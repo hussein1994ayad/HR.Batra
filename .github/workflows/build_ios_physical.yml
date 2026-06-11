@@ -1,0 +1,42 @@
+name: Build iOS Physical Device App (IPA)
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.22.0'
+          channel: 'stable'
+          cache: true
+
+      - name: Install dependencies
+        working-directory: ./mobile
+        run: flutter pub get
+
+      - name: Build unsigned iOS App for Physical Devices
+        working-directory: ./mobile
+        run: flutter build ios --release --no-codesign
+
+      - name: Package into IPA
+        working-directory: ./mobile/build/ios/iphoneos
+        run: |
+          mkdir Payload
+          mv Runner.app Payload/
+          zip -r HRBatra_PhysicalDevice.ipa Payload
+
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: HRBatra-iOS-Physical-IPA
+          path: mobile/build/ios/iphoneos/HRBatra_PhysicalDevice.ipa
