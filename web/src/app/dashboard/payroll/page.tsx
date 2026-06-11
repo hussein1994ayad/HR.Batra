@@ -368,6 +368,45 @@ export default function PayrollPage() {
     }
   };
 
+  const handleRevertSlip = async (empData: any) => {
+    // Check if the slip exists in existingSlips
+    const slip = existingSlips.find(s => s.employee_id === empData.id);
+    if (!slip) return;
+
+    setActionLoading(`revert_${empData.id}`);
+    try {
+      // 1. Delete the slip
+      const { error: delErr } = await supabase.from('salary_slips').delete().eq('id', slip.id);
+      if (delErr) throw delErr;
+
+      // 2. Delete auto-generated bonuses_deductions
+      await supabase.from('bonuses_deductions')
+        .delete()
+        .eq('employee_id', empData.id)
+        .eq('issue_date', endDate)
+        .like('reason', `%للفترة من ${startDate} إلى ${endDate}%`);
+
+      // 3. Mark loan installments back to unpaid
+      const { data: userLoans } = await supabase.from('loans').select('id').eq('employee_id', empData.id);
+      if (userLoans && userLoans.length > 0) {
+        const loanIds = userLoans.map((l: any) => l.id);
+        await supabase.from('loan_installments')
+          .update({ is_paid: false, paid_at: null })
+          .in('loan_id', loanIds)
+          .gte('due_date', startDate)
+          .lte('due_date', endDate)
+          .eq('is_paid', true);
+      }
+
+      toast.success('تم التراجع عن اعتماد الراتب بنجاح! 🔄');
+      fetchPayrollData();
+    } catch (err: any) {
+      toast.error(`فشل في التراجع عن الاعتماد: ${err.message || err}`);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   const toggleExcuseDay = (employeeId: string, dateStr: string) => {
     setExcusedDays(prev => {
       const currentList = prev[employeeId] || [];
@@ -870,10 +909,28 @@ export default function PayrollPage() {
                         </button>
                         
                         {emp.isIssued ? (
-                          <span className="flex items-center gap-1.5 px-3 py-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-xl font-bold text-[10px]">
-                            <CheckCircle className="w-3.5 h-3.5" />
-                            <span>تم الاعتماد</span>
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className="flex items-center gap-1.5 px-3 py-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-xl font-bold text-[10px]">
+                              <CheckCircle className="w-3.5 h-3.5" />
+                              <span>تم الاعتماد</span>
+                            </span>
+                            <button
+                              disabled={actionLoading === `revert_${emp.id}`}
+                              onClick={() => {
+                                if(window.confirm('هل أنت متأكد من رغبتك في إلغاء اعتماد هذا الراتب؟ سيتم مسح قيود الخصم الأوتوماتيكية وإرجاع السلف إلى حالة غير مدفوعة.')) {
+                                  handleRevertSlip(emp);
+                                }
+                              }}
+                              className="p-2 bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-500 hover:text-white rounded-xl transition-all cursor-pointer"
+                              title="إلغاء الاعتماد والتعديل"
+                            >
+                              {actionLoading === `revert_${emp.id}` ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <X className="w-4 h-4" />
+                              )}
+                            </button>
+                          </div>
                         ) : (
                           <button
                             disabled={actionLoading === `slip_${emp.id}`}

@@ -23,6 +23,8 @@ export default function LeavesPage() {
 
   // Tab State: pending, approved, rejected
   const [activeTab, setActiveTab] = useState<'pending' | 'approved' | 'rejected'>('pending');
+  // State for Admin to override is_paid when approving
+  const [leavePaymentOverride, setLeavePaymentOverride] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     fetchLeaveRequests();
@@ -50,7 +52,7 @@ export default function LeavesPage() {
     }
   };
 
-  const handleProcessLeave = async (requestId: string, employeeId: string, approve: boolean) => {
+  const handleProcessLeave = async (requestId: string, employeeId: string, approve: boolean, isPaidValue: boolean) => {
     setActionLoading(requestId);
     const statusText = approve ? 'approved' : 'rejected';
     
@@ -63,6 +65,7 @@ export default function LeavesPage() {
         .from('leave_requests')
         .update({
           status: statusText,
+          is_paid: approve ? isPaidValue : undefined,
           approved_by: session.user.id,
           approved_at: new Date().toISOString(),
         })
@@ -177,6 +180,7 @@ export default function LeavesPage() {
               const endDate = new Date(req.end_date);
               const diffTime = Math.abs(endDate.getTime() - startDate.getTime());
               const totalDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+              const currentIsPaid = leavePaymentOverride[req.id] !== undefined ? leavePaymentOverride[req.id] : req.is_paid;
 
               return (
                 <div 
@@ -233,26 +237,41 @@ export default function LeavesPage() {
                   </div>
 
                   {activeTab === 'pending' ? (
-                    <div className="flex gap-3 pt-6 border-t border-slate-900 mt-6">
-                      <button
-                        disabled={actionLoading === req.id}
-                        onClick={() => handleProcessLeave(req.id, req.employee_id, true)}
-                        className="flex-grow flex items-center justify-center gap-1.5 py-3 px-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-emerald-500/20 cursor-pointer"
-                      >
-                        <Check className="w-4 h-4" />
-                        <span>الموافقة والاعتماد</span>
-                      </button>
-                      <button
-                        disabled={actionLoading === req.id}
-                        onClick={() => handleProcessLeave(req.id, req.employee_id, false)}
-                        className="flex-grow flex items-center justify-center gap-1.5 py-3 px-4 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-xl text-xs font-bold transition-all cursor-pointer"
-                      >
-                        <X className="w-4 h-4" />
-                        <span>رفض الطلب</span>
-                      </button>
+                    <div className="pt-4 border-t border-slate-900 mt-4">
+                      <div className="flex items-center justify-between mb-4 bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+                        <span className="text-xs font-bold text-slate-300">هل سيتم صرف الراتب لهذه الإجازة؟</span>
+                        <button
+                          onClick={() => setLeavePaymentOverride(prev => ({ ...prev, [req.id]: !currentIsPaid }))}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                            currentIsPaid 
+                              ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
+                              : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                          }`}
+                        >
+                          {currentIsPaid ? 'إجازة مدفوعة 💰' : 'إجازة مستقطعة ⚠️'}
+                        </button>
+                      </div>
+                      <div className="flex gap-3">
+                        <button
+                          disabled={actionLoading === req.id}
+                          onClick={() => handleProcessLeave(req.id, req.employee_id, true, currentIsPaid)}
+                          className="flex-grow flex items-center justify-center gap-1.5 py-3 px-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-emerald-500/20 cursor-pointer"
+                        >
+                          <Check className="w-4 h-4" />
+                          <span>الموافقة والاعتماد</span>
+                        </button>
+                        <button
+                          disabled={actionLoading === req.id}
+                          onClick={() => handleProcessLeave(req.id, req.employee_id, false, currentIsPaid)}
+                          className="flex-grow flex items-center justify-center gap-1.5 py-3 px-4 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                        >
+                          <X className="w-4 h-4" />
+                          <span>رفض الطلب</span>
+                        </button>
+                      </div>
                     </div>
                   ) : (
-                    <div className="pt-4 mt-4 border-t border-slate-900">
+                    <div className="pt-4 mt-4 border-t border-slate-900 space-y-2">
                       <div className={`py-2 rounded-xl text-center font-bold text-xs ${
                         activeTab === 'approved' 
                           ? 'bg-emerald-500/10 border border-emerald-500/15 text-emerald-400' 
@@ -260,6 +279,15 @@ export default function LeavesPage() {
                       }`}>
                         {activeTab === 'approved' ? 'تمت الموافقة والاعتماد ✓' : 'تم رفض وإلغاء الطلب ❌'}
                       </div>
+                      {activeTab === 'approved' && (
+                        <div className={`py-2 rounded-xl text-center font-bold text-xs ${
+                          req.is_paid 
+                            ? 'bg-emerald-500/10 border border-emerald-500/15 text-emerald-400' 
+                            : 'bg-rose-500/10 border border-rose-500/15 text-rose-400'
+                        }`}>
+                          {req.is_paid ? 'تم الاعتماد كإجازة مدفوعة الراتب 💰' : 'تم الاعتماد كإجازة مستقطعة الراتب ⚠️'}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

@@ -25,6 +25,7 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
   // حقول الطلب
   String _leaveType = 'annual'; // 'annual', 'sick', 'emergency', 'maternity', 'other'
   bool _isHourly = false;
+  bool _isPaid = true; // خيار الدفع
   DateTime _startDate = DateTime.now();
   DateTime _endDate = DateTime.now().add(const Duration(days: 1));
   TimeOfDay _startHour = const TimeOfDay(hour: 8, minute: 0);
@@ -224,6 +225,7 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
         'end_date': _endDate.toUtc().toIso8601String(),
         'start_hour': startHourStr,
         'end_hour': endHourStr,
+        'is_paid': _isPaid,
         'reason': _reasonController.text.trim(),
         'attachment_url': attachmentUrl,
         'status': 'pending',
@@ -304,6 +306,7 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
     setState(() {
       _attachmentFile = null;
       _isHourly = false;
+      _isPaid = true;
       _leaveType = 'annual';
       _startDate = DateTime.now();
       _endDate = DateTime.now().add(const Duration(days: 1));
@@ -508,6 +511,53 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
                   onChanged: (val) {
                     setState(() => _isHourly = val);
                   },
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+
+            // خيار إجازة براتب أو بدون راتب
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('نوع الإجازة المالي', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white, fontFamily: 'Cairo')),
+                    Text('مستقطعة بدون راتب / مدفوعة الراتب', style: TextStyle(fontSize: 10, color: Colors.white54, fontFamily: 'Cairo')),
+                  ],
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: _isPaid ? AppTheme.successGreen.withOpacity(0.15) : AppTheme.dangerRed.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: _isPaid ? AppTheme.successGreen.withOpacity(0.3) : AppTheme.dangerRed.withOpacity(0.3)),
+                  ),
+                  child: Row(
+                    children: [
+                      Text(
+                        _isPaid ? 'مدفوعة الأجر 💰' : 'مستقطعة (بدون راتب) ⚠️',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: _isPaid ? AppTheme.successGreen : AppTheme.dangerRed,
+                          fontFamily: 'Cairo'
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Switch.adaptive(
+                        value: _isPaid,
+                        activeColor: AppTheme.successGreen,
+                        activeTrackColor: AppTheme.successGreen.withOpacity(0.3),
+                        inactiveThumbColor: AppTheme.dangerRed,
+                        inactiveTrackColor: AppTheme.dangerRed.withOpacity(0.3),
+                        onChanged: (val) {
+                          setState(() => _isPaid = val);
+                        },
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
