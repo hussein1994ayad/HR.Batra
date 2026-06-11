@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "667500759230",
+    "project_id": "hr-pro-batra",
+    "storage_bucket": "hr-pro-batra.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:667500759230:android:26f01ee75ace71bf4df6ef",
+        "android_client_info": {
+          "package_name": "com.batra.hrpro.hr_pro"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBwvQ0QtWRhLT4paKLo1ZFfW4t9lJgqr88"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
