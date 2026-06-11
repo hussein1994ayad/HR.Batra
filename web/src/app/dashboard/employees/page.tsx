@@ -26,6 +26,7 @@ import {
   FileImage
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import toast from 'react-hot-toast';
 
 export default function EmployeesPage() {
   const [loading, setLoading] = useState(true);
@@ -161,7 +162,7 @@ export default function EmployeesPage() {
         colors: ['#0D9488', '#10B981']
       });
     } catch (err) {
-      alert('فشل تغيير قفل الجهاز');
+      toast.error('فشل تغيير قفل الجهاز');
     } finally {
       setActionLoading(null);
     }
@@ -194,9 +195,9 @@ export default function EmployeesPage() {
         return emp;
       }));
 
-      alert('تم فك قفل وربط هاتف الموظف بنجاح ✅');
+      toast.success('تم فك قفل وربط هاتف الموظف بنجاح ✅');
     } catch (err) {
-      alert('فشل فك ربط الهاتف');
+      toast.error('فشل فك ربط الهاتف');
     } finally {
       setActionLoading(null);
     }
@@ -253,9 +254,9 @@ export default function EmployeesPage() {
         particleCount: 70,
         spread: 50,
       });
-      alert(approve ? 'تم اعتماد وتثبيت الجهاز بنجاح! ✅' : 'تم رفض وإزالة طلب ربط الجهاز. ❌');
+      toast.success(approve ? 'تم اعتماد وتثبيت الجهاز بنجاح! ✅' : 'تم رفض وإزالة طلب ربط الجهاز. ❌');
     } catch (err: any) {
-      alert(`فشل إتمام العملية: ${err.message}`);
+      toast.error(`فشل إتمام العملية: ${err.message}`);
     } finally {
       setActionLoading(null);
     }
@@ -265,7 +266,7 @@ export default function EmployeesPage() {
   const handleCreateEmployee = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!password || password.length < 6) {
-      alert('يجب أن تكون كلمة المرور 6 أحرف على الأقل');
+      toast.error('يجب أن تكون كلمة المرور 6 أحرف على الأقل');
       return;
     }
     setActionLoading('create_emp');
@@ -364,9 +365,9 @@ export default function EmployeesPage() {
         spread: 60,
         colors: ['#0D9488', '#10B981']
       });
-      alert('تم إضافة الموظف الجديد بنجاح وإنشاء حسابه الجغرافي! ✅');
+      toast.success('تم إضافة الموظف الجديد بنجاح وإنشاء حسابه الجغرافي! ✅');
     } catch (err: any) {
-      alert(`فشل إضافة الموظف: ${err.message || 'حدث خطأ غير متوقع'}`);
+      toast.error(`فشل إضافة الموظف: ${err.message || 'حدث خطأ غير متوقع'}`);
     } finally {
       setActionLoading(null);
     }
@@ -472,9 +473,9 @@ export default function EmployeesPage() {
         spread: 40,
         colors: ['#3B82F6', '#10B981']
       });
-      alert('تم تحديث بيانات الموظف وسجلاته بنجاح! ✅');
+      toast.success('تم تحديث بيانات الموظف وسجلاته بنجاح! ✅');
     } catch (err: any) {
-      alert(`فشل تعديل بيانات الموظف: ${err.message}`);
+      toast.error(`فشل تعديل بيانات الموظف: ${err.message}`);
     } finally {
       setActionLoading(null);
     }
@@ -590,9 +591,9 @@ export default function EmployeesPage() {
         spread: 50,
         colors: ['#EF4444', '#F59E0B']
       });
-      alert('تم تنفيذ عملية الحذف/الأرشفة المطلوبة للموظف بنجاح! ✅');
+      toast.success('تم تنفيذ عملية الحذف/الأرشفة المطلوبة للموظف بنجاح! ✅');
     } catch (err: any) {
-      alert(`فشل إتمام العملية: ${err.message}`);
+      toast.error(`فشل إتمام العملية: ${err.message}`);
     } finally {
       setActionLoading(null);
     }
@@ -623,9 +624,9 @@ export default function EmployeesPage() {
         spread: 40,
         colors: ['#10B981', '#34D399']
       });
-      alert('تم استعادة الموظف وتنشيط حسابه بالكامل بنجاح! ✅');
+      toast.success('تم استعادة الموظف وتنشيط حسابه بالكامل بنجاح! ✅');
     } catch (err: any) {
-      alert(`فشل استعادة الموظف: ${err.message}`);
+      toast.error(`فشل استعادة الموظف: ${err.message}`);
     } finally {
       setActionLoading(null);
     }
@@ -653,9 +654,9 @@ export default function EmployeesPage() {
       await fetchEmployeesData();
       await fetchArchivedEmployees();
 
-      alert('تم إتلاف بيانات وحساب الموظف نهائياً وبنجاح! 🗑️');
+      toast.success('تم إتلاف بيانات وحساب الموظف نهائياً وبنجاح! 🗑️');
     } catch (err: any) {
-      alert(`فشل الإتلاف النهائي: ${err.message}`);
+      toast.error(`فشل الإتلاف النهائي: ${err.message}`);
     } finally {
       setActionLoading(null);
     }

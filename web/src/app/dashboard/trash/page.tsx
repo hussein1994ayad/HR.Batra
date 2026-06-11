@@ -13,6 +13,7 @@ import {
   Clock
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import toast from 'react-hot-toast';
 
 export default function TrashPage() {
   const [loading, setLoading] = useState(true);
@@ -88,9 +89,9 @@ export default function TrashPage() {
         colors: ['#0D9488', '#34D399']
       });
 
-      alert('تم استعادة الملف بنجاح وإرجاعه لمساره الأصلي ✅');
+      toast.success('تم استعادة الملف بنجاح وإرجاعه لمساره الأصلي ✅');
     } catch (err: any) {
-      alert(`فشل استعادة الملف: ${err.message}`);
+      toast.error(`فشل استعادة الملف: ${err.message}`);
     } finally {
       setActionLoading(null);
     }
@@ -121,9 +122,9 @@ export default function TrashPage() {
       // Filter locally
       setDeletedFiles(prev => prev.filter(f => f.id !== fileRow.id));
 
-      alert('تم إتلاف وحذف الملف نهائياً وتصفية مساحته السحابية 🗑️');
+      toast('تم إتلاف وحذف الملف نهائياً وتصفية مساحته السحابية 🗑️');
     } catch (err: any) {
-      alert(`فشل إتلاف الملف: ${err.message}`);
+      toast.error(`فشل إتلاف الملف: ${err.message}`);
     } finally {
       setActionLoading(null);
     }

@@ -13,6 +13,7 @@ import {
   Server
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import toast from 'react-hot-toast';
 
 export default function StoragePage() {
   const [loading, setLoading] = useState(true);
@@ -109,9 +110,9 @@ export default function StoragePage() {
         spread: 70,
         colors: ['#EF4444', '#F87171']
       });
-      alert('تم إفراغ سلة المحذوفات بالكامل وتطهير المساحة السحابية! 🗑️');
+      toast('تم إفراغ سلة المحذوفات بالكامل وتطهير المساحة السحابية! 🗑️');
     } catch (err: any) {
-      alert(`فشل إفراغ السلة: ${err.message}`);
+      toast.error(`فشل إفراغ السلة: ${err.message}`);
     } finally {
       setActionLoading(false);
     }

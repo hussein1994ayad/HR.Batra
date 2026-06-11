@@ -20,6 +20,7 @@ import {
   X
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import toast from 'react-hot-toast';
 
 const getCycleDates = (monthStr: string, startDay: number = 25, endDay: number = 24) => {
   if (!monthStr) return { start: '', end: '' };
@@ -204,11 +205,11 @@ export default function PayrollPage() {
       setBdReason('');
       
       confetti({ particleCount: 50, spread: 40 });
-      alert('تم إضافة السجل بنجاح! ✅');
+      toast.success('تم إضافة السجل بنجاح! ✅');
       
       fetchPayrollData();
     } catch (err) {
-      alert('حدث خطأ أثناء الإضافة');
+      toast.error('حدث خطأ أثناء الإضافة');
     } finally {
       setActionLoading(null);
     }
@@ -277,10 +278,10 @@ export default function PayrollPage() {
       });
 
       confetti({ particleCount: 100, spread: 60, colors: ['#10B981', '#059669'] });
-      alert('تم اعتماد راتب الموظف بنجاح! 💸');
+      toast.success('تم اعتماد راتب الموظف بنجاح! 💸');
       fetchPayrollData();
     } catch (err: any) {
-      alert(`فشل اعتماد الراتب: ${err.message || err}`);
+      toast.error(`فشل اعتماد الراتب: ${err.message || err}`);
     } finally {
       setActionLoading(null);
     }
@@ -357,11 +358,11 @@ export default function PayrollPage() {
       }
 
       confetti({ particleCount: 150, spread: 80, colors: ['#10B981', '#3B82F6'] });
-      alert(`تم اعتماد رواتب (${successCount}) موظف بنجاح! 💸`);
+      toast(`تم اعتماد رواتب (${successCount}) موظف بنجاح! 💸`);
       setShowBulkModal(false);
       fetchPayrollData();
     } catch (err: any) {
-      alert(`فشل اعتماد الرواتب: ${err.message || err}`);
+      toast.error(`فشل اعتماد الرواتب: ${err.message || err}`);
     } finally {
       setActionLoading(null);
     }

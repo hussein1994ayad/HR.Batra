@@ -14,6 +14,7 @@ import {
   ShieldCheck
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import toast from 'react-hot-toast';
 
 export default function LeavesPage() {
   const [loading, setLoading] = useState(true);
@@ -93,9 +94,9 @@ export default function LeavesPage() {
         });
       }
 
-      alert(approve ? 'تمت الموافقة على طلب الإجازة بنجاح ✅' : 'تم رفض طلب الإجازة بنجاح ❌');
+      toast.success(approve ? 'تمت الموافقة على طلب الإجازة بنجاح ✅' : 'تم رفض طلب الإجازة بنجاح ❌');
     } catch (err) {
-      alert('فشل في معالجة طلب الإجازة');
+      toast.error('فشل في معالجة طلب الإجازة');
     } finally {
       setActionLoading(null);
     }

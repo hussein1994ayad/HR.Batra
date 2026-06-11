@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import Link from 'next/link';
+import toast from 'react-hot-toast';
 
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
@@ -294,7 +295,7 @@ export default function DashboardPage() {
         if (emps) targets = emps.map(emp => emp.id);
       } else if (targetType === 'branch') {
         if (!targetBranchId) {
-          alert('يرجى اختيار الفرع المستهدف أولاً');
+          toast.error('يرجى اختيار الفرع المستهدف أولاً');
           setActionLoading(false);
           return;
         }
@@ -302,7 +303,7 @@ export default function DashboardPage() {
         if (emps) targets = emps.map(emp => emp.id);
       } else if (targetType === 'employee') {
         if (targetEmployeeIds.length === 0) {
-          alert('يرجى اختيار موظف واحد على الأقل');
+          toast.error('يرجى اختيار موظف واحد على الأقل');
           setActionLoading(false);
           return;
         }
@@ -310,7 +311,7 @@ export default function DashboardPage() {
       }
 
       if (targets.length === 0) {
-        alert('لم يتم العثور على موظفين مستهدفين لإرسال هذا التعميم');
+        toast('لم يتم العثور على موظفين مستهدفين لإرسال هذا التعميم');
         setActionLoading(false);
         return;
       }
@@ -349,9 +350,9 @@ export default function DashboardPage() {
         spread: 60,
         origin: { y: 0.8 }
       });
-      alert('تم إرسال وبث التعميم الإداري بنجاح! 🚀');
+      toast.success('تم إرسال وبث التعميم الإداري بنجاح! 🚀');
     } catch (err: any) {
-      alert(`فشل إرسال التعميم: ${err.message || err}`);
+      toast.error(`فشل إرسال التعميم: ${err.message || err}`);
     } finally {
       setActionLoading(false);
     }
@@ -444,7 +445,7 @@ export default function DashboardPage() {
         colors: ['#0D9488', '#3B82F6']
       });
 
-      alert('تم إضافة الموظف الجديد وتوليد بياناته بنجاح! 🎉');
+      toast.success('تم إضافة الموظف الجديد وتوليد بياناته بنجاح! 🎉');
     } catch (err: any) {
       setActionError(err.message || 'حدث خطأ أثناء الإضافة');
     } finally {

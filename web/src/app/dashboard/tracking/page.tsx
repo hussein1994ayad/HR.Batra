@@ -20,6 +20,7 @@ import {
   Download
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import toast from 'react-hot-toast';
 
 export default function TrackingPage() {
   const [loading, setLoading] = useState(true);
@@ -137,11 +138,11 @@ export default function TrackingPage() {
         
       if (error) throw error;
       
-      alert('تم تحديث أوقات الدوام بنجاح! ✅');
+      toast.success('تم تحديث أوقات الدوام بنجاح! ✅');
       setEditingRecord(null);
       fetchTrackingData(selectedDate);
     } catch (err) {
-      alert('حدث خطأ أثناء التحديث.');
+      toast.error('حدث خطأ أثناء التحديث.');
     } finally {
       setLoading(false);
     }
@@ -150,7 +151,7 @@ export default function TrackingPage() {
   const handleManualAttendanceSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!manualEmpId) {
-      alert('الرجاء اختيار الموظف أولاً');
+      toast('الرجاء اختيار الموظف أولاً');
       return;
     }
     
@@ -199,11 +200,11 @@ export default function TrackingPage() {
         if (error) throw error;
       }
       
-      alert('تم تسجيل الحضور اليدوي بنجاح! ✅');
+      toast.success('تم تسجيل الحضور اليدوي بنجاح! ✅');
       setShowManualModal(false);
       fetchTrackingData(selectedDate);
     } catch (err: any) {
-      alert(`حدث خطأ: ${err.message || err}`);
+      toast.error(`حدث خطأ: ${err.message || err}`);
     } finally {
       setLoading(false);
     }
@@ -222,10 +223,10 @@ export default function TrackingPage() {
         .eq('id', recordId);
         
       if (error) throw error;
-      alert('تم تسجيل خروج الموظف بنجاح!');
+      toast.success('تم تسجيل خروج الموظف بنجاح!');
       fetchTrackingData(selectedDate);
     } catch (err) {
-      alert('حدث خطأ أثناء تسجيل الخروج.');
+      toast.error('حدث خطأ أثناء تسجيل الخروج.');
     } finally {
       setLoading(false);
     }
@@ -255,7 +256,7 @@ export default function TrackingPage() {
       if (type === 'virtual_absent') {
         const defaultBranchId = emp.branch_id || (branches.length > 0 ? branches[0].id : null);
         if (!defaultBranchId) {
-          alert('الموظف غير مرتبط بفرع، يرجى ربطه بفرع أولاً.');
+          toast.error('الموظف غير مرتبط بفرع، يرجى ربطه بفرع أولاً.');
           return;
         }
 
@@ -289,10 +290,10 @@ export default function TrackingPage() {
         type: 'attendance'
       });
 
-      alert('تم حفظ القرار وإرسال إشعار للموظف بنجاح! 🔔');
+      toast.success('تم حفظ القرار وإرسال إشعار للموظف بنجاح! 🔔');
       fetchTrackingData(selectedDate, selectedBranch);
     } catch (err: any) {
-      alert(`حدث خطأ أثناء حفظ القرار: ${err.message || err}`);
+      toast.error(`حدث خطأ أثناء حفظ القرار: ${err.message || err}`);
     } finally {
       setLoading(false);
     }
@@ -343,7 +344,7 @@ export default function TrackingPage() {
       XLSX.utils.book_append_sheet(workbook, worksheet, "تقرير الحضور");
       XLSX.writeFile(workbook, `تقرير_الحضور_${selectedDate}.xlsx`);
     } catch (err) {
-      alert("حدث خطأ أثناء تصدير التقرير");
+      toast.error("حدث خطأ أثناء تصدير التقرير");
     }
   };
 

@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { Toaster } from 'react-hot-toast';
 import Link from 'next/link';
 import { 
   LayoutDashboard, 
@@ -264,7 +265,7 @@ export default function DashboardLayout({
           if (payload.new) {
             setSystemNotifs(prev => [payload.new, ...prev]);
             playBeep();
-            // Optional: We can show a toast or alert, but alert() blocks the UI.
+            // Optional: We can show a toast or alert, but toast() blocks the UI.
             // Using a simple notification state if needed.
           }
         }
@@ -300,6 +301,16 @@ export default function DashboardLayout({
 
   return (
     <div className="flex h-screen bg-[#0A0E1A] overflow-hidden text-slate-100 font-sans" dir="rtl">
+      <Toaster position="top-center" reverseOrder={false} toastOptions={{
+        style: {
+          background: '#1e293b',
+          color: '#fff',
+          fontFamily: 'Cairo, sans-serif',
+          fontWeight: 'bold',
+          borderRadius: '12px',
+          border: '1px solid rgba(255,255,255,0.1)',
+        }
+      }} />
       {/* Dynamic Background Glows */}
       <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-indigo-500/5 rounded-full blur-[150px] pointer-events-none"></div>
       <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-violet-500/5 rounded-full blur-[150px] pointer-events-none"></div>

@@ -17,6 +17,7 @@ import {
   CheckCircle
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import toast from 'react-hot-toast';
 
 export default function GeofencesPage() {
   const [loading, setLoading] = useState(true);
@@ -392,9 +393,9 @@ export default function GeofencesPage() {
       if (selectedBranchId === branchId) {
         setSelectedBranchId(null);
       }
-      alert('تم حذف الفرع الجغرافي ونطاق البصمة الخاص به بنجاح 🗑️');
+      toast.success('تم حذف الفرع الجغرافي ونطاق البصمة الخاص به بنجاح 🗑️');
     } catch (err: any) {
-      alert(`فشل حذف الفرع: ${err.message}`);
+      toast.error(`فشل حذف الفرع: ${err.message}`);
     } finally {
       setActionLoading(null);
     }
@@ -437,9 +438,9 @@ export default function GeofencesPage() {
         colors: ['#0D9488', '#3B82F6']
       });
 
-      alert('تم إضافة الفرع الجغرافي الجديد ورسم حدود بصمته بنجاح! 🏢');
+      toast.success('تم إضافة الفرع الجغرافي الجديد ورسم حدود بصمته بنجاح! 🏢');
     } catch (err: any) {
-      alert(err.message || 'حدث خطأ غير متوقع');
+      toast.error(err.message || 'حدث خطأ غير متوقع');
     } finally {
       setActionLoading(null);
     }
@@ -482,9 +483,9 @@ export default function GeofencesPage() {
         colors: ['#0D9488', '#00FF66']
       });
 
-      alert('تم تحديث بيانات الفرع ونطاق البصمة بنجاح! 💾');
+      toast.success('تم تحديث بيانات الفرع ونطاق البصمة بنجاح! 💾');
     } catch (err: any) {
-      alert(err.message || 'حدث خطأ غير متوقع');
+      toast.error(err.message || 'حدث خطأ غير متوقع');
     } finally {
       setActionLoading(null);
     }

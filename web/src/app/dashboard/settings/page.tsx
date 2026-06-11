@@ -22,6 +22,7 @@ import {
   Trash
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import toast from 'react-hot-toast';
 
 export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
@@ -167,12 +168,12 @@ export default function SettingsPage() {
   const handleAddLeaveType = (e: React.MouseEvent) => {
     e.preventDefault();
     if (!newLeaveTypeId.trim() || !newLeaveTypeName.trim()) {
-      alert('يرجى كتابة رمز ونوع الإجازة');
+      toast.error('يرجى كتابة رمز ونوع الإجازة');
       return;
     }
     const cleanId = newLeaveTypeId.trim().toLowerCase().replace(/\s+/g, '_');
     if (leaveTypes.some(t => t.id === cleanId)) {
-      alert('رمز الإجازة هذا موجود بالفعل');
+      toast('رمز الإجازة هذا موجود بالفعل');
       return;
     }
     setLeaveTypes([...leaveTypes, { id: cleanId, name: newLeaveTypeName.trim() }]);
@@ -182,7 +183,7 @@ export default function SettingsPage() {
 
   const handleRemoveLeaveType = (idToRemove: string) => {
     if (['annual', 'sick'].includes(idToRemove)) {
-      alert('لا يمكن حذف الإجازة السنوية أو المرضية الافتراضية لأنها مرتبطة بنظام الرواتب والأرصدة');
+      toast.error('لا يمكن حذف الإجازة السنوية أو المرضية الافتراضية لأنها مرتبطة بنظام الرواتب والأرصدة');
       return;
     }
     setLeaveTypes(leaveTypes.filter(t => t.id !== idToRemove));
@@ -197,10 +198,10 @@ export default function SettingsPage() {
         .eq('id', id);
       if (error) throw error;
       
-      alert('تم حذف التعميم بنجاح! ✅');
+      toast.success('تم حذف التعميم بنجاح! ✅');
       fetchAnnouncements();
     } catch (err: any) {
-      alert(`فشل حذف التعميم: ${err.message}`);
+      toast.error(`فشل حذف التعميم: ${err.message}`);
     }
   };
 
@@ -213,10 +214,10 @@ export default function SettingsPage() {
         .gt('created_at', '1970-01-01');
       if (error) throw error;
       
-      alert('تم إخلاء أرشيف التعميمات بنجاح! 🧹');
+      toast.success('تم إخلاء أرشيف التعميمات بنجاح! 🧹');
       fetchAnnouncements();
     } catch (err: any) {
-      alert(`فشل إخلاء الأرشيف: ${err.message}`);
+      toast.error(`فشل إخلاء الأرشيف: ${err.message}`);
     }
   };
 
@@ -344,12 +345,12 @@ export default function SettingsPage() {
         spread: 60,
         colors: ['#0D9488', '#10B981']
       });
-      alert('تم حفظ وتحديث إعدادات النظام والشركة بنجاح! ✅');
+      toast.success('تم حفظ وتحديث إعدادات النظام والشركة بنجاح! ✅');
       
       // Update app state
       fetchSettings();
     } catch (err: any) {
-      alert(`فشل حفظ الإعدادات: ${err.message}`);
+      toast.error(`فشل حفظ الإعدادات: ${err.message}`);
     } finally {
       setSaving(false);
     }
@@ -387,11 +388,11 @@ export default function SettingsPage() {
   const handleAddSchedule = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!schedName.trim()) {
-      alert('يرجى إدخال اسم لجدول الدوام');
+      toast.error('يرجى إدخال اسم لجدول الدوام');
       return;
     }
     if (!schedTargetId) {
-      alert('يرجى تحديد الجهة المستهدفة (الفرع/القسم/الموظف)');
+      toast.error('يرجى تحديد الجهة المستهدفة (الفرع/القسم/الموظف)');
       return;
     }
     setAddingSchedule(true);
@@ -415,7 +416,7 @@ export default function SettingsPage() {
       const { error } = await supabase.from('work_schedules').insert(scheduleData);
       if (error) throw error;
 
-      alert('تم إضافة جدول الدوام بنجاح! 📅');
+      toast.success('تم إضافة جدول الدوام بنجاح! 📅');
       setSchedName('');
       setSchedTargetId('');
       setSchedCheckIn('09:00');
@@ -426,7 +427,7 @@ export default function SettingsPage() {
       // Refresh settings
       fetchSettings();
     } catch (err: any) {
-      alert(`فشل إضافة الجدول: ${err.message}`);
+      toast.error(`فشل إضافة الجدول: ${err.message}`);
     } finally {
       setAddingSchedule(false);
     }
@@ -441,10 +442,10 @@ export default function SettingsPage() {
         .eq('id', id);
       if (error) throw error;
 
-      alert('تم حذف جدول الدوام بنجاح! ✅');
+      toast.success('تم حذف جدول الدوام بنجاح! ✅');
       fetchSettings();
     } catch (err: any) {
-      alert(`فشل حذف الجدول: ${err.message}`);
+      toast.error(`فشل حذف الجدول: ${err.message}`);
     }
   };
 

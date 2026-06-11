@@ -17,6 +17,7 @@ import {
   Save
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import toast from 'react-hot-toast';
 
 export default function LoansPage() {
   const [loading, setLoading] = useState(true);
@@ -97,9 +98,9 @@ export default function LoansPage() {
       });
 
       setLoanRequests(prev => prev.filter(req => req.id !== loan.id));
-      alert('تم رفض طلب السلفة بنجاح. ❌');
+      toast.success('تم رفض طلب السلفة بنجاح. ❌');
     } catch (err: any) {
-      alert(`فشل إتمام معالجة الطلب: ${err.message}`);
+      toast.error(`فشل إتمام معالجة الطلب: ${err.message}`);
     } finally {
       setActionLoading(null);
     }
@@ -158,9 +159,9 @@ export default function LoansPage() {
       setApprovalModal(null);
       fetchLoanRequests();
       confetti({ particleCount: 100, spread: 70, colors: ['#0D9488', '#34D399', '#6EE7B7'] });
-      alert('تم اعتماد السلفة وتوليد الأقساط بذكاء! ✅');
+      toast.success('تم اعتماد السلفة وتوليد الأقساط بذكاء! ✅');
     } catch (err: any) {
-      alert(`فشل الاعتماد: ${err.message}`);
+      toast.error(`فشل الاعتماد: ${err.message}`);
     } finally {
       setActionLoading(null);
     }
@@ -189,10 +190,10 @@ export default function LoansPage() {
           .eq('id', inst.id);
       }
       
-      alert('تم تخطي القسط وتأجيل الدفعات القادمة بذكاء لمدة شهر! ✨');
+      toast('تم تخطي القسط وتأجيل الدفعات القادمة بذكاء لمدة شهر! ✨');
       fetchLoanRequests();
     } catch (err) {
-      alert('فشل تخطي القسط.');
+      toast.error('فشل تخطي القسط.');
     } finally {
       setActionLoading(null);
     }
@@ -269,9 +270,9 @@ export default function LoansPage() {
 
       setEditLoanModal(null);
       fetchLoanRequests();
-      alert('تم تعديل السلفة وإعادة جدولة الأقساط المتبقية بنجاح! ✅');
+      toast.success('تم تعديل السلفة وإعادة جدولة الأقساط المتبقية بنجاح! ✅');
     } catch (err: any) {
-      alert(`فشل التعديل: ${err.message || err}`);
+      toast.error(`فشل التعديل: ${err.message || err}`);
     } finally {
       setActionLoading(null);
     }
