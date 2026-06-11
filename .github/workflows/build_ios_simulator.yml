@@ -1,0 +1,39 @@
+name: Build iOS Simulator App
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.22.0'
+          channel: 'stable'
+          cache: true
+
+      - name: Install dependencies
+        working-directory: ./mobile
+        run: flutter pub get
+
+      - name: Build iOS Simulator App
+        working-directory: ./mobile
+        run: flutter build ios --simulator
+
+      - name: Zip Simulator App
+        working-directory: ./mobile/build/ios/iphonesimulator
+        run: zip -r HRBatra_SimulatorApp.zip Runner.app
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: HRBatra-iOS-Simulator-App
+          path: mobile/build/ios/iphonesimulator/HRBatra_SimulatorApp.zip
