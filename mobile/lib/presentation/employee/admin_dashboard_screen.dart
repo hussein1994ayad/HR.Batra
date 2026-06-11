@@ -526,7 +526,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
 
       // 3. إذا تمت الموافقة، توليد الأقساط الشهرية تلقائياً
       if (approve) {
-        final double installmentAmt = amount / months;
+        final double installmentAmt = (amount / months).roundToDouble();
         final List<Map<String, dynamic>> installments = [];
         final now = DateTime.now();
 

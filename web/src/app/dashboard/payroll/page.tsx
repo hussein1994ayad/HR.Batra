@@ -232,11 +232,11 @@ export default function PayrollPage() {
       if (error) throw error;
 
       // Mark loan installments as paid if any were deducted
-      if (empData.loanInstallmentId) {
+      if (empData.loanInstallmentIds && empData.loanInstallmentIds.length > 0) {
         await supabase
           .from('loan_installments')
           .update({ is_paid: true, paid_at: new Date().toISOString() })
-          .eq('id', empData.loanInstallmentId);
+          .in('id', empData.loanInstallmentIds);
       }
 
       // Add detailed deduction log entries for the automatic attendance deductions for auditability
@@ -311,11 +311,11 @@ export default function PayrollPage() {
         successCount++;
 
         // Mark loan installments as paid if any were deducted
-        if (empData.loanInstallmentId) {
+        if (empData.loanInstallmentIds && empData.loanInstallmentIds.length > 0) {
           await supabase
             .from('loan_installments')
             .update({ is_paid: true, paid_at: new Date().toISOString() })
-            .eq('id', empData.loanInstallmentId);
+            .in('id', empData.loanInstallmentIds);
         }
 
         // Add detailed deduction log entries for the automatic attendance deductions for auditability
@@ -618,9 +618,9 @@ export default function PayrollPage() {
     const totalBonuses = empBDs.filter(bd => bd.type === 'bonus').reduce((sum, bd) => sum + Number(bd.amount), 0);
     const totalDeductions = empBDs.filter(bd => bd.type === 'deduction').reduce((sum, bd) => sum + Number(bd.amount), 0) + totalAttendanceDeductions;
     
-    const empLoan = loanInstallments.find(l => l.loans?.employee_id === emp.id);
-    const loanDeduction = empLoan ? Number(empLoan.amount) : 0;
-    const loanInstallmentId = empLoan ? empLoan.id : null;
+    const empLoans = loanInstallments.filter(l => l.loans?.employee_id === emp.id);
+    const loanDeduction = empLoans.reduce((sum, l) => sum + Number(l.amount), 0);
+    const loanInstallmentIds = empLoans.map(l => l.id);
 
     const netSalary = basic + totalBonuses - totalDeductions - loanDeduction;
     const isIssued = existingSlips.some(slip => slip.employee_id === emp.id);
@@ -645,7 +645,7 @@ export default function PayrollPage() {
       totalBonuses,
       totalDeductions,
       loanDeduction,
-      loanInstallmentId,
+      loanInstallmentIds,
       netSalary,
       isIssued,
       detailLogs

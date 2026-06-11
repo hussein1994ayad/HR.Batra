@@ -116,7 +116,7 @@ export default function LoansPage() {
 
       const newAmount = Number(approvalModal.amount);
       const newMonths = Number(approvalModal.months);
-      const installmentAmt = newAmount / newMonths;
+      const installmentAmt = Math.round(newAmount / newMonths);
 
       const { error: updErr } = await supabase
         .from('loans')
@@ -204,9 +204,9 @@ export default function LoansPage() {
     setActionLoading('edit_' + editLoanModal.loan.id);
     
     try {
-      const newAmount = Number(editLoanModal.amount);
-      const newInstallmentAmt = Number(editLoanModal.installmentAmount);
-      const newRemainingAmt = Number(editLoanModal.remainingAmount);
+      const newAmount = Math.round(Number(editLoanModal.amount));
+      const newInstallmentAmt = Math.round(Number(editLoanModal.installmentAmount));
+      const newRemainingAmt = Math.round(Number(editLoanModal.remainingAmount));
       const newCount = Number(editLoanModal.installmentCount);
 
       // 1. Update details in loans table
