@@ -49,20 +49,9 @@ BEGIN
     WHERE employee_id = archive_record.employee_id;
   END LOOP;
 
-  -- 5. الإغلاق التلقائي للدوام (Auto-Checkout) للموظفين الذين نسوا التبصيم
-  -- يتم اعتبار الدوام غير مكتمل (نصف يوم) كإجراء عقابي لعدم تسجيل الخروج
-  UPDATE attendance 
-  SET 
-    check_out_time = check_in_time + INTERVAL '8 hours',
-    status = 'half_day',
-    check_out_lat = check_in_lat,
-    check_out_lng = check_in_lng,
-    deduction_status = 'applied',
-    deduction_reason = 'عقوبة تلقائية: نسيان تبصيم الانصراف'
-  WHERE check_out_time IS NULL 
-    AND work_date < TO_CHAR(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD');
+  -- (تم إلغاء الإغلاق التلقائي والعقوبات بناءً على رغبة الإدارة)
 
-  -- 6. إرجاع قائمة الملفات المنتهية في سلة المحذوفات
+  -- 5. إرجاع قائمة الملفات المنتهية في سلة المحذوفات
   RETURN QUERY 
   SELECT 
     df.file_path as expired_file_path, 
