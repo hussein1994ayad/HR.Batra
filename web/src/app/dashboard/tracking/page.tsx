@@ -22,6 +22,36 @@ import {
 import * as XLSX from 'xlsx';
 import toast from 'react-hot-toast';
 
+const formatLateDurationArabic = (minutes: number) => {
+  if (minutes <= 0) return '0 دقيقة';
+  const hrs = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+
+  let hrsStr = '';
+  if (hrs > 0) {
+    if (hrs === 1) hrsStr = 'ساعة';
+    else if (hrs === 2) hrsStr = 'ساعتين';
+    else if (hrs >= 3 && hrs <= 10) hrsStr = `${hrs} ساعات`;
+    else hrsStr = `${hrs} ساعة`;
+  }
+
+  let minsStr = '';
+  if (mins > 0) {
+    if (mins === 1) minsStr = 'دقيقة واحدة';
+    else if (mins === 2) minsStr = 'دقيقتين';
+    else if (mins >= 3 && mins <= 10) minsStr = `${mins} دقائق`;
+    else minsStr = `${mins} دقيقة`;
+  }
+
+  if (hrsStr && minsStr) {
+    return `${hrsStr} و ${minsStr}`;
+  } else if (hrsStr) {
+    return hrsStr;
+  } else {
+    return minsStr;
+  }
+};
+
 export default function TrackingPage() {
   const [loading, setLoading] = useState(true);
   const [attendanceLogs, setAttendanceLogs] = useState<any[]>([]);
@@ -545,10 +575,10 @@ export default function TrackingPage() {
             employee: emp,
             date: selectedDate,
             time: attRecord.check_in_time ? new Date(attRecord.check_in_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : '-',
-            duration: `${lateMinutes} دقائق`,
+            duration: formatLateDurationArabic(lateMinutes),
             typeName: 'التأخير الصباحي',
             deductionStatus: attRecord.deduction_status || 'pending',
-            reason: attRecord.deduction_reason || 'التأخير',
+            reason: attRecord.deduction_reason || `التأخير: ${formatLateDurationArabic(lateMinutes)}`,
             suggestedAmount: lateMinutes * 50
           });
         } else if (attRecord.status === 'absent') {
