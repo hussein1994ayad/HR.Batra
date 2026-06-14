@@ -7,11 +7,18 @@ interface MapMarker {
   lng: number;
   popupText: string;
   isViolation?: boolean;
+  color?: string;
 }
 
 interface MapPolygon {
   name: string;
   coords: [number, number][];
+}
+
+interface MapPolyline {
+  coords: [number, number][];
+  color?: string;
+  weight?: number;
 }
 
 interface MapCircle {
@@ -25,6 +32,7 @@ interface MapCircle {
 interface MapComponentProps {
   markers?: MapMarker[];
   polygons?: MapPolygon[];
+  polylines?: MapPolyline[];
   circles?: MapCircle[];
   selectedCircleId?: string | null;
   center?: [number, number];
@@ -36,6 +44,7 @@ interface MapComponentProps {
 export default function MapComponent({
   markers = [],
   polygons = [],
+  polylines = [],
   circles = [],
   selectedCircleId = null,
   center = [33.3152, 44.3661], // Center of Baghdad
@@ -137,7 +146,7 @@ export default function MapComponent({
 
     // Add Markers
     markers.forEach((marker) => {
-      const markerColor = marker.isViolation ? '#EF4444' : '#0D9488';
+      const markerColor = marker.color || (marker.isViolation ? '#EF4444' : '#0D9488');
       
       // Custom interactive glowing marker icon
       const glowHtml = `
@@ -156,6 +165,17 @@ export default function MapComponent({
 
       const m = L.marker([marker.lat, marker.lng], { icon: customIcon }).addTo(mapInstance);
       m.bindPopup(`<div style="font-family: Cairo; direction: rtl; text-align: right; color: #111; padding: 2px;">${marker.popupText}</div>`);
+    });
+
+    // Add Polylines (Trails / History paths)
+    polylines.forEach((line) => {
+      if (!line.coords || line.coords.length < 2) return;
+      L.polyline(line.coords, {
+        color: line.color || '#3B82F6',
+        weight: line.weight || 4,
+        opacity: 0.85,
+        dashArray: '8, 8'
+      }).addTo(mapInstance);
     });
 
     if (onMapClick) {
@@ -186,7 +206,7 @@ export default function MapComponent({
         mapRef.current = null;
       }
     };
-  }, [leafletInstance, markers, polygons, circles, selectedCircleId, center, zoom]);
+  }, [leafletInstance, markers, polygons, polylines, circles, selectedCircleId, center, zoom]);
 
   return (
     <div className="relative w-full h-full min-h-[450px] rounded-3xl overflow-hidden border border-slate-800/80 shadow-2xl bg-[#090D16]">

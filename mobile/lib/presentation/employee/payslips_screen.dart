@@ -53,14 +53,31 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
       final int year = int.parse(parts[0]);
       final int month = int.parse(parts[1]);
 
-      // تاريخ البداية: يوم البداية من الشهر السابق
-      final prevMonthDate = DateTime(year, month - 1, _cycleStartDay);
-      final String startStr = "${prevMonthDate.year}-${prevMonthDate.month.toString().padLeft(2, '0')}-${_cycleStartDay.toString().padLeft(2, '0')}";
+      // Get last day of selected month
+      final lastDaySelected = DateTime(year, month + 1, 0).day;
 
-      // تاريخ النهاية: يوم النهاية من الشهر الحالي
-      final String endStr = "$year-${month.toString().padLeft(2, '0')}-${_cycleEndDay.toString().padLeft(2, '0')}";
-      
-      return {'start': startStr, 'end': endStr};
+      if (_cycleStartDay <= _cycleEndDay) {
+        // Same calendar month cycle
+        final actualStartDay = _cycleStartDay < lastDaySelected ? _cycleStartDay : lastDaySelected;
+        final actualEndDay = _cycleEndDay < lastDaySelected ? _cycleEndDay : lastDaySelected;
+
+        final String startStr = "$year-${month.toString().padLeft(2, '0')}-${actualStartDay.toString().padLeft(2, '0')}";
+        final String endStr = "$year-${month.toString().padLeft(2, '0')}-${actualEndDay.toString().padLeft(2, '0')}";
+        return {'start': startStr, 'end': endStr};
+      } else {
+        // Cross-month cycle (starts in previous month, ends in selected month)
+        final lastDayPrev = DateTime(year, month, 0).day;
+        final prevMonthDate = DateTime(year, month - 1, 1);
+        final int prevYear = prevMonthDate.year;
+        final int prevMonthNum = prevMonthDate.month;
+
+        final actualStartDay = _cycleStartDay < lastDayPrev ? _cycleStartDay : lastDayPrev;
+        final actualEndDay = _cycleEndDay < lastDaySelected ? _cycleEndDay : lastDaySelected;
+
+        final String startStr = "$prevYear-${prevMonthNum.toString().padLeft(2, '0')}-${actualStartDay.toString().padLeft(2, '0')}";
+        final String endStr = "$year-${month.toString().padLeft(2, '0')}-${actualEndDay.toString().padLeft(2, '0')}";
+        return {'start': startStr, 'end': endStr};
+      }
     } catch (e) {
       return {'start': '', 'end': ''};
     }

@@ -25,15 +25,32 @@ import toast from 'react-hot-toast';
 const getCycleDates = (monthStr: string, startDay: number = 25, endDay: number = 24) => {
   if (!monthStr) return { start: '', end: '' };
   const [year, month] = monthStr.split('-').map(Number);
-  // Previous month startDay
-  const prevMonthDate = new Date(year, month - 2, startDay);
-  const prevYear = prevMonthDate.getFullYear();
-  const prevMonth = (prevMonthDate.getMonth() + 1).toString().padStart(2, '0');
-  const start = `${prevYear}-${prevMonth}-${startDay.toString().padStart(2, '0')}`;
-  
-  // Selected month endDay
-  const end = `${year}-${month.toString().padStart(2, '0')}-${endDay.toString().padStart(2, '0')}`;
-  return { start, end };
+
+  // Get last day of selected month
+  const lastDaySelected = new Date(year, month, 0).getDate();
+
+  if (startDay <= endDay) {
+    // Same calendar month cycle (e.g. 1st to 30th/31st)
+    const actualStartDay = Math.min(startDay, lastDaySelected);
+    const actualEndDay = Math.min(endDay, lastDaySelected);
+
+    const start = `${year}-${month.toString().padStart(2, '0')}-${actualStartDay.toString().padStart(2, '0')}`;
+    const end = `${year}-${month.toString().padStart(2, '0')}-${actualEndDay.toString().padStart(2, '0')}`;
+    return { start, end };
+  } else {
+    // Cross-month cycle (starts in previous month, ends in selected month, e.g. 25th to 24th)
+    const prevMonthDate = new Date(year, month - 2, 1);
+    const prevYear = prevMonthDate.getFullYear();
+    const prevMonthNum = prevMonthDate.getMonth() + 1;
+    const lastDayPrev = new Date(prevYear, prevMonthNum, 0).getDate();
+
+    const actualStartDay = Math.min(startDay, lastDayPrev);
+    const actualEndDay = Math.min(endDay, lastDaySelected);
+
+    const start = `${prevYear}-${prevMonthNum.toString().padStart(2, '0')}-${actualStartDay.toString().padStart(2, '0')}`;
+    const end = `${year}-${month.toString().padStart(2, '0')}-${actualEndDay.toString().padStart(2, '0')}`;
+    return { start, end };
+  }
 };
 
 export default function PayrollPage() {
@@ -69,6 +86,10 @@ export default function PayrollPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedBranch, setSelectedBranch] = useState('all');
 
+  // Overrides State: Record<employeeId, { bonuses?: number, attendanceDeductions?: number, otherDeductions?: number }>
+  const [payrollOverrides, setPayrollOverrides] = useState<Record<string, { bonuses?: number, attendanceDeductions?: number, otherDeductions?: number }>>({});
+  const [editingCell, setEditingCell] = useState<{ employeeId: string, field: 'bonuses' | 'attendanceDeductions' | 'otherDeductions', currentValue: number } | null>(null);
+
   // Modal States
   const [showAddBDModal, setShowAddBDModal] = useState(false);
   const [selectedEmpForBD, setSelectedEmpForBD] = useState<any>(null);
@@ -88,6 +109,126 @@ export default function PayrollPage() {
   useEffect(() => {
     fetchPayrollData();
   }, [startDate, endDate]);
+
+  const saveOverride = (employeeId: string, field: 'bonuses' | 'attendanceDeductions' | 'otherDeductions', value: number) => {
+    setPayrollOverrides(prev => {
+      const empOverrides = prev[employeeId] || {};
+      return {
+        ...prev,
+        [employeeId]: {
+          ...empOverrides,
+          [field]: value
+        }
+      };
+    });
+    setEditingCell(null);
+    toast.success('تم تعديل القيمة وتحديث صافي الراتب! 💸');
+  };
+
+  const clearOverride = (employeeId: string, field: 'bonuses' | 'attendanceDeductions' | 'otherDeductions') => {
+    setPayrollOverrides(prev => {
+      const empOverrides = { ...prev[employeeId] };
+      delete empOverrides[field];
+      const updated = { ...prev };
+      if (Object.keys(empOverrides).length === 0) {
+        delete updated[employeeId];
+      } else {
+        updated[employeeId] = empOverrides;
+      }
+      return updated;
+    });
+    setEditingCell(null);
+    toast.success('تمت استعادة القيمة التلقائية المحتسبة! 🔄');
+  };
+
+  const renderEditableCell = (emp: any, field: 'bonuses' | 'attendanceDeductions' | 'otherDeductions', displayValue: number, colorClass: string, prefixSign: string = '') => {
+    const isEditing = editingCell && editingCell.employeeId === emp.id && editingCell.field === field;
+    const empOverrides = payrollOverrides[emp.id] || {};
+    const isOverridden = empOverrides[field] !== undefined;
+
+    return (
+      <div className="relative inline-block">
+        <button
+          onClick={() => {
+            if (emp.isIssued) {
+              toast.error('الراتب معتمد ومقفل ولا يمكن تعديله 🔒');
+              return;
+            }
+            setEditingCell({
+              employeeId: emp.id,
+              field: field,
+              currentValue: displayValue
+            });
+          }}
+          className={`font-bold border-b border-dashed border-slate-700 hover:border-teal-500 hover:text-teal-300 transition-colors cursor-pointer outline-none select-none ${colorClass} ${isOverridden ? 'bg-amber-500/10 px-2 py-1 rounded-xl border-amber-500/30 hover:border-amber-400' : ''}`}
+          title="اضغط لتعديل القيمة يدوياً"
+        >
+          {displayValue > 0 ? `${prefixSign}${displayValue.toLocaleString()} د.ع` : '-'}
+          {isOverridden && <span className="text-[9px] text-amber-400 font-black mr-1" title="معدل يدوياً">*</span>}
+        </button>
+
+        {isEditing && (
+          <div className="absolute z-50 bottom-full mb-2 right-1/2 translate-x-1/2 bg-slate-900 border border-slate-800 rounded-3xl p-4 shadow-2xl w-48 text-right space-y-3 animate-glass font-sans">
+            <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-teal-500 to-indigo-500 rounded-t-3xl"></div>
+            
+            <h5 className="text-[10px] font-bold text-slate-400">
+              {field === 'bonuses' ? 'تعديل المكافآت يدوياً' : 
+               field === 'attendanceDeductions' ? 'تعديل خصومات الدوام والغياب' : 
+               'تعديل الخصومات الأخرى'}
+            </h5>
+            
+            <input 
+              type="number" 
+              defaultValue={displayValue}
+              className="w-full bg-slate-950 border border-slate-800 focus:border-teal-500 rounded-xl p-2 text-xs text-white outline-none font-bold text-left"
+              dir="ltr"
+              autoFocus
+              id="inline-edit-input"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  saveOverride(emp.id, field, Number((e.target as HTMLInputElement).value));
+                }
+                if (e.key === 'Escape') {
+                  setEditingCell(null);
+                }
+              }}
+            />
+            
+            <div className="flex gap-1.5 justify-end">
+              {isOverridden && (
+                <button 
+                  type="button" 
+                  onClick={() => clearOverride(emp.id, field)}
+                  className="text-[9px] text-amber-500 hover:text-amber-400 font-bold ml-auto"
+                >
+                  تلقائي 🔄
+                </button>
+              )}
+              <button 
+                type="button" 
+                onClick={() => setEditingCell(null)}
+                className="px-2 py-1 text-[10px] text-slate-400 hover:text-white"
+              >
+                إلغاء
+              </button>
+              <button 
+                type="button"
+                onClick={() => {
+                  const input = document.getElementById('inline-edit-input') as HTMLInputElement;
+                  if (input) {
+                    saveOverride(emp.id, field, Number(input.value));
+                  }
+                }}
+                className="px-3 py-1 bg-teal-650 hover:bg-teal-600 text-white rounded-xl text-[10px] font-bold shadow-md cursor-pointer active:scale-95 transition-all"
+              >
+                حفظ
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   const handleMonthChange = (monthVal: string) => {
     setSelectedMonth(monthVal);
@@ -155,7 +296,7 @@ export default function PayrollPage() {
           .lte('work_date', endDate),
         supabase.from('leave_requests')
           .select('*')
-          .eq('status', 'approved')
+          .in('status', ['approved', 'pending'])
           .lte('start_date', endDate)
           .gte('end_date', startDate),
         supabase.from('work_schedules')
@@ -240,8 +381,61 @@ export default function PayrollPage() {
           .in('id', empData.loanInstallmentIds);
       }
 
-      // Add detailed deduction log entries for the automatic attendance deductions for auditability
-      if (empData.totalAttendanceDeductions > 0) {
+      // Record override adjustments for bonuses, attendance deductions, and other deductions
+      if (empData.isBonusesOverridden) {
+        const diff = empData.totalBonuses - empData.computedBonuses;
+        if (diff > 0) {
+          await supabase.from('bonuses_deductions').insert({
+            employee_id: empData.id,
+            type: 'bonus',
+            amount: diff,
+            reason: `تسوية زيادة مكافآت يدوياً لشهر ${selectedMonth}`,
+            issue_date: endDate
+          });
+        } else if (diff < 0) {
+          await supabase.from('bonuses_deductions').insert({
+            employee_id: empData.id,
+            type: 'deduction',
+            amount: Math.abs(diff),
+            reason: `تسوية تخفيض مكافآت يدوياً لشهر ${selectedMonth}`,
+            issue_date: endDate
+          });
+        }
+      }
+
+      if (empData.isOtherDeductionsOverridden) {
+        const diff = (empData.totalDeductions - empData.totalAttendanceDeductions) - empData.computedOtherDeductions;
+        if (diff > 0) {
+          await supabase.from('bonuses_deductions').insert({
+            employee_id: empData.id,
+            type: 'deduction',
+            amount: diff,
+            reason: `تسوية زيادة خصومات يدوياً لشهر ${selectedMonth}`,
+            issue_date: endDate
+          });
+        } else if (diff < 0) {
+          await supabase.from('bonuses_deductions').insert({
+            employee_id: empData.id,
+            type: 'bonus',
+            amount: Math.abs(diff),
+            reason: `تسوية تخفيض خصومات يدوياً لشهر ${selectedMonth}`,
+            issue_date: endDate
+          });
+        }
+      }
+
+      if (empData.isAttendanceDeductionsOverridden) {
+        if (empData.totalAttendanceDeductions > 0) {
+          await supabase.from('bonuses_deductions').insert({
+            employee_id: empData.id,
+            type: 'deduction',
+            amount: empData.totalAttendanceDeductions,
+            reason: `خصم غياب وحضور معدل يدوياً للفترة من ${startDate} إلى ${endDate}`,
+            issue_date: endDate
+          });
+        }
+      } else if (empData.totalAttendanceDeductions > 0) {
+        // Add detailed deduction log entries for the automatic attendance deductions for auditability
         const insertBDIfNotExist = async (amount: number, reason: string) => {
           if (amount <= 0) return;
           const { data: existingBD } = await supabase
@@ -319,8 +513,61 @@ export default function PayrollPage() {
             .in('id', empData.loanInstallmentIds);
         }
 
-        // Add detailed deduction log entries for the automatic attendance deductions for auditability
-        if (empData.totalAttendanceDeductions > 0) {
+        // Record override adjustments for bonuses, attendance deductions, and other deductions
+        if (empData.isBonusesOverridden) {
+          const diff = empData.totalBonuses - empData.computedBonuses;
+          if (diff > 0) {
+            await supabase.from('bonuses_deductions').insert({
+              employee_id: empData.id,
+              type: 'bonus',
+              amount: diff,
+              reason: `تسوية زيادة مكافآت يدوياً لشهر ${selectedMonth}`,
+              issue_date: endDate
+            });
+          } else if (diff < 0) {
+            await supabase.from('bonuses_deductions').insert({
+              employee_id: empData.id,
+              type: 'deduction',
+              amount: Math.abs(diff),
+              reason: `تسوية تخفيض مكافآت يدوياً لشهر ${selectedMonth}`,
+              issue_date: endDate
+            });
+          }
+        }
+
+        if (empData.isOtherDeductionsOverridden) {
+          const diff = (empData.totalDeductions - empData.totalAttendanceDeductions) - empData.computedOtherDeductions;
+          if (diff > 0) {
+            await supabase.from('bonuses_deductions').insert({
+              employee_id: empData.id,
+              type: 'deduction',
+              amount: diff,
+              reason: `تسوية زيادة خصومات يدوياً لشهر ${selectedMonth}`,
+              issue_date: endDate
+            });
+          } else if (diff < 0) {
+            await supabase.from('bonuses_deductions').insert({
+              employee_id: empData.id,
+              type: 'bonus',
+              amount: Math.abs(diff),
+              reason: `تسوية تخفيض خصومات يدوياً لشهر ${selectedMonth}`,
+              issue_date: endDate
+            });
+          }
+        }
+
+        if (empData.isAttendanceDeductionsOverridden) {
+          if (empData.totalAttendanceDeductions > 0) {
+            await supabase.from('bonuses_deductions').insert({
+              employee_id: empData.id,
+              type: 'deduction',
+              amount: empData.totalAttendanceDeductions,
+              reason: `خصم غياب وحضور معدل يدوياً للفترة من ${startDate} إلى ${endDate}`,
+              issue_date: endDate
+            });
+          }
+        } else if (empData.totalAttendanceDeductions > 0) {
+          // Add detailed deduction log entries for the automatic attendance deductions for auditability
           const insertBDIfNotExist = async (amount: number, reason: string) => {
             if (amount <= 0) return;
             const { data: existingBD } = await supabase
@@ -379,12 +626,12 @@ export default function PayrollPage() {
       const { error: delErr } = await supabase.from('salary_slips').delete().eq('id', slip.id);
       if (delErr) throw delErr;
 
-      // 2. Delete auto-generated bonuses_deductions
+      // 2. Delete auto-generated bonuses_deductions and adjustments
       await supabase.from('bonuses_deductions')
         .delete()
         .eq('employee_id', empData.id)
         .eq('issue_date', endDate)
-        .like('reason', `%للفترة من ${startDate} إلى ${endDate}%`);
+        .or(`reason.like.%للفترة من ${startDate} إلى ${endDate}%,reason.like.%لشهر ${selectedMonth}%`);
 
       // 3. Mark loan installments back to unpaid
       const { data: userLoans } = await supabase.from('loans').select('id').eq('employee_id', empData.id);
@@ -456,6 +703,7 @@ export default function PayrollPage() {
     let absencesCount = 0;
     let paidLeavesCount = 0;
     let scheduledWorkDays = 0;
+    let unconfirmedAbsencesCount = 0;
 
     const detailLogs: any[] = [];
     const empExcuses = excusedDays[emp.id] || [];
@@ -489,7 +737,7 @@ export default function PayrollPage() {
           return d >= s && d <= e;
         };
         
-        const leaveRecord = leaveRequests.find(l => l.employee_id === emp.id && isDateWithinRange(loopDate, l.start_date, l.end_date));
+        const leaveRecord = leaveRequests.find(l => l.employee_id === emp.id && l.status === 'approved' && isDateWithinRange(loopDate, l.start_date, l.end_date));
 
         if (attRecord) {
           const status = attRecord.status;
@@ -610,6 +858,9 @@ export default function PayrollPage() {
               // Not excused, no attendance, no leave -> Unconfirmed absence (no auto-deduction)
               // We do not increment absencesCount automatically anymore.
               // Absences must be manually applied from the tracking/attendance decisions screen.
+              if (isPastOrToday) {
+                unconfirmedAbsencesCount++;
+              }
               detailLogs.push({
                 date: dateStr,
                 status: 'يوم بدون حضور ⚠️',
@@ -652,22 +903,56 @@ export default function PayrollPage() {
     const halfDayDeduction = Math.round(halfDaysCount * dailyWage * 0.5);
     const latenessDeduction = Math.round(totalLateMinutes * (dailyWage / workdayMinutes));
     const earlyExitDeduction = Math.round(totalEarlyExitMinutes * (dailyWage / workdayMinutes));
-    const totalAttendanceDeductions = absenceDeduction + halfDayDeduction + latenessDeduction + earlyExitDeduction;
+
+    // Apply overrides
+    const empOverrides = payrollOverrides[emp.id] || {};
+
+    const computedAttendanceDeductions = absenceDeduction + halfDayDeduction + latenessDeduction + earlyExitDeduction;
+    const finalAttendanceDeductions = empOverrides.attendanceDeductions !== undefined 
+      ? empOverrides.attendanceDeductions 
+      : computedAttendanceDeductions;
 
     const empBDs = bonusesAndDeductions.filter(bd => bd.employee_id === emp.id);
-    const totalBonuses = empBDs.filter(bd => bd.type === 'bonus').reduce((sum, bd) => sum + Number(bd.amount), 0);
-    const totalDeductions = empBDs.filter(bd => bd.type === 'deduction').reduce((sum, bd) => sum + Number(bd.amount), 0) + totalAttendanceDeductions;
+    
+    const computedBonuses = empBDs.filter(bd => bd.type === 'bonus').reduce((sum, bd) => sum + Number(bd.amount), 0);
+    const finalBonuses = empOverrides.bonuses !== undefined 
+      ? empOverrides.bonuses 
+      : computedBonuses;
+
+    const computedOtherDeductions = empBDs.filter(bd => bd.type === 'deduction').reduce((sum, bd) => sum + Number(bd.amount), 0);
+    const finalOtherDeductions = empOverrides.otherDeductions !== undefined 
+      ? empOverrides.otherDeductions 
+      : computedOtherDeductions;
+
+    const finalDeductions = finalOtherDeductions + finalAttendanceDeductions;
     
     const empLoans = loanInstallments.filter(l => l.loans?.employee_id === emp.id);
     const loanDeduction = empLoans.reduce((sum, l) => sum + Number(l.amount), 0);
     const loanInstallmentIds = empLoans.map(l => l.id);
 
-    const netSalary = basic + totalBonuses - totalDeductions - loanDeduction;
+    const netSalary = basic + finalBonuses - finalDeductions - loanDeduction;
     const isIssued = existingSlips.some(slip => slip.employee_id === emp.id);
+
+    let displayBasic = basic;
+    let displayBonuses = finalBonuses;
+    let displayAttendanceDeductions = finalAttendanceDeductions;
+    let displayDeductions = finalDeductions;
+    let displayLoanDeduction = loanDeduction;
+    let displayNetSalary = netSalary;
+
+    const issuedSlip = existingSlips.find(slip => slip.employee_id === emp.id);
+    if (issuedSlip) {
+      displayBasic = Number(issuedSlip.basic_salary);
+      displayBonuses = Number(issuedSlip.allowances);
+      displayLoanDeduction = Number(issuedSlip.loans_deduction);
+      displayDeductions = Number(issuedSlip.deductions);
+      displayNetSalary = Number(issuedSlip.net_salary);
+      displayAttendanceDeductions = Math.min(displayDeductions, finalAttendanceDeductions);
+    }
 
     return {
       ...emp,
-      basic,
+      basic: displayBasic,
       scheduledWorkDays,
       presentsCount,
       latesCount,
@@ -681,14 +966,28 @@ export default function PayrollPage() {
       paidLeavesCount,
       absenceDeduction,
       halfDayDeduction,
-      totalAttendanceDeductions,
-      totalBonuses,
-      totalDeductions,
-      loanDeduction,
+      totalAttendanceDeductions: displayAttendanceDeductions,
+      totalBonuses: displayBonuses,
+      totalDeductions: displayDeductions,
+      loanDeduction: displayLoanDeduction,
       loanInstallmentIds,
-      netSalary,
+      netSalary: displayNetSalary,
       isIssued,
-      detailLogs
+      detailLogs,
+      
+      // Smart Validation Flags
+      isNetNegative: !isIssued && displayNetSalary < 0,
+      isAttendanceMissing: !isIssued && scheduledWorkDays > 0 && presentsCount === 0 && absencesCount === 0 && halfDaysCount === 0 && paidLeavesCount === 0,
+      hasPendingLeave: !isIssued && leaveRequests.some(l => l.employee_id === emp.id && l.status === 'pending'),
+      unconfirmedAbsencesCount: isIssued ? 0 : unconfirmedAbsencesCount,
+
+      // Overridden flags for styling and database adjustments
+      isBonusesOverridden: empOverrides.bonuses !== undefined,
+      isAttendanceDeductionsOverridden: empOverrides.attendanceDeductions !== undefined,
+      isOtherDeductionsOverridden: empOverrides.otherDeductions !== undefined,
+      computedAttendanceDeductions,
+      computedBonuses,
+      computedOtherDeductions
     };
   });
 
@@ -713,6 +1012,10 @@ export default function PayrollPage() {
   // Retrieve the selected employee for breakdown dynamically from the processed list
   const selectedEmpForBreakdown = processedPayroll.find(emp => emp.id === selectedEmpIdForBreakdown);
 
+  const monthParts = selectedMonth ? selectedMonth.split('-') : [];
+  const currentYearVal = monthParts[0] || new Date().getFullYear().toString();
+  const currentMonthVal = monthParts[1] || (new Date().getMonth() + 1).toString().padStart(2, '0');
+
   if (loading) {
     return (
       <div className="flex-grow flex items-center justify-center">
@@ -734,45 +1037,65 @@ export default function PayrollPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-3 bg-slate-950/50 p-2 rounded-2xl border border-slate-800/50">
-          {/* Month Selector for Auto-Prefilling Cycle */}
+          {/* Select Month Dropdown */}
           <div className="flex flex-col gap-1 px-2">
-            <span className="text-[9px] text-slate-400 font-bold">الدورة المالية (الشهر)</span>
-            <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5">
+            <span className="text-[9px] text-slate-400 font-bold">الشهر</span>
+            <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 hover:border-teal-500/50 transition-colors">
               <CalendarIcon className="w-3.5 h-3.5 text-teal-400" />
-              <input 
-                type="month" 
-                value={selectedMonth}
-                onChange={(e) => handleMonthChange(e.target.value)}
-                className="bg-transparent border-none text-white text-[11px] outline-none cursor-pointer font-bold"
-              />
+              <select
+                value={currentMonthVal}
+                onChange={(e) => {
+                  const newMonth = e.target.value;
+                  handleMonthChange(`${currentYearVal}-${newMonth}`);
+                }}
+                className="bg-transparent border-none text-white text-[11px] outline-none cursor-pointer font-bold select-none pr-1 focus:ring-0"
+              >
+                <option value="01" className="bg-slate-900 text-white">1 - كانون الثاني (يناير)</option>
+                <option value="02" className="bg-slate-900 text-white">2 - شباط (فبراير)</option>
+                <option value="03" className="bg-slate-900 text-white">3 - آذار (مارس)</option>
+                <option value="04" className="bg-slate-900 text-white">4 - نيسان (أبريل)</option>
+                <option value="05" className="bg-slate-900 text-white">5 - أيار (مايو)</option>
+                <option value="06" className="bg-slate-900 text-white">6 - حزيران (يونيو)</option>
+                <option value="07" className="bg-slate-900 text-white">7 - تموز (يوليو)</option>
+                <option value="08" className="bg-slate-900 text-white">8 - آب (أغسطس)</option>
+                <option value="09" className="bg-slate-900 text-white">9 - أيلول (سبتمبر)</option>
+                <option value="10" className="bg-slate-900 text-white">10 - تشرين الأول (أكتوبر)</option>
+                <option value="11" className="bg-slate-900 text-white">11 - تشرين الثاني (نوفمبر)</option>
+                <option value="12" className="bg-slate-900 text-white">12 - كانون الأول (ديسمبر)</option>
+              </select>
             </div>
           </div>
 
-          {/* From Date Picker */}
+          {/* Select Year Dropdown */}
           <div className="flex flex-col gap-1 px-2 border-r border-slate-800/80">
-            <span className="text-[9px] text-slate-400 font-bold">من تاريخ</span>
-            <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5">
+            <span className="text-[9px] text-slate-400 font-bold">السنة</span>
+            <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 hover:border-teal-500/50 transition-colors">
               <CalendarIcon className="w-3.5 h-3.5 text-teal-400" />
-              <input 
-                type="date" 
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="bg-transparent border-none text-white text-[11px] outline-none cursor-pointer font-bold"
-              />
+              <select
+                value={currentYearVal}
+                onChange={(e) => {
+                  const newYear = e.target.value;
+                  handleMonthChange(`${newYear}-${currentMonthVal}`);
+                }}
+                className="bg-transparent border-none text-white text-[11px] outline-none cursor-pointer font-bold select-none focus:ring-0"
+              >
+                {Array.from({ length: 9 }, (_, i) => 2024 + i).map(year => (
+                  <option key={year} value={year.toString()} className="bg-slate-900 text-white">
+                    {year}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
 
-          {/* To Date Picker */}
-          <div className="flex flex-col gap-1 px-2 border-r border-slate-800/80">
-            <span className="text-[9px] text-slate-400 font-bold">إلى تاريخ</span>
-            <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5">
-              <CalendarIcon className="w-3.5 h-3.5 text-teal-400" />
-              <input 
-                type="date" 
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="bg-transparent border-none text-white text-[11px] outline-none cursor-pointer font-bold"
-              />
+          {/* Calculated Date Range (Read-Only Info Badge) */}
+          <div className="flex flex-col gap-1 px-3 border-r border-slate-800/80 justify-center">
+            <span className="text-[9px] text-slate-400 font-bold">الفترة المالية المحتسبة تلقائياً</span>
+            <div className="text-[11px] text-teal-300 font-extrabold font-mono bg-teal-950/20 border border-teal-500/15 px-3 py-1.5 rounded-xl flex items-center gap-1.5 select-none">
+              <Clock className="w-3 h-3 text-teal-400" />
+              <span>{startDate}</span>
+              <span className="text-slate-500">←</span>
+              <span>{endDate}</span>
             </div>
           </div>
 
@@ -862,6 +1185,34 @@ export default function PayrollPage() {
                     <td className="p-4">
                       <div className="flex flex-col">
                         <span className="font-bold text-white text-xs">{emp.full_name}</span>
+                        
+                        {/* Smart Validation Badges */}
+                        <div className="flex flex-wrap gap-1 mt-1 justify-start">
+                          {emp.isNetNegative && (
+                            <span className="px-2 py-0.5 bg-rose-500/15 border border-rose-500/30 text-rose-400 rounded-lg text-[9px] font-bold flex items-center gap-1 select-none">
+                              <span>الراتب الصافي سالب</span>
+                              <span>⚠️</span>
+                            </span>
+                          )}
+                          {emp.isAttendanceMissing && (
+                            <span className="px-2 py-0.5 bg-amber-500/15 border border-amber-500/30 text-amber-400 rounded-lg text-[9px] font-bold flex items-center gap-1 select-none">
+                              <span>لا توجد بصمات حضور</span>
+                              <span>⚠️</span>
+                            </span>
+                          )}
+                          {emp.hasPendingLeave && (
+                            <span className="px-2 py-0.5 bg-sky-500/15 border border-sky-500/30 text-sky-400 rounded-lg text-[9px] font-bold flex items-center gap-1 select-none">
+                              <span>طلب إجازة معلق</span>
+                              <span>⏳</span>
+                            </span>
+                          )}
+                          {emp.unconfirmedAbsencesCount > 0 && (
+                            <span className="px-2 py-0.5 bg-orange-500/15 border border-orange-500/30 text-orange-400 rounded-lg text-[9px] font-bold flex items-center gap-1 select-none">
+                              <span>غياب غير مثبت ({emp.unconfirmedAbsencesCount} أيام)</span>
+                              <span>⚠️</span>
+                            </span>
+                          )}
+                        </div>
                         <button 
                           onClick={() => setSelectedEmpIdForBreakdown(emp.id)}
                           className="text-[10px] text-teal-400 hover:text-teal-300 font-bold mt-1 text-right flex items-center gap-1 cursor-pointer"
@@ -874,20 +1225,18 @@ export default function PayrollPage() {
                     <td className="p-4 text-slate-400 font-bold">{emp.branches?.name || '-'}</td>
                     <td className="p-4 font-bold text-slate-200">{emp.basic.toLocaleString()} د.ع</td>
                     <td className="p-4 font-bold text-emerald-400">
-                      {emp.totalBonuses > 0 ? `+ ${emp.totalBonuses.toLocaleString()} د.ع` : '-'}
+                      {renderEditableCell(emp, 'bonuses', emp.totalBonuses, 'text-emerald-400', '+ ')}
                     </td>
                     <td className="p-4 font-bold text-amber-500">
-                      {emp.totalAttendanceDeductions > 0 ? (
-                        <div className="flex flex-col">
-                          <span>- {emp.totalAttendanceDeductions.toLocaleString()} د.ع</span>
-                          <span className="text-[9px] opacity-75">({emp.absencesCount} غياب ، {emp.halfDaysCount} نصف يوم)</span>
-                        </div>
-                      ) : '-'}
+                      {renderEditableCell(emp, 'attendanceDeductions', emp.totalAttendanceDeductions, 'text-amber-500', '- ')}
+                      {!emp.isAttendanceDeductionsOverridden && emp.totalAttendanceDeductions > 0 && (
+                        <span className="block text-[9px] opacity-75 text-right mt-1">
+                          ({emp.absencesCount} غياب ، {emp.halfDaysCount} نصف يوم)
+                        </span>
+                      )}
                     </td>
                     <td className="p-4 font-bold text-rose-400">
-                      {(emp.totalDeductions - emp.totalAttendanceDeductions) > 0 ? (
-                        `- ${(emp.totalDeductions - emp.totalAttendanceDeductions).toLocaleString()} د.ع`
-                      ) : '-'}
+                      {renderEditableCell(emp, 'otherDeductions', (emp.totalDeductions - emp.totalAttendanceDeductions), 'text-rose-400', '- ')}
                     </td>
                     <td className="p-4 font-bold text-orange-400">
                       {emp.loanDeduction > 0 ? `- ${emp.loanDeduction.toLocaleString()} د.ع` : '-'}

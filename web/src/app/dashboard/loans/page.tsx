@@ -26,10 +26,29 @@ export default function LoansPage() {
   const [approvalModal, setApprovalModal] = useState<any>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [editLoanModal, setEditLoanModal] = useState<any>(null);
+  const [loansTab, setLoansTab] = useState<'active' | 'completed'>('active');
+
+  // New States for Advanced Installment Management
+  const [selectedLoanForInstallments, setSelectedLoanForInstallments] = useState<any>(null);
+  const [cashPaymentPrompt, setCashPaymentPrompt] = useState<any>(null); // { installmentId, amount }
+  const [cashNote, setCashNote] = useState('');
+  const [editInstallmentPrompt, setEditInstallmentPrompt] = useState<any>(null); // { installmentId, amount }
+  const [newInstallmentAmtVal, setNewInstallmentAmtVal] = useState(0);
 
   useEffect(() => {
     fetchLoanRequests();
   }, []);
+
+  useEffect(() => {
+    if (selectedLoanForInstallments) {
+      const fresh = activeLoans.find(l => l.id === selectedLoanForInstallments.id);
+      if (fresh) {
+        setSelectedLoanForInstallments(fresh);
+      } else {
+        setSelectedLoanForInstallments(null);
+      }
+    }
+  }, [activeLoans]);
 
   const fetchLoanRequests = async () => {
     setLoading(true);
@@ -278,6 +297,151 @@ export default function LoansPage() {
     }
   };
 
+  const handleRecordCashPayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!cashPaymentPrompt) return;
+    
+    setActionLoading('cash_' + cashPaymentPrompt.installmentId);
+    try {
+      const { error } = await supabase
+        .from('loan_installments')
+        .update({
+          is_paid: true,
+          paid_at: new Date().toISOString(),
+          payment_type: 'cash',
+          payment_note: cashNote || 'سداد نقدي مباشر'
+        })
+        .eq('id', cashPaymentPrompt.installmentId);
+
+      if (error) throw error;
+      
+      toast.success('تم تسجيل السداد النقدي وتحديث الرصيد المتبقي بنجاح! 💵');
+      setCashPaymentPrompt(null);
+      setCashNote('');
+      fetchLoanRequests();
+    } catch (err: any) {
+      toast.error(`فشل تسجيل السداد: ${err.message || err}`);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleRevertPayment = async (installmentId: string) => {
+    setActionLoading('revert_' + installmentId);
+    try {
+      const { error } = await supabase
+        .from('loan_installments')
+        .update({
+          is_paid: false,
+          paid_at: null,
+          payment_type: 'salary_deduction',
+          payment_note: null
+        })
+        .eq('id', installmentId);
+
+      if (error) throw error;
+      
+      toast.success('تم التراجع عن السداد بنجاح! 🔄');
+      fetchLoanRequests();
+    } catch (err: any) {
+      toast.error(`فشل التراجع عن السداد: ${err.message || err}`);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleDeletePaidInstallment = async (installmentId: string) => {
+    if (!window.confirm('هل أنت متأكد من حذف هذا القسط المسدد نهائياً من قاعدة البيانات لتوفير المساحة؟ هذا الإجراء غير قابل للتراجع ولن يؤثر على رصيد السلفة المتبقي.')) return;
+    
+    setActionLoading('delete_inst_' + installmentId);
+    try {
+      const { error } = await supabase
+        .from('loan_installments')
+        .delete()
+        .eq('id', installmentId);
+
+      if (error) throw error;
+
+      toast.success('تم حذف القسط المسدد نهائياً من قاعدة البيانات! 🗑️');
+      
+      if (selectedLoanForInstallments) {
+        const updatedInsts = (selectedLoanForInstallments.loan_installments || []).filter((i: any) => i.id !== installmentId);
+        setSelectedLoanForInstallments({
+          ...selectedLoanForInstallments,
+          loan_installments: updatedInsts
+        });
+      }
+      
+      fetchLoanRequests();
+    } catch (err: any) {
+      toast.error(`فشل حذف القسط: ${err.message || err}`);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleUpdateInstallmentAmount = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editInstallmentPrompt || newInstallmentAmtVal <= 0) return;
+    
+    setActionLoading('update_amt_' + editInstallmentPrompt.installmentId);
+    try {
+      const { error } = await supabase
+        .from('loan_installments')
+        .update({
+          amount: newInstallmentAmtVal
+        })
+        .eq('id', editInstallmentPrompt.installmentId);
+
+      if (error) throw error;
+      
+      toast.success('تم تعديل قيمة القسط وتحديث الرصيد المتبقي بنجاح! ✏️');
+      setEditInstallmentPrompt(null);
+      setNewInstallmentAmtVal(0);
+      fetchLoanRequests();
+    } catch (err: any) {
+      toast.error(`فشل تعديل القسط: ${err.message || err}`);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handlePostponeInstallment = async (loanId: string, instId: string, instDueDate: string) => {
+    setActionLoading('postpone_' + instId);
+    try {
+      // Fetch all unpaid installments for this loan that are due on or after this date
+      const { data: installments, error: getErr } = await supabase
+        .from('loan_installments')
+        .select('*')
+        .eq('loan_id', loanId)
+        .eq('is_paid', false)
+        .gte('due_date', instDueDate)
+        .order('due_date', { ascending: true });
+        
+      if (getErr || !installments || installments.length === 0) return;
+      
+      for (const inst of installments) {
+        const oldDate = new Date(inst.due_date);
+        oldDate.setMonth(oldDate.getMonth() + 1);
+        await supabase
+          .from('loan_installments')
+          .update({ due_date: oldDate.toISOString().split('T')[0] })
+          .eq('id', inst.id);
+      }
+      
+      toast.success('تم تأجيل القسط والأقساط اللاحقة شهراً إضافياً بنجاح! 🔄');
+      fetchLoanRequests();
+    } catch (err) {
+      toast.error('فشل تأجيل القسط.');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const incompleteLoans = activeLoans.filter(l => Number(l.remaining_amount) > 0);
+  const completedLoans = activeLoans.filter(l => Number(l.remaining_amount) <= 0);
+  const displayedLoans = loansTab === 'active' ? incompleteLoans : completedLoans;
+
   if (loading) {
     return (
       <div className="flex-grow flex items-center justify-center">
@@ -380,11 +544,41 @@ export default function LoansPage() {
             })}
           </div>
         )}
-        {/* Active Loans Section */}
+        {/* Active & Completed Loans Section */}
         <div className="mt-12 pt-8 border-t border-slate-800/80">
-          <div className="flex items-center gap-2 mb-6">
-            <CreditCard className="w-5 h-5 text-indigo-400" />
-            <h3 className="text-lg font-extrabold text-white">إدارة السلف الجارية (النشطة)</h3>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 border-b border-slate-800 pb-4">
+            <div className="flex items-center gap-2">
+              <CreditCard className="w-5 h-5 text-indigo-400" />
+              <h3 className="text-lg font-extrabold text-white">
+                {loansTab === 'active' ? 'إدارة السلف الجارية (النشطة)' : 'سجل السلف المكتملة المسددة'}
+              </h3>
+            </div>
+            
+            {/* Tab Bar (شريط التبويب) */}
+            <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-800">
+              <button
+                type="button"
+                onClick={() => setLoansTab('active')}
+                className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  loansTab === 'active'
+                    ? 'bg-teal-600 text-white shadow-md'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                السلف الجارية ({incompleteLoans.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setLoansTab('completed')}
+                className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  loansTab === 'completed'
+                    ? 'bg-teal-600 text-white shadow-md'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                السلف المكتملة ({completedLoans.length})
+              </button>
+            </div>
           </div>
           
           <div className="overflow-x-auto rounded-2xl border border-slate-800/60">
@@ -393,20 +587,20 @@ export default function LoansPage() {
                 <tr>
                   <th className="px-4 py-4 font-bold">الموظف</th>
                   <th className="px-4 py-4 font-bold">المبلغ الكلي</th>
-                  <th className="px-4 py-4 font-bold">المتبقي (الأقساط)</th>
+                  <th className="px-4 py-4 font-bold">المبلغ المتبقي (الأقساط)</th>
                   <th className="px-4 py-4 font-bold">القسط القادم</th>
                   <th className="px-4 py-4 font-bold text-center">الإجراءات الذكية</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60 bg-slate-950/30">
-                {activeLoans.length === 0 ? (
+                {displayedLoans.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="px-4 py-12 text-center text-slate-500 text-xs">
-                      لا توجد سلف جارية حالياً
+                      {loansTab === 'active' ? 'لا توجد سلف جارية حالياً' : 'لا توجد سلف مكتملة حالياً'}
                     </td>
                   </tr>
                 ) : (
-                  activeLoans.map((loan) => {
+                  displayedLoans.map((loan) => {
                     const unpaid = (loan.loan_installments || []).filter((i: any) => !i.is_paid).sort((a: any, b: any) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
                     const nextInstallment = unpaid.length > 0 ? unpaid[0] : null;
                     
@@ -414,40 +608,26 @@ export default function LoansPage() {
                       <tr key={loan.id} className="hover:bg-slate-900/40 transition-colors">
                         <td className="px-4 py-3 font-bold text-white text-xs">{loan.employees?.full_name}</td>
                         <td className="px-4 py-3 text-teal-400 font-bold text-xs">{Number(loan.amount).toLocaleString()} د.ع</td>
-                        <td className="px-4 py-3 text-slate-300 text-xs font-bold">
-                          {unpaid.length} أقساط
+                        <td className="px-4 py-3 text-xs font-bold">
+                          <div className="flex flex-col">
+                            <span className={Number(loan.remaining_amount) > 0 ? 'text-amber-500 font-black text-xs' : 'text-emerald-400 font-black text-xs'}>
+                              {Number(loan.remaining_amount).toLocaleString()} د.ع
+                            </span>
+                            <span className="text-[10px] text-slate-500">({unpaid.length} أقساط متبقية)</span>
+                          </div>
                         </td>
                         <td className="px-4 py-3 text-amber-400 text-xs font-mono">
-                          {nextInstallment ? nextInstallment.due_date : 'اكتمل السداد'}
+                          {nextInstallment ? nextInstallment.due_date : 'اكتمل السداد ✨'}
                         </td>
                         <td className="px-4 py-3 flex items-center justify-center gap-2">
-                          {nextInstallment && (
-                            <>
-                              <button
-                                onClick={() => setEditLoanModal({
-                                  isOpen: true,
-                                  loan,
-                                  amount: Number(loan.amount),
-                                  installmentAmount: Number(loan.installment_amount),
-                                  installmentCount: Number(loan.installment_count),
-                                  remainingAmount: Number(loan.remaining_amount),
-                                })}
-                                className="px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 text-blue-400 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
-                              >
-                                <Save className="w-3.5 h-3.5" />
-                                <span>تعديل السلفة</span>
-                              </button>
-
-                              <button
-                                disabled={actionLoading === 'skip_' + loan.id}
-                                onClick={() => handleSkipInstallment(loan.id)}
-                                className="px-3 py-1.5 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/20 text-indigo-400 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
-                              >
-                                {actionLoading === 'skip_' + loan.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ArrowRightLeft className="w-3.5 h-3.5" />}
-                                <span>تخطي شهر وتأجيل</span>
-                              </button>
-                            </>
-                          )}
+                          <button
+                            type="button"
+                            onClick={() => setSelectedLoanForInstallments(loan)}
+                            className="px-3.5 py-2 bg-teal-500/10 hover:bg-teal-500/20 border border-teal-500/20 hover:border-teal-500/40 text-teal-400 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
+                          >
+                            <Calendar className="w-4 h-4" />
+                            <span>جدول الأقساط والسداد</span>
+                          </button>
                         </td>
                       </tr>
                     );
@@ -607,6 +787,255 @@ export default function LoansPage() {
                 {actionLoading !== null ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                 <span>حفظ التعديلات وإعادة الجدولة</span>
               </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Installments & Repayment Schedule Modal */}
+      {selectedLoanForInstallments && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 overflow-y-auto">
+          <div className="relative w-full max-w-2xl bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl p-6 text-right animate-glass my-8">
+            <button 
+              onClick={() => setSelectedLoanForInstallments(null)} 
+              className="absolute top-4 left-4 p-2 text-slate-400 hover:text-white bg-slate-950/40 rounded-xl hover:bg-slate-950 transition-colors cursor-pointer"
+            >
+              ✕
+            </button>
+
+            <h3 className="text-md font-extrabold text-white flex items-center gap-2 mb-2 border-b border-slate-800 pb-4">
+              <Coins className="w-5 h-5 text-teal-400" />
+              <span>جدول سداد وأقساط سلفة: {selectedLoanForInstallments.employees?.full_name}</span>
+            </h3>
+
+            {/* Loan Status Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+              <div className="bg-slate-950/40 border border-slate-850 p-3 rounded-2xl text-center">
+                <span className="text-[10px] text-slate-500 block mb-1">المبلغ الكلي للسلفة</span>
+                <span className="text-xs font-black text-white">{Number(selectedLoanForInstallments.amount).toLocaleString()} د.ع</span>
+              </div>
+              <div className="bg-slate-950/40 border border-slate-850 p-3 rounded-2xl text-center">
+                <span className="text-[10px] text-emerald-400 block mb-1">إجمالي ما تم سداده</span>
+                <span className="text-xs font-black text-emerald-400">
+                  {((Number(selectedLoanForInstallments.amount) - Number(selectedLoanForInstallments.remaining_amount)) || 0).toLocaleString()} د.ع
+                </span>
+              </div>
+              <div className="bg-slate-950/40 border border-slate-850 p-3 rounded-2xl text-center">
+                <span className="text-[10px] text-amber-500 block mb-1">المبلغ المتبقي للسداد</span>
+                <span className="text-xs font-black text-amber-500">{Number(selectedLoanForInstallments.remaining_amount).toLocaleString()} د.ع</span>
+              </div>
+              <div className="bg-slate-950/40 border border-slate-850 p-3 rounded-2xl text-center">
+                <span className="text-[10px] text-indigo-400 block mb-1">القسط الشهري الافتراضي</span>
+                <span className="text-xs font-black text-indigo-400">{Number(selectedLoanForInstallments.installment_amount).toLocaleString()} د.ع</span>
+              </div>
+            </div>
+
+            {/* Actions for Entire Loan */}
+            <div className="flex gap-3 mb-6 bg-slate-950/20 p-3 rounded-2xl border border-slate-850 justify-between items-center">
+              <span className="text-[10px] text-slate-400 font-bold">إجراءات السلفة العامة:</span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setEditLoanModal({
+                    isOpen: true,
+                    loan: selectedLoanForInstallments,
+                    amount: Number(selectedLoanForInstallments.amount),
+                    installmentAmount: Number(selectedLoanForInstallments.installment_amount),
+                    installmentCount: Number(selectedLoanForInstallments.installment_count),
+                    remainingAmount: Number(selectedLoanForInstallments.remaining_amount),
+                  })}
+                  className="px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 text-blue-400 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
+                >
+                  <Settings className="w-3.5 h-3.5" />
+                  <span>تعديل السلفة وإعادة الجدولة</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Installments Table */}
+            <h4 className="text-xs font-bold text-slate-400 mb-3 flex items-center gap-1.5">
+              <Calendar className="w-4 h-4 text-teal-400" />
+              <span>تفاصيل الأقساط وجدول السداد:</span>
+            </h4>
+
+            <div className="overflow-y-auto max-h-[300px] border border-slate-800 rounded-2xl bg-slate-950/20 divide-y divide-slate-800/80">
+              {(selectedLoanForInstallments.loan_installments || [])
+                .sort((a: any, b: any) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime())
+                .map((inst: any, idx: number) => {
+                  const isPaid = inst.is_paid;
+                  
+                  return (
+                    <div key={inst.id} className="p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs hover:bg-slate-900/40 transition-colors">
+                      <div className="flex items-center gap-4">
+                        <span className="font-bold text-slate-500 w-12">قسط #{idx + 1}</span>
+                        <span className="font-mono text-slate-300 font-bold bg-slate-900 border border-slate-800 px-2 py-0.5 rounded-lg">{inst.due_date}</span>
+                        <span className="font-bold text-white">{Number(inst.amount).toLocaleString()} د.ع</span>
+                      </div>
+
+                      <div className="flex items-center gap-3 justify-end">
+                        {/* Status Badge */}
+                        <span className={`px-2.5 py-1 rounded-xl font-bold text-[9px] ${
+                          isPaid 
+                            ? (inst.payment_type === 'cash' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/15' : 'bg-blue-500/10 text-blue-400 border border-blue-500/15')
+                            : 'bg-slate-800 text-slate-400'
+                        }`}>
+                          {isPaid 
+                            ? (inst.payment_type === 'cash' ? `مدفوع نقداً 💵 ${inst.payment_note ? `(${inst.payment_note})` : ''}` : 'مدفوع استقطاع راتب 💸')
+                            : 'غير مدفوع ⏳'
+                          }
+                        </span>
+
+                        {/* Actions */}
+                        <div className="flex gap-1.5">
+                          {!isPaid ? (
+                            <>
+                              <button
+                                disabled={actionLoading !== null}
+                                onClick={() => {
+                                  setCashPaymentPrompt({ installmentId: inst.id, amount: inst.amount });
+                                  setCashNote('');
+                                }}
+                                className="px-2 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-emerald-400 rounded-lg text-[10px] font-bold transition-all cursor-pointer"
+                                title="تسجيل سداد نقدي كاش خارج الراتب"
+                              >
+                                دفع نقدي 💵
+                              </button>
+                              <button
+                                disabled={actionLoading !== null}
+                                onClick={() => handlePostponeInstallment(selectedLoanForInstallments.id, inst.id, inst.due_date)}
+                                className="px-2 py-1 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/20 text-indigo-400 rounded-lg text-[10px] font-bold transition-all cursor-pointer"
+                                title="تأجيل هذا القسط والأقساط اللاحقة شهراً إضافياً"
+                              >
+                                تأجيل قسط 🔄
+                              </button>
+                              <button
+                                disabled={actionLoading !== null}
+                                onClick={() => {
+                                  setEditInstallmentPrompt({ installmentId: inst.id, amount: inst.amount });
+                                  setNewInstallmentAmtVal(Number(inst.amount));
+                                }}
+                                className="px-2 py-1 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 text-blue-400 rounded-lg text-[10px] font-bold transition-all cursor-pointer"
+                                title="تعديل قيمة هذا القسط يدوياً"
+                              >
+                                تعديل ✏️
+                              </button>
+                            </>
+                          ) : (
+                            <div className="flex gap-1.5">
+                              <button
+                                disabled={actionLoading !== null}
+                                onClick={() => {
+                                  if (window.confirm('هل تريد إلغاء حالة السداد لهذا القسط وإعادته لغير مدفوع؟ سيتم إعادة إضافة القسط للمبلغ المتبقي ويستقطع مع الراتب القادم.')) {
+                                    handleRevertPayment(inst.id);
+                                  }
+                                }}
+                                className="px-2 py-1 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-rose-400 rounded-lg text-[10px] font-bold transition-all cursor-pointer"
+                                title="التراجع عن دفع القسط وإعادته لغير مدفوع"
+                              >
+                                تراجع عن الدفع 🔄
+                              </button>
+                              <button
+                                type="button"
+                                disabled={actionLoading !== null}
+                                onClick={() => handleDeletePaidInstallment(inst.id)}
+                                className="px-2 py-1 bg-red-500/15 hover:bg-red-650 border border-red-500/20 text-red-400 hover:text-white rounded-lg text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1"
+                                title="حذف القسط المسدد نهائياً من قاعدة البيانات لتوفير المساحة"
+                              >
+                                <span>حذف نهائي 🗑️</span>
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+
+            <div className="flex justify-end pt-6 mt-6 border-t border-slate-800">
+              <button 
+                onClick={() => setSelectedLoanForInstallments(null)}
+                className="px-6 py-2.5 bg-slate-950 hover:bg-slate-900 text-white rounded-xl text-xs font-bold transition-all border border-slate-800 cursor-pointer"
+              >
+                موافق وإغلاق
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Record Cash Payment Prompt Modal */}
+      {cashPaymentPrompt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 w-full max-w-sm shadow-2xl animate-glass text-right">
+            <h3 className="text-sm font-bold text-white flex items-center gap-2 mb-4">
+              <Coins className="w-5 h-5 text-emerald-400" />
+              <span>تسجيل سداد نقدي (كاش) للقسط</span>
+            </h3>
+            
+            <form onSubmit={handleRecordCashPayment} className="space-y-4">
+              <div className="p-3.5 bg-slate-950/50 rounded-xl text-xs text-slate-350 space-y-1">
+                <p>• قيمة القسط المراد سداده: <span className="font-mono text-white font-bold">{Number(cashPaymentPrompt.amount).toLocaleString()} د.ع</span></p>
+                <p className="text-[10px] text-amber-400">* سيتم خصم هذا القسط وتحديث رصيد السلفة فورياً وتخطيه في الراتب القادم.</p>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs text-slate-400 font-bold">ملاحظات السداد (اختياري)</label>
+                <input 
+                  type="text" 
+                  value={cashNote}
+                  onChange={(e) => setCashNote(e.target.value)}
+                  placeholder="مثال: دفع كاش بالكامل بوصل استلام يدوي"
+                  className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-xs focus:border-emerald-500/50 outline-none transition-all"
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4 border-t border-slate-800 mt-4">
+                <button type="button" onClick={() => setCashPaymentPrompt(null)} className="px-4 py-2 text-xs text-slate-400">إلغاء</button>
+                <button
+                  type="submit"
+                  disabled={actionLoading !== null}
+                  className="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-lg flex items-center gap-2 cursor-pointer"
+                >
+                  {actionLoading !== null ? <Loader2 className="w-4 h-4 animate-spin" /> : <span>تأكيد السداد</span>}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Individual Installment Amount Modal */}
+      {editInstallmentPrompt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 w-full max-w-sm shadow-2xl animate-glass text-right">
+            <h3 className="text-sm font-bold text-white flex items-center gap-2 mb-4">
+              <Settings className="w-5 h-5 text-blue-400" />
+              <span>تعديل قيمة قسط شهري</span>
+            </h3>
+            
+            <form onSubmit={handleUpdateInstallmentAmount} className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-xs text-slate-400 font-bold">مبلغ القسط الجديد (د.ع)</label>
+                <input 
+                  type="text" 
+                  value={newInstallmentAmtVal || ''}
+                  onChange={(e) => setNewInstallmentAmtVal(Number(e.target.value.replace(/\D/g, '')))}
+                  className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-sm focus:border-blue-500/50 outline-none transition-all font-mono text-left"
+                  dir="ltr"
+                  required
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4 border-t border-slate-800 mt-4">
+                <button type="button" onClick={() => setEditInstallmentPrompt(null)} className="px-4 py-2 text-xs text-slate-400">إلغاء</button>
+                <button
+                  type="submit"
+                  disabled={actionLoading !== null}
+                  className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold shadow-lg flex items-center gap-2 cursor-pointer"
+                >
+                  {actionLoading !== null ? <Loader2 className="w-4 h-4 animate-spin" /> : <span>حفظ التعديل</span>}
+                </button>
+              </div>
             </form>
           </div>
         </div>

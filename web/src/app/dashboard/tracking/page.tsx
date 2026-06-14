@@ -59,6 +59,11 @@ export default function TrackingPage() {
   const [leaveRequests, setLeaveRequests] = useState<any[]>([]);
   const [selectedReasons, setSelectedReasons] = useState<Record<string, string>>({});
   const [selectedAmounts, setSelectedAmounts] = useState<Record<string, string>>({});
+  
+  // Live Trail States
+  const [selectedEmployeeForTrail, setSelectedEmployeeForTrail] = useState<string | null>(null);
+  const [trailCoordinates, setTrailCoordinates] = useState<[number, number][]>([]);
+  const [liveTrackingActive, setLiveTrackingActive] = useState(false);
 
   useEffect(() => {
     fetchTrackingData(selectedDate, selectedBranch);
@@ -117,6 +122,71 @@ export default function TrackingPage() {
       setLoading(false);
     }
   };
+
+  const fetchTrailData = async (employeeId: string, dateStr: string) => {
+    try {
+      const startOfDay = `${dateStr}T00:00:00.000Z`;
+      const endOfDay = `${dateStr}T23:59:59.999Z`;
+
+      const { data, error } = await supabase
+        .from('location_tracking')
+        .select('latitude, longitude, timestamp')
+        .eq('employee_id', employeeId)
+        .gte('timestamp', startOfDay)
+        .lte('timestamp', endOfDay)
+        .order('timestamp', { ascending: true });
+
+      if (error) throw error;
+
+      if (data) {
+        const coords: [number, number][] = data.map((item: any) => [Number(item.latitude), Number(item.longitude)]);
+        setTrailCoordinates(coords);
+        if (coords.length > 0) {
+          setSelectedCenter(coords[coords.length - 1]);
+          setSelectedZoom(15);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch trail data:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (!selectedEmployeeForTrail) {
+      setTrailCoordinates([]);
+      return;
+    }
+
+    fetchTrailData(selectedEmployeeForTrail, selectedDate);
+
+    if (!liveTrackingActive) return;
+
+    const channel = supabase
+      .channel(`location_tracking:live:${selectedEmployeeForTrail}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'location_tracking',
+          filter: `employee_id=eq.${selectedEmployeeForTrail}`,
+        },
+        (payload: any) => {
+          const newLat = Number(payload.new.latitude);
+          const newLng = Number(payload.new.longitude);
+          if (newLat && newLng) {
+            setTrailCoordinates(prev => [...prev, [newLat, newLng]]);
+            setSelectedCenter([newLat, newLng]);
+            toast.success('موقع جديد مستلم في الوقت المباشر! 📍');
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [selectedEmployeeForTrail, liveTrackingActive, selectedDate]);
 
   const handleUpdateTimes = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -383,6 +453,23 @@ export default function TrackingPage() {
         });
       }
     });
+
+    // Add latest trail marker for selected employee
+    if (selectedEmployeeForTrail && trailCoordinates.length > 0) {
+      const latest = trailCoordinates[trailCoordinates.length - 1];
+      const empName = attendanceLogs.find(log => log.employee_id === selectedEmployeeForTrail)?.employees?.full_name || 'الموظف المختار';
+      markers.push({
+        lat: latest[0],
+        lng: latest[1],
+        color: '#3B82F6', // Glowing blue for live current location
+        popupText: `
+          <strong style="color: #3B82F6; font-size: 13px;">الموقع المباشر الحالي للموظف 📍</strong><br/>
+          <strong>الموظف:</strong> ${empName}<br/>
+          <strong>الحالة:</strong> متصل (أونلاين)<br/>
+          <span style="color: #3B82F6; font-weight: bold;">يتم رصد الحركة الجغرافية تلقائياً...</span>
+        `
+      });
+    }
 
     return markers;
   };
@@ -745,17 +832,79 @@ export default function TrackingPage() {
             </div>
 
             {/* Dynamic Map Component */}
-            <div className="mt-8 pt-8 border-t border-slate-800/80">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-lg font-extrabold text-white flex items-center gap-2">
-                  <Map className="w-5 h-5 text-teal-400" />
-                  <span>خريطة التواجد المباشر</span>
-                </h3>
+            <div className="mt-8 pt-8 border-t border-slate-800/80 space-y-6">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-lg font-extrabold text-white flex items-center gap-2 mb-1">
+                    <Map className="w-5 h-5 text-teal-400" />
+                    <span>خريطة التتبع المباشر وحركة الموظفين</span>
+                  </h3>
+                  <p className="text-[11px] text-slate-400">تتبع مسار حركة الموظفين ميدانياً على الخريطة في الوقت الفعلي أثناء ساعات العمل</p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3 bg-slate-950/40 p-2 border border-slate-800 rounded-2xl">
+                  {/* Select Employee to Track */}
+                  <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5">
+                    <Users className="w-3.5 h-3.5 text-teal-400" />
+                    <select
+                      value={selectedEmployeeForTrail || ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setSelectedEmployeeForTrail(val || null);
+                      }}
+                      className="bg-transparent border-none text-white text-xs outline-none cursor-pointer"
+                    >
+                      <option value="" className="bg-slate-900">اختر موظف لتتبع مساره...</option>
+                      {attendanceLogs.map((log) => (
+                        <option key={log.employee_id} value={log.employee_id} className="bg-slate-900">
+                          {log.employees?.full_name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {selectedEmployeeForTrail && (
+                    <label className="flex items-center gap-2 cursor-pointer bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 select-none">
+                      <input
+                        type="checkbox"
+                        checked={liveTrackingActive}
+                        onChange={(e) => setLiveTrackingActive(e.target.checked)}
+                        className="rounded border-slate-800 text-teal-500 focus:ring-teal-500 bg-slate-950 w-3.5 h-3.5"
+                      />
+                      <span className="text-xs text-slate-300 font-bold">بث مباشر متواصل (أونلاين) 🟢</span>
+                    </label>
+                  )}
+                </div>
               </div>
+
+              {selectedEmployeeForTrail && trailCoordinates.length > 0 && (
+                <div className="p-4 bg-teal-950/10 border border-teal-500/10 rounded-2xl flex justify-between items-center text-xs animate-glass">
+                  <div className="space-y-1">
+                    <p className="text-slate-300">
+                      • إجمالي نقاط الحركة المرصودة اليوم: <strong className="text-white font-bold">{trailCoordinates.length} نقطة تتبع</strong>
+                    </p>
+                    <p className="text-[10px] text-slate-400">
+                      * يربط الخط المتقطع الأزرق بين مسار تنقلات الموظف منذ بصمة الحضور وحتى اللحظة.
+                    </p>
+                  </div>
+                  {liveTrackingActive && (
+                    <span className="flex items-center gap-1.5 text-xs text-teal-400 font-black animate-pulse">
+                      <span className="w-2.5 h-2.5 bg-teal-400 rounded-full"></span>
+                      <span>تحديث فوري نشط...</span>
+                    </span>
+                  )}
+                </div>
+              )}
+
               <div className="flex-grow min-h-[500px] relative rounded-2xl overflow-hidden border border-slate-800/60">
                 <MapComponent 
                   markers={markers}
                   polygons={polygons}
+                  polylines={
+                    selectedEmployeeForTrail && trailCoordinates.length >= 2
+                      ? [{ coords: trailCoordinates, color: '#3B82F6', weight: 4.5 }]
+                      : []
+                  }
                   center={selectedCenter}
                   zoom={selectedZoom}
                 />
