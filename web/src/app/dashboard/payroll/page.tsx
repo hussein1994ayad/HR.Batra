@@ -53,6 +53,36 @@ const getCycleDates = (monthStr: string, startDay: number = 25, endDay: number =
   }
 };
 
+const formatLateDurationArabic = (minutes: number) => {
+  if (minutes <= 0) return '0 دقيقة';
+  const hrs = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+
+  let hrsStr = '';
+  if (hrs > 0) {
+    if (hrs === 1) hrsStr = 'ساعة';
+    else if (hrs === 2) hrsStr = 'ساعتين';
+    else if (hrs >= 3 && hrs <= 10) hrsStr = `${hrs} ساعات`;
+    else hrsStr = `${hrs} ساعة`;
+  }
+
+  let minsStr = '';
+  if (mins > 0) {
+    if (mins === 1) minsStr = 'دقيقة واحدة';
+    else if (mins === 2) minsStr = 'دقيقتين';
+    else if (mins >= 3 && mins <= 10) minsStr = `${mins} دقائق`;
+    else minsStr = `${mins} دقيقة`;
+  }
+
+  if (hrsStr && minsStr) {
+    return `${hrsStr} و ${minsStr}`;
+  } else if (hrsStr) {
+    return hrsStr;
+  } else {
+    return minsStr;
+  }
+};
+
 export default function PayrollPage() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -459,8 +489,8 @@ export default function PayrollPage() {
 
         await insertBDIfNotExist(empData.absenceDeduction, `خصم غياب غير مبرر (${empData.absencesCount} يوم) للفترة من ${startDate} إلى ${endDate}`);
         await insertBDIfNotExist(empData.halfDayDeduction, `خصم نصف يوم (${empData.halfDaysCount} يوم) للفترة من ${startDate} إلى ${endDate}`);
-        await insertBDIfNotExist(empData.latenessDeduction, `خصم تأخير الحضور (${empData.totalLateMinutes} دقيقة) للفترة من ${startDate} إلى ${endDate}`);
-        await insertBDIfNotExist(empData.earlyExitDeduction, `خصم خروج مبكر (${empData.totalEarlyExitMinutes} دقيقة) للفترة من ${startDate} إلى ${endDate}`);
+        await insertBDIfNotExist(empData.latenessDeduction, `خصم تأخير الحضور (${formatLateDurationArabic(empData.totalLateMinutes)}) للفترة من ${startDate} إلى ${endDate}`);
+        await insertBDIfNotExist(empData.earlyExitDeduction, `خصم خروج مبكر (${formatLateDurationArabic(empData.totalEarlyExitMinutes)}) للفترة من ${startDate} إلى ${endDate}`);
       }
 
       // Send notification to employee
@@ -591,8 +621,8 @@ export default function PayrollPage() {
 
           await insertBDIfNotExist(empData.absenceDeduction, `خصم غياب غير مبرر (${empData.absencesCount} يوم) للفترة من ${startDate} إلى ${endDate}`);
           await insertBDIfNotExist(empData.halfDayDeduction, `خصم نصف يوم (${empData.halfDaysCount} يوم) للفترة من ${startDate} إلى ${endDate}`);
-          await insertBDIfNotExist(empData.latenessDeduction, `خصم تأخير الحضور (${empData.totalLateMinutes} دقيقة) للفترة من ${startDate} إلى ${endDate}`);
-          await insertBDIfNotExist(empData.earlyExitDeduction, `خصم خروج مبكر (${empData.totalEarlyExitMinutes} دقيقة) للفترة من ${startDate} إلى ${endDate}`);
+          await insertBDIfNotExist(empData.latenessDeduction, `خصم تأخير الحضور (${formatLateDurationArabic(empData.totalLateMinutes)}) للفترة من ${startDate} إلى ${endDate}`);
+          await insertBDIfNotExist(empData.earlyExitDeduction, `خصم خروج مبكر (${formatLateDurationArabic(empData.totalEarlyExitMinutes)}) للفترة من ${startDate} إلى ${endDate}`);
         }
 
         // Send notification to employee
@@ -798,7 +828,7 @@ export default function PayrollPage() {
             sched.setHours(h, m, s || 0, 0);
             const diffMs = checkIn.getTime() - sched.getTime();
             const lateMins = diffMs > 0 ? Math.floor(diffMs / (1000 * 60)) : 0;
-            noteParts.push(`تأخير: ${lateMins} دقيقة`);
+            noteParts.push(`تأخير: ${formatLateDurationArabic(lateMins)}`);
           } else if (status === 'half_day') {
             statusAr = 'نصف يوم 🌓';
             noteParts.push('دوام غير مكتمل');
@@ -808,7 +838,7 @@ export default function PayrollPage() {
           }
 
           if (earlyExitMins > 0) {
-            noteParts.push(`خروج مبكر: ${earlyExitMins} دقيقة`);
+            noteParts.push(`خروج مبكر: ${formatLateDurationArabic(earlyExitMins)}`);
             if (status === 'present') {
               statusAr = isApplied ? 'خروج مبكر (خصم) ⚠️' : 'خروج مبكر (تجاهل الخصم) 🟢';
             }
