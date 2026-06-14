@@ -1100,6 +1100,47 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
     );
   }
 
+  // دالة ذكية لتنسيق الدقائق إلى ساعات ودقائق باللغة العربية الفصحى
+  String _formatDurationArabic(int minutes) {
+    if (minutes <= 0) return '0 دقيقة';
+    final int hrs = minutes ~/ 60;
+    final int mins = minutes % 60;
+
+    String hrsStr = '';
+    if (hrs > 0) {
+      if (hrs == 1) {
+        hrsStr = 'ساعة';
+      } else if (hrs == 2) {
+        hrsStr = 'ساعتين';
+      } else if (hrs >= 3 && hrs <= 10) {
+        hrsStr = '$hrs ساعات';
+      } else {
+        hrsStr = '$hrs ساعة';
+      }
+    }
+
+    String minsStr = '';
+    if (mins > 0) {
+      if (mins == 1) {
+        minsStr = 'دقيقة واحدة';
+      } else if (mins == 2) {
+        minsStr = 'دقيقتين';
+      } else if (mins >= 3 && mins <= 10) {
+        minsStr = '$mins دقائق';
+      } else {
+        minsStr = '$mins دقيقة';
+      }
+    }
+
+    if (hrsStr.isNotEmpty && minsStr.isNotEmpty) {
+      return '$hrsStr و $minsStr';
+    } else if (hrsStr.isNotEmpty) {
+      return hrsStr;
+    } else {
+      return minsStr;
+    }
+  }
+
   // تبويب قرارات الغياب والتأخير
   Widget _buildDecisionsTab(bool isDark) {
     if (_selectedDate == null) {
@@ -1147,7 +1188,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
         double suggestedAmount = missedMinutes * 50.0;
         if (status == 'غياب') suggestedAmount = 25000.0;
 
-        TextEditingController reasonCtrl = TextEditingController(text: missedMinutes > 0 ? 'دقائق مفقودة: $missedMinutes دقيقة' : '');
+        TextEditingController reasonCtrl = TextEditingController(text: missedMinutes > 0 ? 'تأخير مفقود: ${_formatDurationArabic(missedMinutes)}' : '');
         TextEditingController amountCtrl = TextEditingController(text: suggestedAmount > 0 ? suggestedAmount.toStringAsFixed(0) : '');
 
         return GlassContainer(
@@ -1185,6 +1226,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                 child: Divider(color: Colors.white10, height: 1),
               ),
               _buildInfoRow(Icons.calendar_month_rounded, 'تاريخ الدوام', date),
+              if (missedMinutes > 0) ...[
+                const SizedBox(height: 10),
+                _buildInfoRow(Icons.hourglass_bottom_rounded, 'المدة المفقودة (التأخير)', _formatDurationArabic(missedMinutes)),
+              ],
               if (item['status'] == 'late' && item['check_in_time'] != null) ...[
                 const SizedBox(height: 10),
                 _buildInfoRow(Icons.watch_later_rounded, 'توقيت البصمة (دخول)', _formatTime12h(item['check_in_time'])),
