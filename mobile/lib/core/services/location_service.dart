@@ -236,20 +236,25 @@ class LocationService {
 
     if (startParts.length < 2 || endParts.length < 2) return false;
 
+    final int startHour = int.tryParse(startParts[0]) ?? 8;
+    final int startMinute = int.tryParse(startParts[1]) ?? 0;
+    final int endHour = int.tryParse(endParts[0]) ?? 17;
+    final int endMinute = int.tryParse(endParts[1]) ?? 0;
+
     final start = DateTime(
       now.year,
       now.month,
       now.day,
-      int.parse(startParts[0]),
-      int.parse(startParts[1]),
+      startHour,
+      startMinute,
     );
 
     var end = DateTime(
       now.year,
       now.month,
       now.day,
-      int.parse(endParts[0]),
-      int.parse(endParts[1]),
+      endHour,
+      endMinute,
     );
 
     // إذا كان وقت الانتهاء في اليوم التالي
