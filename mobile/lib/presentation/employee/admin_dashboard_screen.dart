@@ -954,7 +954,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
       {
         'title': 'مواقع الأفرع',
         'icon': Icons.map_rounded,
-        'color': Colors.emeraldAccent,
+        'color': Colors.greenAccent,
         'route': AppRoutes.adminBranchManagement,
       },
       {
@@ -987,7 +987,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                 fontFamily: 'Cairo',
                 fontSize: 12,
                 fontWeight: FontWeight.bold,
-                color: Colors.white80,
+                color: Colors.white70,
               ),
             ),
           ),
