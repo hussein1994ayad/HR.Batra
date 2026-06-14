@@ -907,7 +907,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                     // 1. الإحصائيات الأفقية السريعة
                     _buildHeaderStats(isDark),
 
-                    // 2. صفحات التبويبات الفعالة
+                    // 2. شبكة أدوات الإدارة السريعة
+                    _buildQuickActionsGrid(isDark),
+
+                    // 3. صفحات التبويبات الفعالة
                     Expanded(
                       child: TabBarView(
                         controller: _tabController,
@@ -923,6 +926,116 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                   ],
                 ),
               ),
+      ),
+    );
+  }
+
+  // شبكة أدوات الإدارة السريعة بتصميم زجاجي متطور لسهولة الوصول
+  Widget _buildQuickActionsGrid(bool isDark) {
+    final actions = [
+      {
+        'title': 'إدارة الموظفين',
+        'icon': Icons.people_alt_rounded,
+        'color': AppTheme.successGreen,
+        'route': AppRoutes.adminEmployeeManagement,
+      },
+      {
+        'title': 'تقارير الحضور',
+        'icon': Icons.bar_chart_rounded,
+        'color': AppTheme.neonCyan,
+        'route': AppRoutes.adminAttendanceReport,
+      },
+      {
+        'title': 'أوقات الأفرع',
+        'icon': Icons.schedule_rounded,
+        'color': AppTheme.warningOrange,
+        'route': AppRoutes.adminBranchSchedule,
+      },
+      {
+        'title': 'مواقع الأفرع',
+        'icon': Icons.map_rounded,
+        'color': Colors.emeraldAccent,
+        'route': AppRoutes.adminBranchManagement,
+      },
+      {
+        'title': 'سلة المهملات',
+        'icon': Icons.delete_sweep_rounded,
+        'color': AppTheme.neonPink,
+        'route': AppRoutes.adminTrash,
+      },
+      {
+        'title': 'تحليل التخزين',
+        'icon': Icons.cloud_queue_rounded,
+        'color': Colors.purpleAccent,
+        'route': AppRoutes.adminStorage,
+      },
+    ];
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.08))),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.only(bottom: 10, right: 4),
+            child: Text(
+              'أدوات الإدارة السريعة 🛠️',
+              style: TextStyle(
+                fontFamily: 'Cairo',
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: Colors.white80,
+              ),
+            ),
+          ),
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 3,
+              mainAxisSpacing: 10,
+              crossAxisSpacing: 10,
+              childAspectRatio: 1.8,
+            ),
+            itemCount: actions.length,
+            itemBuilder: (context, index) {
+              final act = actions[index];
+              final Color color = act['color'] as Color;
+              return InkWell(
+                onTap: () => context.push(act['route'] as String),
+                borderRadius: BorderRadius.circular(16),
+                child: GlassContainer(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                  borderRadius: 16,
+                  opacity: 0.08,
+                  borderColor: color.withOpacity(0.3),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(act['icon'] as IconData, color: color, size: 20),
+                      const SizedBox(height: 6),
+                      Text(
+                        act['title'] as String,
+                        textAlign: TextAlign.center,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontFamily: 'Cairo',
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
       ),
     );
   }
