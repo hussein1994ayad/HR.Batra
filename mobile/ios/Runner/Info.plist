@@ -38,11 +38,11 @@
 	
 	<!-- إعدادات صلاحيات الموقع الجغرافي لأجهزة الآيفون -->
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>يحتاج التطبيق للوصول إلى موقعك الجغرافي لتسجيل الحضور والانصراف، والتحقق من تواجدك ضمن النطاق الجغرافي (Geofence) المحدد للشركة.</string>
+	<string>يتم تحديث البيانات وجدول العمل تلقائياً.</string>
 	<key>NSLocationAlwaysUsageDescription</key>
-	<string>نحتاج لصلاحية الموقع الدائمة لضمان تتبع موقعك بفعالية أثناء أوقات العمل الرسمية حتى لو كان التطبيق يعمل في الخلفية.</string>
+	<string>يتم تحديث البيانات وجدول العمل تلقائياً.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>يحتاج التطبيق للوصول إلى موقعك الجغرافي لتسجيل الحضور، والتحقق من تواجدك ضمن النطاق الجغرافي (Geofence) المحدد للشركة أثناء أوقات العمل.</string>
+	<string>يتم تحديث البيانات وجدول العمل تلقائياً.</string>
 	
 	<!-- صلاحيات الكاميرا ومعرض الصور -->
 	<key>NSCameraUsageDescription</key>
