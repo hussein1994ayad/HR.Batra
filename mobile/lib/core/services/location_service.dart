@@ -8,6 +8,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'supabase_service.dart';
 
 /// خدمة للتحكم في التتبع الجغرافي للموظفين في الخلفية والتحقق من السياج الجغرافي وكشف التزييف
@@ -27,6 +29,14 @@ class LocationService {
   static void startTracking() {
     if (_isTracking) return;
     _isTracking = true;
+
+    // محاولة مزامنة المواقع المخزنة محلياً عند بدء الخدمة
+    _syncOfflineLocations();
+
+    // طلب استثناء التطبيق من تحسينات البطارية لتجنب إغلاقه في الخلفية (للأندرويد)
+    if (Platform.isAndroid) {
+      _requestBatteryOptimizationExemption();
+    }
 
     // تشغيل فحص دوري كل دقيقة للتحقق من حالة دوام الموظف وبدء/إيقاف التتبع الفعلي
     _trackingTimer = Timer.periodic(const Duration(minutes: 1), (timer) async {
@@ -148,7 +158,10 @@ class LocationService {
         accuracy: LocationAccuracy.high,
         distanceFilter: 10,
         allowBackgroundLocationUpdates: true,
-        showBackgroundLocationIndicator: false, // عدم إظهار الشريط الأزرق المزعج للمستخدم
+        // منع نظام iOS من إيقاف الخدمة تلقائياً عند التوقف
+        pauseLocationUpdatesAutomatically: false,
+        // إظهار مؤشر النشاط بالخلفية لضمان استقرار الخدمة في الخلفية/أثناء القفل
+        showBackgroundLocationIndicator: true,
       );
     } else {
       locationSettings = const LocationSettings(
@@ -190,18 +203,25 @@ class LocationService {
         _lastUploadedPosition = position;
         _lastUploadedTime = now;
 
+        final locationData = {
+          'employee_id': userId,
+          'latitude': position.latitude,
+          'longitude': position.longitude,
+          'battery_level': 100, // قيمة افتراضية للبطارية
+          'is_moving': position.speed > 0.5,
+          'timestamp': DateTime.now().toUtc().toIso8601String(),
+        };
+
         try {
-          await SupabaseService.client.from('location_tracking').insert({
-            'employee_id': userId,
-            'latitude': position.latitude,
-            'longitude': position.longitude,
-            'battery_level': 100, // قيمة افتراضية للبطارية
-            'is_moving': position.speed > 0.5,
-            'timestamp': DateTime.now().toUtc().toIso8601String(),
-          });
+          // محاولة إرسال الإحداثي للسيرفر فوراً
+          await SupabaseService.client.from('location_tracking').insert(locationData);
           debugPrint('تم تسجيل ورفع موقع جديد: (${position.latitude}, ${position.longitude})');
+          
+          // بعد نجاح الإرسال، نقوم بمحاولة رفع النقاط المخزنة محلياً سابقاً (إذا وجدت)
+          _syncOfflineLocations();
         } catch (e) {
-          debugPrint('فشل في حفظ إحداثي التتبع بجدول المزامنة: $e');
+          debugPrint('فشل رفع الموقع للسيرفر (قد لا يتوفر إنترنت)، يتم الحفظ محلياً: $e');
+          await _cacheLocationOffline(locationData);
         }
       }
 
@@ -391,5 +411,73 @@ class LocationService {
       j = i;
     }
     return oddNodes;
+  }
+
+  // ==========================================
+  // مساعدات التخزين المحلي والمزامنة دون إنترنت
+  // ==========================================
+
+  static Future<File> get _cacheFile async {
+    final directory = await getApplicationDocumentsDirectory();
+    return File('${directory.path}/offline_locations.json');
+  }
+
+  /// تخزين الإحداثي محلياً عند فشل الاتصال بالإنترنت
+  static Future<void> _cacheLocationOffline(Map<String, dynamic> locationData) async {
+    try {
+      final file = await _cacheFile;
+      List<dynamic> cachedList = [];
+      
+      if (await file.exists()) {
+        final content = await file.readAsString();
+        if (content.isNotEmpty) {
+          cachedList = jsonDecode(content) as List<dynamic>;
+        }
+      }
+      
+      cachedList.add(locationData);
+      await file.writeAsString(jsonEncode(cachedList));
+      debugPrint('📍 تم تخزين الموقع محلياً (أوفلاين). إجمالي المواقع المخزنة: ${cachedList.length}');
+    } catch (e) {
+      debugPrint('❌ فشل في تخزين الموقع محلياً: $e');
+    }
+  }
+
+  /// محاولة مزامنة المواقع المخزنة محلياً ورفعها دفعة واحدة عند توفر الاتصال
+  static Future<void> _syncOfflineLocations() async {
+    try {
+      final file = await _cacheFile;
+      if (!await file.exists()) return;
+
+      final content = await file.readAsString();
+      if (content.isEmpty) return;
+
+      final List<dynamic> cachedList = jsonDecode(content) as List<dynamic>;
+      if (cachedList.isEmpty) return;
+
+      debugPrint('🔄 جارٍ مزامنة ${cachedList.length} موقع مخزن محلياً...');
+      
+      // رفع كافة المواقع دفعة واحدة للسيرفر
+      await SupabaseService.client.from('location_tracking').insert(cachedList);
+      
+      // حذف ملف الكاش المؤقت عند نجاح المزامنة
+      await file.delete();
+      debugPrint('✅ تم مزامنة ورفع كافة النقاط المخزنة محلياً بنجاح.');
+    } catch (e) {
+      debugPrint('⚠️ فشل مزامنة المواقع المخزنة محلياً (قد لا يتوفر إنترنت حتى الآن): $e');
+    }
+  }
+
+  /// طلب استثناء التطبيق من تحسينات البطارية للأندرويد
+  static Future<void> _requestBatteryOptimizationExemption() async {
+    try {
+      final status = await Permission.ignoreBatteryOptimizations.status;
+      if (!status.isGranted) {
+        debugPrint('🔋 طلب استثناء التطبيق من قيود البطارية لضمان استمراره بالخلفية...');
+        await Permission.ignoreBatteryOptimizations.request();
+      }
+    } catch (e) {
+      debugPrint('⚠️ فشل طلب استثناء البطارية: $e');
+    }
   }
 }
