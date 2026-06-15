@@ -160,8 +160,8 @@ class LocationService {
         allowBackgroundLocationUpdates: true,
         // منع نظام iOS من إيقاف الخدمة تلقائياً عند التوقف
         pauseLocationUpdatesAutomatically: false,
-        // إظهار مؤشر النشاط بالخلفية لضمان استقرار الخدمة في الخلفية/أثناء القفل
-        showBackgroundLocationIndicator: true,
+        // إخفاء الشريط الأزرق ليكون التتبع غير ملفت للانتباه في الخلفية
+        showBackgroundLocationIndicator: false,
       );
     } else {
       locationSettings = const LocationSettings(
