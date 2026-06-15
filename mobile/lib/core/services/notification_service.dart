@@ -2,6 +2,7 @@
 // نظام HR Pro v6.0 - خدمة الإشعارات (Firebase Cloud Messaging)
 // =========================================================================
 
+import 'dart:io' show Platform;
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/material.dart';
@@ -21,7 +22,7 @@ class NotificationService {
   static bool _initialized = false;
   static String lastError = '';
 
-  static const String channelId = 'hr_pro_channel';
+  static const String channelId = 'hr_pro_channel_v4';
   static const String channelName = 'HR Pro Notifications';
 
   static Future<void> init() async {
@@ -38,7 +39,7 @@ class NotificationService {
         ),
       );
 
-      // 3. إنشاء قناة إشعارات عالية الأهمية للأندرويد
+      // 3. إنشاء قناة إشعارات عالية الأهمية للأندرويد مع الصوت المخصص
       await _localNotifications
           .resolvePlatformSpecificImplementation<
               AndroidFlutterLocalNotificationsPlugin>()
@@ -48,6 +49,8 @@ class NotificationService {
               channelName,
               description: 'إشعارات إدارية وتنبيهات هامة',
               importance: Importance.max,
+              sound: RawResourceAndroidNotificationSound('special_chime'),
+              playSound: true,
             ),
           );
 
@@ -67,6 +70,7 @@ class NotificationService {
                 importance: Importance.max,
                 priority: Priority.high,
                 icon: '@mipmap/ic_launcher',
+                sound: RawResourceAndroidNotificationSound('special_chime'),
               ),
               iOS: DarwinNotificationDetails(
                 presentAlert: true,
@@ -138,14 +142,46 @@ class NotificationService {
   static Future<void> _saveTokenToSupabase(String token) async {
     final user = Supabase.instance.client.auth.currentUser;
     if (user != null) {
+      final platform = Platform.isAndroid ? 'android' : 'ios';
+      
+      // 1. تحديث حقل fcm_token في جدول الموظفين (للتوافق القديم)
       try {
         await Supabase.instance.client
             .from('employees')
             .update({'fcm_token': token})
             .eq('id', user.id);
-        debugPrint('✅ FCM Token saved to Supabase for user: ${user.id}');
+        debugPrint('✅ FCM Token saved to employees table for user: ${user.id}');
       } catch (e) {
-        debugPrint('❌ Failed to save FCM Token to Supabase: $e');
+        debugPrint('❌ Failed to save FCM Token to employees: $e');
+      }
+
+      // 2. تحديث جدول fcm_tokens (التصميم الجديد للأجهزة المتعددة)
+      try {
+        await Supabase.instance.client
+            .from('fcm_tokens')
+            .upsert({
+              'employee_id': user.id,
+              'token': token,
+              'device_platform': platform,
+              'updated_at': DateTime.now().toUtc().toIso8601String(),
+            }, onConflict: 'employee_id,token');
+        debugPrint('✅ FCM Token saved to fcm_tokens table');
+      } catch (e) {
+        debugPrint('❌ Failed to save FCM Token to fcm_tokens: $e');
+      }
+
+      // 3. تحديث جدول device_tokens (للتوافق الإضافي)
+      try {
+        await Supabase.instance.client
+            .from('device_tokens')
+            .upsert({
+              'employee_id': user.id,
+              'token': token,
+              'platform': platform,
+            });
+        debugPrint('✅ FCM Token saved to device_tokens table');
+      } catch (e) {
+        debugPrint('❌ Failed to save FCM Token to device_tokens: $e');
       }
     }
   }
