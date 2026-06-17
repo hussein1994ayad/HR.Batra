@@ -25,13 +25,40 @@ class LocationService {
   // key: zoneId, value: isInside
   static final Map<String, bool> _lastGeofenceStates = {};
 
+  /// طلب صلاحيات الموقع الكافية للتتبع بالخلفية
+  static Future<void> requestLocationPermissions() async {
+    try {
+      // 1. طلب الصلاحية العادية أولاً (In Use)
+      var status = await Permission.location.status;
+      if (!status.isGranted) {
+        status = await Permission.location.request();
+        if (!status.isGranted) {
+          debugPrint('⚠️ صلاحية الموقع العادية مرفوضة.');
+          return;
+        }
+      }
+
+      // 2. طلب صلاحية الخلفية (Always Allow) للأندرويد والآيفون
+      var alwaysStatus = await Permission.locationAlways.status;
+      if (!alwaysStatus.isGranted) {
+        debugPrint('📍 طلب صلاحية الموقع بالخلفية (Always Allow)...');
+        await Permission.locationAlways.request();
+      }
+    } catch (e) {
+      debugPrint('⚠️ خطأ في طلب صلاحيات الموقع: $e');
+    }
+  }
+
   /// بدء تتبع الموقع الجغرافي الذكي بناءً على جداول تتبع الموظف
   static void startTracking() {
     if (_isTracking) return;
     _isTracking = true;
 
-    // محاولة مزامنة المواقع المخزنة محلياً عند بدء الخدمة
-    _syncOfflineLocations();
+    // تشغيل طلب الصلاحيات والمزامنة في الخلفية
+    Future.microtask(() async {
+      await requestLocationPermissions();
+      await _syncOfflineLocations();
+    });
 
     // طلب استثناء التطبيق من تحسينات البطارية لتجنب إغلاقه في الخلفية (للأندرويد)
     if (Platform.isAndroid) {
@@ -81,9 +108,27 @@ class LocationService {
 
   /// التحقق من صلاحية اليوم والوقت وحالة تسجيل الدخول لتحديد ما إذا كان يجب بدء التتبع
   static Future<bool> _shouldTrackLocation(String userId) async {
+    final todayStr = DateTime.now().toIso8601String().split('T')[0];
+    
+    // 1. محاولة قراءة الحالة المخزنة محلياً للتحقق من التوقيت الفاصل
+    final cached = await _getTrackingStateOffline();
+    if (cached != null && cached['checked_in_date'] == todayStr) {
+      final updatedAtStr = cached['updated_at'] as String?;
+      if (updatedAtStr != null) {
+        final updatedAt = DateTime.tryParse(updatedAtStr);
+        if (updatedAt != null) {
+          final difference = DateTime.now().difference(updatedAt.toLocal());
+          // إذا كان التحديث الأخير قبل أقل من 15 دقيقة، نعتمد على الكاش مباشرة لتجنب كثرة طلبات الشبكة
+          if (difference < const Duration(minutes: 15)) {
+            return _evaluateStateFromCache(cached);
+          }
+        }
+      }
+    }
+
+    // 2. إذا مضى أكثر من 15 دقيقة أو لم يوجد كاش، نحاول التحديث من السيرفر
     try {
-      // 1. التحقق من حالة البصمة اليومية للموظف (يجب أن يكون مسجلاً حضوراً ولم يسجل انصرافاً بعد)
-      final todayStr = DateTime.now().toIso8601String().split('T')[0];
+      // التحقق من حالة البصمة اليومية للموظف من السيرفر
       final attendanceData = await SupabaseService.client
           .from('attendance')
           .select()
@@ -91,46 +136,64 @@ class LocationService {
           .eq('work_date', todayStr)
           .maybeSingle();
 
-      if (attendanceData == null) {
-        // لم يبصم اليوم أبداً
-        return false;
+      bool hasCheckedIn = false;
+      if (attendanceData != null) {
+        if (attendanceData['check_in_time'] != null && attendanceData['check_out_time'] == null) {
+          hasCheckedIn = true;
+        }
       }
 
-      if (attendanceData['check_in_time'] == null || attendanceData['check_out_time'] != null) {
-        // لم يبصم دخول أو بصم انصراف بالفعل
-        return false;
-      }
-
-      // 2. جلب جدول التتبع المخصص للموظف من قاعدة البيانات
+      // جلب جدول التتبع المخصص للموظف
       final trackingSchedule = await SupabaseService.client
           .from('tracking_schedules')
           .select()
           .eq('employee_id', userId)
           .maybeSingle();
 
-      // إذا لم يكن هناك جدول تتبع محدد للموظف حالياً، نتبعه طالما هو مسجل حضور (كافتراض افتراضي)
-      if (trackingSchedule == null) {
-        return true;
-      }
+      // حفظ الحالة الجديدة في الكاش للعمل دون اتصال بالإنترنت
+      await _saveTrackingStateOffline(
+        hasCheckedIn: hasCheckedIn,
+        checkedInDate: todayStr,
+        schedule: trackingSchedule,
+      );
 
-      // 3. التحقق من مطابقة الأيام المسموح بها
-      final now = DateTime.now();
-      final int pgDay = now.weekday % 7; // Sunday = 0, Monday = 1, etc.
-      final List<dynamic> trackingDays = trackingSchedule['tracking_days'] ?? [];
-      
-      if (!trackingDays.contains(pgDay)) {
-        return false;
-      }
+      if (!hasCheckedIn) return false;
+      if (trackingSchedule == null) return true;
 
-      // 4. مطابقة الوقت الحالي مع أوقات الجدول
-      final String startTimeStr = trackingSchedule['start_time'] ?? '08:00:00';
-      final String endTimeStr = trackingSchedule['end_time'] ?? '17:00:00';
-
-      return _isCurrentTimeBetween(startTimeStr, endTimeStr);
+      return _evaluateSchedule(trackingSchedule);
     } catch (e) {
-      debugPrint('خطأ أثناء التحقق من صلاحية وقت التتبع للموظف: $e');
+      debugPrint('⚠️ فشل التحديث من السيرفر (قد لا يتوفر إنترنت)، استخدام الكاش المحلي كبديل: $e');
+      // عند فشل الشبكة، نعتمد على الكاش المحلي دون حد زمني
+      if (cached != null && cached['checked_in_date'] == todayStr) {
+        return _evaluateStateFromCache(cached);
+      }
       return false;
     }
+  }
+
+  static bool _evaluateStateFromCache(Map<String, dynamic> cached) {
+    final bool hasCheckedIn = cached['has_checked_in'] ?? false;
+    if (!hasCheckedIn) return false;
+
+    final schedule = cached['schedule'] as Map<String, dynamic>?;
+    if (schedule == null) return true;
+
+    return _evaluateSchedule(schedule);
+  }
+
+  static bool _evaluateSchedule(Map<String, dynamic> schedule) {
+    final now = DateTime.now();
+    final int pgDay = now.weekday % 7; // Sunday = 0, Monday = 1, etc.
+    final List<dynamic> trackingDays = schedule['tracking_days'] ?? [];
+    
+    if (!trackingDays.contains(pgDay)) {
+      return false;
+    }
+
+    final String startTimeStr = schedule['start_time'] ?? '08:00:00';
+    final String endTimeStr = schedule['end_time'] ?? '17:00:00';
+
+    return _isCurrentTimeBetween(startTimeStr, endTimeStr);
   }
 
   /// بدء الاستماع لتدفق إحداثيات الموقع الفعلي في الخلفية
@@ -227,12 +290,6 @@ class LocationService {
 
       // 3. مطابقة إحداثيات الموقع الجغرافي مع السياج الجغرافي المخصص للموظف
       await _verifyGeofences(userId, position);
-
-      // 4. تقييم سريع للحالة لإطفاء التتبع فور انتهاء أوقات العمل
-      final bool stillOnDuty = await _shouldTrackLocation(userId);
-      if (!stillOnDuty) {
-        _stopLocationUpdates();
-      }
 
     }, onError: (e) {
       debugPrint('حدث خطأ في استقبال تدفق بيانات الموقع: $e');
@@ -420,6 +477,48 @@ class LocationService {
   static Future<File> get _cacheFile async {
     final directory = await getApplicationDocumentsDirectory();
     return File('${directory.path}/offline_locations.json');
+  }
+
+  static Future<File> get _trackingStateFile async {
+    final directory = await getApplicationDocumentsDirectory();
+    return File('${directory.path}/tracking_state.json');
+  }
+
+  /// حفظ حالة تتبع الموظف والجدول محلياً للعمل دون اتصال بالإنترنت
+  static Future<void> _saveTrackingStateOffline({
+    required bool hasCheckedIn,
+    required String checkedInDate,
+    required Map<String, dynamic>? schedule,
+  }) async {
+    try {
+      final file = await _trackingStateFile;
+      final data = {
+        'has_checked_in': hasCheckedIn,
+        'checked_in_date': checkedInDate,
+        'schedule': schedule,
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      };
+      await file.writeAsString(jsonEncode(data));
+      debugPrint('💾 تم حفظ حالة التتبع والجدول محلياً للعمل أوفلاين.');
+    } catch (e) {
+      debugPrint('❌ فشل في حفظ حالة التتبع محلياً: $e');
+    }
+  }
+
+  /// قراءة حالة تتبع الموظف المخزنة محلياً
+  static Future<Map<String, dynamic>?> _getTrackingStateOffline() async {
+    try {
+      final file = await _trackingStateFile;
+      if (await file.exists()) {
+        final content = await file.readAsString();
+        if (content.isNotEmpty) {
+          return jsonDecode(content) as Map<String, dynamic>;
+        }
+      }
+    } catch (e) {
+      debugPrint('❌ فشل في قراءة حالة التتبع المحلية: $e');
+    }
+    return null;
   }
 
   /// تخزين الإحداثي محلياً عند فشل الاتصال بالإنترنت
