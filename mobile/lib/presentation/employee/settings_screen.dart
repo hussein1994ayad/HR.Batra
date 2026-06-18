@@ -37,6 +37,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _isLoading = true;
   bool _isUploadingAvatar = false;
   bool _isUploadingDoc = false;
+  bool _isRequestingDeletion = false;
 
   @override
   void initState() {
@@ -273,6 +274,117 @@ class _SettingsScreenState extends State<SettingsScreen> {
       
     } catch (e) {
       debugPrint('Failed to delete document: $e');
+    }
+  }
+
+  // طلب حذف الحساب
+  Future<void> _handleAccountDeletionRequest() async {
+    final user = SupabaseService.currentUser;
+    if (user == null) return;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: AppTheme.darkSurface,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          title: const Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: AppTheme.dangerRed),
+              SizedBox(width: 8),
+              Text(
+                'طلب حذف الحساب ⚠️',
+                style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16),
+              ),
+            ],
+          ),
+          content: const Text(
+            'بناءً على سياسات الموارد البشرية للمؤسسة، لا يمكن حذف حساب الموظف تلقائياً لتجنب فقدان البيانات المالية وجداول الحضور والالتزامات النشطة.\n\nعند تأكيد الطلب، سيتم إرسال طلب رسمي معلق إلى إدارة الموارد البشرية لمراجعة طلبك وإتمام عملية حذف الحساب والبيانات المرتبطة به.',
+            style: TextStyle(fontFamily: 'Cairo', color: Colors.white70, fontSize: 12, height: 1.6),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('إلغاء', style: TextStyle(fontFamily: 'Cairo', color: Colors.white54, fontWeight: FontWeight.bold)),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.dangerRed,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              child: const Text('تأكيد الطلب', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirm != true) return;
+
+    setState(() => _isRequestingDeletion = true);
+
+    try {
+      // 1. تسجيل الإشعار بالطلب للموظف نفسه
+      await SupabaseService.client.from('notifications').insert({
+        'employee_id': user.id,
+        'title': 'تم تقديم طلب حذف الحساب ⚠️',
+        'body': 'تم إرسال طلب حذف حسابك وبياناتك الجغرافية بنجاح إلى إدارة الموارد البشرية للمراجعة والتدقيق.',
+        'type': 'system',
+      });
+
+      // 2. جلب اسم الموظف الحالي لإدراجه في نص إشعار المسؤولين
+      String empName = 'موظف';
+      try {
+        final empProfile = await SupabaseService.client
+            .from('employees')
+            .select('full_name')
+            .eq('id', user.id)
+            .maybeSingle();
+        if (empProfile != null && empProfile['full_name'] != null) {
+          empName = empProfile['full_name'];
+        }
+      } catch (_) {}
+
+      // 3. إشعار المدراء والمسؤولين بطلب الحذف المعلق
+      final List<dynamic> admins = await SupabaseService.client
+          .from('employees')
+          .select('id')
+          .or('role.eq.admin,role.eq.manager');
+      
+      for (var admin in admins) {
+        if (admin['id'] != null && admin['id'] != user.id) {
+          await SupabaseService.client.from('notifications').insert({
+            'employee_id': admin['id'],
+            'title': 'طلب معلق لحذف حساب موظف ⚠️',
+            'body': 'قدم الموظف ($empName) طلباً رسمياً لحذف حسابه الجغرافي والوظيفي بالكامل من النظام.',
+            'type': 'system',
+          });
+        }
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('تم إرسال طلب حذف الحساب بنجاح إلى الإدارة 📨', style: TextStyle(fontFamily: 'Cairo')),
+            backgroundColor: AppTheme.successGreen,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('فشل إرسال الطلب: ${e.toString()}', style: const TextStyle(fontFamily: 'Cairo')),
+            backgroundColor: AppTheme.dangerRed,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isRequestingDeletion = false);
+      }
     }
   }
 
@@ -708,6 +820,55 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SizedBox(height: 24),
 
             // 3. أزرار التحكم
+
+            Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppTheme.dangerRed.withOpacity(0.15),
+                    blurRadius: 16,
+                    spreadRadius: 1,
+                  )
+                ],
+              ),
+              child: ElevatedButton(
+                onPressed: _isRequestingDeletion ? null : _handleAccountDeletionRequest,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.dangerRed.withOpacity(0.25),
+                  foregroundColor: AppTheme.dangerRed,
+                  side: const BorderSide(color: AppTheme.dangerRed, width: 1.5),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  minimumSize: const Size(double.infinity, 50),
+                  elevation: 0,
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    if (_isRequestingDeletion)
+                      const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(color: AppTheme.dangerRed, strokeWidth: 2.5),
+                      )
+                    else ...[
+                      const Icon(Icons.delete_forever_rounded),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'طلب حذف الحساب بالكامل',
+                        style: TextStyle(
+                          fontFamily: 'Cairo',
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
 
             Container(
               decoration: BoxDecoration(
