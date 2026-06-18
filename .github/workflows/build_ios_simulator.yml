@@ -31,12 +31,15 @@ jobs:
         working-directory: ./mobile
         run: flutter build ios --simulator
 
-      - name: Zip Simulator App
+      - name: Package Simulator App into IPA for Cloud Testing
         working-directory: ./mobile/build/ios/iphonesimulator
-        run: zip -r HRBatra_SimulatorApp.zip Runner.app
+        run: |
+          mkdir Payload
+          cp -r Runner.app Payload/
+          zip -r HRBatra_Simulator.ipa Payload
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: HRBatra-iOS-Simulator-App
-          path: mobile/build/ios/iphonesimulator/HRBatra_SimulatorApp.zip
+          path: mobile/build/ios/iphonesimulator/HRBatra_Simulator.ipa
