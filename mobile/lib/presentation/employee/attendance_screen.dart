@@ -830,6 +830,25 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                         _selectedPunchType == 'check_out' ? 'اضغط لتسجيل بصمة الانصراف 🔴' : 'اضغط لتسجيل بصمة الحضور 🟢',
                         style: const TextStyle(fontSize: 11, color: Colors.white70, fontWeight: FontWeight.w600, fontFamily: 'Cairo'),
                       ),
+                    const Divider(color: Colors.white10, height: 24),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: const [
+                        Icon(Icons.info_outline_rounded, color: AppTheme.neonCyan, size: 16),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'يتم استخدام الموقع أثناء ساعات العمل فقط لأغراض إثبات الحضور والانصراف وتتبع مسار العمل للموظفين الميدانيين، ويتم إيقاف التتبع تلقائياً عند تسجيل الخروج أو انتهاء الدوام.',
+                            style: TextStyle(
+                              fontSize: 9.5,
+                              color: Colors.white54,
+                              fontFamily: 'Cairo',
+                              height: 1.4,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ],
                 ],
               ),
