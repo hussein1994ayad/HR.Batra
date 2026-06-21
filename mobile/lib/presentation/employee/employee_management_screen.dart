@@ -106,33 +106,22 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
 
   Future<List<String>> _uploadDocuments(List<File> files, String employeeId) async {
     List<String> uploadedUrls = [];
-    final tempDir = await getTemporaryDirectory();
     
     for (var file in files) {
       try {
-        final ext = file.path.split('.').last;
-        final targetPath = '${tempDir.path}/${DateTime.now().millisecondsSinceEpoch}_compressed.$ext';
+        // ضغط الصورة تلقائياً وإرجاعها، أو إرجاع الملف كما هو إذا كان مستنداً غير صوري (مثل PDF)
+        final processedFile = await ImageCompressionService.compressImage(file);
         
-        final compressedFile = await FlutterImageCompress.compressAndGetFile(
-          file.absolute.path,
-          targetPath,
-          quality: 70,
-          minWidth: 1024,
-          minHeight: 1024,
-        );
-        
-        if (compressedFile != null) {
-          final fileName = '$employeeId/${DateTime.now().millisecondsSinceEpoch}_${file.path.split('/').last}';
-          await SupabaseService.client.storage
-              .from('employee-documents')
-              .upload(fileName, File(compressedFile.path));
-              
-          final url = SupabaseService.client.storage
-              .from('employee-documents')
-              .getPublicUrl(fileName);
-              
-          uploadedUrls.add(url);
-        }
+        final fileName = '$employeeId/${DateTime.now().millisecondsSinceEpoch}_${file.path.split('/').last}';
+        await SupabaseService.client.storage
+            .from('employee-documents')
+            .upload(fileName, processedFile);
+            
+        final url = SupabaseService.client.storage
+            .from('employee-documents')
+            .getPublicUrl(fileName);
+            
+        uploadedUrls.add(url);
       } catch (e) {
         debugPrint('Error compressing/uploading file: $e');
       }
