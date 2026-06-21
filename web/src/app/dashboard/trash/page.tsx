@@ -44,10 +44,10 @@ export default function TrashPage() {
   const getBucketName = (fileType: string) => {
     switch (fileType) {
       case 'avatar': return 'avatars';
-      case 'document': return 'documents';
+      case 'document': return 'employee-documents';
       case 'pledge': return 'loan-pledges';
       case 'logo': return 'company-logos';
-      default: return 'documents';
+      default: return 'employee-documents';
     }
   };
 

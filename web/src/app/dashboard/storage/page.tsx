@@ -61,7 +61,7 @@ export default function StoragePage() {
           const bucket = stat.bucket_name;
           const size = Number(stat.total_size || 0);
           if (bucket === 'avatars') avatars += size;
-          else if (bucket === 'documents') documents += size;
+          else if (bucket === 'employee-documents') documents += size;
           else if (bucket === 'loan-pledges') pledges += size;
           else others += size;
         });
@@ -121,10 +121,10 @@ export default function StoragePage() {
   const getBucketName = (fileType: string) => {
     switch (fileType) {
       case 'avatar': return 'avatars';
-      case 'document': return 'documents';
+      case 'document': return 'employee-documents';
       case 'pledge': return 'loan-pledges';
       case 'logo': return 'company-logos';
-      default: return 'documents';
+      default: return 'employee-documents';
     }
   };
 

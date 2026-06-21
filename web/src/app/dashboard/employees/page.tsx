@@ -313,10 +313,10 @@ export default function EmployeesPage() {
             const fileExt = file.name.split('.').pop();
             const fileName = `${signUpData.user.id}/${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
             
-            const { error: uploadError } = await supabase.storage.from('documents').upload(fileName, compressedFile);
+            const { error: uploadError } = await supabase.storage.from('employee-documents').upload(fileName, compressedFile);
             if (!uploadError) {
               const { data: { publicUrl } } = supabase.storage
-                .from('documents')
+                .from('employee-documents')
                 .getPublicUrl(fileName);
               uploadedUrls.push(publicUrl);
             }
@@ -409,9 +409,9 @@ export default function EmployeesPage() {
       
       for (const url of deletedDocs) {
         try {
-          const pathMatch = url.match(/\/documents\/(.+)$/);
+          const pathMatch = url.match(/\/employee-documents\/(.+)$/);
           if (pathMatch && pathMatch[1]) {
-            await supabase.storage.from('documents').remove([pathMatch[1]]);
+            await supabase.storage.from('employee-documents').remove([pathMatch[1]]);
           }
         } catch (err) {
           console.error('Failed to delete old document:', err);
@@ -431,10 +431,10 @@ export default function EmployeesPage() {
             const fileExt = file.name.split('.').pop();
             const fileName = `${selectedEmployee.id}/${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
             
-            const { error: uploadError } = await supabase.storage.from('documents').upload(fileName, compressedFile);
+            const { error: uploadError } = await supabase.storage.from('employee-documents').upload(fileName, compressedFile);
             if (!uploadError) {
               const { data: { publicUrl } } = supabase.storage
-                .from('documents')
+                .from('employee-documents')
                 .getPublicUrl(fileName);
               newUploadedUrls.push(publicUrl);
             }

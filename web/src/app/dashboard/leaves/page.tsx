@@ -207,8 +207,14 @@ export default function LeavesPage() {
                     </div>
 
                     <div className="flex justify-between items-center text-xs bg-slate-900/40 p-2.5 rounded-xl border border-slate-850">
-                      <span className="text-slate-400 font-semibold">إجمالي مدة الإجازة:</span>
-                      <span className="text-teal-400 font-extrabold">{totalDays} يوم دوام</span>
+                      <span className="text-slate-400 font-semibold">نوع ومدة الإجازة:</span>
+                      {req.is_hourly ? (
+                        <span className="text-amber-400 font-extrabold">
+                          إجازة ساعية ({req.start_hour?.substring(0, 5)} - {req.end_hour?.substring(0, 5)})
+                        </span>
+                      ) : (
+                        <span className="text-teal-400 font-extrabold">{totalDays} يوم دوام</span>
+                      )}
                     </div>
 
                     {req.reason && (
@@ -218,6 +224,19 @@ export default function LeavesPage() {
                           <FileText className="w-3.5 h-3.5" />
                         </span>
                         <p className="text-xs text-slate-300 leading-relaxed font-medium">{req.reason}</p>
+                      </div>
+                    )}
+
+                    {req.attachment_url && (
+                      <div className="flex justify-start bg-slate-900/30 p-2 rounded-xl border border-slate-850/60">
+                        <a 
+                          href={req.attachment_url} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1.5 text-xs font-bold text-teal-400 hover:text-teal-300 transition-colors"
+                        >
+                          <span>عرض المستند المرفق 📎</span>
+                        </a>
                       </div>
                     )}
 
