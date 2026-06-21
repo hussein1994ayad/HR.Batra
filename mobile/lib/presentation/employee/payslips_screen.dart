@@ -5,6 +5,7 @@
 import 'package:flutter/material.dart';
 import '../../core/services/supabase_service.dart';
 import '../../core/theme/app_theme.dart';
+import '../shared/widgets/glass_background.dart';
 
 class PayslipsScreen extends StatefulWidget {
   const PayslipsScreen({super.key});
@@ -137,42 +138,44 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      appBar: AppBar(
+    return GlassBackground(
+      child: Scaffold(
         backgroundColor: Colors.transparent,
-        elevation: 0,
-        centerTitle: true,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text(
-          'كشوف الرواتب الشهرية',
-          style: TextStyle(
-            fontFamily: 'Cairo',
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          centerTitle: true,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
+            onPressed: () => Navigator.pop(context),
+          ),
+          title: const Text(
+            'كشوف الرواتب الشهرية',
+            style: TextStyle(
+              fontFamily: 'Cairo',
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
           ),
         ),
-      ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: AppTheme.neonCyan))
-          : _slips.isEmpty
-              ? _buildEmptyState()
-              : RefreshIndicator(
-                  onRefresh: _loadPayslips,
-                  color: AppTheme.neonCyan,
-                  child: ListView.separated(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: _slips.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 16),
-                    itemBuilder: (context, index) {
-                      final slip = _slips[index];
-                      return _buildSlipCard(slip, isDark);
-                    },
+        body: _isLoading
+            ? const Center(child: CircularProgressIndicator(color: AppTheme.neonCyan))
+            : _slips.isEmpty
+                ? _buildEmptyState()
+                : RefreshIndicator(
+                    onRefresh: _loadPayslips,
+                    color: AppTheme.neonCyan,
+                    child: ListView.separated(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: _slips.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 16),
+                      itemBuilder: (context, index) {
+                        final slip = _slips[index];
+                        return _buildSlipCard(slip, isDark);
+                      },
+                    ),
                   ),
-                ),
+      ),
     );
   }
 
