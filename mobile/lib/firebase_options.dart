@@ -46,9 +46,30 @@ class DefaultFirebaseOptions {
     storageBucket: 'hr-pro-batra.firebasestorage.app',
   );
 
+  // ==========================================================================
+  // ⚠️  iOS Firebase Configuration - يحتاج إعداداً حقيقياً قبل بناء نسخة iOS
+  // ==========================================================================
+  // معرّف التطبيق (appId) الحالي غير صحيح — يبدو نسخة معدّلة من appId الأندرويد
+  // ولم يُنشأ تطبيق iOS في مشروع Firebase الفعلي بعد.
+  //
+  // خطوات التصحيح الصحيحة:
+  //   1. افتح https://console.firebase.google.com/project/hr-pro-batra
+  //   2. Project settings → Your apps → Add app → iOS
+  //   3. Bundle ID: com.batra.hrpro.hrPro  (نفس الموجود في iosBundleId أدناه)
+  //   4. حمّل ملف GoogleService-Info.plist وضعه في:
+  //        mobile/ios/Runner/GoogleService-Info.plist
+  //   5. أضفه من Xcode إلى Runner target (Drag → Copy items if needed).
+  //   6. شغّل: `dart pub global run flutterfire_cli:flutterfire configure --project=hr-pro-batra`
+  //      أو حدّث القيم أدناه يدوياً من الملف الجديد:
+  //         - apiKey             ← API_KEY
+  //         - appId              ← GOOGLE_APP_ID
+  //         - iosBundleId        ← BUNDLE_ID
+  //
+  // حتى يُصحّح، أي محاولة تهيئة Firebase على iOS ستفشل صامتاً (لا FCM على iOS).
+  // ==========================================================================
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyBwvQ0QtWRhLT4paKLo1ZFfW4t9lJgqr88',
-    appId: '1:667500759230:ios:76d4df6ef26f01ee75ace7', // تنبيه: يرجى تحديث هذا المعرف بمعرف تطبيق iOS الفعلي من لوحة تحكم Firebase إذا لزم الأمر
+    apiKey: 'AIzaSyBwvQ0QtWRhLT4paKLo1ZFfW4t9lJgqr88', // TODO(ios-firebase): استبدله بمفتاح iOS الحقيقي
+    appId: 'PLACEHOLDER_IOS_APP_ID_REPLACE_BEFORE_BUILDING_IOS', // TODO(ios-firebase): استبدله بمعرّف تطبيق iOS الحقيقي من Firebase Console
     messagingSenderId: '667500759230',
     projectId: 'hr-pro-batra',
     storageBucket: 'hr-pro-batra.firebasestorage.app',
