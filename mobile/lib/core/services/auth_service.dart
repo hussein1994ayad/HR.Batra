@@ -14,6 +14,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'device_service.dart';
+import '../providers/app_container.dart';
+import '../providers/auth_provider.dart';
 import 'supabase_service.dart';
 
 // -------------------------------------------------------------------------
@@ -64,6 +66,18 @@ class AuthService {
   /// يُمسح إلى null عند تسجيل الخروج أو انتهاء الجلسة.
   static String? currentUserRole;
 
+  /// Set the current role in both the static field (backward-compat) and
+  /// the Riverpod provider (source of truth for widgets).
+  static void _setRole(String? role) {
+    currentUserRole = role;
+    try {
+      appContainer.read(currentUserRoleProvider.notifier).state = role;
+    } catch (e) {
+      debugPrint('auth: role provider sync failed: $e');
+    }
+  }
+
+
   // =======================================================================
   // Public API
   // =======================================================================
@@ -88,7 +102,7 @@ class AuthService {
     try {
       // 2) قراءة صف الموظف
       final employee = await _loadEmployee(user.id);
-      currentUserRole = employee['role'] as String?;
+      _setRole(employee['role'] as String?);
 
       // 3) الحساب مفعّل؟
       if (!(employee['is_active'] as bool? ?? false)) {
@@ -151,14 +165,14 @@ class AuthService {
         .maybeSingle();
 
     if (data != null) {
-      currentUserRole = data['role'] as String?;
+      _setRole(data['role'] as String?);
     }
     return (data?['must_change_password'] as bool?) ?? false;
   }
 
   /// تسجيل الخروج الشامل: يمسح جلسة Supabase + الحالة الثابتة + نشاط الجلسة.
   static Future<void> signOut() async {
-    currentUserRole = null;
+    _setRole(null);
     try {
       await SupabaseService.client.auth.signOut();
     } catch (e) {

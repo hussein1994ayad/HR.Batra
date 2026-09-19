@@ -2,18 +2,21 @@
 // نظام HR Pro v6.0 - نقطة الدخول الرئيسية
 // =========================================================================
 
+import 'dart:ui';
+
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'core/routes/app_router.dart';
-import 'core/services/supabase_service.dart';
-import 'core/services/location_service.dart';
-import 'package:hr_pro/core/services/notification_service.dart';
-import 'package:hr_pro/firebase_options.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'core/theme/app_theme.dart';
 
-import 'dart:ui';
+import 'core/providers/app_container.dart';
+import 'core/routes/app_router.dart';
+import 'core/services/location_service.dart';
+import 'core/services/notification_service.dart';
+import 'core/services/supabase_service.dart';
+import 'core/theme/app_theme.dart';
+import 'firebase_options.dart';
+import 'presentation/shared/widgets/offline_banner.dart';
 
 void main() async {
   // 1. ضمان استقرار المحرك ومعالجة كافة الأخطاء غير الملتقطة لمنع توقف التطبيق نهائياً
@@ -26,7 +29,6 @@ void main() async {
 
   PlatformDispatcher.instance.onError = (Object error, StackTrace stack) {
     debugPrint('🛑 PlatformDispatcher Handled Async Error: $error\n$stack');
-    // إرجاع true يمنع النظام (Android/iOS) من إغلاق التطبيق قسرياً
     return true;
   };
 
@@ -54,9 +56,13 @@ void main() async {
     debugPrint('⚠️ فشل تهيئة خدمة الموقع بالخلفية: $e\n$stack');
   }
 
+  // 5. بدء مراقبة حالة الاتصال (كل 30 ثانية)
+  ConnectivityStatus.startPolling();
+
   runApp(
-    const ProviderScope(
-      child: HRProApp(),
+    UncontrolledProviderScope(
+      container: appContainer,
+      child: const HRProApp(),
     ),
   );
 }
