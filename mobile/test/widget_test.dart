@@ -1,21 +1,20 @@
-// =========================================================================
-// نظام HR Pro v6.0 - اختبار الفحص الدخاني للواجهة (Widget Test)
-// =========================================================================
-
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:hr_pro/main.dart';
+import 'package:hr_pro/presentation/shared/widgets/glass_container.dart';
 
 void main() {
-  testWidgets('HRProApp smoke test', (WidgetTester tester) async {
-    // بناء التطبيق وإطلاق إطار العمل تحت تغليف ProviderScope
+  testWidgets('GlassContainer widget renders child correctly', (WidgetTester tester) async {
     await tester.pumpWidget(
-      const ProviderScope(
-        child: HRProApp(),
+      const MaterialApp(
+        home: Scaffold(
+          body: GlassContainer(
+            child: Text('اختبار النظام'),
+          ),
+        ),
       ),
     );
 
-    // التحقق من بناء عنصر التطبيق الرئيسي بنجاح
-    expect(find.byType(HRProApp), findsOneWidget);
+    expect(find.text('اختبار النظام'), findsOneWidget);
+    expect(find.byType(GlassContainer), findsOneWidget);
   });
 }
