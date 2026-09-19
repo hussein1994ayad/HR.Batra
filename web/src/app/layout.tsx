@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Cairo } from "next/font/google";
 import "./globals.css";
 import "leaflet/dist/leaflet.css";
@@ -12,13 +12,30 @@ const cairo = Cairo({
 export const metadata: Metadata = {
   title: "HR Pro v6.0 - لوحة التحكم الاحترافية للمدير 👑",
   description: "نظام إدارة الموارد البشرية والتحليلات المتقدم والتتبع الجغرافي للموظفين",
+  manifest: "/manifest.json",
+  applicationName: "HR Pro",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "HR Pro",
+  },
+  icons: {
+    icon: [
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+    ],
+  },
 };
 
-export const viewport = {
+export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
+  themeColor: "#0F766E",
 };
 
 export default function RootLayout({
