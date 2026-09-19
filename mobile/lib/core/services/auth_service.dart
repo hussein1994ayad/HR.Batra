@@ -1,226 +1,145 @@
 // =========================================================================
-// نظام HR Pro v6.0 - خدمة المصادقة وأمن الجلسات (Authentication & Security Service)
+// HR Pro v6.0 — Authentication & Session Service
+// =========================================================================
+// المسؤوليات:
+//  • تسجيل الدخول عبر Supabase Auth مع فحص جدول employees
+//  • قفل الجهاز الواحد (Single-Device Locking) — انظر _handleDeviceLock
+//  • فرض تغيير كلمة المرور المؤقتة عند أول دخول
+//  • انتهاء الجلسة بعد فترة عدم استخدام (SessionTimeout)
+//  • تنظيف الحالة الثابتة (currentUserRole) عند تسجيل الخروج
 // =========================================================================
 
+import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'supabase_service.dart';
+
 import 'device_service.dart';
+import 'supabase_service.dart';
 
-/// استثناء خاص بالحسابات المعطلة
+// -------------------------------------------------------------------------
+// Exceptions — بأنواع محددة ليسهل معالجة كل حالة بشكل مستقل
+// -------------------------------------------------------------------------
+
+/// حساب معطّل من قبل الإدارة (is_active=false).
 class InactiveAccountException implements Exception {
-  final String message = 'هذا الحساب معطل حالياً. يرجى مراجعة إدارة الموارد البشرية لتفعيله.';
+  final String message =
+      'هذا الحساب معطل حالياً. يرجى مراجعة إدارة الموارد البشرية لتفعيله.';
   @override
   String toString() => message;
 }
 
-/// استثناء خاص بمحاولة تسجيل الدخول من جهاز غير معتمد (قفل الجهاز الواحد)
+/// محاولة تسجيل دخول من جهاز غير معتمد (قفل الجهاز الواحد فعّال).
 class DeviceLockedException implements Exception {
-  final String message = 'لا يمكن تسجيل الدخول من هذا الجهاز. هذا الحساب مقفل ومصرح به لجهاز آخر معتمد فقط. تم تسجيل هذه المحاولة كخرق أمني.';
+  final String message =
+      'لا يمكن تسجيل الدخول من هذا الجهاز. هذا الحساب مقفل ومصرح به لجهاز آخر معتمد فقط. '
+      'تم تسجيل هذه المحاولة كخرق أمني.';
   @override
   String toString() => message;
 }
 
-/// استثناء يطالب الموظف بضرورة تغيير كلمة المرور المؤقتة
+/// كلمة المرور المؤقتة تحتاج تغيير قبل استعمال النظام.
 class MustChangePasswordException implements Exception {
-  final String message = 'يجب عليك تغيير كلمة المرور المؤقتة الممنوحة لك قبل التمكن من تصفح النظام.';
+  final String message =
+      'يجب عليك تغيير كلمة المرور المؤقتة الممنوحة لك قبل التمكن من تصفح النظام.';
   @override
   String toString() => message;
 }
 
-/// خدمة لإدارة عمليات تسجيل الدخول والتحقق الأمني الشامل
+// -------------------------------------------------------------------------
+// AuthService
+// -------------------------------------------------------------------------
+
+/// خدمة إدارة المصادقة والجلسات والأمن التطبيقي.
+///
+/// ملاحظة: تحتفظ بحقل ثابت `currentUserRole` لأغراض التحقق السريع من الصلاحيات
+/// من داخل الـ Router و الشاشات. **يُمسح تلقائياً عند تسجيل الخروج** (انظر [signOut]).
 class AuthService {
-  static String? currentUserRole;  
-  /// التحقق من بيانات الدخول وتأمين حماية الحساب
+  // -----------------------------------------------------------------------
+  // Session Timeout — عدد الأيام قبل انتهاء الجلسة تلقائياً بدون استخدام
+  // -----------------------------------------------------------------------
+  static const int _sessionMaxIdleDays = 30;
+  static const String _kLastActivityKey = 'auth.last_activity_ms';
+
+  /// الدور الحالي للمستخدم — مقروء من قِبل الـ Router والشاشات.
+  /// يُمسح إلى null عند تسجيل الخروج أو انتهاء الجلسة.
+  static String? currentUserRole;
+
+  // =======================================================================
+  // Public API
+  // =======================================================================
+
+  /// تسجيل الدخول الكامل مع كل فحوصات الأمان.
+  ///
+  /// يرمي أحد الاستثناءات المُعرَّفة أعلاه حسب الحالة.
   static Future<void> signIn(String email, String password) async {
-    // 1. تسجيل الدخول عبر Supabase Auth
-    final AuthResponse response = await SupabaseService.client.auth.signInWithPassword(
+    // 1) Supabase Auth
+    final AuthResponse response =
+        await SupabaseService.client.auth.signInWithPassword(
       email: email,
       password: password,
     );
 
     final User? user = response.user;
     if (user == null) {
-      throw Exception('فشل تسجيل الدخول، يرجى التحقق من البريد الإلكتروني وكلمة المرور.');
+      throw Exception(
+          'فشل تسجيل الدخول، يرجى التحقق من البريد الإلكتروني وكلمة المرور.');
     }
 
     try {
-      // 2. التحقق من حالة الموظف وفرض كلمة المرور من جدول الموظفين
-      final employeeData = await SupabaseService.client
-          .from('employees')
-          .select('is_active, must_change_password, full_name, device_id_lock, role')
-          .eq('id', user.id)
-          .maybeSingle();
+      // 2) قراءة صف الموظف
+      final employee = await _loadEmployee(user.id);
+      currentUserRole = employee['role'] as String?;
 
-      if (employeeData == null) {
-        await SupabaseService.signOut();
-        throw Exception('بيانات الموظف غير موجودة في قاعدة بيانات النظام.');
-      }
-
-      final bool isActive = employeeData['is_active'] ?? false;
-      final bool mustChangePassword = employeeData['must_change_password'] ?? true;
-      final String fullName = employeeData['full_name'] ?? 'موظف';
-      final String? deviceIdLock = employeeData['device_id_lock'];
-      AuthService.currentUserRole = employeeData['role'];
-
-      // التحقق من تفعيل الحساب
-      if (!isActive) {
-        await SupabaseService.signOut();
+      // 3) الحساب مفعّل؟
+      if (!(employee['is_active'] as bool? ?? false)) {
+        await signOut();
         throw InactiveAccountException();
       }
 
-      // 3. التحقق من قفل الحساب على جهاز واحد (Single-device locking)
-      final String deviceUUID = await DeviceService.getDeviceUUID();
-      final String deviceModel = await DeviceService.getDeviceModel();
-      final String osVersion = await DeviceService.getOSVersion();
+      // 4) قفل الجهاز
+      await _handleDeviceLock(
+        userId: user.id,
+        fullName: employee['full_name'] as String? ?? 'موظف',
+        deviceIdLock: employee['device_id_lock'] as String?,
+      );
 
-      if (deviceIdLock != null && deviceIdLock.isNotEmpty) {
-        final List<dynamic> devices = await SupabaseService.client
-            .from('employee_devices')
-            .select()
-            .eq('employee_id', user.id);
-
-        if (devices.isEmpty) {
-          // هذا هو الدخول الأول للموظف، نسجل جهازه تلقائياً كجهاز معتمد
-          await SupabaseService.client.from('employee_devices').insert({
-            'employee_id': user.id,
-            'device_id': deviceUUID,
-            'model': deviceModel,
-            'os_version': osVersion,
-            'is_approved': true,
-            'approved_at': DateTime.now().toUtc().toIso8601String(),
-          });
-          
-          await SupabaseService.client
-              .from('employees')
-              .update({'device_id_lock': deviceUUID})
-              .eq('id', user.id);
-        } else {
-          // يوجد جهاز مسجل مسبقاً
-          if (deviceIdLock == 'force_lock_active') {
-            // مسح أي تسجيلات سابقة
-            await SupabaseService.client
-                .from('employee_devices')
-                .delete()
-                .eq('employee_id', user.id);
-
-            // إدخال الجهاز الحالي كجهاز معتمد تلقائياً
-            await SupabaseService.client.from('employee_devices').insert({
-              'employee_id': user.id,
-              'device_id': deviceUUID,
-              'model': deviceModel,
-              'os_version': osVersion,
-              'is_approved': true,
-              'approved_at': DateTime.now().toUtc().toIso8601String(),
-            });
-
-            // تحديث قفل الجهاز ليكون الجهاز الجديد
-            await SupabaseService.client
-                .from('employees')
-                .update({'device_id_lock': deviceUUID})
-                .eq('id', user.id);
-          } else {
-            // يوجد قفل محدد بجهاز معين
-            final registeredDevice = devices.first;
-            final String registeredDeviceUUID = registeredDevice['device_id'];
-            final bool isApproved = registeredDevice['is_approved'] ?? false;
-
-            if (registeredDeviceUUID != deviceUUID || deviceIdLock != deviceUUID || !isApproved) {
-              // محاولة خرق أمني لجهاز آخر أو دخول من جهاز غير معتمد!
-              
-              // تحقق إذا كان هذا الجهاز قد تم تقديم طلب له مسبقاً لمنع التكرار
-              final List<dynamic> existingReq = await SupabaseService.client
-                  .from('employee_devices')
-                  .select()
-                  .eq('employee_id', user.id)
-                  .eq('device_id', deviceUUID);
-
-              if (existingReq.isEmpty) {
-                // إدراج طلب ربط جهاز جديد غير معتمد ينتظر موافقة الأدمن
-                await SupabaseService.client.from('employee_devices').insert({
-                  'employee_id': user.id,
-                  'device_id': deviceUUID,
-                  'model': deviceModel,
-                  'os_version': osVersion,
-                  'is_approved': false,
-                });
-              }
-
-              // نقوم بتسجيل إشعار أمني في قاعدة البيانات للأدمن والموظف نفسه
-              await SupabaseService.client.from('notifications').insert({
-                'employee_id': user.id,
-                'title': 'محاولة خرق أمني للدخول ⚠️',
-                'body': 'تمت محاولة تسجيل دخول غير مصرح بها إلى حسابك ($fullName) من جهاز جديد ($deviceModel). تم تقديم طلب ربط جهاز جديد وبانتظار موافقة الإدارة.',
-                'type': 'device',
-              });
-
-              await SupabaseService.signOut();
-              throw DeviceLockedException();
-            }
-          }
-        }
-      } else {
-        // إذا كان قفل الجهاز ملغى (device_id_lock == null)، نسمح بالدخول من أي جهاز ونقوم بتحديث معرف الجهاز المخزن
-        final List<dynamic> devices = await SupabaseService.client
-            .from('employee_devices')
-            .select()
-            .eq('employee_id', user.id);
-
-        if (devices.isEmpty || devices.first['device_id'] != deviceUUID) {
-          // مسح أي تسجيلات سابقة للماك أو الآي دي القديم
-          await SupabaseService.client
-              .from('employee_devices')
-              .delete()
-              .eq('employee_id', user.id);
-
-          // إدخال الجهاز الحالي كجهاز افتراضي
-          await SupabaseService.client.from('employee_devices').insert({
-            'employee_id': user.id,
-            'device_id': deviceUUID,
-            'model': deviceModel,
-            'os_version': osVersion,
-            'is_approved': true,
-            'approved_at': DateTime.now().toUtc().toIso8601String(),
-          });
-        }
-      }
-
-      // 4. التحقق من فرض تغيير كلمة المرور المؤقتة
-      if (mustChangePassword) {
+      // 5) كلمة مرور مؤقتة؟
+      if (employee['must_change_password'] as bool? ?? true) {
         throw MustChangePasswordException();
       }
 
+      // 6) تسجيل نشاط الجلسة
+      await _touchActivity();
     } catch (e) {
-      // في حال حدوث أي استثناء، نضمن تسجيل الخروج التام لحماية الجلسة
+      // أي فشل يوقف الجلسة، إلا حالة "غيّر كلمة المرور" التي هي مسار مقصود
       if (e is! MustChangePasswordException) {
-        await SupabaseService.signOut();
+        await signOut();
       }
       rethrow;
     }
   }
 
-  /// تغيير كلمة المرور للموظف وإلغاء حالة الفرض بعد النجاح
+  /// تغيير كلمة المرور وإلغاء علامة "يجب تغيير كلمة المرور".
   static Future<void> changePassword(String newPassword) async {
     final User? user = SupabaseService.currentUser;
     if (user == null) {
       throw Exception('الجلسة غير صالحة. يرجى تسجيل الدخول مجدداً.');
     }
 
-    // 1. تحديث كلمة المرور في Supabase Auth
     await SupabaseService.client.auth.updateUser(
       UserAttributes(password: newPassword),
     );
 
-    // 2. تحديث حالة الموظف وكلمة المرور في جدول الموظفين
-    await SupabaseService.client
-        .from('employees')
-        .update({
-          'must_change_password': false,
-          'plain_password': newPassword,
-        })
-        .eq('id', user.id);
+    await SupabaseService.client.from('employees').update({
+      'must_change_password': false,
+      'plain_password': newPassword,
+    }).eq('id', user.id);
+
+    await _touchActivity();
   }
 
-  /// التحقق من حالة الموظف الحالية (هل يجب تغيير كلمة المرور؟)
+  /// هل يجب على المستخدم الحالي تغيير كلمة المرور؟
+  /// (يُحدّث currentUserRole في نفس الاستدعاء).
   static Future<bool> checkMustChangePassword() async {
     final User? user = SupabaseService.currentUser;
     if (user == null) return false;
@@ -232,9 +151,209 @@ class AuthService {
         .maybeSingle();
 
     if (data != null) {
-      currentUserRole = data['role'];
+      currentUserRole = data['role'] as String?;
+    }
+    return (data?['must_change_password'] as bool?) ?? false;
+  }
+
+  /// تسجيل الخروج الشامل: يمسح جلسة Supabase + الحالة الثابتة + نشاط الجلسة.
+  static Future<void> signOut() async {
+    currentUserRole = null;
+    try {
+      await SupabaseService.client.auth.signOut();
+    } catch (e) {
+      debugPrint('signOut warning: $e');
+    }
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_kLastActivityKey);
+    } catch (_) {}
+  }
+
+  /// يُستدعى من كل شاشة رئيسية عند البناء لتحديث علامة "آخر نشاط".
+  static Future<void> touchActivity() => _touchActivity();
+
+  /// هل انتهت صلاحية الجلسة بسبب عدم استخدام لفترة طويلة؟
+  static Future<bool> isSessionExpired() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final last = prefs.getInt(_kLastActivityKey);
+      if (last == null) return false; // لم نبدأ تتبع بعد
+      final elapsed = DateTime.now().millisecondsSinceEpoch - last;
+      final maxMs = _sessionMaxIdleDays * 24 * 60 * 60 * 1000;
+      return elapsed > maxMs;
+    } catch (_) {
+      return false; // في حال فشل القراءة، لا نُخرج المستخدم
+    }
+  }
+
+  // =======================================================================
+  // Private helpers
+  // =======================================================================
+
+  static Future<Map<String, dynamic>> _loadEmployee(String userId) async {
+    final data = await SupabaseService.client
+        .from('employees')
+        .select(
+            'is_active, must_change_password, full_name, device_id_lock, role')
+        .eq('id', userId)
+        .maybeSingle();
+
+    if (data == null) {
+      await signOut();
+      throw Exception('بيانات الموظف غير موجودة في قاعدة بيانات النظام.');
+    }
+    return data;
+  }
+
+  /// منطق قفل الجهاز الواحد — أربع حالات، كل واحدة معلّقة بوضوح.
+  static Future<void> _handleDeviceLock({
+    required String userId,
+    required String fullName,
+    required String? deviceIdLock,
+  }) async {
+    final deviceUUID = await DeviceService.getDeviceUUID();
+    final deviceModel = await DeviceService.getDeviceModel();
+    final osVersion = await DeviceService.getOSVersion();
+
+    // -------------------------------------------------------------------
+    // الحالة 1: القفل معطّل (deviceIdLock == null|empty)
+    // → الدخول مفتوح من أي جهاز، ونسجّل الجهاز الحالي كافتراضي.
+    // -------------------------------------------------------------------
+    if (deviceIdLock == null || deviceIdLock.isEmpty) {
+      await _replaceDeviceRecord(
+          userId, deviceUUID, deviceModel, osVersion);
+      return;
     }
 
-    return data?['must_change_password'] ?? false;
+    final devices = await SupabaseService.client
+        .from('employee_devices')
+        .select()
+        .eq('employee_id', userId);
+
+    // -------------------------------------------------------------------
+    // الحالة 2: أول دخول (deviceIdLock موجود لكن لا سجل أجهزة)
+    // → نعتمد هذا الجهاز تلقائياً كجهاز الموظف الرسمي.
+    // -------------------------------------------------------------------
+    if (devices.isEmpty) {
+      await _insertDevice(userId, deviceUUID, deviceModel, osVersion,
+          approved: true);
+      await SupabaseService.client
+          .from('employees')
+          .update({'device_id_lock': deviceUUID}).eq('id', userId);
+      return;
+    }
+
+    // -------------------------------------------------------------------
+    // الحالة 3: الأدمن فعّل "force_lock_active" لإعادة الضبط
+    // → نحذف كل الأجهزة القديمة ونعتمد الجهاز الحالي.
+    // -------------------------------------------------------------------
+    if (deviceIdLock == 'force_lock_active') {
+      await SupabaseService.client
+          .from('employee_devices')
+          .delete()
+          .eq('employee_id', userId);
+      await _insertDevice(userId, deviceUUID, deviceModel, osVersion,
+          approved: true);
+      await SupabaseService.client
+          .from('employees')
+          .update({'device_id_lock': deviceUUID}).eq('id', userId);
+      return;
+    }
+
+    // -------------------------------------------------------------------
+    // الحالة 4: قفل على جهاز محدد
+    // → نفحص إن كان الجهاز الحالي هو نفسه المعتمد. إن لم يكن:
+    //   • نسجّل طلب "جهاز جديد" ينتظر موافقة الأدمن
+    //   • ننشئ إشعار خرق أمني
+    //   • نرمي DeviceLockedException
+    // -------------------------------------------------------------------
+    final registered = devices.first;
+    final registeredUUID = registered['device_id'] as String?;
+    final isApproved = registered['is_approved'] as bool? ?? false;
+
+    final matches = registeredUUID == deviceUUID &&
+        deviceIdLock == deviceUUID &&
+        isApproved;
+
+    if (matches) return; // كل شي تمام
+
+    // خرق محتمل — نسجّل ونرمي استثناء
+    await _recordSecurityBreach(
+      userId: userId,
+      fullName: fullName,
+      deviceUUID: deviceUUID,
+      deviceModel: deviceModel,
+      osVersion: osVersion,
+    );
+    await signOut();
+    throw DeviceLockedException();
+  }
+
+  static Future<void> _replaceDeviceRecord(String userId, String uuid,
+      String model, String os) async {
+    final devices = await SupabaseService.client
+        .from('employee_devices')
+        .select()
+        .eq('employee_id', userId);
+    if (devices.isEmpty || devices.first['device_id'] != uuid) {
+      await SupabaseService.client
+          .from('employee_devices')
+          .delete()
+          .eq('employee_id', userId);
+      await _insertDevice(userId, uuid, model, os, approved: true);
+    }
+  }
+
+  static Future<void> _insertDevice(
+      String userId, String uuid, String model, String os,
+      {required bool approved}) async {
+    await SupabaseService.client.from('employee_devices').insert({
+      'employee_id': userId,
+      'device_id': uuid,
+      'model': model,
+      'os_version': os,
+      'is_approved': approved,
+      if (approved)
+        'approved_at': DateTime.now().toUtc().toIso8601String(),
+    });
+  }
+
+  static Future<void> _recordSecurityBreach({
+    required String userId,
+    required String fullName,
+    required String deviceUUID,
+    required String deviceModel,
+    required String osVersion,
+  }) async {
+    // سجّل طلب جهاز جديد (فقط لو ما موجود)
+    final existing = await SupabaseService.client
+        .from('employee_devices')
+        .select()
+        .eq('employee_id', userId)
+        .eq('device_id', deviceUUID);
+
+    if (existing.isEmpty) {
+      await _insertDevice(userId, deviceUUID, deviceModel, osVersion,
+          approved: false);
+    }
+
+    // إشعار أمني للأدمن والموظف
+    await SupabaseService.client.from('notifications').insert({
+      'employee_id': userId,
+      'title': 'محاولة خرق أمني للدخول ⚠️',
+      'body':
+          'تمت محاولة تسجيل دخول غير مصرح بها إلى حسابك ($fullName) من جهاز جديد ($deviceModel). '
+              'تم تقديم طلب ربط جهاز جديد وبانتظار موافقة الإدارة.',
+      'type': 'device',
+    });
+  }
+
+  static Future<void> _touchActivity() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt(
+          _kLastActivityKey, DateTime.now().millisecondsSinceEpoch);
+    } catch (_) {}
   }
 }
