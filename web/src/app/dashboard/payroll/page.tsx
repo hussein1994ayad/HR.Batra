@@ -17,7 +17,9 @@ import {
   CalendarRange,
   Info,
   Clock,
-  X
+  X,
+  Bell,
+  Archive
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import toast from 'react-hot-toast';
@@ -83,9 +85,28 @@ const formatLateDurationArabic = (minutes: number) => {
   }
 };
 
+const getBaghdadMinutesFromIso = (isoStr: string): number => {
+  try {
+    const d = new Date(isoStr);
+    const utcHours = d.getUTCHours();
+    const utcMins = d.getUTCMinutes();
+    // Iraq / Baghdad is UTC+3
+    const baghdadHours = (utcHours + 3) % 24;
+    return baghdadHours * 60 + utcMins;
+  } catch (_) {
+    return 0;
+  }
+};
+
+const parseScheduleMinutes = (timeStr: string = '09:00:00'): number => {
+  const parts = timeStr.split(':').map(Number);
+  return (parts[0] || 0) * 60 + (parts[1] || 0);
+};
+
 export default function PayrollPage() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [sendingNotifs, setSendingNotifs] = useState(false);
   
   // Data States
   const [employees, setEmployees] = useState<any[]>([]);
@@ -96,6 +117,7 @@ export default function PayrollPage() {
   const [leaveRequests, setLeaveRequests] = useState<any[]>([]);
   const [workSchedules, setWorkSchedules] = useState<any[]>([]);
   const [existingSlips, setExistingSlips] = useState<any[]>([]);
+  const [archivedMonths, setArchivedMonths] = useState<string[]>([]);
   
   // Filter States
   const [selectedMonth, setSelectedMonth] = useState(() => {
@@ -304,11 +326,12 @@ export default function PayrollPage() {
         resAtt,
         resLvs,
         resScheds,
-        resSlips
+        resSlips,
+        resArchived
       ] = await Promise.all([
         supabase.from('branches').select('id, name'),
         supabase.from('employees')
-          .select('id, full_name, monthly_salary_iqd, future_salary_iqd, future_salary_month, branch_id, department_id, branches(name)')
+          .select('id, full_name, monthly_salary_iqd, future_salary_iqd, future_salary_month, branch_id, department_id, created_at, join_date, branches(name)')
           .eq('is_active', true)
           .order('full_name'),
         supabase.from('bonuses_deductions')
@@ -333,7 +356,9 @@ export default function PayrollPage() {
           .select('*'),
         supabase.from('salary_slips')
           .select('*')
-          .eq('work_month', selectedMonth)
+          .eq('work_month', selectedMonth),
+        supabase.from('archived_months')
+          .select('work_month')
       ]);
 
       if (resBrs.data) setBranches(resBrs.data);
@@ -344,6 +369,9 @@ export default function PayrollPage() {
       if (resLvs.data) setLeaveRequests(resLvs.data);
       if (resScheds.data) setWorkSchedules(resScheds.data);
       if (resSlips.data) setExistingSlips(resSlips.data);
+      if (resArchived.data) {
+        setArchivedMonths(resArchived.data.map((r: any) => r.work_month));
+      }
 
     } catch (err) {
       console.error(err);
@@ -389,6 +417,13 @@ export default function PayrollPage() {
   const handleGenerateSlip = async (empData: any) => {
     setActionLoading(`slip_${empData.id}`);
     try {
+      // Prevent double generation
+      if (existingSlips.some(s => s.employee_id === empData.id && s.work_month === selectedMonth)) {
+        toast.error('تم صرف الراتب مسبقاً لهذا الموظف في هذا الشهر.');
+        setActionLoading(null);
+        return;
+      }
+
       // Create a salary slip record (status is published according to CHECK constraint)
       const { error } = await supabase.from('salary_slips').insert({
         employee_id: empData.id,
@@ -493,14 +528,6 @@ export default function PayrollPage() {
         await insertBDIfNotExist(empData.earlyExitDeduction, `خصم خروج مبكر (${formatLateDurationArabic(empData.totalEarlyExitMinutes)}) للفترة من ${startDate} إلى ${endDate}`);
       }
 
-      // Send notification to employee
-      await supabase.from('notifications').insert({
-        employee_id: empData.id,
-        title: 'اعتماد كشف الراتب 💸',
-        body: `تم اعتماد وصرف كشف راتبك لشهر (${selectedMonth}) بصافي مستلم قدره (${empData.netSalary.toLocaleString()} د.ع).`,
-        type: 'salary'
-      });
-
       confetti({ particleCount: 100, spread: 60, colors: ['#10B981', '#059669'] });
       toast.success('تم اعتماد راتب الموظف بنجاح! 💸');
       fetchPayrollData();
@@ -516,6 +543,11 @@ export default function PayrollPage() {
     try {
       let successCount = 0;
       for (const empData of empsToProcess) {
+        // Prevent double generation
+        if (existingSlips.some(s => s.employee_id === empData.id && s.work_month === selectedMonth)) {
+          continue;
+        }
+        
         // Create a salary slip record
         const { error } = await supabase.from('salary_slips').insert({
           employee_id: empData.id,
@@ -625,13 +657,6 @@ export default function PayrollPage() {
           await insertBDIfNotExist(empData.earlyExitDeduction, `خصم خروج مبكر (${formatLateDurationArabic(empData.totalEarlyExitMinutes)}) للفترة من ${startDate} إلى ${endDate}`);
         }
 
-        // Send notification to employee
-        await supabase.from('notifications').insert({
-          employee_id: empData.id,
-          title: 'اعتماد كشف الراتب 💸',
-          body: `تم اعتماد وصرف كشف راتبك لشهر (${selectedMonth}) بصافي مستلم قدره (${empData.netSalary.toLocaleString()} د.ع).`,
-          type: 'salary'
-        });
       }
 
       confetti({ particleCount: 150, spread: 80, colors: ['#10B981', '#3B82F6'] });
@@ -645,7 +670,70 @@ export default function PayrollPage() {
     }
   };
 
+  const handleSendBranchNotifications = async () => {
+    if (selectedBranch === 'all') {
+      toast.error('يرجى اختيار فرع محدد أولاً لإرسال الإشعارات له.');
+      return;
+    }
+    
+    setSendingNotifs(true);
+    try {
+      // 1. جلب الموظفين النشطين في الفرع المختار
+      const { data: branchEmps, error: empErr } = await supabase
+        .from('employees')
+        .select('id, full_name')
+        .eq('branch_id', selectedBranch)
+        .eq('is_active', true);
+        
+      if (empErr) throw empErr;
+      if (!branchEmps || branchEmps.length === 0) {
+        toast.error('لم يتم العثور على موظفين في هذا الفرع.');
+        return;
+      }
+
+      // 2. جلب كشوف الرواتب المعتمدة لهؤلاء الموظفين للشهر المحدد
+      const empIds = branchEmps.map(emp => emp.id);
+      const { data: slips, error: slipsErr } = await supabase
+        .from('salary_slips')
+        .select('employee_id, net_salary')
+        .in('employee_id', empIds)
+        .eq('work_month', selectedMonth);
+        
+      if (slipsErr) throw slipsErr;
+      if (!slips || slips.length === 0) {
+        toast.error('لا توجد كشوف رواتب معتمدة/منشورة لهذا الفرع في الشهر المحدد.');
+        return;
+      }
+
+      // 3. إدراج الإشعارات دفعة واحدة
+      const notifications = slips.map(slip => {
+        return {
+          employee_id: slip.employee_id,
+          title: 'اعتماد ونشر كشف الراتب 💸',
+          body: `تم اعتماد وصرف كشف راتبك لشهر (${selectedMonth}) بصافي مستلم قدره (${slip.net_salary.toLocaleString()} د.ع). يمكنك الاطلاع عليه من التطبيق.`,
+          type: 'salary',
+          is_read: false
+        };
+      });
+
+      const { error: notifErr } = await supabase.from('notifications').insert(notifications);
+      if (notifErr) throw notifErr;
+
+      confetti({ particleCount: 80, spread: 50, colors: ['#3B82F6', '#60A5FA'] });
+      toast.success(`تم إرسال إشعارات كشوف الرواتب بنجاح لـ (${slips.length}) موظف في الفرع! 🔔`);
+    } catch (err: any) {
+      toast.error(`فشل إرسال إشعارات الفرع: ${err.message || err}`);
+    } finally {
+      setSendingNotifs(false);
+    }
+  };
+
   const handleRevertSlip = async (empData: any) => {
+    if (archivedMonths.includes(selectedMonth)) {
+      toast.error('هذا الشهر مؤرشف مالياً ومقفل تماماً 🔒');
+      return;
+    }
+
     // Check if the slip exists in existingSlips
     const slip = existingSlips.find(s => s.employee_id === empData.id);
     if (!slip) return;
@@ -684,6 +772,49 @@ export default function PayrollPage() {
     }
   };
 
+  const handleArchiveMonth = async () => {
+    const confirmArchive = window.confirm(
+      `⚠️ تحذير أمني: هل أنت متأكد من أرشفة كشوف الرواتب لشهر (${selectedMonth})؟\n\n` +
+      `عند الأرشفة:\n` +
+      `- سيتم حذف سجلات الحضور والغياب التفصيلية لهذا الشهر بشكل نهائي لتوفير المساحة.\n` +
+      `- سيتم حذف سجلات المكافآت والخصومات التفصيلية (حيث تم حفظ المبالغ الصافية نهائياً في كشوف الرواتب).\n` +
+      `- سيتم قفل الشهر مالياً ولن تتمكن من تعديل أو التراجع عن أي راتب بعد الآن.\n` +
+      `- لا يمكن التراجع عن هذه العملية لاحقاً.\n\n` +
+      `هل تريد المتابعة؟`
+    );
+
+    if (!confirmArchive) return;
+
+    setActionLoading('archive_month');
+    try {
+      const { data, error } = await supabase.rpc('safe_archive_payroll_month', {
+        target_month: selectedMonth,
+        cycle_start_day: cycleStartDay,
+        cycle_end_day: cycleEndDay
+      });
+
+      if (error) throw error;
+
+      if (data && data.success === false) {
+        let errorMsg = data.error;
+        if (data.missing_employees && data.missing_employees.length > 0) {
+          errorMsg += `\n\nالموظفون الذين لم يتم اعتماد رواتبهم بعد:\n- ` + data.missing_employees.join('\n- ');
+        }
+        alert(errorMsg);
+        toast.error(data.error || 'فشلت عملية الأرشفة');
+      } else {
+        toast.success(data.message || 'تمت أرشفة الشهر بنجاح! 📦');
+        confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+        fetchPayrollData();
+      }
+    } catch (err: any) {
+      console.error(err);
+      toast.error(`خطأ أثناء الأرشفة: ${err.message || err}`);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   const toggleExcuseDay = (employeeId: string, dateStr: string) => {
     setExcusedDays(prev => {
       const currentList = prev[employeeId] || [];
@@ -698,20 +829,48 @@ export default function PayrollPage() {
     });
   };
 
+  // Filter out employees who joined AFTER the end of this payroll cycle
+  const validEmployees = employees.filter(emp => {
+    const effectiveJoinDate = emp.join_date || emp.created_at;
+    if (!effectiveJoinDate) return true;
+    const createdDate = new Date(effectiveJoinDate).getTime();
+    const cycleEnd = new Date(endDate + 'T23:59:59.999Z').getTime();
+    return createdDate <= cycleEnd;
+  });
+
   // Compile processed payroll data with smart attendance & absence calculation
-  const processedPayroll = employees.map(emp => {
-    let basic = emp.monthly_salary_iqd || 0;
+  const processedPayroll = validEmployees.map(emp => {
+    let nominalBasic = emp.monthly_salary_iqd || 0;
     
     if (emp.future_salary_iqd && emp.future_salary_month) {
       const futureMonthStr = emp.future_salary_month.substring(0, 7);
       if (selectedMonth >= futureMonthStr) {
-        basic = emp.future_salary_iqd;
+        nominalBasic = emp.future_salary_iqd;
+      }
+    }
+
+    let basic = nominalBasic;
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+
+    // Prorate salary if the employee joined mid-cycle
+    const effectiveJoinDateStr = emp.join_date;
+    if (effectiveJoinDateStr) {
+      const joinDate = new Date(effectiveJoinDateStr);
+      const joinDay = new Date(joinDate.getFullYear(), joinDate.getMonth(), joinDate.getDate());
+      const startDay = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+      
+      if (joinDay > startDay) {
+        const totalCycleDays = Math.round((end.getTime() - startDay.getTime()) / (1000 * 3600 * 24)) + 1;
+        const daysWorkedInCycle = Math.round((end.getTime() - joinDay.getTime()) / (1000 * 3600 * 24)) + 1;
+        
+        if (daysWorkedInCycle > 0 && daysWorkedInCycle < totalCycleDays) {
+          basic = Math.round((nominalBasic / totalCycleDays) * daysWorkedInCycle);
+        }
       }
     }
     
     // Dynamic Attendance Calculations
-    const start = new Date(startDate);
-    const end = new Date(endDate);
     
     // Define the limit day (if selectedRange is current month, calculate up to today)
     const today = new Date();
@@ -738,6 +897,12 @@ export default function PayrollPage() {
     const detailLogs: any[] = [];
     const empExcuses = excusedDays[emp.id] || [];
 
+    let joinDay: Date | null = null;
+    if (emp.created_at) {
+      const jd = new Date(emp.created_at);
+      joinDay = new Date(jd.getFullYear(), jd.getMonth(), jd.getDate());
+    }
+
     let loopDate = new Date(start);
     while (loopDate <= end) {
       const year = loopDate.getFullYear();
@@ -749,165 +914,169 @@ export default function PayrollPage() {
       const isWorkingDay = workDays.includes(weekday);
       
       if (isWorkingDay) {
-        const isPastOrToday = loopDate <= todayNormalized;
-        if (isPastOrToday) {
-          scheduledWorkDays++;
-        }
+        const isBeforeJoining = joinDay && loopDate < joinDay;
 
-        const isExcused = empExcuses.includes(dateStr);
-        
-        // Check attendance records
-        const attRecord = attendanceLogs.find(log => log.employee_id === emp.id && log.work_date === dateStr);
-        
-        // Check approved leaves
-        const isDateWithinRange = (date: Date, startStr: string, endStr: string) => {
-          const d = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
-          const s = new Date(new Date(startStr).getFullYear(), new Date(startStr).getMonth(), new Date(startStr).getDate()).getTime();
-          const e = new Date(new Date(endStr).getFullYear(), new Date(endStr).getMonth(), new Date(endStr).getDate()).getTime();
-          return d >= s && d <= e;
-        };
-        
-        const leaveRecord = leaveRequests.find(l => l.employee_id === emp.id && l.status === 'approved' && isDateWithinRange(loopDate, l.start_date, l.end_date));
-
-        if (attRecord) {
-          const status = attRecord.status;
-          const isApplied = attRecord.deduction_status === 'applied';
-          const isIgnored = attRecord.deduction_status === 'ignored';
-
-          let earlyExitMins = 0;
-          if (attRecord.check_out_time) {
-            const schedCheckOut = empSched ? empSched.check_out_time : '17:00:00';
-            const checkOut = new Date(attRecord.check_out_time);
-            const [h, m, s] = schedCheckOut.split(':').map(Number);
-            const sched = new Date(checkOut);
-            sched.setHours(h, m, s || 0, 0);
-            const diffMs = sched.getTime() - checkOut.getTime();
-            if (diffMs > 0) {
-              earlyExitMins = Math.floor(diffMs / (1000 * 60));
-            }
-          }
-
-          if (isPastOrToday) {
-            if (status === 'present') presentsCount++;
-            else if (status === 'late') {
-              presentsCount++;
-              if (isApplied) {
-                latesCount++;
-                // Calculate late minutes
-                const schedCheckIn = empSched ? empSched.check_in_time : '09:00:00';
-                const checkIn = new Date(attRecord.check_in_time);
-                const [h, m, s] = schedCheckIn.split(':').map(Number);
-                const sched = new Date(checkIn);
-                sched.setHours(h, m, s || 0, 0);
-                const diffMs = checkIn.getTime() - sched.getTime();
-                const lateMins = diffMs > 0 ? Math.floor(diffMs / (1000 * 60)) : 0;
-                totalLateMinutes += lateMins;
-              }
-            }
-            else if (status === 'half_day') halfDaysCount++;
-            else if (status === 'absent') {
-              if (isApplied) absencesCount++;
-            }
-
-            // Early exit check
-            if (earlyExitMins > 0 && isApplied) {
-              earlyExitsCount++;
-              totalEarlyExitMinutes += earlyExitMins;
-            }
-          }
-          
-          let statusAr = 'حاضر ✅';
-          let noteParts = [];
-          if (status === 'late') {
-            statusAr = isApplied ? 'متأخر (تم تطبيق الخصم) ⚠️' : (isIgnored ? 'متأخر (تم تجاهل الخصم) 🟢' : 'متأخر (معلق) ⏳');
-            // Calculate late minutes for display
-            const schedCheckIn = empSched ? empSched.check_in_time : '09:00:00';
-            const checkIn = new Date(attRecord.check_in_time);
-            const [h, m, s] = schedCheckIn.split(':').map(Number);
-            const sched = new Date(checkIn);
-            sched.setHours(h, m, s || 0, 0);
-            const diffMs = checkIn.getTime() - sched.getTime();
-            const lateMins = diffMs > 0 ? Math.floor(diffMs / (1000 * 60)) : 0;
-            noteParts.push(`تأخير: ${formatLateDurationArabic(lateMins)}`);
-          } else if (status === 'half_day') {
-            statusAr = 'نصف يوم 🌓';
-            noteParts.push('دوام غير مكتمل');
-          } else if (status === 'absent') {
-            statusAr = isApplied ? 'غياب (تم تطبيق الخصم) ❌' : 'غياب (تم تجاهل الخصم) 🟢';
-            noteParts.push(attRecord.deduction_reason || 'غياب غير مبرر');
-          }
-
-          if (earlyExitMins > 0) {
-            noteParts.push(`خروج مبكر: ${formatLateDurationArabic(earlyExitMins)}`);
-            if (status === 'present') {
-              statusAr = isApplied ? 'خروج مبكر (خصم) ⚠️' : 'خروج مبكر (تجاهل الخصم) 🟢';
-            }
-          }
-
-          const noteAr = noteParts.length > 0 ? noteParts.join(' | ') : 'بصمة دوام اعتيادية';
-
+        if (isBeforeJoining) {
           detailLogs.push({
             date: dateStr,
-            status: statusAr,
-            time: attRecord.check_in_time ? new Date(attRecord.check_in_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : '-',
-            note: noteAr,
-            isAbsenceDay: false
-          });
-        } else if (leaveRecord) {
-          if (isPastOrToday) {
-            if (leaveRecord.is_paid) {
-              paidLeavesCount++;
-            } else {
-              absencesCount++;
-            }
-          }
-          detailLogs.push({
-            date: dateStr,
-            status: leaveRecord.is_paid ? 'إجازة معتمدة 🌴' : 'إجازة بدون راتب ❌',
+            status: 'قبل التعيين 🕒',
             time: '-',
-            note: leaveRecord.reason ? `سبب الإجازة: ${leaveRecord.reason}` : 'إجازة إدارية معتمدة',
+            note: 'هذا اليوم يسبق تاريخ مباشرة الموظف للعمل',
             isAbsenceDay: false
           });
         } else {
-          // No attendance record and no leave
-          const isPast = loopDate < todayNormalized || (loopDate.getTime() === todayNormalized.getTime() && today.getHours() >= 17);
-          if (isPast) {
-            if (isExcused) {
-              if (isPastOrToday) {
-                presentsCount++; // Treated as present (excused)
+          const isPastOrToday = loopDate <= todayNormalized;
+          if (isPastOrToday) {
+            scheduledWorkDays++;
+          }
+
+          const isExcused = empExcuses.includes(dateStr);
+          
+          // Check attendance records
+          const attRecord = attendanceLogs.find(log => log.employee_id === emp.id && log.work_date === dateStr);
+          
+          // Check approved leaves
+          const isDateWithinRange = (date: Date, startStr: string, endStr: string) => {
+            const d = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+            const s = new Date(new Date(startStr).getFullYear(), new Date(startStr).getMonth(), new Date(startStr).getDate()).getTime();
+            const e = new Date(new Date(endStr).getFullYear(), new Date(endStr).getMonth(), new Date(endStr).getDate()).getTime();
+            return d >= s && d <= e;
+          };
+          
+          const leaveRecord = leaveRequests.find(l => l.employee_id === emp.id && l.status === 'approved' && isDateWithinRange(loopDate, l.start_date, l.end_date));
+
+          if (attRecord) {
+            const status = attRecord.status;
+            const isApplied = attRecord.deduction_status === 'applied';
+            const isIgnored = attRecord.deduction_status === 'ignored';
+
+            let earlyExitMins = 0;
+            if (attRecord.check_out_time) {
+              const schedCheckOut = empSched ? empSched.check_out_time : '17:00:00';
+              const schedOutMins = parseScheduleMinutes(schedCheckOut);
+              const actualOutMins = getBaghdadMinutesFromIso(attRecord.check_out_time);
+              const diffEarly = schedOutMins - actualOutMins;
+              if (diffEarly > 0) {
+                earlyExitMins = diffEarly;
               }
-              detailLogs.push({
-                date: dateStr,
-                status: 'معفى (عذر إداري) 🟢',
-                time: '-',
-                note: 'غياب تم إعفاؤه إدارياً بواسطة المدير المباشر',
-                isAbsenceDay: true,
-                isExcused: true
-              });
-            } else {
-              // Not excused, no attendance, no leave -> Unconfirmed absence (no auto-deduction)
-              // We do not increment absencesCount automatically anymore.
-              // Absences must be manually applied from the tracking/attendance decisions screen.
-              if (isPastOrToday) {
-                unconfirmedAbsencesCount++;
-              }
-              detailLogs.push({
-                date: dateStr,
-                status: 'يوم بدون حضور ⚠️',
-                time: '-',
-                note: 'لم يتم تسجيل حضور، ولم يتم تطبيق خصم غياب من قبل الإدارة بعد',
-                isAbsenceDay: false,
-                isExcused: false
-              });
             }
-          } else {
+
+            if (isPastOrToday) {
+              if (status === 'present') presentsCount++;
+              else if (status === 'late') {
+                presentsCount++;
+                if (isApplied) {
+                  latesCount++;
+                  // Calculate late minutes
+                  const schedCheckIn = empSched ? empSched.check_in_time : '09:00:00';
+                  const schedInMins = parseScheduleMinutes(schedCheckIn);
+                  const actualInMins = getBaghdadMinutesFromIso(attRecord.check_in_time);
+                  const diffLate = actualInMins - schedInMins;
+                  const lateMins = diffLate > 0 ? diffLate : 0;
+                  totalLateMinutes += lateMins;
+                }
+              }
+              else if (status === 'half_day') halfDaysCount++;
+              else if (status === 'absent') {
+                if (isApplied) absencesCount++;
+              }
+
+              // Early exit check
+              if (earlyExitMins > 0 && isApplied) {
+                earlyExitsCount++;
+                totalEarlyExitMinutes += earlyExitMins;
+              }
+            }
+            
+            let statusAr = 'حاضر ✅';
+            let noteParts = [];
+            if (status === 'late') {
+              statusAr = isApplied ? 'متأخر (تم تطبيق الخصم) ⚠️' : (isIgnored ? 'متأخر (تم تجاهل الخصم) 🟢' : 'متأخر (معلق) ⏳');
+              // Calculate late minutes for display
+              const schedCheckIn = empSched ? empSched.check_in_time : '09:00:00';
+              const schedInMins = parseScheduleMinutes(schedCheckIn);
+              const actualInMins = getBaghdadMinutesFromIso(attRecord.check_in_time);
+              const diffLate = actualInMins - schedInMins;
+              const lateMins = diffLate > 0 ? diffLate : 0;
+              noteParts.push(`تأخير: ${formatLateDurationArabic(lateMins)}`);
+            } else if (status === 'half_day') {
+              statusAr = 'نصف يوم 🌓';
+              noteParts.push('دوام غير مكتمل');
+            } else if (status === 'absent') {
+              statusAr = isApplied ? 'غياب (تم تطبيق الخصم) ❌' : 'غياب (تم تجاهل الخصم) 🟢';
+              noteParts.push(attRecord.deduction_reason || 'غياب غير مبرر');
+            }
+
+            if (earlyExitMins > 0) {
+              noteParts.push(`خروج مبكر: ${formatLateDurationArabic(earlyExitMins)}`);
+              if (status === 'present') {
+                statusAr = isApplied ? 'خروج مبكر (خصم) ⚠️' : 'خروج مبكر (تجاهل الخصم) 🟢';
+              }
+            }
+
+            const noteAr = noteParts.length > 0 ? noteParts.join(' | ') : 'بصمة دوام اعتيادية';
+
             detailLogs.push({
               date: dateStr,
-              status: 'لم يحن بعد ⏳',
-              time: '-',
-              note: loopDate.getTime() === todayNormalized.getTime() ? 'قيد الانتظار لموعد الدوام اليوم' : 'يوم عمل مجدول مستقبلي',
+              status: statusAr,
+              time: attRecord.check_in_time ? new Date(attRecord.check_in_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : '-',
+              note: noteAr,
               isAbsenceDay: false
             });
+          } else if (leaveRecord) {
+            if (isPastOrToday) {
+              if (leaveRecord.is_paid) {
+                paidLeavesCount++;
+              } else {
+                absencesCount++;
+              }
+            }
+            detailLogs.push({
+              date: dateStr,
+              status: leaveRecord.is_paid ? 'إجازة معتمدة 🌴' : 'إجازة بدون راتب ❌',
+              time: '-',
+              note: leaveRecord.reason ? `سبب الإجازة: ${leaveRecord.reason}` : 'إجازة إدارية معتمدة',
+              isAbsenceDay: false
+            });
+          } else {
+            // No attendance record and no leave
+            const isPast = loopDate < todayNormalized || (loopDate.getTime() === todayNormalized.getTime() && today.getHours() >= 17);
+            if (isPast) {
+              if (isExcused) {
+                if (isPastOrToday) {
+                  presentsCount++; // Treated as present (excused)
+                }
+                detailLogs.push({
+                  date: dateStr,
+                  status: 'معفى (عذر إداري) 🟢',
+                  time: '-',
+                  note: 'غياب تم إعفاؤه إدارياً بواسطة المدير المباشر',
+                  isAbsenceDay: true,
+                  isExcused: true
+                });
+              } else {
+                // Not excused, no attendance, no leave -> Unconfirmed absence (no auto-deduction)
+                if (isPastOrToday) {
+                  unconfirmedAbsencesCount++;
+                }
+                detailLogs.push({
+                  date: dateStr,
+                  status: 'يوم بدون حضور ⚠️',
+                  time: '-',
+                  note: 'لم يتم تسجيل حضور، ولم يتم تطبيق خصم غياب من قبل الإدارة بعد',
+                  isAbsenceDay: false,
+                  isExcused: false
+                });
+              }
+            } else {
+              detailLogs.push({
+                date: dateStr,
+                status: 'لم يحن بعد ⏳',
+                time: '-',
+                note: loopDate.getTime() === todayNormalized.getTime() ? 'قيد الانتظار لموعد الدوام اليوم' : 'يوم عمل مجدول مستقبلي',
+                isAbsenceDay: false
+              });
+            }
           }
         }
       }
@@ -928,7 +1097,8 @@ export default function PayrollPage() {
       }
     }
 
-    const dailyWage = basic / 30;
+    // Use nominalBasic for daily wage calculations, so mid-month joiners aren't under-penalized
+    const dailyWage = nominalBasic / 30;
     const absenceDeduction = Math.round(absencesCount * dailyWage);
     const halfDayDeduction = Math.round(halfDaysCount * dailyWage * 0.5);
     const latenessDeduction = Math.round(totalLateMinutes * (dailyWage / workdayMinutes));
@@ -1004,6 +1174,9 @@ export default function PayrollPage() {
       netSalary: displayNetSalary,
       isIssued,
       detailLogs,
+      bonusesList: empBDs.filter(bd => bd.type === 'bonus'),
+      otherDeductionsList: empBDs.filter(bd => bd.type === 'deduction'),
+      loanInstallmentsList: empLoans,
       
       // Smart Validation Flags
       isNetNegative: !isIssued && displayNetSalary < 0,
@@ -1028,6 +1201,26 @@ export default function PayrollPage() {
   });
 
   const totalNetSalaries = filteredPayroll.reduce((sum, emp) => sum + emp.netSalary, 0);
+  const totalBasicSalaries = filteredPayroll.reduce((sum, emp) => sum + emp.basic, 0);
+  const totalBonuses = filteredPayroll.reduce((sum, emp) => sum + emp.totalBonuses, 0);
+  const totalAttendanceDeductions = filteredPayroll.reduce((sum, emp) => sum + emp.totalAttendanceDeductions, 0);
+  const totalOtherDeductions = filteredPayroll.reduce((sum, emp) => sum + (emp.totalDeductions - emp.totalAttendanceDeductions), 0);
+  const totalLoans = filteredPayroll.reduce((sum, emp) => sum + emp.loanDeduction, 0);
+
+  const arabicMonths: Record<string, string> = {
+    '01': 'كانون الثاني (يناير)',
+    '02': 'شباط (فبراير)',
+    '03': 'آذار (مارس)',
+    '04': 'نيسان (أبريل)',
+    '05': 'أيار (مايو)',
+    '06': 'حزيران (يونيو)',
+    '07': 'تموز (يوليو)',
+    '08': 'آب (أغسطس)',
+    '09': 'أيلول (سبتمبر)',
+    '10': 'تشرين الأول (أكتوبر)',
+    '11': 'تشرين الثاني (نوفمبر)',
+    '12': 'كانون الأول (ديسمبر)',
+  };
 
   // Branch bulk calculation helpers
   const selectedBranchObj = branches.find(b => b.id === selectedBranch);
@@ -1045,6 +1238,8 @@ export default function PayrollPage() {
   const monthParts = selectedMonth ? selectedMonth.split('-') : [];
   const currentYearVal = monthParts[0] || new Date().getFullYear().toString();
   const currentMonthVal = monthParts[1] || (new Date().getMonth() + 1).toString().padStart(2, '0');
+  const currentMonthName = arabicMonths[currentMonthVal] || currentMonthVal;
+  const isMonthArchived = archivedMonths.includes(selectedMonth);
 
   if (loading) {
     return (
@@ -1056,12 +1251,53 @@ export default function PayrollPage() {
 
   return (
     <div className="space-y-8 pb-12">
+      {/* Print-Only Header Block */}
+      <div className="hidden print:block text-slate-900 text-right p-6 border-b-2 border-slate-900 mb-8 font-sans" dir="rtl">
+        <div className="flex justify-between items-start mb-6">
+          <div>
+            <h1 className="text-2xl font-black mb-1">قسم ادارة موظفين شركة بترى</h1>
+            <p className="text-xs text-slate-500 font-bold">كشف رواتب الموظفين التفصيلي الشهري</p>
+          </div>
+          <div className="text-left font-mono text-[10px]">
+            <p>تاريخ الطباعة: {new Date().toLocaleDateString('ar-IQ')}</p>
+            <p>الوقت: {new Date().toLocaleTimeString('ar-IQ')}</p>
+          </div>
+        </div>
+        
+        <div className="grid grid-cols-3 gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-200 text-xs mb-4">
+          <div>
+            <span className="font-bold text-slate-500 block mb-0.5">الشهر والسنة:</span>
+            <span className="font-black text-sm text-slate-800">
+              {currentMonthName} - {currentYearVal}
+            </span>
+          </div>
+          <div>
+            <span className="font-bold text-slate-500 block mb-0.5">الفترة المالية المحتسبة:</span>
+            <span className="font-black text-sm text-slate-800 font-mono">
+              {startDate} إلى {endDate}
+            </span>
+          </div>
+          <div>
+            <span className="font-bold text-slate-500 block mb-0.5">الفرع المالي:</span>
+            <span className="font-black text-sm text-slate-800">
+              {selectedBranch === 'all' ? 'كافة فروع الشركة' : branches.find(b => b.id === selectedBranch)?.name || '-'}
+            </span>
+          </div>
+        </div>
+      </div>
+
       {/* Header & Stats */}
-      <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-800/80 rounded-3xl p-6 shadow-xl flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
+      <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-800/80 rounded-3xl p-6 shadow-xl flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 print:hidden">
         <div>
           <h3 className="text-xl font-extrabold text-white flex items-center gap-2 mb-2">
             <Banknote className="w-6 h-6 text-teal-400" />
             <span>نظام الرواتب والدوام الذكي (Payroll Hub)</span>
+            {isMonthArchived && (
+              <span className="flex items-center gap-1.5 px-3 py-1 bg-purple-500/20 border border-purple-500/40 text-purple-300 rounded-full font-bold text-xs select-none">
+                <Archive className="w-3.5 h-3.5" />
+                <span>مؤرشف ومغلق مالياً 📦</span>
+              </span>
+            )}
           </h3>
           <p className="text-xs text-slate-400">احتساب فوري للأجور والخصومات التلقائية للغيابات وأنصاف الأيام بناءً على البصمة الجغرافية</p>
         </div>
@@ -1137,9 +1373,9 @@ export default function PayrollPage() {
       </div>
 
       {/* Main Table Area */}
-      <div className="bg-slate-900/40 backdrop-blur-xl border border-slate-800/80 rounded-3xl p-6 shadow-xl">
-        <div className="flex flex-col md:flex-row justify-between gap-4 mb-6">
-          <div className="flex items-center gap-3">
+      <div className="bg-slate-900/40 backdrop-blur-xl border border-slate-800/80 rounded-3xl p-6 shadow-xl print:border-none print:bg-transparent print:p-0 print:shadow-none">
+        <div className="flex flex-col md:flex-row justify-between gap-4 mb-6 print:hidden">
+          <div className="flex items-center gap-3 print:hidden">
             <div className="relative">
               <input
                 type="text"
@@ -1167,14 +1403,28 @@ export default function PayrollPage() {
           </div>
           
           <div className="flex items-center gap-3 print:hidden">
-            {selectedBranch !== 'all' && (
-              <button
-                onClick={() => setShowBulkModal(true)}
-                className="flex items-center justify-center gap-2 py-2 px-4 bg-teal-650 hover:bg-teal-600 text-white rounded-2xl text-xs font-bold transition-all cursor-pointer active:scale-95"
-              >
-                <CheckCircle className="w-4 h-4" />
-                <span>اعتماد رواتب الفرع لشهر {selectedMonth}</span>
-              </button>
+            {!isMonthArchived && selectedBranch !== 'all' && (
+              <>
+                <button
+                  onClick={() => setShowBulkModal(true)}
+                  className="flex items-center justify-center gap-2 py-2 px-4 bg-teal-650 hover:bg-teal-600 text-white rounded-2xl text-xs font-bold transition-all cursor-pointer active:scale-95"
+                >
+                  <CheckCircle className="w-4 h-4" />
+                  <span>اعتماد رواتب الفرع لشهر {selectedMonth}</span>
+                </button>
+                <button
+                  onClick={handleSendBranchNotifications}
+                  disabled={sendingNotifs}
+                  className="flex items-center justify-center gap-2 py-2 px-4 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-800 text-white rounded-2xl text-xs font-bold transition-all cursor-pointer active:scale-95"
+                >
+                  {sendingNotifs ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Bell className="w-4 h-4" />
+                  )}
+                  <span>إرسال إشعار للفرع</span>
+                </button>
+              </>
             )}
 
             <button 
@@ -1184,6 +1434,27 @@ export default function PayrollPage() {
               <Printer className="w-4 h-4" />
               <span>طباعة مسودة كشف الرواتب</span>
             </button>
+
+            {isMonthArchived ? (
+              <div className="flex items-center gap-1.5 px-3 py-2 bg-purple-500/10 border border-purple-500/20 text-purple-400 rounded-2xl font-bold text-xs select-none">
+                <Archive className="w-4 h-4" />
+                <span>مؤرشف ومغلق مالياً 📦</span>
+              </div>
+            ) : (
+              <button 
+                onClick={handleArchiveMonth}
+                disabled={actionLoading === 'archive_month'}
+                className="flex items-center justify-center gap-2 py-2 px-4 bg-purple-650 hover:bg-purple-600 disabled:bg-purple-800 text-white rounded-2xl text-xs font-bold transition-all cursor-pointer active:scale-95"
+                title="أرشفة وحذف سجلات الدوام التفصيلية لهذا الشهر بشكل نهائي"
+              >
+                {actionLoading === 'archive_month' ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Archive className="w-4 h-4" />
+                )}
+                <span>أرشفة وإغلاق الشهر 📦</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -1217,7 +1488,7 @@ export default function PayrollPage() {
                         <span className="font-bold text-white text-xs">{emp.full_name}</span>
                         
                         {/* Smart Validation Badges */}
-                        <div className="flex flex-wrap gap-1 mt-1 justify-start">
+                        <div className="flex flex-wrap gap-1 mt-1 justify-start print:hidden">
                           {emp.isNetNegative && (
                             <span className="px-2 py-0.5 bg-rose-500/15 border border-rose-500/30 text-rose-400 rounded-lg text-[9px] font-bold flex items-center gap-1 select-none">
                               <span>الراتب الصافي سالب</span>
@@ -1243,13 +1514,19 @@ export default function PayrollPage() {
                             </span>
                           )}
                         </div>
-                        <button 
-                          onClick={() => setSelectedEmpIdForBreakdown(emp.id)}
-                          className="text-[10px] text-teal-400 hover:text-teal-300 font-bold mt-1 text-right flex items-center gap-1 cursor-pointer"
-                        >
-                          <Info className="w-3.5 h-3.5" />
-                          <span>عرض تفاصيل الحضور والخصومات</span>
-                        </button>
+                        {isMonthArchived ? (
+                          <span className="text-[10px] text-slate-500 font-bold mt-1 text-right select-none block">
+                            📦 تم أرشفة وحذف السجلات التفصيلية
+                          </span>
+                        ) : (
+                          <button 
+                            onClick={() => setSelectedEmpIdForBreakdown(emp.id)}
+                            className="text-[10px] text-teal-400 hover:text-teal-300 font-bold mt-1 text-right flex items-center gap-1 cursor-pointer print:hidden"
+                          >
+                            <Info className="w-3.5 h-3.5" />
+                            <span>عرض تفاصيل الحضور والخصومات</span>
+                          </button>
+                        )}
                       </div>
                     </td>
                     <td className="p-4 text-slate-400 font-bold">{emp.branches?.name || '-'}</td>
@@ -1276,16 +1553,18 @@ export default function PayrollPage() {
                     </td>
                     <td className="p-4 text-left print:hidden">
                       <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => {
-                            setSelectedEmpForBD(emp);
-                            setShowAddBDModal(true);
-                          }}
-                          className="p-2 bg-slate-800 border border-slate-700 text-slate-300 hover:text-white hover:bg-slate-700 rounded-xl transition-all cursor-pointer"
-                          title="إضافة تسوية مالية (مكافأة أو خصم)"
-                        >
-                          <Plus className="w-4 h-4" />
-                        </button>
+                        {!isMonthArchived && (
+                          <button
+                            onClick={() => {
+                              setSelectedEmpForBD(emp);
+                              setShowAddBDModal(true);
+                            }}
+                            className="p-2 bg-slate-800 border border-slate-700 text-slate-300 hover:text-white hover:bg-slate-700 rounded-xl transition-all cursor-pointer"
+                            title="إضافة تسوية مالية (مكافأة أو خصم)"
+                          >
+                            <Plus className="w-4 h-4" />
+                          </button>
+                        )}
                         
                         {emp.isIssued ? (
                           <div className="flex items-center gap-2">
@@ -1293,38 +1572,42 @@ export default function PayrollPage() {
                               <CheckCircle className="w-3.5 h-3.5" />
                               <span>تم الاعتماد</span>
                             </span>
-                            <button
-                              disabled={actionLoading === `revert_${emp.id}`}
-                              onClick={() => {
-                                if(window.confirm('هل أنت متأكد من رغبتك في إلغاء اعتماد هذا الراتب؟ سيتم مسح قيود الخصم الأوتوماتيكية وإرجاع السلف إلى حالة غير مدفوعة.')) {
-                                  handleRevertSlip(emp);
-                                }
-                              }}
-                              className="p-2 bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-500 hover:text-white rounded-xl transition-all cursor-pointer"
-                              title="إلغاء الاعتماد والتعديل"
-                            >
-                              {actionLoading === `revert_${emp.id}` ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                              ) : (
-                                <X className="w-4 h-4" />
-                              )}
-                            </button>
+                            {!isMonthArchived && (
+                              <button
+                                disabled={actionLoading === `revert_${emp.id}`}
+                                onClick={() => {
+                                  if(window.confirm('هل أنت متأكد من رغبتك في إلغاء اعتماد هذا الراتب؟ سيتم مسح قيود الخصم الأوتوماتيكية وإرجاع السلف إلى حالة غير مدفوعة.')) {
+                                    handleRevertSlip(emp);
+                                  }
+                                }}
+                                className="p-2 bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-500 hover:text-white rounded-xl transition-all cursor-pointer"
+                                title="إلغاء الاعتماد والتعديل"
+                              >
+                                {actionLoading === `revert_${emp.id}` ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <X className="w-4 h-4" />
+                                )}
+                              </button>
+                            )}
                           </div>
                         ) : (
-                          <button
-                            disabled={actionLoading === `slip_${emp.id}`}
-                            onClick={() => handleGenerateSlip(emp)}
-                            className="flex items-center gap-1.5 px-3 py-2 bg-teal-650/20 hover:bg-teal-600/40 border border-teal-500/30 text-teal-400 rounded-xl transition-all cursor-pointer font-bold text-[10px]"
-                          >
-                            {actionLoading === `slip_${emp.id}` ? (
-                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            ) : (
-                              <>
-                                <CheckCircle className="w-3.5 h-3.5" />
-                                <span>اعتماد الراتب</span>
-                              </>
-                            )}
-                          </button>
+                          !isMonthArchived && (
+                            <button
+                              disabled={actionLoading === `slip_${emp.id}`}
+                              onClick={() => handleGenerateSlip(emp)}
+                              className="flex items-center gap-1.5 px-3 py-2 bg-teal-650/20 hover:bg-teal-600/40 border border-teal-500/30 text-teal-400 rounded-xl transition-all cursor-pointer font-bold text-[10px]"
+                            >
+                              {actionLoading === `slip_${emp.id}` ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <>
+                                  <CheckCircle className="w-3.5 h-3.5" />
+                                  <span>اعتماد الراتب</span>
+                                </>
+                              )}
+                            </button>
+                          )
                         )}
                       </div>
                     </td>
@@ -1332,7 +1615,40 @@ export default function PayrollPage() {
                 ))
               )}
             </tbody>
+            <tfoot>
+              <tr className="bg-slate-950 font-bold border-t border-slate-800 text-xs print:bg-slate-100 print:text-black">
+                <td className="p-4 text-right">إجمالي المجموع</td>
+                <td className="p-4 text-slate-400 print:text-slate-600">-</td>
+                <td className="p-4 text-slate-200 print:text-black">{totalBasicSalaries.toLocaleString()} د.ع</td>
+                <td className="p-4 text-emerald-450 print:text-green-800">+ {totalBonuses.toLocaleString()} د.ع</td>
+                <td className="p-4 text-amber-500 print:text-amber-800">- {totalAttendanceDeductions.toLocaleString()} د.ع</td>
+                <td className="p-4 text-rose-400 print:text-red-800">- {totalOtherDeductions.toLocaleString()} د.ع</td>
+                <td className="p-4 text-orange-400 print:text-orange-900">- {totalLoans.toLocaleString()} د.ع</td>
+                <td className="p-4 text-teal-300 text-sm bg-teal-900/20 print:bg-green-50 print:text-green-900">
+                  {totalNetSalaries.toLocaleString()} د.ع
+                </td>
+                <td className="p-4 print:hidden"></td>
+              </tr>
+            </tfoot>
           </table>
+        </div>
+
+        {/* Print-Only Signature Block */}
+        <div className="hidden print:block mt-16 text-slate-900 text-right font-sans" dir="rtl">
+          <div className="grid grid-cols-3 gap-8 text-center text-xs">
+            <div className="flex flex-col items-center">
+              <span className="font-bold text-slate-600 mb-12">توقيع المحاسب المالي</span>
+              <div className="w-40 border-b border-slate-400"></div>
+            </div>
+            <div className="flex flex-col items-center">
+              <span className="font-bold text-slate-600 mb-12">توقيع مدير الموارد البشرية</span>
+              <div className="w-40 border-b border-slate-400"></div>
+            </div>
+            <div className="flex flex-col items-center">
+              <span className="font-bold text-slate-600 mb-12">اعتماد الإدارة العامة</span>
+              <div className="w-40 border-b border-slate-400"></div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1464,6 +1780,108 @@ export default function PayrollPage() {
               </div>
             </div>
 
+            {/* Bonuses & Other Deductions Detailed Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              {/* 1. قسم المكافآت والزيادات */}
+              <div className="p-4 bg-emerald-950/20 border border-emerald-500/20 rounded-2xl">
+                <div className="flex items-center justify-between mb-3 border-b border-emerald-500/10 pb-2">
+                  <span className="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
+                    <TrendingUp className="w-4 h-4" />
+                    <span>المكافآت والزيادات ({selectedEmpForBreakdown.totalBonuses.toLocaleString()} د.ع)</span>
+                  </span>
+                  <button
+                    onClick={() => {
+                      setSelectedEmpForBD(selectedEmpForBreakdown);
+                      setBdType('bonus');
+                      setBdAmount(0);
+                      setBdReason('');
+                      setShowAddBDModal(true);
+                    }}
+                    className="text-[10px] font-bold bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-lg border border-emerald-500/20 flex items-center gap-1 transition-all cursor-pointer"
+                  >
+                    <Plus className="w-3 h-3" />
+                    <span>إضافة مكافأة</span>
+                  </button>
+                </div>
+
+                {selectedEmpForBreakdown.bonusesList && selectedEmpForBreakdown.bonusesList.length > 0 ? (
+                  <div className="space-y-2 max-h-[140px] overflow-y-auto">
+                    {selectedEmpForBreakdown.bonusesList.map((b: any, idx: number) => (
+                      <div key={idx} className="p-2 bg-slate-950/40 rounded-xl border border-emerald-500/10 text-xs flex justify-between items-start gap-2">
+                        <div>
+                          <div className="text-white font-bold">{b.reason || 'مكافأة تشجيعية'}</div>
+                          <div className="text-[10px] text-slate-400 mt-0.5">التاريخ: {b.issue_date || '-'}</div>
+                        </div>
+                        <span className="font-mono text-emerald-400 font-bold text-xs shrink-0">
+                          + {Number(b.amount).toLocaleString()} د.ع
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-4 text-xs text-slate-500">
+                    لا توجد مكافآت مسجلة لهذا الموظف خلال هذه الدورة
+                  </div>
+                )}
+              </div>
+
+              {/* 2. قسم الخصومات والجزاءات الإدارية */}
+              <div className="p-4 bg-rose-950/20 border border-rose-500/20 rounded-2xl">
+                <div className="flex items-center justify-between mb-3 border-b border-rose-500/10 pb-2">
+                  <span className="text-xs font-bold text-rose-400 flex items-center gap-1.5">
+                    <TrendingDown className="w-4 h-4" />
+                    <span>الخصومات والجزاءات ({((selectedEmpForBreakdown.totalDeductions || 0) - (selectedEmpForBreakdown.totalAttendanceDeductions || 0)).toLocaleString()} د.ع)</span>
+                  </span>
+                  <button
+                    onClick={() => {
+                      setSelectedEmpForBD(selectedEmpForBreakdown);
+                      setBdType('deduction');
+                      setBdAmount(0);
+                      setBdReason('');
+                      setShowAddBDModal(true);
+                    }}
+                    className="text-[10px] font-bold bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 px-2 py-0.5 rounded-lg border border-rose-500/20 flex items-center gap-1 transition-all cursor-pointer"
+                  >
+                    <Plus className="w-3 h-3" />
+                    <span>إضافة خصم</span>
+                  </button>
+                </div>
+
+                {selectedEmpForBreakdown.otherDeductionsList && selectedEmpForBreakdown.otherDeductionsList.length > 0 ? (
+                  <div className="space-y-2 max-h-[140px] overflow-y-auto">
+                    {selectedEmpForBreakdown.otherDeductionsList.map((d: any, idx: number) => (
+                      <div key={idx} className="p-2 bg-slate-950/40 rounded-xl border border-rose-500/10 text-xs flex justify-between items-start gap-2">
+                        <div>
+                          <div className="text-white font-bold">{d.reason || 'خصم إداري'}</div>
+                          <div className="text-[10px] text-slate-400 mt-0.5">التاريخ: {d.issue_date || '-'}</div>
+                        </div>
+                        <span className="font-mono text-rose-400 font-bold text-xs shrink-0">
+                          - {Number(d.amount).toLocaleString()} د.ع
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-4 text-xs text-slate-500">
+                    لا توجد خصومات إدارية مسجلة لهذا الموظف خلال هذه الدورة
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* 3. قسم خصومات أقساط السلف إذا وجدت */}
+            {selectedEmpForBreakdown.loanDeduction > 0 && (
+              <div className="p-3 bg-amber-950/20 border border-amber-500/20 rounded-2xl mb-6 flex justify-between items-center text-xs">
+                <div className="flex items-center gap-2">
+                  <Banknote className="w-4 h-4 text-amber-400" />
+                  <span className="font-bold text-white">قسط السلفة المستحق لهذا الشهر:</span>
+                </div>
+                <span className="font-mono font-bold text-amber-400 text-sm">
+                  - {selectedEmpForBreakdown.loanDeduction.toLocaleString()} د.ع
+                </span>
+              </div>
+            )}
+
             {/* Calendar logs list */}
             <h4 className="text-xs font-bold text-slate-400 mb-3 flex items-center justify-between">
               <span className="flex items-center gap-1">
@@ -1516,7 +1934,14 @@ export default function PayrollPage() {
               ))}
             </div>
 
-            <div className="flex justify-end pt-6 mt-6 border-t border-slate-800">
+            <div className="flex justify-between items-center pt-6 mt-6 border-t border-slate-800">
+              <button 
+                onClick={() => window.print()}
+                className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-teal-300 rounded-xl text-xs font-bold transition-all border border-slate-700 flex items-center gap-2 cursor-pointer"
+              >
+                <Printer className="w-4 h-4" />
+                <span>طباعة كشف راتب الموظف 📄</span>
+              </button>
               <button 
                 onClick={() => setSelectedEmpIdForBreakdown(null)}
                 className="px-6 py-2.5 bg-slate-950 hover:bg-slate-900 text-white rounded-xl text-xs font-bold transition-all border border-slate-800 cursor-pointer"

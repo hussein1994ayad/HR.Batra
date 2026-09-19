@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import toast from 'react-hot-toast';
+import { Trash2 } from 'lucide-react';
 
 export default function LoansPage() {
   const [loading, setLoading] = useState(true);
@@ -60,12 +61,12 @@ export default function LoansPage() {
       ] = await Promise.all([
         supabase
           .from('loans')
-          .select('*, employees!loans_employee_id_fkey(full_name)')
+          .select('*, employees!loans_employee_id_fkey(full_name, monthly_salary_iqd)')
           .eq('status', 'pending')
           .order('created_at', { ascending: false }),
         supabase
           .from('loans')
-          .select('*, employees!loans_employee_id_fkey(full_name), loan_installments(*)')
+          .select('*, employees!loans_employee_id_fkey(full_name, monthly_salary_iqd), loan_installments(*)')
           .eq('status', 'approved')
           .order('created_at', { ascending: false })
       ]);
@@ -81,6 +82,12 @@ export default function LoansPage() {
 
   const handleProcessLoan = async (loan: any, approve: boolean) => {
     if (approve) {
+      const hasActive = activeLoans.some(l => l.employee_id === loan.employee_id && l.status === 'approved');
+      if (hasActive) {
+        toast.error('لا يمكن الموافقة: الموظف لديه سلفة نشطة حالياً. يرجى إغلاقها أولاً.');
+        return;
+      }
+      
       const nextMonth = new Date();
       nextMonth.setMonth(nextMonth.getMonth() + 1);
       setApprovalModal({
@@ -136,7 +143,22 @@ export default function LoansPage() {
 
       const newAmount = Number(approvalModal.amount);
       const newMonths = Number(approvalModal.months);
-      const installmentAmt = Math.round(newAmount / newMonths);
+
+      if (newAmount <= 0 || newMonths <= 0) {
+        toast.error('يرجى إدخال مبلغ وعدد أشهر سداد أكبر من الصفر.');
+        setActionLoading(null);
+        return;
+      }
+
+      const baseInstallmentAmt = Math.floor(newAmount / newMonths);
+      const remainder = newAmount - (baseInstallmentAmt * newMonths);
+
+      const empSalary = approvalModal.loan?.employees?.monthly_salary_iqd || 0;
+      if (empSalary > 0 && baseInstallmentAmt > (empSalary * 0.5)) {
+        toast.error('مبلغ القسط يتجاوز 50% من راتب الموظف. يرجى زيادة مدة السداد أو تقليل المبلغ.');
+        setActionLoading(null);
+        return;
+      }
 
       const { error: updErr } = await supabase
         .from('loans')
@@ -144,7 +166,8 @@ export default function LoansPage() {
           status: 'approved',
           amount: newAmount,
           installment_count: newMonths,
-          installment_amount: installmentAmt,
+          installment_amount: baseInstallmentAmt,
+          remaining_amount: newAmount,
           approved_by: session.user.id,
           approved_at: new Date().toISOString(),
         })
@@ -156,10 +179,12 @@ export default function LoansPage() {
       let currentDueDate = new Date(approvalModal.startDate);
 
       for (let i = 0; i < newMonths; i++) {
+        // Last installment absorbs the rounding difference to ensure Sum(installments) === newAmount
+        const currentAmt = (i === newMonths - 1) ? (baseInstallmentAmt + remainder) : baseInstallmentAmt;
         installments.push({
           loan_id: approvalModal.loan.id,
           due_date: currentDueDate.toISOString().split('T')[0],
-          amount: installmentAmt,
+          amount: currentAmt,
           is_paid: false,
         });
         currentDueDate.setMonth(currentDueDate.getMonth() + 1);
@@ -266,11 +291,15 @@ export default function LoansPage() {
         currentDueDate.setMonth(currentDueDate.getMonth() + 1);
         currentDueDate.setDate(1);
         
+        const baseAmt = Math.floor(newRemainingAmt / remainingCount);
+        const remRemainder = newRemainingAmt - (baseAmt * remainingCount);
+
         for (let i = 0; i < remainingCount; i++) {
+          const currentAmt = (i === remainingCount - 1) ? (baseAmt + remRemainder) : baseAmt;
           installments.push({
             loan_id: editLoanModal.loan.id,
             due_date: currentDueDate.toISOString().split('T')[0],
-            amount: newInstallmentAmt,
+            amount: currentAmt,
             is_paid: false,
           });
           currentDueDate.setMonth(currentDueDate.getMonth() + 1);
@@ -438,6 +467,43 @@ export default function LoansPage() {
     }
   };
 
+  const handleDeleteCompletedLoan = async (loan: any) => {
+    if (Number(loan.remaining_amount) > 0) {
+      toast.error('لا يمكن حذف سلفة غير مكتملة السداد.');
+      return;
+    }
+    if (!window.confirm('تحذير: هل أنت متأكد من مسح هذه السلفة المكتملة بشكل نهائي من قاعدة البيانات لتوفير المساحة؟ سيتم حذف جميع تفاصيلها وأقساطها. هذا الإجراء لا يمكن التراجع عنه.')) return;
+    
+    setActionLoading('delete_loan_' + loan.id);
+    try {
+      // Delete pledge from storage if exists
+      if (loan.pledge_url) {
+        try {
+          const pathMatch = loan.pledge_url.match(/\/loan-pledges\/(.+)$/);
+          if (pathMatch && pathMatch[1]) {
+            await supabase.storage.from('loan-pledges').remove([pathMatch[1]]);
+          }
+        } catch (e) {
+          console.error('Failed to delete pledge file', e);
+        }
+      }
+
+      const { error } = await supabase
+        .from('loans')
+        .delete()
+        .eq('id', loan.id);
+
+      if (error) throw error;
+      
+      toast.success('تم حذف السلفة وتوفير مساحة التخزين بنجاح! 🗑️');
+      fetchLoanRequests();
+    } catch (err: any) {
+      toast.error(`فشل الحذف: ${err.message || err}`);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   const incompleteLoans = activeLoans.filter(l => Number(l.remaining_amount) > 0);
   const completedLoans = activeLoans.filter(l => Number(l.remaining_amount) <= 0);
   const displayedLoans = loansTab === 'active' ? incompleteLoans : completedLoans;
@@ -451,7 +517,8 @@ export default function LoansPage() {
   }
 
   return (
-    <div className="space-y-8 pb-12">
+    <>
+      <div className="space-y-8 pb-12 print:hidden">
       <div className="bg-slate-900/40 backdrop-blur-xl border border-slate-800/80 rounded-3xl p-6 shadow-xl space-y-6">
         <div>
           <h3 className="text-lg font-extrabold text-white flex items-center gap-2">
@@ -628,6 +695,18 @@ export default function LoansPage() {
                             <Calendar className="w-4 h-4" />
                             <span>جدول الأقساط والسداد</span>
                           </button>
+                          {loansTab === 'completed' && (
+                            <button
+                              type="button"
+                              disabled={actionLoading === 'delete_loan_' + loan.id}
+                              onClick={() => handleDeleteCompletedLoan(loan)}
+                              className="px-3.5 py-2 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 hover:border-rose-500/40 text-rose-400 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
+                              title="حذف نهائي لتوفير المساحة"
+                            >
+                              {actionLoading === 'delete_loan_' + loan.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                              <span>إتلاف السجل</span>
+                            </button>
+                          )}
                         </td>
                       </tr>
                     );
@@ -831,9 +910,25 @@ export default function LoansPage() {
             </div>
 
             {/* Actions for Entire Loan */}
-            <div className="flex gap-3 mb-6 bg-slate-950/20 p-3 rounded-2xl border border-slate-850 justify-between items-center">
+            <div className="flex gap-3 mb-6 bg-slate-950/20 p-3 rounded-2xl border border-slate-850 justify-between items-center flex-wrap">
               <span className="text-[10px] text-slate-400 font-bold">إجراءات السلفة العامة:</span>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
+                {selectedLoanForInstallments.pledge_url && (
+                  <a
+                    href={selectedLoanForInstallments.pledge_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-3 py-1.5 bg-teal-500/10 hover:bg-teal-500/20 border border-teal-500/20 hover:border-teal-500/30 text-teal-400 hover:text-teal-300 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
+                  >
+                    <span>عرض التعهد الخطي 📄</span>
+                  </a>
+                )}
+                <button
+                  onClick={() => window.print()}
+                  className="px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 hover:border-amber-500/30 text-amber-400 hover:text-amber-300 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
+                >
+                  <span>طباعة كشف الحركة 🖨️</span>
+                </button>
                 <button
                   onClick={() => setEditLoanModal({
                     isOpen: true,
@@ -1040,6 +1135,105 @@ export default function LoansPage() {
           </div>
         </div>
       )}
-    </div>
+      </div>
+
+      {/* Print-Only Loan Statement of Account */}
+      {selectedLoanForInstallments && (
+        <div className="hidden print:block text-slate-900 text-right p-8 font-sans bg-white min-h-screen" dir="rtl">
+          {/* Header */}
+          <div className="text-center border-b-2 border-slate-950 pb-6 mb-6">
+            <h1 className="text-2xl font-black mb-2">كشف حساب أقساط وسلف الموظفين</h1>
+            <h2 className="text-lg font-bold text-slate-700">قسم ادارة موظفين شركة بترى</h2>
+            <p className="text-[10px] text-slate-500 mt-1">تاريخ استخراج الكشف: {new Date().toLocaleDateString('ar-IQ')} {new Date().toLocaleTimeString('ar-IQ')}</p>
+          </div>
+
+          {/* Employee & Loan info details */}
+          <div className="grid grid-cols-2 gap-4 border border-slate-300 p-4 rounded-xl mb-6 bg-slate-50">
+            <div>
+              <span className="font-bold text-slate-600 block text-[10px] mb-0.5">اسم الموظف:</span>
+              <span className="font-black text-sm text-slate-950">{selectedLoanForInstallments.employees?.full_name}</span>
+            </div>
+            <div>
+              <span className="font-bold text-slate-600 block text-[10px] mb-0.5">المبلغ الإجمالي للسلفة:</span>
+              <span className="font-black text-sm text-slate-950">{Number(selectedLoanForInstallments.amount).toLocaleString()} د.ع</span>
+            </div>
+            <div>
+              <span className="font-bold text-slate-600 block text-[10px] mb-0.5">إجمالي ما تم سداده:</span>
+              <span className="font-black text-sm text-emerald-800">
+                {((Number(selectedLoanForInstallments.amount) - Number(selectedLoanForInstallments.remaining_amount)) || 0).toLocaleString()} د.ع
+              </span>
+            </div>
+            <div>
+              <span className="font-bold text-slate-600 block text-[10px] mb-0.5">المبلغ المتبقي للسداد:</span>
+              <span className="font-black text-sm text-amber-800">{Number(selectedLoanForInstallments.remaining_amount).toLocaleString()} د.ع</span>
+            </div>
+            <div>
+              <span className="font-bold text-slate-600 block text-[10px] mb-0.5">القسط الشهري الافتراضي:</span>
+              <span className="font-black text-sm text-slate-950">{Number(selectedLoanForInstallments.installment_amount).toLocaleString()} د.ع</span>
+            </div>
+            <div>
+              <span className="font-bold text-slate-600 block text-[10px] mb-0.5">حالة السلفة الحالية:</span>
+              <span className="font-black text-sm text-slate-950">
+                {Number(selectedLoanForInstallments.remaining_amount) <= 0 ? 'مسددة بالكامل ✅' : 'جارية السداد ⏳'}
+              </span>
+            </div>
+          </div>
+
+          {/* Details table */}
+          <h3 className="font-bold text-xs mb-3">جدول تفاصيل الدفعات والأقساط:</h3>
+          <table className="w-full border-collapse border border-slate-400 text-xs">
+            <thead>
+              <tr className="bg-slate-100 text-slate-900 font-bold">
+                <th className="border border-slate-400 p-2 text-right">رقم القسط</th>
+                <th className="border border-slate-400 p-2 text-right">تاريخ الاستحقاق</th>
+                <th className="border border-slate-400 p-2 text-right">مبلغ القسط</th>
+                <th className="border border-slate-400 p-2 text-right">حالة السداد</th>
+                <th className="border border-slate-400 p-2 text-right">طريقة الدفع</th>
+                <th className="border border-slate-400 p-2 text-right">تاريخ الدفع الفعلي</th>
+                <th className="border border-slate-400 p-2 text-right">ملاحظات وتفاصيل الدفع</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(selectedLoanForInstallments.loan_installments || [])
+                .sort((a: any, b: any) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime())
+                .map((inst: any, idx: number) => (
+                  <tr key={inst.id} className="border-b border-slate-300">
+                    <td className="border border-slate-400 p-2 font-bold">قسط #{idx + 1}</td>
+                    <td className="border border-slate-400 p-2 font-mono">{inst.due_date}</td>
+                    <td className="border border-slate-400 p-2 font-bold">{Number(inst.amount).toLocaleString()} د.ع</td>
+                    <td className="border border-slate-400 p-2 font-bold">
+                      {inst.is_paid ? 'مدفوع' : 'غير مدفوع'}
+                    </td>
+                    <td className="border border-slate-400 p-2">
+                      {inst.is_paid 
+                        ? (inst.payment_type === 'cash' ? 'نقدي (كاش)' : 'استقطاع راتب')
+                        : '-'
+                      }
+                    </td>
+                    <td className="border border-slate-400 p-2">
+                      {inst.paid_at ? new Date(inst.paid_at).toLocaleDateString('ar-IQ') : '-'}
+                    </td>
+                    <td className="border border-slate-400 p-2 text-slate-700">
+                      {inst.payment_note || '-'}
+                    </td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+
+          {/* Footer signature line */}
+          <div className="grid grid-cols-2 gap-12 mt-20 text-[11px] text-center">
+            <div>
+              <p className="font-bold mb-12">توقيع المستلم (الموظف)</p>
+              <p className="border-t border-slate-400 pt-2 w-48 mx-auto">التوقيع:</p>
+            </div>
+            <div>
+              <p className="font-bold mb-12">اعتماد قسم الحسابات والموارد البشرية</p>
+              <p className="border-t border-slate-400 pt-2 w-48 mx-auto">الختم والتوقيع:</p>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

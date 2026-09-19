@@ -54,6 +54,7 @@ export default function MapComponent({
 }: MapComponentProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
+  const layersRef = useRef<any[]>([]);
   const [leafletInstance, setLeafletInstance] = useState<any>(null);
 
   // Dynamically load Leaflet library only on the client side
@@ -80,19 +81,17 @@ export default function MapComponent({
     };
   }, []);
 
-  // Initialize and update the map when Leaflet is loaded and props change
+  // 1. Initialize Leaflet Map Instance ONCE when leafletInstance loads
   useEffect(() => {
     if (!leafletInstance || !containerRef.current) return;
-
     const L = leafletInstance;
 
-    // Clean existing map instance if any
+    // Clean existing map instance if any (failsafe)
     if (mapRef.current) {
       mapRef.current.remove();
       mapRef.current = null;
     }
 
-    // Initialize map container
     const mapInstance = L.map(containerRef.current, {
       center: center,
       zoom: zoom,
@@ -107,6 +106,56 @@ export default function MapComponent({
       attribution: '&copy; <a href="https://carto.com/attributions">CARTO</a>'
     }).addTo(mapInstance);
 
+    if (onMapClick) {
+      mapInstance.on('click', (e: any) => {
+        onMapClick(e.latlng.lat, e.latlng.lng);
+      });
+    }
+
+    mapRef.current = mapInstance;
+
+    // Watch for window resize events
+    const handleResize = () => {
+      mapInstance.invalidateSize();
+    };
+    window.addEventListener('resize', handleResize);
+
+    // Solve Leaflet disappearing tiles on tab switch or layout computing delay
+    mapInstance.invalidateSize();
+    const timer = setTimeout(() => {
+      mapInstance.invalidateSize();
+    }, 250);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      clearTimeout(timer);
+      if (mapRef.current) {
+        mapRef.current.remove();
+        mapRef.current = null;
+      }
+    };
+  }, [leafletInstance]);
+
+  // 2. Adjust Camera Center & Zoom separately to prevent full map rebuild
+  useEffect(() => {
+    if (!mapRef.current) return;
+    mapRef.current.setView(center, zoom);
+  }, [center, zoom]);
+
+  // 3. Update overlay layers dynamically (markers, polylines, polygons, circles)
+  useEffect(() => {
+    const mapInstance = mapRef.current;
+    if (!mapInstance || !leafletInstance) return;
+    const L = leafletInstance;
+
+    // Clear previous layers
+    layersRef.current.forEach((layer) => {
+      mapInstance.removeLayer(layer);
+    });
+    layersRef.current = [];
+
+    const newLayers: any[] = [];
+
     // Add Polygons (Geofence Zones)
     polygons.forEach((poly) => {
       if (!poly.coords || poly.coords.length < 3) return;
@@ -119,6 +168,7 @@ export default function MapComponent({
       }).addTo(mapInstance);
 
       leafletPoly.bindPopup(`<strong style="font-family: Cairo; color: #111;">السياج الجغرافي: ${poly.name}</strong>`);
+      newLayers.push(leafletPoly);
     });
 
     // Add Circles (Branch Range Circles)
@@ -142,6 +192,7 @@ export default function MapComponent({
           onCircleClick(c.id);
         }
       });
+      newLayers.push(leafletCircle);
     });
 
     // Add Markers
@@ -165,48 +216,24 @@ export default function MapComponent({
 
       const m = L.marker([marker.lat, marker.lng], { icon: customIcon }).addTo(mapInstance);
       m.bindPopup(`<div style="font-family: Cairo; direction: rtl; text-align: right; color: #111; padding: 2px;">${marker.popupText}</div>`);
+      newLayers.push(m);
     });
 
     // Add Polylines (Trails / History paths)
     polylines.forEach((line) => {
       if (!line.coords || line.coords.length < 2) return;
-      L.polyline(line.coords, {
+      const polyline = L.polyline(line.coords, {
         color: line.color || '#3B82F6',
         weight: line.weight || 4,
         opacity: 0.85,
         dashArray: '8, 8'
       }).addTo(mapInstance);
+      newLayers.push(polyline);
     });
 
-    if (onMapClick) {
-      mapInstance.on('click', (e: any) => {
-        onMapClick(e.latlng.lat, e.latlng.lng);
-      });
-    }
-
-    // Solve Leaflet disappearing tiles on tab switch or layout computing delay
+    layersRef.current = newLayers;
     mapInstance.invalidateSize();
-    const timer = setTimeout(() => {
-      mapInstance.invalidateSize();
-    }, 250);
-
-    // Watch for window resize events
-    const handleResize = () => {
-      mapInstance.invalidateSize();
-    };
-    window.addEventListener('resize', handleResize);
-
-    mapRef.current = mapInstance;
-
-    return () => {
-      window.removeEventListener('resize', handleResize);
-      clearTimeout(timer);
-      if (mapRef.current) {
-        mapRef.current.remove();
-        mapRef.current = null;
-      }
-    };
-  }, [leafletInstance, markers, polygons, polylines, circles, selectedCircleId, center, zoom]);
+  }, [leafletInstance, markers, polygons, polylines, circles, selectedCircleId]);
 
   return (
     <div className="relative w-full h-full min-h-[450px] rounded-3xl overflow-hidden border border-slate-800/80 shadow-2xl bg-[#090D16]">

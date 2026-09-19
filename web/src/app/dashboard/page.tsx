@@ -360,41 +360,53 @@ export default function DashboardPage() {
 
   const handleAddEmployee = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!newEmpName.trim()) {
+      toast.error('يرجى إدخال اسم الموظف');
+      return;
+    }
+    if (!newEmpEmail.trim()) {
+      toast.error('يرجى إدخال البريد الإلكتروني');
+      return;
+    }
+    if (!newEmpPassword || newEmpPassword.length < 6) {
+      toast.error('يجب أن تكون كلمة المرور 6 أحرف على الأقل');
+      return;
+    }
     setActionLoading(true);
     setActionError(null);
 
     try {
-      // 1. Create user in Supabase auth system via standard signup
-      // Note: In Next.js Web Dashboard, registering employees triggers Supabase SignUp
-      const { data: authData, error: authErr } = await supabase.auth.signUp({
-        email: newEmpEmail,
-        password: newEmpPassword,
-      });
+      // 1. Generate local UUID for employee
+      const newEmpId = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+            const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+          });
+      const empCode = 'EMP-' + Math.floor(1000 + Math.random() * 9000);
 
-      if (authErr) throw new Error(`خطأ في التسجيل: ${authErr.message}`);
-      if (!authData.user) throw new Error('فشل تسجيل حساب الموظف.');
-
-      const newEmpId = authData.user.id;
-
-      // 2. Upload Documents if any
+      // 2. Compress and Upload Documents if any
       let uploadedDocs: string[] = [];
       if (newDocuments.length > 0) {
         for (const file of newDocuments) {
           try {
-            // Compress image
-            const options = {
-              maxSizeMB: 1,
-              maxWidthOrHeight: 1024,
-              useWebWorker: true,
-            };
-            const compressedFile = await imageCompression(file, options);
+            let fileToUpload = file;
+            if (file.type.startsWith('image/')) {
+              const options = {
+                maxSizeMB: 1,
+                maxWidthOrHeight: 1024,
+                useWebWorker: true,
+              };
+              fileToUpload = await imageCompression(file, options);
+            }
+
             
             const fileExt = file.name.split('.').pop();
-            const fileName = `${newEmpId}/${Math.random()}.${fileExt}`;
+            const fileName = `${newEmpId}/${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
 
             const { error: uploadErr } = await supabase.storage
               .from('employee-documents')
-              .upload(fileName, compressedFile, { cacheControl: '3600', upsert: false });
+              .upload(fileName, fileToUpload, { cacheControl: '3600', upsert: false });
 
             if (uploadErr) throw uploadErr;
 
@@ -410,22 +422,23 @@ export default function DashboardPage() {
         }
       }
 
-      // 3. Insert record in employees table
-      const { error: dbErr } = await supabase.from('employees').insert({
-        id: newEmpId,
-        employee_code: 'EMP-' + Math.floor(1000 + Math.random() * 9000),
-        email: newEmpEmail,
-        full_name: newEmpName,
-        phone: newEmpPhone || null,
-        role: newEmpRole,
-        monthly_salary_iqd: newEmpSalary,
-        branch_id: newEmpBranch || null,
-        department_id: newEmpDept || null,
-        document_urls: uploadedDocs,
-        device_id_lock: null, // First device to login locks automatically
+      // 3. Create user in Supabase auth system & employees table securely via RPC
+      const { data: createdId, error: createError } = await supabase.rpc('create_employee_secure', {
+        p_email: newEmpEmail,
+        p_password: newEmpPassword,
+        p_full_name: newEmpName,
+        p_phone: newEmpPhone || null,
+        p_role: newEmpRole,
+        p_branch_id: newEmpBranch || null,
+        p_monthly_salary_iqd: newEmpSalary || 0,
+        p_document_urls: uploadedDocs,
+        p_employee_code: empCode,
+        p_employee_id: newEmpId,
+        p_join_date: new Date().toISOString().split('T')[0],
+        p_department_id: newEmpDept || null
       });
 
-      if (dbErr) throw new Error(`خطأ في قاعدة البيانات: ${dbErr.message}`);
+      if (createError) throw new Error(`خطأ في الإضافة: ${createError.message}`);
 
       // Reset
       setNewEmpEmail('');

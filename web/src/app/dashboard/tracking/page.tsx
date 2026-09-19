@@ -6,6 +6,7 @@ import MapComponent from '@/components/MapComponent';
 import { 
   MapPin, 
   Users, 
+  User,
   ShieldAlert, 
   CheckCircle,
   Loader2,
@@ -17,7 +18,9 @@ import {
   Calendar as CalendarIcon,
   Building2,
   Map,
-  Download
+  Download,
+  FileSpreadsheet,
+  ArrowLeftRight
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import toast from 'react-hot-toast';
@@ -66,20 +69,22 @@ export default function TrackingPage() {
     return d.toISOString().split('T')[0];
   };
 
-  // New states for advanced attendance
-  const [selectedDate, setSelectedDate] = useState(getLocalDateStr());
+  // New states for advanced attendance — date range
+  const [startDate, setStartDate] = useState(getLocalDateStr());
+  const [endDate, setEndDate] = useState(getLocalDateStr());
   const [editingRecord, setEditingRecord] = useState<any>(null);
   const [editCheckIn, setEditCheckIn] = useState('');
   const [editCheckOut, setEditCheckOut] = useState('');
   
   const [branches, setBranches] = useState<any[]>([]);
   const [selectedBranch, setSelectedBranch] = useState('all');
+  const [selectedEmployee, setSelectedEmployee] = useState('all');
 
   // Manual attendance states
   const [employees, setEmployees] = useState<any[]>([]);
   const [showManualModal, setShowManualModal] = useState(false);
   const [manualEmpId, setManualEmpId] = useState('');
-  const [manualDate, setManualDate] = useState(selectedDate);
+  const [manualDate, setManualDate] = useState(startDate);
   const [manualCheckIn, setManualCheckIn] = useState('09:00');
   const [manualCheckOut, setManualCheckOut] = useState('17:00');
 
@@ -93,13 +98,14 @@ export default function TrackingPage() {
   // Live Trail States
   const [selectedEmployeeForTrail, setSelectedEmployeeForTrail] = useState<string | null>(null);
   const [trailCoordinates, setTrailCoordinates] = useState<[number, number][]>([]);
+  const [detectedStops, setDetectedStops] = useState<any[]>([]);
   const [liveTrackingActive, setLiveTrackingActive] = useState(false);
 
   useEffect(() => {
-    fetchTrackingData(selectedDate, selectedBranch);
-  }, [selectedDate, selectedBranch]);
+    fetchTrackingData();
+  }, [startDate, endDate, selectedBranch, selectedEmployee]);
 
-  const fetchTrackingData = async (dateStr = selectedDate, branchId = selectedBranch) => {
+  const fetchTrackingData = async () => {
     setLoading(true);
     try {
       const promises: any[] = [
@@ -110,10 +116,14 @@ export default function TrackingPage() {
         supabase.from('leave_requests').select('*').eq('status', 'approved')
       ];
 
-      // Only query attendance and mock attempts if date is selected
-      if (dateStr) {
+      // Query attendance for the date range
+      if (startDate && endDate) {
+        let attQuery = supabase.from('attendance').select('*, employees!employee_id(full_name, branch_id)').gte('work_date', startDate).lte('work_date', endDate);
+        if (selectedEmployee !== 'all') {
+          attQuery = attQuery.eq('employee_id', selectedEmployee);
+        }
         promises.push(
-          supabase.from('attendance').select('*, employees!employee_id(full_name, branch_id)').eq('work_date', dateStr),
+          attQuery,
           supabase.from('mock_gps_attempts').select('*, employees(full_name)').order('timestamp', { ascending: false })
         );
       }
@@ -132,13 +142,13 @@ export default function TrackingPage() {
       if (resScheds.data) setWorkSchedules(resScheds.data);
       if (resLeaves.data) setLeaveRequests(resLeaves.data);
 
-      if (dateStr) {
+      if (startDate && endDate) {
         const resAtt = results[5];
         const resMock = results[6];
 
         let filteredAtt = resAtt.data || [];
-        if (branchId !== 'all') {
-          filteredAtt = filteredAtt.filter((log: any) => log.employees?.branch_id === branchId);
+        if (selectedBranch !== 'all') {
+          filteredAtt = filteredAtt.filter((log: any) => log.employees?.branch_id === selectedBranch);
         }
         setAttendanceLogs(filteredAtt);
         if (resMock.data) setSecurityLogs(resMock.data);
@@ -155,8 +165,8 @@ export default function TrackingPage() {
 
   const fetchTrailData = async (employeeId: string, dateStr: string) => {
     try {
-      const startOfDay = `${dateStr}T00:00:00.000Z`;
-      const endOfDay = `${dateStr}T23:59:59.999Z`;
+      const startOfDay = new Date(`${dateStr}T00:00:00`).toISOString();
+      const endOfDay = new Date(`${dateStr}T23:59:59.999`).toISOString();
 
       const { data, error } = await supabase
         .from('location_tracking')
@@ -169,10 +179,89 @@ export default function TrackingPage() {
       if (error) throw error;
 
       if (data) {
-        const coords: [number, number][] = data.map((item: any) => [Number(item.latitude), Number(item.longitude)]);
-        setTrailCoordinates(coords);
-        if (coords.length > 0) {
-          setSelectedCenter(coords[coords.length - 1]);
+        const rawCoords: [number, number][] = data.map((item: any) => [Number(item.latitude), Number(item.longitude)]);
+        
+        // 1. Filter out contiguous duplicates (stationary points) to prevent redundant paths
+        const filteredCoords: [number, number][] = [];
+        rawCoords.forEach((coord) => {
+          if (filteredCoords.length === 0) {
+            filteredCoords.push(coord);
+          } else {
+            const last = filteredCoords[filteredCoords.length - 1];
+            // Euclidean distance threshold roughly 10 meters (~0.0001 degrees)
+            const dist = Math.sqrt(Math.pow(last[0] - coord[0], 2) + Math.pow(last[1] - coord[1], 2));
+            if (dist > 0.0001) {
+              filteredCoords.push(coord);
+            }
+          }
+        });
+        
+        setTrailCoordinates(filteredCoords);
+
+        // 2. Detect stops (stationary for >= 5 minutes)
+        const stops: any[] = [];
+        let stopStart: number | null = null;
+        let stopCoords: [number, number] | null = null;
+
+        for (let i = 0; i < data.length; i++) {
+          const pt = data[i];
+          const ptTime = new Date(pt.timestamp).getTime();
+
+          if (i === 0) {
+            stopStart = ptTime;
+            stopCoords = [Number(pt.latitude), Number(pt.longitude)];
+            continue;
+          }
+
+          const prevPt = data[i - 1];
+          const prevTime = new Date(prevPt.timestamp).getTime();
+          const dist = Math.sqrt(
+            Math.pow(Number(pt.latitude) - Number(prevPt.latitude), 2) +
+            Math.pow(Number(pt.longitude) - Number(prevPt.longitude), 2)
+          );
+
+          // If moved less than ~50 meters (~0.0005 degrees)
+          if (dist < 0.0005) {
+            // Still in the same stop
+          } else {
+            // Moved away! Calculate stop duration
+            if (stopStart && stopCoords) {
+              const durationMins = (prevTime - stopStart) / (1000 * 60);
+              if (durationMins >= 5) {
+                stops.push({
+                  lat: stopCoords[0],
+                  lng: stopCoords[1],
+                  startTime: new Date(stopStart),
+                  endTime: new Date(prevTime),
+                  duration: Math.round(durationMins)
+                });
+              }
+            }
+            // Reset stop
+            stopStart = ptTime;
+            stopCoords = [Number(pt.latitude), Number(pt.longitude)];
+          }
+        }
+
+        // Check final point stop
+        if (stopStart && stopCoords && data.length > 0) {
+          const lastTime = new Date(data[data.length - 1].timestamp).getTime();
+          const durationMins = (lastTime - stopStart) / (1000 * 60);
+          if (durationMins >= 5) {
+            stops.push({
+              lat: stopCoords[0],
+              lng: stopCoords[1],
+              startTime: new Date(stopStart),
+              endTime: new Date(lastTime),
+              duration: Math.round(durationMins)
+            });
+          }
+        }
+
+        setDetectedStops(stops);
+
+        if (filteredCoords.length > 0) {
+          setSelectedCenter(filteredCoords[filteredCoords.length - 1]);
           setSelectedZoom(15);
         }
       }
@@ -184,10 +273,11 @@ export default function TrackingPage() {
   useEffect(() => {
     if (!selectedEmployeeForTrail) {
       setTrailCoordinates([]);
+      setDetectedStops([]);
       return;
     }
 
-    fetchTrailData(selectedEmployeeForTrail, selectedDate);
+    fetchTrailData(selectedEmployeeForTrail, endDate);
 
     if (!liveTrackingActive) return;
 
@@ -205,9 +295,8 @@ export default function TrackingPage() {
           const newLat = Number(payload.new.latitude);
           const newLng = Number(payload.new.longitude);
           if (newLat && newLng) {
-            setTrailCoordinates(prev => [...prev, [newLat, newLng]]);
-            setSelectedCenter([newLat, newLng]);
             toast.success('موقع جديد مستلم في الوقت المباشر! 📍');
+            fetchTrailData(selectedEmployeeForTrail, endDate);
           }
         }
       )
@@ -216,7 +305,7 @@ export default function TrackingPage() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [selectedEmployeeForTrail, liveTrackingActive, selectedDate]);
+  }, [selectedEmployeeForTrail, liveTrackingActive, endDate]);
 
   const handleUpdateTimes = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -224,8 +313,9 @@ export default function TrackingPage() {
     
     try {
       setLoading(true);
-      const checkInISO = editCheckIn ? new Date(`${selectedDate}T${editCheckIn}:00`).toISOString() : null;
-      const checkOutISO = editCheckOut ? new Date(`${selectedDate}T${editCheckOut}:00`).toISOString() : null;
+      const workDate = editingRecord.work_date || endDate;
+      const checkInISO = editCheckIn ? new Date(`${workDate}T${editCheckIn}:00`).toISOString() : null;
+      const checkOutISO = editCheckOut ? new Date(`${workDate}T${editCheckOut}:00`).toISOString() : null;
       
       const { error } = await supabase
         .from('attendance')
@@ -240,7 +330,7 @@ export default function TrackingPage() {
       
       toast.success('تم تحديث أوقات الدوام بنجاح! ✅');
       setEditingRecord(null);
-      fetchTrackingData(selectedDate);
+      fetchTrackingData();
     } catch (err) {
       toast.error('حدث خطأ أثناء التحديث.');
     } finally {
@@ -302,7 +392,7 @@ export default function TrackingPage() {
       
       toast.success('تم تسجيل الحضور اليدوي بنجاح! ✅');
       setShowManualModal(false);
-      fetchTrackingData(selectedDate);
+      fetchTrackingData();
     } catch (err: any) {
       toast.error(`حدث خطأ: ${err.message || err}`);
     } finally {
@@ -324,7 +414,7 @@ export default function TrackingPage() {
         
       if (error) throw error;
       toast.success('تم تسجيل خروج الموظف بنجاح!');
-      fetchTrackingData(selectedDate);
+      fetchTrackingData();
     } catch (err) {
       toast.error('حدث خطأ أثناء تسجيل الخروج.');
     } finally {
@@ -360,15 +450,36 @@ export default function TrackingPage() {
           return;
         }
 
-        const { error } = await supabase.from('attendance').insert({
-          employee_id: emp.id,
-          work_date: infractionDate,
-          status: 'absent',
-          deduction_status: status,
-          deduction_reason: reason,
-          branch_id: defaultBranchId
-        });
-        if (error) throw error;
+        // Check if attendance record already exists for this date and employee
+        const { data: existing } = await supabase
+          .from('attendance')
+          .select('id')
+          .eq('employee_id', emp.id)
+          .eq('work_date', infractionDate)
+          .maybeSingle();
+
+        if (existing) {
+          const { error } = await supabase
+            .from('attendance')
+            .update({
+              status: 'absent',
+              deduction_status: status,
+              deduction_reason: reason,
+              branch_id: defaultBranchId
+            })
+            .eq('id', existing.id);
+          if (error) throw error;
+        } else {
+          const { error } = await supabase.from('attendance').insert({
+            employee_id: emp.id,
+            work_date: infractionDate,
+            status: 'absent',
+            deduction_status: status,
+            deduction_reason: reason,
+            branch_id: defaultBranchId
+          });
+          if (error) throw error;
+        }
       } else {
         const { error } = await supabase
           .from('attendance')
@@ -380,18 +491,28 @@ export default function TrackingPage() {
         if (error) throw error;
       }
 
-      // Add a notification for the employee
-      await supabase.from('notifications').insert({
-        employee_id: emp.id,
-        title: status === 'applied' ? 'تطبيق خصم مالي ⚠️' : 'إعفاء من الخصم المالي ✅',
-        body: status === 'applied'
-          ? `تقرر تطبيق الخصم المالي المترتب على ${type === 'late' ? 'التأخير الصباحي' : 'الغياب'} ليوم ${infractionDate}. السبب: ${reason}`
-          : `تم إعفاؤك من الخصم المالي المترتب على ${type === 'late' ? 'التأخير الصباحي' : 'الغياب'} ليوم ${infractionDate}.`,
-        type: 'attendance'
-      });
+      // Add a notification for the employee based on rules:
+      // - Deductions (status === 'applied') for lateness: ❌ Do NOT notify
+      // - Absences (type === 'virtual_absent'): ✅ Notify employee of absence registration
+      // - Waived/Ignored infractions (status === 'ignored'): ✅ Notify employee of waiver
+      if (type === 'virtual_absent') {
+        await supabase.from('notifications').insert({
+          employee_id: emp.id,
+          title: 'تسجيل غياب يومي ⚠️',
+          body: `تم تسجيل غيابك عن العمل ليوم ${infractionDate} من قبل الإدارة. السبب: ${reason || 'غير محدد'}`,
+          type: 'attendance'
+        });
+      } else if (status === 'ignored') {
+        await supabase.from('notifications').insert({
+          employee_id: emp.id,
+          title: 'إعفاء من الخصم المالي ✅',
+          body: `تم إعفاؤك من الخصم المالي المترتب على ${type === 'late' ? 'التأخير الصباحي' : 'الغياب'} ليوم ${infractionDate}.`,
+          type: 'attendance'
+        });
+      }
 
       toast.success('تم حفظ القرار وإرسال إشعار للموظف بنجاح! 🔔');
-      fetchTrackingData(selectedDate, selectedBranch);
+      fetchTrackingData();
     } catch (err: any) {
       toast.error(`حدث خطأ أثناء حفظ القرار: ${err.message || err}`);
     } finally {
@@ -423,26 +544,151 @@ export default function TrackingPage() {
         ...decisionsList.filter(d => d.type === 'virtual_absent').map(d => ({
           is_virtual: true,
           employee_id: d.employee.id,
-          work_date: selectedDate,
+          work_date: d.date,
           check_in_time: null,
           check_out_time: null,
           employees: d.employee
         }))
       ];
       
-      const excelData = fullList.map(log => ({
-        'اسم الموظف': log.employees?.full_name || 'غير محدد',
-        'التاريخ': log.work_date,
-        'وقت الدخول': log.check_in_time ? new Date(log.check_in_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : '-',
-        'وقت الخروج': log.check_out_time ? new Date(log.check_out_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : '-',
-        'ساعات العمل': formatHours(log.check_in_time, log.check_out_time),
-        'الحالة': log.is_virtual ? 'غياب' : (log.status === 'late' ? 'تأخير' : 'حضور')
-      }));
+      const excelData = fullList.map((log, index) => {
+        const emp = log.employees;
+        const branchName = branches.find(b => b.id === emp?.branch_id)?.name || 'غير محدد';
+        
+        // Day of the week in Arabic
+        const arabicDays = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+        let dayName = '-';
+        if (log.work_date) {
+          const [y, m, d] = log.work_date.split('-').map(Number);
+          const dayObj = new Date(y, m - 1, d);
+          dayName = arabicDays[dayObj.getDay()];
+        }
 
-      const worksheet = XLSX.utils.json_to_sheet(excelData);
+        // Find decision info
+        const dec = decisionsList.find(d => d.employee.id === log.employee_id && d.date === log.work_date);
+        
+        let delayStr = '-';
+        if (dec && dec.type === 'late') {
+          delayStr = dec.duration || '-';
+        }
+
+        let decStatusStr = 'لا يوجد خصم';
+        let decAmountStr = '-';
+        if (dec) {
+          if (dec.deductionStatus === 'approved') {
+            decStatusStr = 'تم اعتماد الخصم ✅';
+            const amt = selectedAmounts[dec.id] || dec.suggestedAmount || 0;
+            decAmountStr = `${Number(amt).toLocaleString('ar-IQ')} د.ع`;
+          } else if (dec.deductionStatus === 'ignored') {
+            decStatusStr = 'معفى من الخصم 🔓';
+            decAmountStr = '0 د.ع (إعفاء)';
+          } else {
+            decStatusStr = 'بانتظار القرار ⏳';
+            const amt = selectedAmounts[dec.id] || dec.suggestedAmount || 0;
+            decAmountStr = `${Number(amt).toLocaleString('ar-IQ')} د.ع (مقترح)`;
+          }
+        }
+
+        // Find approved leave
+        const leave = leaveRequests.find(l => {
+          if (l.employee_id !== log.employee_id) return false;
+          const dTime = new Date(log.work_date).getTime();
+          const sTime = new Date(l.start_date.split('T')[0]).getTime();
+          const eTime = new Date(l.end_date.split('T')[0]).getTime();
+          return dTime >= sTime && dTime <= eTime;
+        });
+
+        // Find GPS spoofing attempts on this date
+        const spoofing = securityLogs.filter(s => {
+          if (s.employee_id !== log.employee_id) return false;
+          const sDate = new Date(s.timestamp).toISOString().split('T')[0];
+          return sDate === log.work_date;
+        });
+
+        // Formulate detailed notes
+        let notes = [];
+        if (spoofing.length > 0) {
+          notes.push(`🚨 تنبيه: كشف موقع وهمي (${spoofing.length} محاولة)`);
+        }
+        if (leave) {
+          notes.push(`إجازة معتمدة (${leave.leave_type || 'اعتيادية'})`);
+        }
+        if (dec && dec.reason) {
+          notes.push(`ملاحظة الانضباط: ${dec.reason}`);
+        }
+        const notesStr = notes.length > 0 ? notes.join(' | ') : 'سجل سليم وطبيعي';
+
+        // Status mapping
+        let attendanceStatus = 'حضور منتظم';
+        if (log.is_virtual) {
+          attendanceStatus = 'غياب بدون عذر ❌';
+        } else if (log.status === 'late') {
+          attendanceStatus = 'حضور متأخر ⚠️';
+        } else if (log.status === 'absent') {
+          attendanceStatus = 'غياب مسجل ❌';
+        }
+
+        return {
+          'ت': index + 1,
+          'اسم الموظف': emp?.full_name || 'غير محدد',
+          'الفرع': branchName,
+          'تاريخ الدوام': log.work_date,
+          'اليوم': dayName,
+          'وقت الدخول الفعلي': log.check_in_time ? new Date(log.check_in_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : '-',
+          'وقت الخروج الفعلي': log.check_out_time ? new Date(log.check_out_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : '-',
+          'ساعات العمل': formatHours(log.check_in_time, log.check_out_time),
+          'حالة الدوام': attendanceStatus,
+          'مدة التأخير': delayStr,
+          'حالة الخصم': decStatusStr,
+          'قيمة الخصم (د.ع)': decAmountStr,
+          'ملاحظات الانضباط والتنبيهات الذكية': notesStr
+        };
+      });
+
+      // 1. Create a blank sheet with a professional title block
+      const worksheet = XLSX.utils.aoa_to_sheet([
+        ["كشف المراقبة والانضباط الوظيفي التفصيلي الموحد - شركة بترى"],
+        [`الفترة المشمولة بالتقرير: من ${startDate} إلى ${endDate}`],
+        [`فرع المؤسسة المصفى: ${selectedBranch === 'all' ? 'جميع الفروع' : (branches.find(b => b.id === selectedBranch)?.name || '')} | الموظف المصفى: ${selectedEmployee === 'all' ? 'جميع الموظفين' : (employees.find(e => e.id === selectedEmployee)?.full_name || '')}`],
+        [`تاريخ ووقت استخراج التقرير: ${new Date().toLocaleString('ar-IQ', { hour12: true })}`],
+        [] // Blank spacer row
+      ]);
+
+      // 2. Append the main json data starting at A6
+      XLSX.utils.sheet_add_json(worksheet, excelData, { origin: "A6" });
+
+      // 3. Set layout direction to RTL for Arabic reader
+      worksheet['!dir'] = 'rtl';
+      worksheet['!views'] = [{ RTL: true }];
+
+      // 4. Merge headers for the title blocks (A1:M1, A2:M2, A3:M3, A4:M4)
+      worksheet['!merges'] = [
+        { s: { r: 0, c: 0 }, e: { r: 0, c: 12 } }, // Row 1
+        { s: { r: 1, c: 0 }, e: { r: 1, c: 12 } }, // Row 2
+        { s: { r: 2, c: 0 }, e: { r: 2, c: 12 } }, // Row 3
+        { s: { r: 3, c: 0 }, e: { r: 3, c: 12 } }  // Row 4
+      ];
+
+      // 5. Adjust column widths dynamically to prevent clipping
+      worksheet['!cols'] = [
+        { wch: 6 },   // ت
+        { wch: 28 },  // اسم الموظف
+        { wch: 20 },  // الفرع
+        { wch: 15 },  // تاريخ الدوام
+        { wch: 12 },  // اليوم
+        { wch: 16 },  // وقت الدخول الفعلي
+        { wch: 16 },  // وقت الخروج الفعلي
+        { wch: 16 },  // ساعات العمل
+        { wch: 20 },  // حالة الدوام
+        { wch: 15 },  // مدة التأخير
+        { wch: 20 },  // حالة الخصم
+        { wch: 22 },  // قيمة الخصم (د.ع)
+        { wch: 45 }   // ملاحظات الانضباط والتنبيهات الذكية
+      ];
+
       const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "تقرير الحضور");
-      XLSX.writeFile(workbook, `تقرير_الحضور_${selectedDate}.xlsx`);
+      XLSX.utils.book_append_sheet(workbook, worksheet, "كشف الانضباط والتتبع");
+      XLSX.writeFile(workbook, `تقرير_الانضباط_والتتبع_شركة_بترى_${startDate}_الى_${endDate}.xlsx`);
     } catch (err) {
       toast.error("حدث خطأ أثناء تصدير التقرير");
     }
@@ -501,24 +747,43 @@ export default function TrackingPage() {
       });
     }
 
+    // Add detected stops markers
+    detectedStops.forEach((stop, index) => {
+      markers.push({
+        lat: stop.lat,
+        lng: stop.lng,
+        color: '#EAB308', // Glowing yellow for stops
+        popupText: `
+          <strong style="color: #EAB308; font-size: 13px;">موقع توقف مؤقت ⏳ (وقفة رقم ${index + 1})</strong><br/>
+          <strong>وقت البدء:</strong> ${stop.startTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}<br/>
+          <strong>وقت النهاية:</strong> ${stop.endTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}<br/>
+          <strong>المدة:</strong> ${formatLateDurationArabic(stop.duration)}<br/>
+          <span style="color: #EAB308; font-weight: bold;">توقف الموظف في هذا الموقع لأكثر من 5 دقائق</span>
+        `
+      });
+    });
+
     return markers;
   };
 
   const getMapPolygons = () => {
     return geofenceZones.map((zone) => {
       let coords: [number, number][] = [];
-      if (zone.polygon_coordinates) {
-        coords = Array.isArray(zone.polygon_coordinates) ? zone.polygon_coordinates : JSON.parse(zone.polygon_coordinates as string);
-      }
-      
-      if (coords.length < 3 && zone.latitude && zone.longitude) {
-        const offset = 0.003;
-        coords = [
-          [zone.latitude + offset, zone.longitude - offset],
-          [zone.latitude + offset, zone.longitude + offset],
-          [zone.latitude - offset, zone.longitude + offset],
-          [zone.latitude - offset, zone.longitude - offset]
-        ];
+      const rawCoords = zone.coordinates || zone.polygon_coordinates;
+      if (rawCoords) {
+        try {
+          const parsed = typeof rawCoords === 'string' ? JSON.parse(rawCoords) : rawCoords;
+          if (Array.isArray(parsed)) {
+            coords = parsed
+              .map((pt: any): [number, number] => {
+                if (Array.isArray(pt)) return [Number(pt[0]), Number(pt[1])];
+                return [Number(pt.lat ?? pt.latitude), Number(pt.lng ?? pt.longitude)];
+              })
+              .filter((pt) => !isNaN(pt[0]) && !isNaN(pt[1]));
+          }
+        } catch (e) {
+          console.error('Error parsing geofence zone coords:', e);
+        }
       }
 
       return {
@@ -528,89 +793,102 @@ export default function TrackingPage() {
     });
   };
 
-  // Compile infractions (absences and latenesses) for decisions
+  // Compile infractions (absences and latenesses) for decisions across date range
   const getDecisionsList = () => {
-    if (!selectedDate) return [];
+    if (!startDate || !endDate) return [];
     const list: any[] = [];
-    employees.forEach(emp => {
-      if (selectedBranch !== 'all' && emp.branch_id !== selectedBranch) return;
 
-      const attRecord = attendanceLogs.find(log => log.employee_id === emp.id);
+    // Generate array of all dates in range
+    const allDates: string[] = [];
+    const current = new Date(startDate);
+    const end = new Date(endDate);
+    while (current <= end) {
+      allDates.push(current.toISOString().split('T')[0]);
+      current.setDate(current.getDate() + 1);
+    }
 
-      const empSched = workSchedules.find(s => s.employee_id === emp.id) || 
-                       workSchedules.find(s => s.department_id === emp.department_id && !s.employee_id) ||
-                       workSchedules.find(s => s.branch_id === emp.branch_id && !s.employee_id && !s.department_id);
-      const workDays = empSched ? empSched.work_days : [6, 0, 1, 2, 3, 4];
-      
-      const [year, month, day] = selectedDate.split('-');
-      const dayObj = new Date(Number(year), Number(month) - 1, Number(day));
-      const weekday = dayObj.getDay();
-      const isWorkingDay = workDays.includes(weekday);
+    const isDateWithinRange = (dStr: string, startStr: string, endStr: string) => {
+      if (!dStr || !startStr || !endStr) return false;
+      const d = new Date(dStr).getTime();
+      const s = new Date(startStr.split('T')[0]).getTime();
+      const e = new Date(endStr.split('T')[0]).getTime();
+      return d >= s && d <= e;
+    };
 
-      if (!isWorkingDay) return;
+    allDates.forEach(dateStr => {
+      employees.forEach(emp => {
+        if (selectedBranch !== 'all' && emp.branch_id !== selectedBranch) return;
+        if (selectedEmployee !== 'all' && emp.id !== selectedEmployee) return;
 
-      const isDateWithinRange = (dStr: string, startStr: string, endStr: string) => {
-        if (!dStr || !startStr || !endStr) return false;
-        const d = new Date(dStr).getTime();
-        const s = new Date(startStr.split('T')[0]).getTime();
-        const e = new Date(endStr.split('T')[0]).getTime();
-        return d >= s && d <= e;
-      };
+        const empSched = workSchedules.find(s => s.employee_id === emp.id) || 
+                         workSchedules.find(s => s.department_id === emp.department_id && !s.employee_id) ||
+                         workSchedules.find(s => s.branch_id === emp.branch_id && !s.employee_id && !s.department_id);
+        const workDays = empSched ? empSched.work_days : [6, 0, 1, 2, 3, 4];
+        
+        const [year, month, day] = dateStr.split('-');
+        const dayObj = new Date(Number(year), Number(month) - 1, Number(day));
+        const weekday = dayObj.getDay();
+        const isWorkingDay = workDays.includes(weekday);
 
-      const leaveRecord = leaveRequests.find(l => l.employee_id === emp.id && isDateWithinRange(selectedDate, l.start_date, l.end_date));
+        if (!isWorkingDay) return;
 
-      if (attRecord) {
-        if (attRecord.status === 'late') {
-          const schedCheckIn = empSched ? empSched.check_in_time : '09:00:00';
-          const checkIn = new Date(attRecord.check_in_time);
-          const [h, m, s] = schedCheckIn.split(':').map(Number);
-          const sched = new Date(checkIn);
-          sched.setHours(h, m, s || 0, 0);
-          const diffMs = checkIn.getTime() - sched.getTime();
-          const lateMinutes = diffMs > 0 ? Math.floor(diffMs / (1000 * 60)) : 0;
+        const leaveRecord = leaveRequests.find(l => l.employee_id === emp.id && isDateWithinRange(dateStr, l.start_date, l.end_date));
 
-          list.push({
-            id: attRecord.id,
-            type: 'late',
-            employee: emp,
-            date: selectedDate,
-            time: attRecord.check_in_time ? new Date(attRecord.check_in_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : '-',
-            duration: formatLateDurationArabic(lateMinutes),
-            typeName: 'التأخير الصباحي',
-            deductionStatus: attRecord.deduction_status || 'pending',
-            reason: attRecord.deduction_reason || `التأخير: ${formatLateDurationArabic(lateMinutes)}`,
-            suggestedAmount: lateMinutes * 50
-          });
-        } else if (attRecord.status === 'absent') {
-          list.push({
-            id: attRecord.id,
-            type: 'absent',
-            employee: emp,
-            date: selectedDate,
-            time: '-',
-            duration: 'يوم واحد',
-            typeName: 'الغياب',
-            deductionStatus: attRecord.deduction_status || 'pending',
-            reason: attRecord.deduction_reason || 'الغياب بدون إجازة',
-            suggestedAmount: 25000
-          });
+        const attRecord = attendanceLogs.find(log => log.employee_id === emp.id && log.work_date === dateStr);
+
+        if (attRecord) {
+          if (attRecord.status === 'late') {
+            const schedCheckIn = empSched ? empSched.check_in_time : '09:00:00';
+            const checkIn = new Date(attRecord.check_in_time);
+            const [h, m, s] = schedCheckIn.split(':').map(Number);
+            const sched = new Date(checkIn);
+            sched.setHours(h, m, s || 0, 0);
+            const diffMs = checkIn.getTime() - sched.getTime();
+            const lateMinutes = diffMs > 0 ? Math.floor(diffMs / (1000 * 60)) : 0;
+
+            list.push({
+              id: attRecord.id,
+              type: 'late',
+              employee: emp,
+              date: dateStr,
+              time: attRecord.check_in_time ? new Date(attRecord.check_in_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : '-',
+              duration: formatLateDurationArabic(lateMinutes),
+              typeName: 'التأخير الصباحي',
+              deductionStatus: attRecord.deduction_status || 'pending',
+              reason: attRecord.deduction_reason || `التأخير: ${formatLateDurationArabic(lateMinutes)}`,
+              suggestedAmount: lateMinutes * 50
+            });
+          } else if (attRecord.status === 'absent') {
+            list.push({
+              id: attRecord.id,
+              type: 'absent',
+              employee: emp,
+              date: dateStr,
+              time: '-',
+              duration: 'يوم واحد',
+              typeName: 'الغياب',
+              deductionStatus: attRecord.deduction_status || 'pending',
+              reason: attRecord.deduction_reason || 'الغياب بدون إجازة',
+              suggestedAmount: 25000
+            });
+          }
+        } else {
+          if (!leaveRecord) {
+            list.push({
+              id: null,
+              type: 'virtual_absent',
+              employee: emp,
+              date: dateStr,
+              time: '-',
+              duration: 'يوم واحد',
+              typeName: 'الغياب',
+              deductionStatus: 'pending',
+              reason: 'الغياب بدون إجازة',
+              suggestedAmount: 25000
+            });
+          }
         }
-      } else {
-        if (!leaveRecord) {
-          list.push({
-            id: null,
-            type: 'virtual_absent',
-            employee: emp,
-            date: selectedDate,
-            time: '-',
-            duration: 'يوم واحد',
-            typeName: 'الغياب',
-            deductionStatus: 'pending',
-            reason: 'الغياب بدون إجازة',
-            suggestedAmount: 25000
-          });
-        }
-      }
+      });
     });
     return list;
   };
@@ -646,7 +924,10 @@ export default function TrackingPage() {
               <Building2 className="w-4 h-4 text-teal-400" />
               <select 
                 value={selectedBranch}
-                onChange={(e) => setSelectedBranch(e.target.value)}
+                onChange={(e) => {
+                  setSelectedBranch(e.target.value);
+                  setSelectedEmployee('all');
+                }}
                 className="bg-transparent border-none text-white text-xs outline-none cursor-pointer min-w-[120px]"
               >
                 <option value="all" className="bg-slate-900">جميع الفروع</option>
@@ -658,16 +939,42 @@ export default function TrackingPage() {
 
             <div className="flex items-center gap-2 bg-slate-800/60 border border-slate-700/60 rounded-xl px-3 py-2">
               <CalendarIcon className="w-4 h-4 text-teal-400" />
+              <span className="text-[10px] text-slate-400 font-bold">من</span>
               <input 
                 type="date" 
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
                 className="bg-transparent border-none text-white text-xs outline-none cursor-pointer"
               />
             </div>
+
+            <div className="flex items-center gap-2 bg-slate-800/60 border border-slate-700/60 rounded-xl px-3 py-2">
+              <CalendarIcon className="w-4 h-4 text-amber-400" />
+              <span className="text-[10px] text-slate-400 font-bold">إلى</span>
+              <input 
+                type="date" 
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="bg-transparent border-none text-white text-xs outline-none cursor-pointer"
+              />
+            </div>
+
+            <div className="flex items-center gap-2 bg-slate-800/60 border border-slate-700/60 rounded-xl px-3 py-2">
+              <Users className="w-4 h-4 text-violet-400" />
+              <select
+                value={selectedEmployee}
+                onChange={(e) => setSelectedEmployee(e.target.value)}
+                className="bg-transparent border-none text-white text-xs outline-none appearance-none cursor-pointer min-w-[80px]"
+              >
+                <option value="all" className="bg-slate-900">جميع الموظفين</option>
+                {employees.filter(emp => selectedBranch === 'all' || emp.branch_id === selectedBranch).map(emp => (
+                  <option key={emp.id} value={emp.id} className="bg-slate-900">{emp.full_name}</option>
+                ))}
+              </select>
+            </div>
             
             <button
-              onClick={() => fetchTrackingData(selectedDate, selectedBranch)}
+              onClick={() => fetchTrackingData()}
               className="flex items-center gap-2 py-2 px-4 bg-slate-800 hover:bg-slate-750 text-white rounded-xl text-xs font-bold transition-all border border-slate-700/60 cursor-pointer"
             >
               <RefreshCw className="w-4 h-4" />
@@ -676,7 +983,7 @@ export default function TrackingPage() {
 
             <button
               onClick={() => {
-                setManualDate(selectedDate);
+                setManualDate(endDate);
                 setManualCheckIn('09:00');
                 setManualCheckOut('17:00');
                 setManualEmpId('');
@@ -719,13 +1026,13 @@ export default function TrackingPage() {
           </button>
         </div>
 
-        {!selectedDate ? (
+        {!startDate || !endDate ? (
           <div className="flex flex-col items-center justify-center p-12 bg-slate-900/20 border border-slate-800 rounded-3xl text-center">
             <CalendarIcon className="w-16 h-16 text-amber-500 mb-4 animate-bounce" />
             <h4 className="text-md font-bold text-white mb-2">
               {activeTab === 'monitoring' 
-                ? 'يرجى تحديد تاريخ أولاً لعرض خريطة التتبع وسجل الحضور 📅' 
-                : 'يرجى تحديد تاريخ أولاً لعرض قرارات الغياب والتأخير المعلقة 📅'}
+                ? 'يرجى تحديد فترة زمنية (من - إلى) أولاً لعرض خريطة التتبع وسجل الحضور 📅' 
+                : 'يرجى تحديد فترة زمنية (من - إلى) أولاً لعرض قرارات الغياب والتأخير المعلقة 📅'}
             </h4>
             <p className="text-slate-400 text-xs">اختر التاريخ من شريط التحكم أعلاه للبدء</p>
           </div>
@@ -785,10 +1092,10 @@ export default function TrackingPage() {
                     {[
                       ...attendanceLogs,
                       ...decisionsList.filter(d => d.type === 'virtual_absent').map(d => ({
-                        id: `virtual_${d.employee.id}`,
+                        id: `virtual_${d.employee.id}_${d.date}`,
                         is_virtual: true,
                         employee_id: d.employee.id,
-                        work_date: selectedDate,
+                        work_date: d.date,
                         check_in_time: null,
                         check_out_time: null,
                         employees: d.employee
@@ -796,17 +1103,17 @@ export default function TrackingPage() {
                     ].length === 0 ? (
                       <tr>
                         <td colSpan={6} className="px-4 py-12 text-center text-slate-500 text-xs">
-                          لا توجد سجلات حضور لهذا اليوم
+                          لا توجد سجلات حضور لهذه الفترة
                         </td>
                       </tr>
                     ) : (
                       [
                         ...attendanceLogs,
                         ...decisionsList.filter(d => d.type === 'virtual_absent').map(d => ({
-                          id: `virtual_${d.employee.id}`,
+                          id: `virtual_${d.employee.id}_${d.date}`,
                           is_virtual: true,
                           employee_id: d.employee.id,
-                          work_date: selectedDate,
+                          work_date: d.date,
                           check_in_time: null,
                           check_out_time: null,
                           employees: d.employee
@@ -1073,7 +1380,7 @@ export default function TrackingPage() {
             <form onSubmit={handleUpdateTimes} className="space-y-4">
               <div className="p-4 bg-slate-950/50 rounded-xl mb-4 text-sm text-slate-300">
                 <strong>الموظف:</strong> {editingRecord.employees?.full_name} <br/>
-                <strong>التاريخ:</strong> {selectedDate}
+                <strong>التاريخ:</strong> {editingRecord.work_date}
               </div>
 
               <div className="space-y-1.5">

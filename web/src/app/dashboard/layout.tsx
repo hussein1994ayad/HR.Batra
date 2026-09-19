@@ -198,7 +198,6 @@ export default function DashboardLayout({
       gainNode.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + 0.5);
       osc.stop(ctx.currentTime + 0.5);
     } catch (e) {
-      console.log('Audio playback failed:', e);
     }
   };
 
@@ -316,7 +315,7 @@ export default function DashboardLayout({
       <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-violet-500/5 rounded-full blur-[150px] pointer-events-none"></div>
 
       {/* Sidebar - Desktop */}
-      <aside className="hidden lg:flex lg:flex-col lg:w-72 bg-slate-950/40 backdrop-blur-xl border-l border-slate-800/40 z-20 transition-all duration-300">
+      <aside className="hidden lg:flex lg:flex-col lg:w-72 bg-slate-950/40 backdrop-blur-xl border-l border-slate-800/40 z-20 transition-all duration-300 print:hidden">
         <div className="p-6 border-b border-slate-800/40 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-indigo-500/10 rounded-xl border border-indigo-500/20">
@@ -441,7 +440,7 @@ export default function DashboardLayout({
       <div className="flex-1 flex flex-col h-full overflow-hidden">
         
         {/* Top Navbar Header */}
-        <header className="h-16 border-b border-slate-800/80 bg-slate-900/40 backdrop-blur-xl px-6 flex items-center justify-between z-10">
+        <header className="h-16 border-b border-slate-800/80 bg-slate-900/40 backdrop-blur-xl px-6 flex items-center justify-between z-10 print:hidden">
           <div className="flex items-center gap-4">
             <button
               onClick={() => setSidebarOpen(true)}

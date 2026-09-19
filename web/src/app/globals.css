@@ -37,3 +37,111 @@ body {
   border-radius: 1rem;
   background-color: #0F172A !important;
 }
+
+/* Print Media Styles for clean corporate layouts */
+@media print {
+  /* Force white background and black text on all base containers */
+  html, body, main, #__next, div[class*="max-w-7xl"] {
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    color: #111827 !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+    overflow: visible !important;
+    height: auto !important;
+    min-height: 0 !important;
+  }
+
+  /* Reset layout viewport heights that clip pagination */
+  div.h-screen, div[class*="h-screen"], div[class*="overflow-hidden"], main.flex-1 {
+    height: auto !important;
+    overflow: visible !important;
+    display: block !important;
+  }
+
+  /* Reset padding for print */
+  main {
+    padding: 0 !important;
+  }
+
+  /* Hide print-hidden classes and interactive controls */
+  .print\:hidden,
+  button,
+  select,
+  input,
+  iframe,
+  aside,
+  header {
+    display: none !important;
+  }
+
+  /* Core print-only blocks display */
+  .hidden.print\:block {
+    display: block !important;
+  }
+  .hidden.print\:grid {
+    display: grid !important;
+  }
+
+  /* Table layout overrides */
+  table {
+    border-collapse: collapse !important;
+    width: 100% !important;
+    margin-top: 15px !important;
+    background-color: #ffffff !important;
+    color: #111827 !important;
+  }
+
+  tr {
+    page-break-inside: avoid !important;
+    border-bottom: 1px solid #d1d5db !important;
+  }
+
+  th {
+    background-color: #f3f4f6 !important;
+    color: #111827 !important;
+    border: 1px solid #d1d5db !important;
+    font-size: 11px !important;
+    font-weight: bold !important;
+    padding: 8px 6px !important;
+    text-align: right !important;
+  }
+
+  td {
+    border: 1px solid #e5e7eb !important;
+    color: #1f2937 !important;
+    font-size: 10px !important;
+    padding: 8px 6px !important;
+    text-align: right !important;
+  }
+
+  /* Specific color overrides for printing readability */
+  .text-emerald-400 {
+    color: #15803d !important; /* dark green */
+  }
+  .text-amber-500 {
+    color: #b45309 !important; /* dark amber */
+  }
+  .text-rose-400 {
+    color: #b91c1c !important; /* dark red */
+  }
+  .text-orange-400 {
+    color: #c2410c !important; /* dark orange */
+  }
+  .text-teal-350, .text-teal-300 {
+    color: #0f766e !important; /* dark teal */
+  }
+  .text-white {
+    color: #111827 !important;
+  }
+  .text-slate-400, .text-slate-500 {
+    color: #4b5563 !important;
+  }
+
+  /* Highlight net salary column */
+  td.bg-teal-900\/10, td.print\:bg-green-50, td.bg-teal-900\/20 {
+    background-color: #f0fdf4 !important;
+    font-weight: bold !important;
+    color: #15803d !important;
+  }
+}

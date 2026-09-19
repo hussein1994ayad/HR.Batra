@@ -53,6 +53,13 @@ export default function LeavesPage() {
   };
 
   const handleProcessLeave = async (requestId: string, employeeId: string, approve: boolean, isPaidValue: boolean) => {
+    let rejectionReason = '';
+    if (!approve) {
+      const reason = prompt('يرجى إدخال سبب الرفض (اختياري):');
+      if (reason === null) return;
+      rejectionReason = reason;
+    }
+
     setActionLoading(requestId);
     const statusText = approve ? 'approved' : 'rejected';
     
@@ -61,14 +68,18 @@ export default function LeavesPage() {
       if (!session) return;
 
       // 1. Update leave request record
+      const updateData: any = {
+        status: statusText,
+        approved_by: session.user.id,
+        approved_at: new Date().toISOString(),
+      };
+      if (approve) {
+        updateData.is_paid = isPaidValue;
+      }
+
       const { error: updErr } = await supabase
         .from('leave_requests')
-        .update({
-          status: statusText,
-          is_paid: approve ? isPaidValue : undefined,
-          approved_by: session.user.id,
-          approved_at: new Date().toISOString(),
-        })
+        .update(updateData)
         .eq('id', requestId);
 
       if (updErr) throw updErr;
@@ -77,7 +88,7 @@ export default function LeavesPage() {
       const actionTitle = approve ? 'الموافقة على طلب إجازتك 🎉' : 'رفض طلب إجازتك ❌';
       const actionBody = approve 
           ? 'تهانينا! تمت الموافقة على طلب إجازتك المقدم مسبقاً.' 
-          : 'نأسف لإعلامك بأنه تم رفض طلب إجازتك من قبل الإدارة.';
+          : `نأسف لإعلامك بأنه تم رفض طلب إجازتك من قبل الإدارة.${rejectionReason ? `\nالسبب: ${rejectionReason}` : ''}`;
 
       await supabase.from('notifications').insert({
         employee_id: employeeId,

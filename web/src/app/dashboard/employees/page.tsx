@@ -23,10 +23,29 @@ import {
   Phone,
   Mail,
   Upload,
-  FileImage
+  FileImage,
+  Calendar,
+  FolderOpen,
+  FileText,
+  Download,
+  ExternalLink,
+  Eye,
+  Share2
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import toast from 'react-hot-toast';
+
+function normalizeArabic(text: string = ''): string {
+  return text
+    .replace(/[أإآٱ]/g, 'ا')
+    .replace(/ة/g, 'ه')
+    .replace(/ى/g, 'ي')
+    .replace(/ئ/g, 'ي')
+    .replace(/ؤ/g, 'و')
+    .replace(/[\u064B-\u065F]/g, '')
+    .trim()
+    .toLowerCase();
+}
 
 export default function EmployeesPage() {
   const [loading, setLoading] = useState(true);
@@ -42,6 +61,10 @@ export default function EmployeesPage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<any>(null);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [profileEmployee, setProfileEmployee] = useState<any>(null);
+  const [previewDocUrl, setPreviewDocUrl] = useState<string | null>(null);
+  const [previewDocTitle, setPreviewDocTitle] = useState<string>('');
 
   // Archives & Deletions States
   const [activeTab, setActiveTab] = useState<'active' | 'archived'>('active');
@@ -61,6 +84,7 @@ export default function EmployeesPage() {
   const [monthlySalary, setMonthlySalary] = useState<number>(0);
   const [futureSalary, setFutureSalary] = useState<number>(0);
   const [futureSalaryMonth, setFutureSalaryMonth] = useState('');
+  const [joinDate, setJoinDate] = useState(() => new Date().toISOString().split('T')[0]);
   
   // Documents
   const [newDocuments, setNewDocuments] = useState<File[]>([]);
@@ -262,58 +286,49 @@ export default function EmployeesPage() {
     }
   };
 
-  // Create new employee auth & profile without logging out active admin
   const handleCreateEmployee = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!fullName.trim()) {
+      toast.error('يرجى إدخال اسم الموظف');
+      return;
+    }
+    if (!email.trim()) {
+      toast.error('يرجى إدخال البريد الإلكتروني');
+      return;
+    }
     if (!password || password.length < 6) {
       toast.error('يجب أن تكون كلمة المرور 6 أحرف على الأقل');
       return;
     }
     setActionLoading('create_emp');
     try {
-      // 1. Create a non-persisted client to avoid logging out the current admin
-      const { createClient } = await import('@supabase/supabase-js');
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://jgjlmddphhncatrhqrej.supabase.co';
-      const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_EjrPBiypg0kR-HMDk0uitw_y1aHc7kP';
-      
-      const tempClient = createClient(supabaseUrl, supabaseAnonKey, {
-        auth: {
-          persistSession: false,
-          autoRefreshToken: false,
-          detectSessionInUrl: false
-        }
-      });
-
-      // 2. Sign up the new user
-      const { data: signUpData, error: signUpErr } = await tempClient.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            full_name: fullName,
-          }
-        }
-      });
-
-      if (signUpErr) throw signUpErr;
-      if (!signUpData.user) throw new Error('فشل إنشاء حساب الموظف في المصادقة');
+      // 1. Generate local employee UUID beforehand to use for documents directory
+      const empId = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+            const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+          });
 
       const empCode = `EMP-${Math.floor(100 + Math.random() * 900)}`;
 
-      // 3. Compress and upload documents
+      // 2. Compress and upload documents
       let uploadedUrls: string[] = [];
       if (newDocuments.length > 0) {
         for (const file of newDocuments) {
           try {
-            const compressedFile = await imageCompression(file, {
-              maxSizeMB: 1,
-              maxWidthOrHeight: 1920,
-              useWebWorker: true,
-            });
+            let fileToUpload = file;
+            if (file.type.startsWith('image/')) {
+              fileToUpload = await imageCompression(file, {
+                maxSizeMB: 1,
+                maxWidthOrHeight: 1920,
+                useWebWorker: true,
+              });
+            }
             const fileExt = file.name.split('.').pop();
-            const fileName = `${signUpData.user.id}/${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+            const fileName = `${empId}/${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
             
-            const { error: uploadError } = await supabase.storage.from('employee-documents').upload(fileName, compressedFile);
+            const { error: uploadError } = await supabase.storage.from('employee-documents').upload(fileName, fileToUpload);
             if (!uploadError) {
               const { data: { publicUrl } } = supabase.storage
                 .from('employee-documents')
@@ -326,25 +341,22 @@ export default function EmployeesPage() {
         }
       }
 
-      // 4. Insert employee profile in employees table
-      const { error: insErr } = await supabase.from('employees').insert({
-        id: signUpData.user.id,
-        employee_code: empCode,
-        full_name: fullName,
-        email,
-        phone: phone || null,
-        role,
-        branch_id: branchId || null,
-        monthly_salary_iqd: monthlySalary || 0,
-        plain_password: password,
-        is_active: true,
-        must_change_password: true,
-        document_urls: uploadedUrls
+      // 3. Create employee & auth credentials in a single RPC transaction to bypass client-side rate limit
+      const { data: createdId, error: createError } = await supabase.rpc('create_employee_secure', {
+        p_email: email,
+        p_password: password,
+        p_full_name: fullName,
+        p_phone: phone || null,
+        p_role: role,
+        p_branch_id: branchId || null,
+        p_monthly_salary_iqd: monthlySalary || 0,
+        p_document_urls: uploadedUrls,
+        p_employee_code: empCode,
+        p_employee_id: empId,
+        p_join_date: joinDate
       });
 
-      if (insErr) {
-        throw insErr;
-      }
+      if (createError) throw createError;
 
       // Reset states
       setFullName('');
@@ -354,6 +366,7 @@ export default function EmployeesPage() {
       setRole('employee');
       setBranchId('');
       setMonthlySalary(0);
+      setJoinDate(new Date().toISOString().split('T')[0]);
       setNewDocuments([]);
       setShowAddModal(false);
 
@@ -383,6 +396,7 @@ export default function EmployeesPage() {
     setMonthlySalary(emp.monthly_salary_iqd || 0);
     setFutureSalary(emp.future_salary_iqd || 0);
     setFutureSalaryMonth(emp.future_salary_month || '');
+    setJoinDate(emp.join_date || (emp.created_at ? new Date(emp.created_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]));
     setPassword(emp.plain_password || '');
     setExistingDocuments(emp.document_urls || []);
     setNewDocuments([]);
@@ -392,6 +406,14 @@ export default function EmployeesPage() {
   const handleUpdateEmployee = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedEmployee) return;
+    if (!fullName.trim()) {
+      toast.error('يرجى إدخال اسم الموظف');
+      return;
+    }
+    if (!email.trim()) {
+      toast.error('يرجى إدخال البريد الإلكتروني');
+      return;
+    }
     setActionLoading('update_emp');
     try {
       // Update auth credentials safely via RPC
@@ -423,15 +445,18 @@ export default function EmployeesPage() {
       if (newDocuments.length > 0) {
         for (const file of newDocuments) {
           try {
-            const compressedFile = await imageCompression(file, {
-              maxSizeMB: 1,
-              maxWidthOrHeight: 1920,
-              useWebWorker: true,
-            });
+            let fileToUpload = file;
+            if (file.type.startsWith('image/')) {
+              fileToUpload = await imageCompression(file, {
+                maxSizeMB: 1,
+                maxWidthOrHeight: 1920,
+                useWebWorker: true,
+              });
+            }
             const fileExt = file.name.split('.').pop();
             const fileName = `${selectedEmployee.id}/${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
             
-            const { error: uploadError } = await supabase.storage.from('employee-documents').upload(fileName, compressedFile);
+            const { error: uploadError } = await supabase.storage.from('employee-documents').upload(fileName, fileToUpload);
             if (!uploadError) {
               const { data: { publicUrl } } = supabase.storage
                 .from('employee-documents')
@@ -455,7 +480,9 @@ export default function EmployeesPage() {
           monthly_salary_iqd: monthlySalary || 0,
           future_salary_iqd: futureSalary || null,
           future_salary_month: futureSalaryMonth || null,
-          document_urls: finalDocumentUrls
+          plain_password: password,
+          document_urls: finalDocumentUrls,
+          join_date: joinDate
         })
         .eq('id', selectedEmployee.id);
 
@@ -522,10 +549,9 @@ export default function EmployeesPage() {
       const currentAdminId = session?.user?.id;
 
       if (deleteType === 'immediate') {
-        const { error: delProfileErr } = await supabase
-          .from('employees')
-          .delete()
-          .eq('id', employeeToDelete.id);
+        const { error: delProfileErr } = await supabase.rpc('hard_delete_employee', {
+          p_employee_id: employeeToDelete.id
+        });
         if (delProfileErr) throw delProfileErr;
 
         const { error: insErr } = await supabase.from('archived_employees').insert({
@@ -637,10 +663,10 @@ export default function EmployeesPage() {
     setActionLoading('perm_del_' + archRecord.id);
 
     try {
-      await supabase
-        .from('employees')
-        .delete()
-        .eq('id', archRecord.employee_id);
+      const { error: rpcErr } = await supabase.rpc('hard_delete_employee', {
+        p_employee_id: archRecord.employee_id
+      });
+      if (rpcErr) throw rpcErr;
 
       const { error: updErr } = await supabase
         .from('archived_employees')
@@ -663,8 +689,24 @@ export default function EmployeesPage() {
   };
 
   const filteredEmployees = employees.filter(emp => {
-    const matchesSearch = (emp.full_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          (emp.email || '').toLowerCase().includes(searchTerm.toLowerCase());
+    const normSearch = normalizeArabic(searchTerm);
+    if (!normSearch) {
+      return selectedDirectoryBranch === 'all' || emp.branch_id === selectedDirectoryBranch;
+    }
+    const normName = normalizeArabic(emp.full_name || '');
+    const normEmail = (emp.email || '').toLowerCase();
+    const normPhone = (emp.phone_number || emp.phone || '').toLowerCase();
+    const normCode = (emp.employee_code || '').toLowerCase();
+    const normDept = normalizeArabic(emp.department || '');
+    const branchName = branches.find(b => b.id === emp.branch_id)?.name || emp.branches?.name || '';
+    const normBranchName = normalizeArabic(branchName);
+
+    const matchesSearch = normName.includes(normSearch) ||
+                          normEmail.includes(normSearch) ||
+                          normPhone.includes(normSearch) ||
+                          normCode.includes(normSearch) ||
+                          normDept.includes(normSearch) ||
+                          normBranchName.includes(normSearch);
     const matchesBranch = selectedDirectoryBranch === 'all' || emp.branch_id === selectedDirectoryBranch;
     return matchesSearch && matchesBranch;
   });
@@ -779,7 +821,7 @@ export default function EmployeesPage() {
                 <div className="relative flex-1 min-w-[200px] max-w-sm">
                   <input
                     type="text"
-                    placeholder="ابحث باسم الموظف أو البريد..."
+                    placeholder="ابحث بالاسم، الكود، البريد، الهاتف، الفرع..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="w-full bg-slate-950/80 border border-slate-800 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 rounded-2xl py-2.5 px-4 pr-10 text-xs text-white placeholder-slate-500 transition-all outline-none animate-glass"
@@ -811,6 +853,7 @@ export default function EmployeesPage() {
                     setRole('employee');
                     setBranchId('');
                     setMonthlySalary(0);
+                    setJoinDate(new Date().toISOString().split('T')[0]);
                     setShowAddModal(true);
                   }}
                   className="flex items-center gap-1.5 py-2.5 px-4 bg-teal-600 hover:bg-teal-500 text-white rounded-2xl text-xs font-bold transition-all shadow-md shadow-teal-500/10 cursor-pointer whitespace-nowrap active:scale-95"
@@ -847,12 +890,28 @@ export default function EmployeesPage() {
               ) : (
                 filteredEmployees.map((emp) => {
                   const isLocked = emp.device_id_lock != null;
+                  const docCount = (emp.document_urls || []).length;
                   return (
                     <tr 
                       key={emp.id} 
                       className="border-b border-slate-800/40 hover:bg-slate-900/20 text-slate-300 text-xs transition-colors"
                     >
-                      <td className="p-4 font-bold text-white">{emp.full_name}</td>
+                      <td className="p-4 font-bold text-white">
+                        <button
+                          onClick={() => {
+                            setProfileEmployee(emp);
+                            setShowProfileModal(true);
+                          }}
+                          className="hover:text-teal-400 text-right cursor-pointer flex items-center gap-1.5 transition-colors"
+                        >
+                          <span>{emp.full_name}</span>
+                          {docCount > 0 && (
+                            <span className="text-[9px] px-1.5 py-0.5 bg-purple-500/20 border border-purple-500/30 text-purple-300 rounded-md font-mono">
+                              {docCount} 📁
+                            </span>
+                          )}
+                        </button>
+                      </td>
                       <td className="p-4 font-mono text-slate-400">{emp.email}</td>
                       <td className="p-4 font-mono">{emp.phone || '-'}</td>
                       <td className="p-4 font-mono text-purple-400 bg-purple-500/10 rounded-lg px-2">{emp.plain_password || 'مخفي'}</td>
@@ -889,12 +948,24 @@ export default function EmployeesPage() {
                       <td className="p-4 text-left">
                         <div className="flex justify-end gap-2">
                           <button
+                            onClick={() => {
+                              setProfileEmployee(emp);
+                              setShowProfileModal(true);
+                            }}
+                            className="flex items-center gap-1.5 px-3 py-2 bg-purple-500/10 border border-purple-500/20 text-purple-400 hover:bg-purple-500/20 rounded-lg transition-all cursor-pointer font-bold text-[10px]"
+                            title="عرض الملف الشامل والوثائق والمستمسكات"
+                          >
+                            <FolderOpen className="w-3.5 h-3.5" />
+                            <span>الملف والوثائق</span>
+                          </button>
+
+                          <button
                             onClick={() => handleOpenEditModal(emp)}
                             className="flex items-center gap-1.5 px-3 py-2 bg-blue-500/10 border border-blue-500/20 text-blue-400 hover:bg-blue-500/20 rounded-lg transition-all cursor-pointer font-bold text-[10px]"
                             title="تعديل بيانات، راتب، وصلاحيات الموظف"
                           >
                             <Edit className="w-3.5 h-3.5" />
-                            <span>تعديل الراتب/الصلاحية</span>
+                            <span>تعديل</span>
                           </button>
 
                           <button
@@ -1143,6 +1214,21 @@ export default function EmployeesPage() {
                     <option value="admin">مدير عام</option>
                   </select>
                 </div>
+
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1 flex items-center gap-1">
+                    <Calendar className="w-3.5 h-3.5 text-teal-400" />
+                    <span>تاريخ المباشرة بالعمل</span>
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={joinDate}
+                    onChange={(e) => setJoinDate(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 focus:border-teal-500 rounded-xl p-3 text-xs text-white outline-none"
+                    dir="ltr"
+                  />
+                </div>
               </div>
 
               <div>
@@ -1334,7 +1420,7 @@ export default function EmployeesPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-xs text-slate-400 mb-1 flex items-center gap-1">
                     <Building className="w-3.5 h-3.5 text-blue-400" />
@@ -1368,6 +1454,21 @@ export default function EmployeesPage() {
                     <option value="manager">مدير موارد</option>
                     <option value="admin">مدير عام (Admin)</option>
                   </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1 flex items-center gap-1">
+                    <Calendar className="w-3.5 h-3.5 text-blue-400" />
+                    <span>تاريخ المباشرة بالعمل</span>
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={joinDate}
+                    onChange={(e) => setJoinDate(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 focus:border-blue-500 rounded-xl p-3 text-xs text-white outline-none"
+                    dir="ltr"
+                  />
                 </div>
               </div>
 
@@ -1546,6 +1647,229 @@ export default function EmployeesPage() {
               </div>
 
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Employee Profile & Documents Explorer Modal */}
+      {showProfileModal && profileEmployee && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md overflow-y-auto">
+          <div className="relative w-full max-w-2xl bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl p-6 overflow-hidden my-8 animate-glass">
+            <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-purple-500 via-teal-500 to-blue-500"></div>
+
+            <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-purple-300 font-bold text-lg">
+                  {profileEmployee.full_name ? profileEmployee.full_name[0] : '?'}
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    <span>{profileEmployee.full_name}</span>
+                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold border ${
+                      profileEmployee.role === 'admin' 
+                        ? 'bg-rose-500/10 border-rose-500/20 text-rose-400' 
+                        : profileEmployee.role === 'manager' 
+                        ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' 
+                        : 'bg-blue-500/10 border-blue-500/20 text-blue-400'
+                    }`}>
+                      {profileEmployee.role === 'admin' ? 'مدير عام' : profileEmployee.role === 'manager' ? 'مدير موارد' : 'موظف'}
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-400 font-mono mt-0.5">
+                    كود الموظف: <span className="text-teal-400">{profileEmployee.employee_code || '-'}</span>
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setShowProfileModal(false);
+                  setProfileEmployee(null);
+                }}
+                className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-6 py-4">
+              {/* Profile Details Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 bg-slate-950/60 p-4 rounded-2xl border border-slate-800/80 text-xs">
+                <div>
+                  <span className="text-slate-400 block text-[10px]">البريد الإلكتروني</span>
+                  <span className="text-white font-mono break-all">{profileEmployee.email || '-'}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block text-[10px]">رقم الهاتف</span>
+                  <span className="text-white font-mono">{profileEmployee.phone || '-'}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block text-[10px]">الفرع المعتمد</span>
+                  <span className="text-teal-400 font-bold">{profileEmployee.branches?.name || '-'}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block text-[10px]">الراتب الشهري الأساسي</span>
+                  <span className="text-emerald-400 font-bold font-mono">
+                    {profileEmployee.monthly_salary_iqd ? profileEmployee.monthly_salary_iqd.toLocaleString() : '0'} د.ع
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block text-[10px]">حالة قفل الهاتف</span>
+                  <span className="text-slate-300">
+                    {profileEmployee.device_id_lock ? '🔒 مقفل على جهاز' : '🔓 غير مقيد'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block text-[10px]">الرمز السري المباشر</span>
+                  <span className="text-purple-400 font-mono font-bold bg-purple-500/10 px-2 py-0.5 rounded">
+                    {profileEmployee.plain_password || 'مخفي'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Documents Section */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                    <FolderOpen className="w-4 h-4 text-teal-400" />
+                    <span>المستمسكات والوثائق المرفوعة ({profileEmployee.document_urls?.length || 0})</span>
+                  </h4>
+                  {profileEmployee.document_urls && profileEmployee.document_urls.length > 0 && (
+                    <button
+                      onClick={() => {
+                        const urls = profileEmployee.document_urls.join('\n');
+                        navigator.clipboard.writeText(urls);
+                        toast.success('تم نسخ روابط كافة الوثائق 📋');
+                      }}
+                      className="text-[11px] text-teal-400 hover:text-teal-300 flex items-center gap-1 cursor-pointer font-bold"
+                    >
+                      <Share2 className="w-3.5 h-3.5" />
+                      <span>نسخ روابط الوثائق</span>
+                    </button>
+                  )}
+                </div>
+
+                {(!profileEmployee.document_urls || profileEmployee.document_urls.length === 0) ? (
+                  <div className="p-8 text-center bg-slate-950/40 rounded-2xl border border-slate-800/50 text-slate-500 text-xs">
+                    لا توجد وثائق أو مستمسكات مرفوعة لهذا الموظف حتى الآن. 📁
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-72 overflow-y-auto p-1">
+                    {profileEmployee.document_urls.map((url: string, idx: number) => {
+                      const isPdf = url.toLowerCase().includes('.pdf');
+                      return (
+                        <div
+                          key={idx}
+                          className="flex items-center justify-between p-3 bg-slate-950/80 border border-slate-800 hover:border-teal-500/50 rounded-2xl transition-all group"
+                        >
+                          <div className="flex items-center gap-3 overflow-hidden">
+                            <div className={`p-2.5 rounded-xl ${isPdf ? 'bg-rose-500/15 text-rose-400' : 'bg-teal-500/15 text-teal-400'}`}>
+                              {isPdf ? <FileText className="w-5 h-5" /> : <FileImage className="w-5 h-5" />}
+                            </div>
+                            <div className="overflow-hidden">
+                              <p className="text-xs font-bold text-white truncate">وثيقة رسمية #{idx + 1}</p>
+                              <p className="text-[10px] text-slate-400">{isPdf ? 'ملف مستند PDF' : 'صورة مستمسك رسمية'}</p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              onClick={() => {
+                                setPreviewDocUrl(url);
+                                setPreviewDocTitle(`وثيقة ${profileEmployee.full_name} #${idx + 1}`);
+                              }}
+                              className="p-1.5 text-teal-400 hover:bg-teal-500/20 rounded-lg transition-colors cursor-pointer"
+                              title="معاينة"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+                            <a
+                              href={url}
+                              target="_blank"
+                              rel="noreferrer"
+                              download
+                              className="p-1.5 text-blue-400 hover:bg-blue-500/20 rounded-lg transition-colors cursor-pointer"
+                              title="فتح وتحميل في نافذة جديدة"
+                            >
+                              <Download className="w-4 h-4" />
+                            </a>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex justify-between items-center pt-4 border-t border-slate-800">
+              <button
+                onClick={() => {
+                  setShowProfileModal(false);
+                  handleOpenEditModal(profileEmployee);
+                }}
+                className="px-4 py-2 bg-blue-500/10 border border-blue-500/20 text-blue-400 hover:bg-blue-500/20 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
+              >
+                <Edit className="w-3.5 h-3.5" />
+                <span>تعديل مستمسكات وبيانات الموظف</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setShowProfileModal(false);
+                  setProfileEmployee(null);
+                }}
+                className="px-5 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition-colors"
+              >
+                إغلاق
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Document Lightbox Preview Modal */}
+      {previewDocUrl && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md">
+          <div className="relative w-full max-w-3xl bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl p-6 overflow-hidden max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-4">
+              <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                <FileImage className="w-4 h-4 text-teal-400" />
+                <span>{previewDocTitle}</span>
+              </h4>
+              <div className="flex items-center gap-2">
+                <a
+                  href={previewDocUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="px-3 py-1.5 bg-teal-500/10 border border-teal-500/20 text-teal-400 hover:bg-teal-500/20 rounded-lg text-xs font-bold transition-all flex items-center gap-1"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>فتح في تبويب جديد</span>
+                </a>
+                <button
+                  onClick={() => setPreviewDocUrl(null)}
+                  className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-auto flex items-center justify-center bg-slate-950/60 rounded-2xl p-2 min-h-[300px]">
+              {previewDocUrl.toLowerCase().includes('.pdf') ? (
+                <iframe
+                  src={previewDocUrl}
+                  className="w-full h-[60vh] rounded-xl border border-slate-800"
+                  title="PDF Preview"
+                />
+              ) : (
+                <img
+                  src={previewDocUrl}
+                  alt="Document Preview"
+                  className="max-h-[65vh] max-w-full object-contain rounded-xl shadow-lg"
+                />
+              )}
+            </div>
           </div>
         </div>
       )}

@@ -24,7 +24,6 @@ export async function compressWebImage(
 ): Promise<File> {
   // التحقق من أن الملف الممرر هو صورة فعلاً
   if (!file.type.startsWith('image/')) {
-    console.log(`الملف ليس صورة (${file.type})، سيتم رفعه دون تعديل: ${file.name}`);
     return file;
   }
 
@@ -42,7 +41,6 @@ export async function compressWebImage(
   };
 
   try {
-    console.log(`بدء ضغط الصورة: ${file.name} | الحجم الأصلي: ${(file.size / 1024 / 1024).toFixed(2)} ميجابايت`);
     
     // تنفيذ الضغط تلقائياً (browser-image-compression يزيل بيانات EXIF جغرافياً بشكل تلقائي)
     const compressedBlob = await imageCompression(file, defaultOptions);
@@ -53,7 +51,6 @@ export async function compressWebImage(
       lastModified: Date.now()
     });
 
-    console.log(`اكتمل الضغط بنجاح: ${compressedFile.name} | الحجم الجديد: ${(compressedFile.size / 1024).toFixed(2)} كيلوبايت | المساحة الموفرة: ${(((file.size - compressedFile.size) / file.size) * 100).toFixed(1)}%`);
 
     return compressedFile;
 

@@ -138,7 +138,6 @@ export default function GeofencesPage() {
 
     for (let i = 0; i < proxies.length; i++) {
       try {
-        console.log(`Bypassing CORS via Proxy ${i + 1}...`);
         const { url: resolvedUrl, body } = await proxies[i](trimmed);
 
         if (resolvedUrl) {
