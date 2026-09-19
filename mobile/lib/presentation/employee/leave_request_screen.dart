@@ -99,6 +99,7 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
           'sick_used': 0,
         };
         await SupabaseService.client.from('leave_balances').insert(defaultBalance);
+        if (!mounted) return;
         setState(() {
           _balances = defaultBalance;
         });
