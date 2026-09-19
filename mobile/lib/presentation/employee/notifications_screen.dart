@@ -1,12 +1,14 @@
 // =========================================================================
-// نظام HR Pro v6.0 - شاشة إشعارات الموظف المفصلة (Employee Notifications Screen)
+// HR Pro v6.0 - شاشة إشعارات الموظف (Notifications)
+// إعادة تصميم عصرية: ألوان الثيم بالكامل، skeleton loading، empty state أنيق.
+// كل منطق التحميل ووضع علامة "مقروء" محفوظ كما هو.
 // =========================================================================
 
 import 'package:flutter/material.dart';
+
 import '../../core/services/supabase_service.dart';
 import '../../core/theme/app_theme.dart';
-import '../shared/widgets/glass_background.dart';
-import '../shared/widgets/glass_container.dart';
+import '../shared/widgets/skeleton_loader.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -25,8 +27,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     _loadNotifications();
   }
 
-  // جلب الإشعارات وتحديث حالتها لتصبح مقروءة تلقائياً للتخفيف عن الموظف
   Future<void> _loadNotifications() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
     final user = SupabaseService.currentUser;
     if (user == null) return;
@@ -38,13 +40,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           .eq('employee_id', user.id)
           .order('created_at', ascending: false);
 
-      if (mounted) {
-        setState(() {
-          _notifications = List<Map<String, dynamic>>.from(data);
-        });
-      }
+      if (!mounted) return;
+      setState(() {
+        _notifications = List<Map<String, dynamic>>.from(data);
+      });
 
-      // 2. تحديث جميع الإشعارات غير المقروءة لتصبح مقروءة الآن
       final unreadIds = _notifications
           .where((n) => !(n['is_read'] ?? false))
           .map((n) => n['id'] as String)
@@ -53,207 +53,214 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       if (unreadIds.isNotEmpty) {
         await SupabaseService.client
             .from('notifications')
-            .update({'is_read': true})
-            .inFilter('id', unreadIds);
+            .update({'is_read': true}).inFilter('id', unreadIds);
       }
     } catch (e) {
-      debugPrint('خطأ في تحميل إشعارات الموظف: $e');
+      debugPrint('خطأ في تحميل الإشعارات: $e');
     } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return GlassBackground(
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-            onPressed: () => Navigator.pop(context),
-          ),
-          centerTitle: true,
-          title: const Text(
-            'لوحة الإشعارات والتنبيهات',
-            style: TextStyle(
-              fontFamily: 'Cairo',
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
-              color: Colors.white,
-              shadows: [
-                Shadow(
-                  color: AppTheme.neonCyan,
-                  blurRadius: 10,
-                ),
-              ],
-            ),
-          ),
-        ),
-        body: _isLoading
-            ? const Center(
-                child: CircularProgressIndicator(
-                  color: AppTheme.neonCyan,
-                ),
-              )
-            : _notifications.isEmpty
-                ? Center(
-                    child: GlassContainer(
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-                      margin: const EdgeInsets.all(24),
-                      borderRadius: 24,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.notifications_off_rounded,
-                            size: 48,
-                            color: Colors.white.withValues(alpha: 0.4),
-                          ),
-                          const SizedBox(height: 16),
-                          const Text(
-                            'صندوق الإشعارات فارغ حالياً ✨',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white70,
-                              fontFamily: 'Cairo',
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'عند تلقي أي إشعار جديد من الإدارة سيظهر هنا فوراً.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.white.withValues(alpha: 0.5),
-                              fontFamily: 'Cairo',
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  )
-                : RefreshIndicator(
-                    onRefresh: _loadNotifications,
-                    color: AppTheme.neonCyan,
-                    backgroundColor: AppTheme.darkSurface,
-                    child: ListView.separated(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                      itemCount: _notifications.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 12),
-                      itemBuilder: (context, index) {
-                        final n = _notifications[index];
-                        final type = n['type'] ?? 'system';
-                        final title = n['title'] ?? 'تنبيه النظام';
-                        final body = n['body'] ?? '';
-                        final isRead = n['is_read'] ?? false;
-                        final typeColor = _getTypeColor(type);
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final t = theme.textTheme;
+    final cs = theme.colorScheme;
 
-                        return GlassContainer(
-                          borderRadius: 18,
-                          opacity: !isRead ? 0.14 : 0.06,
-                          borderColor: !isRead 
-                              ? typeColor.withValues(alpha: 0.7) 
-                              : Colors.white.withValues(alpha: 0.08),
-                          boxShadow: !isRead
-                              ? [
-                                  BoxShadow(
-                                    color: typeColor.withValues(alpha: 0.12),
-                                    blurRadius: 12,
-                                    offset: const Offset(0, 4),
-                                  )
-                                ]
-                              : null,
-                          padding: const EdgeInsets.all(16),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // أيقونة نوع الإشعار المتوهجة
-                              Container(
-                                padding: const EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  color: typeColor.withValues(alpha: 0.15),
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: typeColor.withValues(alpha: 0.35),
-                                    width: 1.5,
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: typeColor.withValues(alpha: 0.2),
-                                      blurRadius: 8,
-                                    ),
-                                  ],
-                                ),
-                                child: Icon(
-                                  _getTypeIcon(type),
-                                  color: typeColor,
-                                  size: 20,
-                                ),
-                              ),
-                              const SizedBox(width: 14),
-
-                              // محتوى الإشعار
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Expanded(
-                                          child: Text(
-                                            title,
-                                            style: TextStyle(
-                                              fontFamily: 'Cairo',
-                                              fontWeight: !isRead ? FontWeight.w800 : FontWeight.bold,
-                                              fontSize: 13,
-                                              color: Colors.white,
-                                            ),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Text(
-                                          _formatNotificationDate(n['created_at']),
-                                          style: TextStyle(
-                                            fontFamily: 'Cairo',
-                                            fontSize: 9, 
-                                            color: Colors.white.withValues(alpha: 0.4),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 6),
-                                    Text(
-                                      body,
-                                      style: TextStyle(
-                                        fontFamily: 'Cairo',
-                                        fontSize: 11,
-                                        color: Colors.white.withValues(alpha: 0.8),
-                                        height: 1.5,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-                  ),
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('الإشعارات'),
+        centerTitle: true,
+      ),
+      body: RefreshIndicator(
+        onRefresh: _loadNotifications,
+        color: cs.primary,
+        child: _buildBody(isDark, t, cs),
       ),
     );
   }
 
-  // تصنيف الأيقونات طبقاً لنوع الإشعار
-  IconData _getTypeIcon(String type) {
+  Widget _buildBody(bool isDark, TextTheme t, ColorScheme cs) {
+    if (_isLoading) {
+      return Padding(
+        padding: const EdgeInsets.all(AppTheme.space4),
+        child: SkeletonList(itemCount: 6, itemHeight: 84),
+      );
+    }
+
+    if (_notifications.isEmpty) {
+      return SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: Padding(
+          padding: const EdgeInsets.all(AppTheme.space6),
+          child: Center(
+            child: Container(
+              padding: const EdgeInsets.all(AppTheme.space8),
+              decoration: BoxDecoration(
+                color: cs.surface,
+                borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+                border: Border.all(color: cs.outline),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.notifications_off_rounded,
+                    size: 56,
+                    color: cs.outline,
+                  ),
+                  const SizedBox(height: AppTheme.space4),
+                  Text(
+                    'لا توجد إشعارات حالياً',
+                    style: t.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: AppTheme.space2),
+                  Text(
+                    'ستظهر التنبيهات والإشعارات الجديدة هنا فور وصولها.',
+                    textAlign: TextAlign.center,
+                    style: t.bodySmall?.copyWith(
+                      color: isDark
+                          ? AppTheme.darkTextMuted
+                          : AppTheme.lightTextMuted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return ListView.separated(
+      padding: const EdgeInsets.all(AppTheme.space4),
+      itemCount: _notifications.length,
+      separatorBuilder: (_, __) => const SizedBox(height: AppTheme.space3),
+      itemBuilder: (context, index) {
+        final n = _notifications[index];
+        return _NotificationCard(
+          type: n['type']?.toString() ?? 'system',
+          title: n['title']?.toString() ?? 'تنبيه النظام',
+          body: n['body']?.toString() ?? '',
+          isRead: n['is_read'] as bool? ?? false,
+          createdAt: n['created_at']?.toString(),
+        );
+      },
+    );
+  }
+}
+
+class _NotificationCard extends StatelessWidget {
+  final String type;
+  final String title;
+  final String body;
+  final bool isRead;
+  final String? createdAt;
+
+  const _NotificationCard({
+    required this.type,
+    required this.title,
+    required this.body,
+    required this.isRead,
+    required this.createdAt,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final cs = theme.colorScheme;
+    final t = theme.textTheme;
+    final accent = _typeColor(type);
+
+    return Container(
+      padding: const EdgeInsets.all(AppTheme.space4),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+        border: Border.all(
+          color: isRead
+              ? (isDark
+                  ? AppTheme.darkBorder.withValues(alpha: 0.5)
+                  : AppTheme.lightBorder)
+              : accent.withValues(alpha: 0.4),
+          width: isRead ? 1 : 1.5,
+        ),
+        boxShadow: isRead ? null : AppTheme.shadowSm(isDark),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(AppTheme.space3),
+            decoration: BoxDecoration(
+              color: accent.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+            ),
+            child: Icon(_typeIcon(type), color: accent, size: 22),
+          ),
+          const SizedBox(width: AppTheme.space3),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: t.titleMedium?.copyWith(
+                          fontWeight:
+                              isRead ? FontWeight.w600 : FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: AppTheme.space2),
+                    Text(
+                      _formatDate(createdAt),
+                      style: t.bodySmall?.copyWith(
+                        color: isDark
+                            ? AppTheme.darkTextMuted
+                            : AppTheme.lightTextMuted,
+                        fontSize: 11,
+                      ),
+                    ),
+                    if (!isRead) ...[
+                      const SizedBox(width: AppTheme.space2),
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: accent,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: AppTheme.space2),
+                Text(
+                  body,
+                  style: t.bodyMedium?.copyWith(
+                    color: isDark
+                        ? AppTheme.darkTextSecondary
+                        : AppTheme.lightTextSecondary,
+                    height: 1.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  IconData _typeIcon(String type) {
     switch (type) {
       case 'leave':
         return Icons.calendar_month_rounded;
@@ -272,32 +279,41 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
   }
 
-  // تصنيف ألوان الأيقونات بما يتماشى مع لوحة النيون
-  Color _getTypeColor(String type) {
+  Color _typeColor(String type) {
     switch (type) {
       case 'leave':
-        return AppTheme.neonCyan;
+        return AppTheme.accentIndigo;
       case 'loan':
-        return AppTheme.cyberPurple;
+        return AppTheme.warningOrange;
       case 'attendance':
         return AppTheme.successGreen;
+      case 'salary':
+        return AppTheme.primaryTeal;
       case 'device':
         return AppTheme.dangerRed;
       case 'ota':
-        return AppTheme.warningOrange;
+        return AppTheme.cyberPurple;
       default:
-        return AppTheme.neonPink;
+        return AppTheme.neonCyan;
     }
   }
 
-  String _formatNotificationDate(String? dateStr) {
+  String _formatDate(String? dateStr) {
     if (dateStr == null) return '';
     try {
       final date = DateTime.parse(dateStr).toLocal();
       final now = DateTime.now();
-      if (date.year == now.year && date.month == now.month && date.day == now.day) {
+      final diff = now.difference(date);
+      if (diff.inMinutes < 1) return 'الآن';
+      if (diff.inMinutes < 60) return 'قبل ${diff.inMinutes} د';
+      if (diff.inHours < 24) return 'قبل ${diff.inHours} س';
+      if (date.year == now.year &&
+          date.month == now.month &&
+          date.day == now.day) {
         final minute = date.minute.toString().padLeft(2, '0');
-        final hour = date.hour > 12 ? date.hour - 12 : (date.hour == 0 ? 12 : date.hour);
+        final hour = date.hour > 12
+            ? date.hour - 12
+            : (date.hour == 0 ? 12 : date.hour);
         final amPm = date.hour >= 12 ? 'PM' : 'AM';
         return '$hour:$minute $amPm';
       }
