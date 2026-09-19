@@ -68,7 +68,7 @@ export default function TrashPage() {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
-  const handleRestoreFile = async (fileRow: any) => {
+  const handleRestoreFile = async (fileRow: Record<string, any>) => {
     setActionLoading(fileRow.id);
     try {
       const { error } = await supabase
@@ -97,7 +97,7 @@ export default function TrashPage() {
     }
   };
 
-  const handlePermanentDelete = async (fileRow: any) => {
+  const handlePermanentDelete = async (fileRow: Record<string, any>) => {
     if (!confirm('تحذير: هل أنت متأكد من رغبتك في حذف هذا الملف وإتلافه بشكل نهائي من الخادم؟ لا يمكن التراجع عن هذا الإجراء.')) return;
     
     setActionLoading(fileRow.id + '_delete');

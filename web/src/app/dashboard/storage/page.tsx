@@ -129,7 +129,7 @@ export default function StoragePage() {
       // Buckets
       let avatars = 0, documents = 0, pledges = 0, others = 0;
       if (storageResult.data) {
-        storageResult.data.forEach((stat: any) => {
+        storageResult.data.forEach((stat: Record<string, any>) => {
           const bucket = stat.bucket_name;
           const size = Number(stat.total_size || 0);
           if (bucket === 'avatars') avatars += size;

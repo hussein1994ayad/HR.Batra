@@ -386,7 +386,7 @@ export default function EmployeesPage() {
     }
   };
 
-  const handleOpenEditModal = (emp: any) => {
+  const handleOpenEditModal = (emp: Record<string, any>) => {
     setSelectedEmployee(emp);
     setFullName(emp.full_name);
     setEmail(emp.email);
@@ -532,7 +532,7 @@ export default function EmployeesPage() {
     }
   };
 
-  const handleOpenDeleteModal = (emp: any) => {
+  const handleOpenDeleteModal = (emp: Record<string, any>) => {
     setEmployeeToDelete(emp);
     setDeleteReason('');
     setDeleteType('archive');
@@ -625,7 +625,7 @@ export default function EmployeesPage() {
     }
   };
 
-  const handleRestoreArchivedEmployee = async (archRecord: any) => {
+  const handleRestoreArchivedEmployee = async (archRecord: Record<string, any>) => {
     if (!confirm(`هل أنت متأكد من رغبتك في استعادة الموظف (${archRecord.full_name}) وتنشيط حسابه الجغرافي للدوام مجدداً؟`)) return;
     setActionLoading('restore_' + archRecord.id);
 
@@ -658,7 +658,7 @@ export default function EmployeesPage() {
     }
   };
 
-  const handlePermanentDeleteArchived = async (archRecord: any) => {
+  const handlePermanentDeleteArchived = async (archRecord: Record<string, any>) => {
     if (!confirm(`تحذير نهائي: هل تريد حقاً حذف الموظف (${archRecord.full_name}) وإتلاف حسابه وسجلاته وبصماته من قاعدة البيانات بشكل كامل ونهائي؟ لا يمكن استعادة البيانات بعد ذلك.`)) return;
     setActionLoading('perm_del_' + archRecord.id);
 

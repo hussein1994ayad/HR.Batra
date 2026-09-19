@@ -148,7 +148,7 @@ export default function TrackingPage() {
 
         let filteredAtt = resAtt.data || [];
         if (selectedBranch !== 'all') {
-          filteredAtt = filteredAtt.filter((log: any) => log.employees?.branch_id === selectedBranch);
+          filteredAtt = filteredAtt.filter((log: Record<string, any>) => log.employees?.branch_id === selectedBranch);
         }
         setAttendanceLogs(filteredAtt);
         if (resMock.data) setSecurityLogs(resMock.data);
@@ -179,7 +179,7 @@ export default function TrackingPage() {
       if (error) throw error;
 
       if (data) {
-        const rawCoords: [number, number][] = data.map((item: any) => [Number(item.latitude), Number(item.longitude)]);
+        const rawCoords: [number, number][] = data.map((item: Record<string, any>) => [Number(item.latitude), Number(item.longitude)]);
         
         // 1. Filter out contiguous duplicates (stationary points) to prevent redundant paths
         const filteredCoords: [number, number][] = [];
@@ -291,7 +291,7 @@ export default function TrackingPage() {
           table: 'location_tracking',
           filter: `employee_id=eq.${selectedEmployeeForTrail}`,
         },
-        (payload: any) => {
+        (payload: Record<string, any>) => {
           const newLat = Number(payload.new.latitude);
           const newLng = Number(payload.new.longitude);
           if (newLat && newLng) {

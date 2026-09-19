@@ -75,10 +75,10 @@ export default function DashboardPage() {
         const parsed = JSON.parse(cachedData);
         if (parsed) {
           if (parsed.stats) setStats(parsed.stats);
-          setSecurityLogs((parsed.securityLogs || []).filter((l: any) => l && l.id));
-          setBranches((parsed.branches || []).filter((b: any) => b && b.id));
-          setDepartments((parsed.departments || []).filter((d: any) => d && d.id));
-          setEmployeesList((parsed.employeesList || []).filter((e: any) => e && e.id));
+          setSecurityLogs((parsed.securityLogs || []).filter((l: Record<string, any>) => l && l.id));
+          setBranches((parsed.branches || []).filter((b: Record<string, any>) => b && b.id));
+          setDepartments((parsed.departments || []).filter((d: Record<string, any>) => d && d.id));
+          setEmployeesList((parsed.employeesList || []).filter((e: Record<string, any>) => e && e.id));
           setLoading(false); // Instant render!
         }
       } catch (e) {
@@ -156,10 +156,10 @@ export default function DashboardPage() {
             present++;
             presentEmpIds.add(r.employee_id);
           } else if (r.status === 'absent') {
-            const emp = empList?.find((e: any) => e.id === r.employee_id);
-            const empSched = workSchedulesData?.find((s: any) => s.employee_id === r.employee_id) || 
-                             workSchedulesData?.find((s: any) => s.department_id === emp?.department_id && !s.employee_id) ||
-                             workSchedulesData?.find((s: any) => s.branch_id === emp?.branch_id && !s.employee_id && !s.department_id);
+            const emp = empList?.find((e: Record<string, any>) => e.id === r.employee_id);
+            const empSched = workSchedulesData?.find((s: Record<string, any>) => s.employee_id === r.employee_id) || 
+                             workSchedulesData?.find((s: Record<string, any>) => s.department_id === emp?.department_id && !s.employee_id) ||
+                             workSchedulesData?.find((s: Record<string, any>) => s.branch_id === emp?.branch_id && !s.employee_id && !s.department_id);
             const workDays = empSched ? empSched.work_days : [6, 0, 1, 2, 3, 4];
             const isWorkingDay = workDays.includes(weekday);
 
@@ -182,15 +182,15 @@ export default function DashboardPage() {
 
       // Calculate virtual absentees
       if (empList) {
-        empList.forEach((emp: any) => {
+        empList.forEach((emp: Record<string, any>) => {
           if (presentEmpIds.has(emp.id)) return; // Already checked in or explicitly absent
           
           // Check if on leave
-          const isOnLeave = leavesData?.some((l: any) => l.employee_id === emp.id && isDateWithinRange(todayStr, l.start_date, l.end_date));
+          const isOnLeave = leavesData?.some((l: Record<string, any>) => l.employee_id === emp.id && isDateWithinRange(todayStr, l.start_date, l.end_date));
           if (!isOnLeave) {
-            const empSched = workSchedulesData?.find((s: any) => s.employee_id === emp.id) || 
-                             workSchedulesData?.find((s: any) => s.department_id === emp.department_id && !s.employee_id) ||
-                             workSchedulesData?.find((s: any) => s.branch_id === emp.branch_id && !s.employee_id && !s.department_id);
+            const empSched = workSchedulesData?.find((s: Record<string, any>) => s.employee_id === emp.id) || 
+                             workSchedulesData?.find((s: Record<string, any>) => s.department_id === emp.department_id && !s.employee_id) ||
+                             workSchedulesData?.find((s: Record<string, any>) => s.branch_id === emp.branch_id && !s.employee_id && !s.department_id);
             const workDays = empSched ? empSched.work_days : [6, 0, 1, 2, 3, 4];
             const isWorkingDay = workDays.includes(weekday);
 
@@ -211,7 +211,7 @@ export default function DashboardPage() {
 
       let actualStorageBytes = 0;
       if (statsData) {
-        statsData.forEach((stat: any) => {
+        statsData.forEach((stat: Record<string, any>) => {
           actualStorageBytes += Number(stat.total_size || 0);
         });
       }

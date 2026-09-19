@@ -439,7 +439,7 @@ export default function SettingsPage() {
     return days[dayNum] || '';
   };
 
-  const getScheduleTargetName = (sched: any) => {
+  const getScheduleTargetName = (sched: Record<string, any>) => {
     if (sched.employee_id) {
       const emp = employeesList.find(e => e.id === sched.employee_id);
       return `👤 موظف: ${emp ? emp.full_name : 'غير معروف'}`;

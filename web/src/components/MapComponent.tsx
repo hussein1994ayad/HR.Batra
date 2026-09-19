@@ -107,7 +107,7 @@ export default function MapComponent({
     }).addTo(mapInstance);
 
     if (onMapClick) {
-      mapInstance.on('click', (e: any) => {
+      mapInstance.on('click', (e: Record<string, any>) => {
         onMapClick(e.latlng.lat, e.latlng.lng);
       });
     }

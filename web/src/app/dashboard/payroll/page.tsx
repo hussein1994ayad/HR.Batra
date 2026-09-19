@@ -370,7 +370,7 @@ export default function PayrollPage() {
       if (resScheds.data) setWorkSchedules(resScheds.data);
       if (resSlips.data) setExistingSlips(resSlips.data);
       if (resArchived.data) {
-        setArchivedMonths(resArchived.data.map((r: any) => r.work_month));
+        setArchivedMonths(resArchived.data.map((r: Record<string, any>) => r.work_month));
       }
 
     } catch (err) {
@@ -414,7 +414,7 @@ export default function PayrollPage() {
     }
   };
 
-  const handleGenerateSlip = async (empData: any) => {
+  const handleGenerateSlip = async (empData: Record<string, any>) => {
     setActionLoading(`slip_${empData.id}`);
     try {
       // Prevent double generation
@@ -728,7 +728,7 @@ export default function PayrollPage() {
     }
   };
 
-  const handleRevertSlip = async (empData: any) => {
+  const handleRevertSlip = async (empData: Record<string, any>) => {
     if (archivedMonths.includes(selectedMonth)) {
       toast.error('هذا الشهر مؤرشف مالياً ومقفل تماماً 🔒');
       return;
@@ -754,7 +754,7 @@ export default function PayrollPage() {
       // 3. Mark loan installments back to unpaid
       const { data: userLoans } = await supabase.from('loans').select('id').eq('employee_id', empData.id);
       if (userLoans && userLoans.length > 0) {
-        const loanIds = userLoans.map((l: any) => l.id);
+        const loanIds = userLoans.map((l: Record<string, any>) => l.id);
         await supabase.from('loan_installments')
           .update({ is_paid: false, paid_at: null })
           .in('loan_id', loanIds)

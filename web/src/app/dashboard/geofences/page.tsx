@@ -366,7 +366,7 @@ export default function GeofencesPage() {
     }
   };
 
-  const handleOpenEditModal = (b: any) => {
+  const handleOpenEditModal = (b: Record<string, any>) => {
     setEditBranchId(b.id);
     setEditBranchName(b.name);
     setEditLatVal(b.latitude);

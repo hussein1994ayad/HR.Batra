@@ -394,7 +394,7 @@ export default function LoansPage() {
       toast.success('تم حذف القسط المسدد نهائياً من قاعدة البيانات! 🗑️');
       
       if (selectedLoanForInstallments) {
-        const updatedInsts = (selectedLoanForInstallments.loan_installments || []).filter((i: any) => i.id !== installmentId);
+        const updatedInsts = (selectedLoanForInstallments.loan_installments || []).filter((i: Record<string, any>) => i.id !== installmentId);
         setSelectedLoanForInstallments({
           ...selectedLoanForInstallments,
           loan_installments: updatedInsts
@@ -467,7 +467,7 @@ export default function LoansPage() {
     }
   };
 
-  const handleDeleteCompletedLoan = async (loan: any) => {
+  const handleDeleteCompletedLoan = async (loan: Record<string, any>) => {
     if (Number(loan.remaining_amount) > 0) {
       toast.error('لا يمكن حذف سلفة غير مكتملة السداد.');
       return;
@@ -668,7 +668,7 @@ export default function LoansPage() {
                   </tr>
                 ) : (
                   displayedLoans.map((loan) => {
-                    const unpaid = (loan.loan_installments || []).filter((i: any) => !i.is_paid).sort((a: any, b: any) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
+                    const unpaid = (loan.loan_installments || []).filter((i: Record<string, any>) => !i.is_paid).sort((a: any, b: any) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
                     const nextInstallment = unpaid.length > 0 ? unpaid[0] : null;
                     
                     return (
