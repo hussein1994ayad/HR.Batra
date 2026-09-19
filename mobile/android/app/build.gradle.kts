@@ -22,11 +22,9 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.batra.hrpro.hr_pro"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = 26
+        // ⬇️  خفّضنا minSdk من 26 إلى 24 لدعم Android 7 (Nougat) — تغطية سوقية أكبر.
+        minSdk = 24
         targetSdk = 35
         versionCode = flutter.versionCode
         versionName = flutter.versionName
@@ -34,9 +32,18 @@ android {
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
+            // TODO(android-release): استبدل بمفاتيح release keystore حقيقية
+            // عند الحصول على حساب Google Play Console:
+            //   1. أنشئ keystore: keytool -genkey -v -keystore batra.jks -alias batra ...
+            //   2. أضف key.properties (خارج git) بالمفاتيح
+            //   3. استبدل السطر أدناه بـ signingConfigs.getByName("release")
             signingConfig = signingConfigs.getByName("debug")
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
 }
