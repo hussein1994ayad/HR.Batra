@@ -23,7 +23,7 @@ class ImageCompressionService {
     // إذا لم يكن الملف صورة (مثل PDF أو Excel)، يتم إرجاعه كما هو دون أي تغيير
     if (!isImage(filePath)) {
       if (kDebugMode) {
-        print("الملف ليس صورة، سيتم رفعه دون ضغط: ${p.basename(filePath)}");
+        debugPrint("الملف ليس صورة، سيتم رفعه دون ضغط: ${p.basename(filePath)}");
       }
       return file;
     }
@@ -31,7 +31,7 @@ class ImageCompressionService {
     try {
       final originalSize = await file.length();
       if (kDebugMode) {
-        print("حجم الصورة الأصلي: ${(originalSize / 1024).toStringAsFixed(2)} كيلوبايت");
+        debugPrint("حجم الصورة الأصلي: ${(originalSize / 1024).toStringAsFixed(2)} كيلوبايت");
       }
 
       // الحصول على مجلد التخزين المؤقت (Temporary Directory) لحفظ الصورة المضغوطة مؤقتاً
@@ -54,7 +54,7 @@ class ImageCompressionService {
 
       if (compressedXFile == null) {
         if (kDebugMode) {
-          print("فشل ضغط الصورة، سيتم استخدام الملف الأصلي كبديل.");
+          debugPrint("فشل ضغط الصورة، سيتم استخدام الملف الأصلي كبديل.");
         }
         return file;
       }
@@ -64,15 +64,15 @@ class ImageCompressionService {
       final spaceSaved = ((originalSize - compressedSize) / originalSize) * 100;
 
       if (kDebugMode) {
-        print("حجم الصورة بعد الضغط: ${(compressedSize / 1024).toStringAsFixed(2)} كيلوبايت");
-        print("المساحة الموفرة بالسيرفر: ${spaceSaved.toStringAsFixed(1)}%");
+        debugPrint("حجم الصورة بعد الضغط: ${(compressedSize / 1024).toStringAsFixed(2)} كيلوبايت");
+        debugPrint("المساحة الموفرة بالسيرفر: ${spaceSaved.toStringAsFixed(1)}%");
       }
 
       return compressedFile;
 
     } catch (e) {
       if (kDebugMode) {
-        print("حدث خطأ غير متوقع أثناء محاولة ضغط الصورة: $e");
+        debugPrint("حدث خطأ غير متوقع أثناء محاولة ضغط الصورة: $e");
       }
       return file; // إرجاع الصورة الأصلية كخطة بديلة (Fallback) في حال حدوث خطأ مفاجئ
     }

@@ -42,11 +42,11 @@ class FileUploadService {
             .remove([oldRemotePath]);
         
         if (kDebugMode) {
-          print("تم مسح الملف المستبدل القديم بنجاح من التخزين: $oldRemotePath");
+          debugPrint("تم مسح الملف المستبدل القديم بنجاح من التخزين: $oldRemotePath");
         }
       } catch (e) {
         if (kDebugMode) {
-          print("فشل مسح الملف المستبدل القديم تلقائياً: $e");
+          debugPrint("فشل مسح الملف المستبدل القديم تلقائياً: $e");
         }
       }
     }
@@ -71,7 +71,7 @@ class FileUploadService {
       await supabase.storage.from(bucketName).remove([filePath]);
       
       if (kDebugMode) {
-        print("تم حذف الملف نهائياً وفورياً من التخزين: $filePath");
+        debugPrint("تم حذف الملف نهائياً وفورياً من التخزين: $filePath");
       }
     } else {
       // نقل الملف لسلة المحذوفات (Deleted Files) لمدة 30 يوماً
@@ -93,7 +93,7 @@ class FileUploadService {
       });
 
       if (kDebugMode) {
-        print("تم نقل الملف لسلة المحذوفات مؤقتاً لمدة 30 يوماً: $filePath");
+        debugPrint("تم نقل الملف لسلة المحذوفات مؤقتاً لمدة 30 يوماً: $filePath");
       }
     }
   }

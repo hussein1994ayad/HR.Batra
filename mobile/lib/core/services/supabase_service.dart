@@ -21,12 +21,20 @@ class SupabaseService {
   }
 
   // مساعدات برمجية سريعة للجلسة الحالية
-  static User? get currentUser => client.auth.currentUser;
+  static User? get currentUser {
+    try {
+      return client.auth.currentUser;
+    } catch (_) {
+      return null;
+    }
+  }
   
   static bool get isAuthenticated => currentUser != null;
 
   // تسجيل الخروج التام
   static Future<void> signOut() async {
-    await client.auth.signOut();
+    try {
+      await client.auth.signOut();
+    } catch (_) {}
   }
 }

@@ -4,9 +4,15 @@
 
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:uuid/uuid.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:open_filex/open_filex.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:http/http.dart' as http;
 import '../../core/services/supabase_service.dart';
 import '../../core/services/image_compression_service.dart';
 import '../../core/theme/app_theme.dart';
@@ -32,20 +38,41 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
   }
 
   Future<void> _loadEmployees() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
+
+    final user = SupabaseService.currentUser;
+    if (user == null) {
+      if (mounted) Navigator.pop(context);
+      return;
+    }
+
     try {
+      final employeeRes = await SupabaseService.client
+          .from('employees')
+          .select('role')
+          .eq('id', user.id)
+          .maybeSingle();
+
+      if (employeeRes == null || (employeeRes['role'] != 'admin' && employeeRes['role'] != 'manager')) {
+        if (mounted) Navigator.pop(context);
+        return;
+      }
+
       final data = await SupabaseService.client
           .from('employees')
           .select('*, employee_devices(id, model)')
           .order('full_name');
           
-      setState(() {
-        _employees = List<Map<String, dynamic>>.from(data);
-      });
+      if (mounted) {
+        setState(() {
+          _employees = List<Map<String, dynamic>>.from(data);
+        });
+      }
     } catch (e) {
       debugPrint('Error loading employees: $e');
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -69,7 +96,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
     } catch (e) {
       debugPrint('Error toggling status: $e');
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -101,7 +128,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
     } catch (e) {
       debugPrint('Error unbinding device: $e');
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -152,7 +179,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
               decoration: BoxDecoration(
                 color: const Color(0xFF1A1F3A),
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-                border: Border.all(color: AppTheme.neonCyan.withOpacity(0.2)),
+                border: Border.all(color: AppTheme.neonCyan.withValues(alpha: 0.2)),
               ),
               child: isSaving 
                   ? const Center(child: CircularProgressIndicator(color: AppTheme.neonCyan))
@@ -174,7 +201,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                         Container(
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
-                            color: AppTheme.neonCyan.withOpacity(0.15),
+                            color: AppTheme.neonCyan.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: const Icon(Icons.person_add_rounded, color: AppTheme.neonCyan, size: 22),
@@ -253,9 +280,9 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                                 width: 60,
                                 height: 60,
                                 decoration: BoxDecoration(
-                                  border: Border.all(color: AppTheme.neonCyan.withOpacity(0.5), style: BorderStyle.solid),
+                                  border: Border.all(color: AppTheme.neonCyan.withValues(alpha: 0.5), style: BorderStyle.solid),
                                   borderRadius: BorderRadius.circular(12),
-                                  color: AppTheme.neonCyan.withOpacity(0.1),
+                                  color: AppTheme.neonCyan.withValues(alpha: 0.1),
                                 ),
                                 child: const Icon(Icons.add_a_photo_rounded, color: AppTheme.neonCyan),
                               ),
@@ -283,38 +310,36 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
 
                           setModalState(() => isSaving = true);
                           try {
-                            // استدعاء Edge Function لإنشاء الموظف
-                            final res = await SupabaseService.client.functions.invoke(
-                              'admin-create-user',
-                              body: {
-                                'email': emailController.text.trim(),
-                                'password': passwordController.text,
-                                'full_name': nameController.text.trim(),
-                                'employee_code': codeController.text.trim(),
-                                'role': role,
-                              },
-                            );
+                            final newEmpId = const Uuid().v4();
+                            List<String> uploadedDocs = [];
+                            if (_selectedDocuments.isNotEmpty) {
+                              uploadedDocs = await _uploadDocuments(_selectedDocuments, newEmpId);
+                            }
 
-                            if (res.status == 200) {
-                              if (_selectedDocuments.isNotEmpty) {
-                                try {
-                                  final empData = await SupabaseService.client.from('employees').select('id').eq('email', emailController.text.trim()).single();
-                                  final urls = await _uploadDocuments(_selectedDocuments, empData['id']);
-                                  await SupabaseService.client.from('employees').update({'document_urls': urls}).eq('id', empData['id']);
-                                } catch (e) {
-                                  debugPrint('Failed to upload documents: $e');
-                                }
-                              }
+                            final empCode = codeController.text.trim().isNotEmpty
+                                ? codeController.text.trim()
+                                : 'EMP-${DateTime.now().millisecondsSinceEpoch % 10000}';
 
-                              if (mounted) {
-                                Navigator.pop(context);
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('تم إنشاء الموظف بنجاح ✅', style: TextStyle(fontFamily: 'Cairo')), backgroundColor: AppTheme.successGreen),
-                                );
-                                _loadEmployees();
-                              }
-                            } else {
-                              throw Exception('فشل إنشاء المستخدم: ${res.data}');
+                            await SupabaseService.client.rpc('create_employee_secure', params: {
+                              'p_email': emailController.text.trim(),
+                              'p_password': passwordController.text,
+                              'p_full_name': nameController.text.trim(),
+                              'p_phone': '',
+                              'p_role': role,
+                              'p_branch_id': null,
+                              'p_monthly_salary_iqd': 0,
+                              'p_document_urls': uploadedDocs,
+                              'p_employee_code': empCode,
+                              'p_employee_id': newEmpId,
+                              'p_join_date': DateTime.now().toIso8601String().split('T')[0],
+                            });
+
+                            if (mounted) {
+                              Navigator.pop(context);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('تم إنشاء الموظف بنجاح ✅', style: TextStyle(fontFamily: 'Cairo')), backgroundColor: AppTheme.successGreen),
+                              );
+                              _loadEmployees();
                             }
                           } catch (e) {
                             setModalState(() => isSaving = false);
@@ -359,7 +384,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
               decoration: BoxDecoration(
                 color: const Color(0xFF1A1F3A),
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-                border: Border.all(color: AppTheme.neonCyan.withOpacity(0.2)),
+                border: Border.all(color: AppTheme.neonCyan.withValues(alpha: 0.2)),
               ),
               child: isSaving 
                   ? const Center(child: CircularProgressIndicator(color: AppTheme.neonCyan))
@@ -381,7 +406,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                         Container(
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
-                            color: AppTheme.neonCyan.withOpacity(0.15),
+                            color: AppTheme.neonCyan.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: const Icon(Icons.edit_document, color: AppTheme.neonCyan, size: 22),
@@ -459,9 +484,9 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                                 width: 60,
                                 height: 60,
                                 decoration: BoxDecoration(
-                                  border: Border.all(color: AppTheme.neonCyan.withOpacity(0.5), style: BorderStyle.solid),
+                                  border: Border.all(color: AppTheme.neonCyan.withValues(alpha: 0.5), style: BorderStyle.solid),
                                   borderRadius: BorderRadius.circular(12),
-                                  color: AppTheme.neonCyan.withOpacity(0.1),
+                                  color: AppTheme.neonCyan.withValues(alpha: 0.1),
                                 ),
                                 child: const Icon(Icons.add_a_photo_rounded, color: AppTheme.neonCyan),
                               ),
@@ -543,7 +568,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
-          color: isSelected ? AppTheme.neonCyan.withOpacity(0.2) : Colors.white.withOpacity(0.05),
+          color: isSelected ? AppTheme.neonCyan.withValues(alpha: 0.2) : Colors.white.withValues(alpha: 0.05),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: isSelected ? AppTheme.neonCyan : Colors.white10),
         ),
@@ -572,16 +597,475 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
         labelStyle: const TextStyle(fontFamily: 'Cairo', color: Colors.white54, fontSize: 12),
         prefixIcon: Icon(icon, color: AppTheme.neonCyan, size: 20),
         filled: true,
-        fillColor: Colors.white.withOpacity(0.05),
+        fillColor: Colors.white.withValues(alpha: 0.05),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
         focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: AppTheme.neonCyan)),
       ),
     );
   }
 
+  String _normalizeArabic(String text) {
+    return text
+        .replaceAll(RegExp(r'[أإآٱ]'), 'ا')
+        .replaceAll('ة', 'ه')
+        .replaceAll('ى', 'ي')
+        .replaceAll('ئ', 'ي')
+        .replaceAll('ؤ', 'و')
+        .replaceAll(RegExp(r'[\u064B-\u065F]'), '')
+        .trim()
+        .toLowerCase();
+  }
+
+  void _previewImageDialog(String url, String title) {
+    final isPdf = url.toLowerCase().contains('.pdf');
+
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(16),
+        child: Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFF13182C),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: AppTheme.neonCyan.withValues(alpha: 0.3)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    Icon(isPdf ? Icons.picture_as_pdf_rounded : Icons.image_rounded, color: isPdf ? AppTheme.neonPink : AppTheme.neonCyan, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded, color: Colors.white60, size: 20),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(color: Colors.white10, height: 1),
+              ClipRRect(
+                borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24)),
+                child: isPdf
+                    ? Container(
+                        padding: const EdgeInsets.all(32),
+                        child: Column(
+                          children: [
+                            const Icon(Icons.picture_as_pdf_rounded, size: 64, color: AppTheme.neonPink),
+                            const SizedBox(height: 12),
+                            const Text('مستند رقمي بصيغة PDF', style: TextStyle(fontFamily: 'Cairo', color: Colors.white, fontWeight: FontWeight.bold)),
+                            const SizedBox(height: 16),
+                            ElevatedButton.icon(
+                              onPressed: () => _downloadAndOpenFile(url, 'document.pdf'),
+                              icon: const Icon(Icons.open_in_new_rounded, size: 16),
+                              label: const Text('فتح وتحميل المستند', style: TextStyle(fontFamily: 'Cairo')),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppTheme.neonPink,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    : InteractiveViewer(
+                        minScale: 0.5,
+                        maxScale: 4.0,
+                        child: Image.network(
+                          url,
+                          fit: BoxFit.contain,
+                          loadingBuilder: (context, child, loadingProgress) {
+                            if (loadingProgress == null) return child;
+                            return Container(
+                              height: 250,
+                              alignment: Alignment.center,
+                              child: const CircularProgressIndicator(color: AppTheme.neonCyan),
+                            );
+                          },
+                          errorBuilder: (context, error, stackTrace) => Container(
+                            height: 150,
+                            alignment: Alignment.center,
+                            child: const Text('تعذر تحميل الصورة', style: TextStyle(fontFamily: 'Cairo', color: Colors.white54)),
+                          ),
+                        ),
+                      ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton.icon(
+                      onPressed: () => _downloadAndOpenFile(url, isPdf ? 'document.pdf' : 'document.jpg'),
+                      icon: const Icon(Icons.download_rounded, size: 16, color: AppTheme.neonCyan),
+                      label: const Text('تحميل وفتح', style: TextStyle(fontFamily: 'Cairo', fontSize: 11, color: AppTheme.neonCyan)),
+                    ),
+                    const SizedBox(width: 8),
+                    TextButton.icon(
+                      onPressed: () async {
+                        await Share.shareUri(Uri.parse(url));
+                      },
+                      icon: const Icon(Icons.share_rounded, size: 16, color: Colors.white70),
+                      label: const Text('مشاركة', style: TextStyle(fontFamily: 'Cairo', fontSize: 11, color: Colors.white70)),
+                    ),
+                  ],
+                ),
+              )
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _downloadAndOpenFile(String url, String fallbackName) async {
+    try {
+      final response = await http.get(Uri.parse(url));
+      if (response.statusCode == 200) {
+        final dir = await getTemporaryDirectory();
+        final ext = url.split('?').first.split('.').last;
+        final fileName = 'batra_${DateTime.now().millisecondsSinceEpoch}.$ext';
+        final file = File('${dir.path}/$fileName');
+        await file.writeAsBytes(response.bodyBytes);
+        await OpenFilex.open(file.path);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('فشل فتح الملف: $e', style: const TextStyle(fontFamily: 'Cairo')), backgroundColor: AppTheme.dangerRed),
+        );
+      }
+    }
+  }
+
+  void _showEmployeeProfileModal(Map<String, dynamic> emp) {
+    final name = emp['full_name'] ?? 'بدون اسم';
+    final email = emp['email'] ?? 'لا يوجد بريد';
+    final phone = emp['phone_number'] ?? emp['phone'] ?? 'غير مسجل';
+    final code = emp['employee_code'] ?? 'غير محدد';
+    final role = emp['role'] == 'admin' ? 'مدير عام' : (emp['role'] == 'manager' ? 'مدير' : 'موظف');
+    final department = emp['department'] ?? 'غير محدد';
+    final branch = emp['branch'] ?? emp['branches']?['name'] ?? 'غير محدد';
+    final isActive = emp['is_active'] ?? true;
+    final salary = emp['monthly_salary_iqd'] ?? emp['salary'] ?? 0;
+    final docUrls = List<dynamic>.from(emp['document_urls'] ?? []);
+    final devices = emp['employee_devices'] as List<dynamic>? ?? [];
+    final hasDevice = devices.isNotEmpty;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        height: MediaQuery.of(context).size.height * 0.88,
+        decoration: const BoxDecoration(
+          color: Color(0xFF13182C),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: Column(
+          children: [
+            Center(
+              child: Container(
+                width: 44,
+                height: 4,
+                margin: const EdgeInsets.only(top: 12, bottom: 8),
+                decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2)),
+              ),
+            ),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                children: [
+                  // Profile Header
+                  Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 28,
+                        backgroundColor: AppTheme.neonCyan.withValues(alpha: 0.2),
+                        child: Text(
+                          name.isNotEmpty ? name.substring(0, 1) : '?',
+                          style: const TextStyle(color: AppTheme.neonCyan, fontSize: 22, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(name, style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white)),
+                            const SizedBox(height: 2),
+                            Row(
+                              children: [
+                                _buildBadge(role, AppTheme.cyberPurple),
+                                const SizedBox(width: 6),
+                                _buildBadge(isActive ? 'نشط' : 'معطل', isActive ? AppTheme.successGreen : AppTheme.dangerRed),
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(color: AppTheme.neonCyan.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6)),
+                                  child: Text('كود: $code', style: const TextStyle(fontFamily: 'Cairo', fontSize: 9, color: AppTheme.neonCyan, fontWeight: FontWeight.bold)),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded, color: Colors.white60),
+                        onPressed: () => Navigator.pop(ctx),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // Quick Contact Buttons
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: phone != 'غير مسجل'
+                              ? () async {
+                                  final uri = Uri.parse('tel:$phone');
+                                  if (await canLaunchUrl(uri)) await launchUrl(uri);
+                                }
+                              : null,
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppTheme.successGreen,
+                            side: const BorderSide(color: AppTheme.successGreen),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                          ),
+                          icon: const Icon(Icons.phone_rounded, size: 16),
+                          label: const Text('اتصال 📞', style: TextStyle(fontFamily: 'Cairo', fontSize: 11, fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: phone != 'غير مسجل'
+                              ? () async {
+                                  final cleanPhone = phone.replaceAll(RegExp(r'\D'), '');
+                                  final uri = Uri.parse('https://wa.me/$cleanPhone');
+                                  if (await canLaunchUrl(uri)) await launchUrl(uri, mode: LaunchMode.externalApplication);
+                                }
+                              : null,
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppTheme.neonCyan,
+                            side: const BorderSide(color: AppTheme.neonCyan),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                          ),
+                          icon: const Icon(Icons.chat_bubble_rounded, size: 16),
+                          label: const Text('واتساب 💬', style: TextStyle(fontFamily: 'Cairo', fontSize: 11, fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        onPressed: () {
+                          Clipboard.setData(ClipboardData(text: phone));
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('تم نسخ رقم الهاتف 📋', style: TextStyle(fontFamily: 'Cairo')),
+                              backgroundColor: AppTheme.primaryTeal,
+                              duration: Duration(seconds: 2),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.copy_rounded, color: Colors.white70, size: 18),
+                        tooltip: 'نسخ الرقم',
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // Employee Details Grid
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.04),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('المعلومات الوظيفية والشخصية', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 13, color: AppTheme.neonCyan)),
+                        const SizedBox(height: 12),
+                        _buildProfileInfoRow(Icons.email_outlined, 'البريد الإلكتروني', email),
+                        _buildProfileInfoRow(Icons.phone_android_rounded, 'رقم الهاتف', phone),
+                        _buildProfileInfoRow(Icons.account_tree_outlined, 'القسم / الإدارة', department),
+                        _buildProfileInfoRow(Icons.location_on_outlined, 'الفرع المعتمد', branch),
+                        _buildProfileInfoRow(Icons.monetization_on_outlined, 'الراتب الشهري', '$salary د.ع'),
+                        _buildProfileInfoRow(Icons.smartphone_rounded, 'حالة قفل الجهاز', hasDevice ? 'مربوط بجهاز (${devices.first['model'] ?? 'هاتف'})' : 'غير مقيد بجهاز حالياً'),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // Documents Explorer
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.folder_shared_rounded, color: AppTheme.neonCyan, size: 20),
+                          const SizedBox(width: 8),
+                          Text(
+                            'المستمسكات والوثائق (${docUrls.length})',
+                            style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white),
+                          ),
+                        ],
+                      ),
+                      Row(
+                        children: [
+                          if (docUrls.length > 1)
+                            TextButton.icon(
+                              onPressed: () async {
+                                final text = docUrls.map((u) => u.toString()).join('\n');
+                                await Share.share(text, subject: 'وثائق الموظف: $name');
+                              },
+                              icon: const Icon(Icons.share_rounded, color: AppTheme.neonCyan, size: 14),
+                              label: const Text('مشاركة الكل', style: TextStyle(fontFamily: 'Cairo', fontSize: 10, color: AppTheme.neonCyan)),
+                            ),
+                          TextButton.icon(
+                            onPressed: () {
+                              Navigator.pop(ctx);
+                              _showEditEmployeeModal(emp);
+                            },
+                            icon: const Icon(Icons.edit_document, color: AppTheme.cyberPurple, size: 14),
+                            label: const Text('تعديل/إضافة', style: TextStyle(fontFamily: 'Cairo', fontSize: 10, color: AppTheme.cyberPurple)),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  if (docUrls.isEmpty)
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.02),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+                      ),
+                      child: const Center(
+                        child: Text('لا توجد وثائق أو مستمسكات مرفوعة لهذا الموظف.', style: TextStyle(fontFamily: 'Cairo', color: Colors.white38, fontSize: 11)),
+                      ),
+                    )
+                  else
+                    ...docUrls.asMap().entries.map((entry) {
+                      final idx = entry.key + 1;
+                      final url = entry.value.toString();
+                      final isPdf = url.toLowerCase().contains('.pdf');
+
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.04),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: AppTheme.neonCyan.withValues(alpha: 0.2)),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: (isPdf ? AppTheme.neonPink : AppTheme.neonCyan).withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Icon(
+                                isPdf ? Icons.picture_as_pdf_rounded : Icons.image_rounded,
+                                color: isPdf ? AppTheme.neonPink : AppTheme.neonCyan,
+                                size: 20,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('وثيقة رسمية رقم #$idx', style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 12, color: Colors.white)),
+                                  Text(isPdf ? 'مستند PDF رقمي' : 'صورة / مستمسك معتمد', style: const TextStyle(fontFamily: 'Cairo', fontSize: 10, color: Colors.white54)),
+                                ],
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.visibility_rounded, color: AppTheme.neonCyan, size: 18),
+                              tooltip: 'معاينة',
+                              onPressed: () => _previewImageDialog(url, 'وثيقة الموظف $name #$idx'),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.download_rounded, color: AppTheme.successGreen, size: 18),
+                              tooltip: 'تحميل وفتح',
+                              onPressed: () => _downloadAndOpenFile(url, isPdf ? 'doc_$idx.pdf' : 'doc_$idx.jpg'),
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProfileInfoRow(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 16, color: Colors.white54),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 110,
+            child: Text(label, style: const TextStyle(fontFamily: 'Cairo', fontSize: 11, color: Colors.white54)),
+          ),
+          Expanded(
+            child: Text(value, style: const TextStyle(fontFamily: 'Cairo', fontSize: 11, color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final filtered = _employees.where((e) => (e['full_name'] ?? '').toLowerCase().contains(_searchQuery.toLowerCase())).toList();
+    final normQuery = _normalizeArabic(_searchQuery);
+    final filtered = _employees.where((e) {
+      if (normQuery.isEmpty) return true;
+      final name = _normalizeArabic(e['full_name']?.toString() ?? '');
+      final email = (e['email']?.toString() ?? '').toLowerCase();
+      final code = (e['employee_code']?.toString() ?? '').toLowerCase();
+      final phone = (e['phone_number']?.toString() ?? e['phone']?.toString() ?? '').toLowerCase();
+      final dept = _normalizeArabic(e['department']?.toString() ?? '');
+      final branch = _normalizeArabic(e['branch']?.toString() ?? e['branches']?['name']?.toString() ?? '');
+      return name.contains(normQuery) ||
+          email.contains(normQuery) ||
+          code.contains(normQuery) ||
+          phone.contains(normQuery) ||
+          dept.contains(normQuery) ||
+          branch.contains(normQuery);
+    }).toList();
 
     return GlassBackground(
       child: Scaffold(
@@ -609,11 +1093,11 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                 onChanged: (val) => setState(() => _searchQuery = val),
                 style: const TextStyle(color: Colors.white, fontFamily: 'Cairo'),
                 decoration: InputDecoration(
-                  hintText: 'ابحث عن موظف...',
-                  hintStyle: const TextStyle(color: Colors.white38, fontFamily: 'Cairo'),
+                  hintText: 'ابحث بالاسم، الكود، الهاتف، القسم، الفرع...',
+                  hintStyle: const TextStyle(color: Colors.white38, fontFamily: 'Cairo', fontSize: 12),
                   prefixIcon: const Icon(Icons.search, color: Colors.white54),
                   filled: true,
-                  fillColor: Colors.white.withOpacity(0.05),
+                  fillColor: Colors.white.withValues(alpha: 0.05),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
                   contentPadding: const EdgeInsets.symmetric(vertical: 0),
                 ),
@@ -623,7 +1107,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
               child: _isLoading
                   ? const Center(child: CircularProgressIndicator(color: AppTheme.neonCyan))
                   : filtered.isEmpty
-                      ? const Center(child: Text('لا يوجد موظفين', style: TextStyle(color: Colors.white54, fontFamily: 'Cairo')))
+                      ? const Center(child: Text('لا يوجد موظفون مطابقون لبحثك', style: TextStyle(color: Colors.white54, fontFamily: 'Cairo')))
                       : ListView.builder(
                           padding: const EdgeInsets.all(16),
                           itemCount: filtered.length,
@@ -633,70 +1117,84 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                             final devices = emp['employee_devices'] as List<dynamic>? ?? [];
                             final hasDevice = devices.isNotEmpty;
 
-                            return GlassContainer(
-                              margin: const EdgeInsets.only(bottom: 12),
-                              padding: const EdgeInsets.all(16),
-                              borderRadius: 16,
-                              opacity: 0.08,
-                              borderColor: isActive ? AppTheme.neonCyan.withOpacity(0.2) : AppTheme.dangerRed.withOpacity(0.3),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      CircleAvatar(
-                                        backgroundColor: AppTheme.neonCyan.withOpacity(0.2),
-                                        child: Text(emp['full_name']?.substring(0, 1) ?? '?', style: const TextStyle(color: AppTheme.neonCyan, fontWeight: FontWeight.bold)),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text(emp['full_name'] ?? 'بدون اسم', style: const TextStyle(color: Colors.white, fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 14)),
-                                            Text(emp['email'] ?? '', style: const TextStyle(color: Colors.white54, fontSize: 10)),
-                                            const SizedBox(height: 4),
-                                            Row(
-                                              children: [
-                                                _buildBadge(emp['role'] == 'admin' ? 'مدير' : 'موظف', AppTheme.cyberPurple),
-                                                const SizedBox(width: 4),
-                                                _buildBadge(isActive ? 'نشط' : 'معطل', isActive ? AppTheme.successGreen : AppTheme.dangerRed),
-                                                if (hasDevice) ...[
-                                                  const SizedBox(width: 4),
-                                                  _buildBadge('جهاز مربوط', AppTheme.warningOrange),
-                                                ]
-                                              ],
-                                            )
-                                          ],
+                            return InkWell(
+                              onTap: () => _showEmployeeProfileModal(emp),
+                              borderRadius: BorderRadius.circular(16),
+                              child: GlassContainer(
+                                margin: const EdgeInsets.only(bottom: 12),
+                                padding: const EdgeInsets.all(16),
+                                borderRadius: 16,
+                                opacity: 0.08,
+                                borderColor: isActive ? AppTheme.neonCyan.withValues(alpha: 0.2) : AppTheme.dangerRed.withValues(alpha: 0.3),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        CircleAvatar(
+                                          backgroundColor: AppTheme.neonCyan.withValues(alpha: 0.2),
+                                          child: Text(emp['full_name']?.isNotEmpty == true ? emp['full_name']!.substring(0, 1) : '?', style: const TextStyle(color: AppTheme.neonCyan, fontWeight: FontWeight.bold)),
                                         ),
-                                      ),
-                                      PopupMenuButton<String>(
-                                        icon: const Icon(Icons.more_vert, color: Colors.white70),
-                                        color: const Color(0xFF1A1F3A),
-                                        onSelected: (value) {
-                                          if (value == 'edit') _showEditEmployeeModal(emp);
-                                          if (value == 'toggle') _toggleEmployeeStatus(emp['id'], isActive);
-                                          if (value == 'unbind') _unbindDevice(emp['id']);
-                                        },
-                                        itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
-                                          const PopupMenuItem<String>(
-                                            value: 'edit',
-                                            child: Text('تعديل الملف والمستمسكات', style: TextStyle(color: AppTheme.neonCyan, fontFamily: 'Cairo')),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(emp['full_name'] ?? 'بدون اسم', style: const TextStyle(color: Colors.white, fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 14)),
+                                              Text(emp['email'] ?? '', style: const TextStyle(color: Colors.white54, fontSize: 10)),
+                                              const SizedBox(height: 4),
+                                              Row(
+                                                children: [
+                                                  _buildBadge(emp['role'] == 'admin' ? 'مدير عام' : (emp['role'] == 'manager' ? 'مدير' : 'موظف'), AppTheme.cyberPurple),
+                                                  const SizedBox(width: 4),
+                                                  _buildBadge(isActive ? 'نشط' : 'معطل', isActive ? AppTheme.successGreen : AppTheme.dangerRed),
+                                                  if (hasDevice) ...[
+                                                    const SizedBox(width: 4),
+                                                    _buildBadge('جهاز مربوط', AppTheme.warningOrange),
+                                                  ]
+                                                ],
+                                              )
+                                            ],
                                           ),
-                                          PopupMenuItem<String>(
-                                            value: 'toggle',
-                                            child: Text(isActive ? 'تعطيل الحساب' : 'تفعيل الحساب', style: TextStyle(color: isActive ? AppTheme.dangerRed : AppTheme.successGreen, fontFamily: 'Cairo')),
-                                          ),
-                                          if (hasDevice)
+                                        ),
+                                        IconButton(
+                                          icon: const Icon(Icons.folder_shared_rounded, color: AppTheme.neonCyan, size: 20),
+                                          tooltip: 'عرض الملف والوثائق',
+                                          onPressed: () => _showEmployeeProfileModal(emp),
+                                        ),
+                                        PopupMenuButton<String>(
+                                          icon: const Icon(Icons.more_vert, color: Colors.white70),
+                                          color: const Color(0xFF1A1F3A),
+                                          onSelected: (value) {
+                                            if (value == 'profile') _showEmployeeProfileModal(emp);
+                                            if (value == 'edit') _showEditEmployeeModal(emp);
+                                            if (value == 'toggle') _toggleEmployeeStatus(emp['id'], isActive);
+                                            if (value == 'unbind') _unbindDevice(emp['id']);
+                                          },
+                                          itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
                                             const PopupMenuItem<String>(
-                                              value: 'unbind',
-                                              child: Text('فك ربط الجهاز (السماح بتسجيل جديد)', style: TextStyle(color: AppTheme.warningOrange, fontFamily: 'Cairo')),
+                                              value: 'profile',
+                                              child: Text('عرض الملف والوثائق 📁', style: TextStyle(color: AppTheme.neonCyan, fontFamily: 'Cairo')),
                                             ),
-                                        ],
-                                      )
-                                    ],
-                                  ),
-                                ],
+                                            const PopupMenuItem<String>(
+                                              value: 'edit',
+                                              child: Text('تعديل المستمسكات 📝', style: TextStyle(color: Colors.white, fontFamily: 'Cairo')),
+                                            ),
+                                            PopupMenuItem<String>(
+                                              value: 'toggle',
+                                              child: Text(isActive ? 'تعطيل الحساب' : 'تفعيل الحساب', style: TextStyle(color: isActive ? AppTheme.dangerRed : AppTheme.successGreen, fontFamily: 'Cairo')),
+                                            ),
+                                            if (hasDevice)
+                                              const PopupMenuItem<String>(
+                                                value: 'unbind',
+                                                child: Text('فك ربط الجهاز (السماح بتسجيل جديد)', style: TextStyle(color: AppTheme.warningOrange, fontFamily: 'Cairo')),
+                                              ),
+                                          ],
+                                        )
+                                      ],
+                                    ),
+                                  ],
+                                ),
                               ),
                             );
                           },
@@ -712,9 +1210,9 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.15),
+        color: color.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Text(text, style: TextStyle(color: color, fontSize: 8, fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
     );

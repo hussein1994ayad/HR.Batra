@@ -5,112 +5,320 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:flutter_background_service/flutter_background_service.dart';
 import 'supabase_service.dart';
 
 /// خدمة للتحكم في التتبع الجغرافي للموظفين في الخلفية والتحقق من السياج الجغرافي وكشف التزييف
 class LocationService {
-  static Timer? _trackingTimer;
   static bool _isTracking = false;
-  
+  static bool get isTracking => _isTracking;
+
   static StreamSubscription<Position>? _positionStreamSubscription;
   static Position? _lastUploadedPosition;
   static DateTime? _lastUploadedTime;
-  
-  // الاحتفاظ بالدولة الأخيرة لكل منطقة جيوفينس لمنع تكرار تسجيل المخالفات المتتالية
-  // key: zoneId, value: isInside
+  static List<dynamic>? _cachedGeofenceZones;
+  static DateTime? _lastGeofencesFetchTime;
+  static String? _activeEmployeeId;
+
+  // الاحتفاظ بالحالة الأخيرة لكل منطقة جيوفينس لمنع تكرار تسجيل المخالفات المتتالية
   static final Map<String, bool> _lastGeofenceStates = {};
 
-  /// طلب صلاحيات الموقع الكافية للتتبع بالخلفية
-  static Future<void> requestLocationPermissions() async {
+  /// تهيئة وتأسيس خدمة الخلفية لتتبع الموقع
+  static Future<void> initializeBackgroundService() async {
     try {
-      // 1. طلب الصلاحية العادية أولاً (In Use)
+      final service = FlutterBackgroundService();
+      await service.configure(
+        androidConfiguration: AndroidConfiguration(
+          onStart: onStart,
+          autoStart: false,
+          isForegroundMode: true,
+          notificationChannelId: 'hrpro_location_service',
+          initialNotificationTitle: 'HR Pro: التتبع الجغرافي الميداني نشط 📍',
+          initialNotificationContent: 'يتم تسجيل مسار العمل المعتمد أثناء ساعات الدوام',
+        ),
+        iosConfiguration: IosConfiguration(
+          autoStart: false,
+          onForeground: onForeground,
+          onBackground: onIosBackground,
+        ),
+      );
+    } catch (e) {
+      debugPrint('⚠️ تعذر تكوين خدمة الخلفية: $e');
+    }
+  }
+
+  @pragma('vm:entry-point')
+  static void onForeground(ServiceInstance service) {
+    debugPrint('Background Service: iOS Foreground state.');
+  }
+
+  @pragma('vm:entry-point')
+  static bool onIosBackground(ServiceInstance service) {
+    debugPrint('Background Service: iOS Background state.');
+    return true;
+  }
+
+  @pragma('vm:entry-point')
+  static void onStart(ServiceInstance service) async {
+    WidgetsFlutterBinding.ensureInitialized();
+
+    try {
+      if (!SupabaseService.isAuthenticated) {
+        await SupabaseService.init();
+      }
+    } catch (e) {
+      debugPrint('Background Service Isolate: Supabase init check: $e');
+    }
+
+    try {
+      if (service is AndroidServiceInstance) {
+        service.setAsForegroundService();
+      }
+
+      service.on('stopService').listen((event) {
+        try {
+          service.stopSelf();
+        } catch (_) {}
+      });
+
+      // تشغيل فحص دوري كل دقيقتين للتحقق من حالة دوام الموظف ومزامنة المسار
+      Timer.periodic(const Duration(minutes: 2), (timer) async {
+        try {
+          await _evaluateTrackingStateInService(service);
+        } catch (e) {
+          debugPrint('⚠️ خطأ في دورة فحص التتبع بالخلفية: $e');
+        }
+      });
+
+      await _evaluateTrackingStateInService(service);
+    } catch (e) {
+      debugPrint('⚠️ خطأ في تهيئة onStart لخدمة الخلفية: $e');
+    }
+  }
+
+  /// طلب صلاحيات الموقع الكافية للتتبع الدقيق
+  static Future<bool> requestLocationPermissions() async {
+    try {
+      // 1. التحقق من تفعيل خدمة GPS في الجهاز
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        debugPrint('⚠️ خدمة GPS معطلة في الجهاز');
+      }
+
+      // 2. طلب الصلاحية العادية أولاً (In Use)
       var status = await Permission.location.status;
       if (!status.isGranted) {
         status = await Permission.location.request();
         if (!status.isGranted) {
           debugPrint('⚠️ صلاحية الموقع العادية مرفوضة.');
-          return;
+          return false;
         }
       }
 
-      // 2. طلب صلاحية الخلفية (Always Allow) للأندرويد والآيفون
-      var alwaysStatus = await Permission.locationAlways.status;
-      if (!alwaysStatus.isGranted) {
-        debugPrint('📍 طلب صلاحية الموقع بالخلفية (Always Allow)...');
-        await Permission.locationAlways.request();
+      // 3. طلب صلاحية الخلفية (Always Allow) للأندرويد والآيفون إذا أمكن
+      if (Platform.isAndroid || Platform.isIOS) {
+        try {
+          var alwaysStatus = await Permission.locationAlways.status;
+          if (!alwaysStatus.isGranted) {
+            debugPrint('📍 طلب صلاحية الموقع بالخلفية (Always Allow)...');
+            await Permission.locationAlways.request();
+          }
+        } catch (_) {}
       }
+      return true;
     } catch (e) {
       debugPrint('⚠️ خطأ في طلب صلاحيات الموقع: $e');
+      return false;
     }
   }
 
-  /// بدء تتبع الموقع الجغرافي الذكي بناءً على جداول تتبع الموظف
-  static void startTracking() {
-    if (_isTracking) return;
-    _isTracking = true;
+  /// بدء خدمة التتبع الجغرافي للموظف فوراً
+  static Future<void> startTracking({String? employeeId}) async {
+    try {
+      final userId = employeeId ?? SupabaseService.currentUser?.id ?? _activeEmployeeId;
+      if (userId == null) {
+        debugPrint('⚠️ لم يتم العثور على معرف الموظف لبدء التتبع');
+        return;
+      }
 
-    // تشغيل طلب الصلاحيات والمزامنة في الخلفية
-    Future.microtask(() async {
-      await requestLocationPermissions();
-      await _syncOfflineLocations();
-    });
+      _activeEmployeeId = userId;
 
-    // طلب استثناء التطبيق من تحسينات البطارية لتجنب إغلاقه في الخلفية (للأندرويد)
-    if (Platform.isAndroid) {
-      _requestBatteryOptimizationExemption();
+      final hasPermission = await requestLocationPermissions();
+      if (!hasPermission) {
+        debugPrint('⚠️ تم إلغاء بدء خدمة التتبع لعدم توفر الصلاحيات المطلوبة.');
+        return;
+      }
+
+      _isTracking = true;
+
+      // حفظ حالة الدوام والتتبع محلياً للعمل في وضع الأوفلاين
+      final todayStr = DateTime.now().toIso8601String().split('T')[0];
+      await _saveTrackingStateOffline(
+        hasCheckedIn: true,
+        checkedInDate: todayStr,
+        userId: userId,
+      );
+
+      // مزامنة أي نقاط سابقة مخزنة محلياً
+      unawaited(_syncOfflineLocations());
+
+      // طلب استثناء قيود البطارية للأندرويد
+      if (Platform.isAndroid) {
+        _requestBatteryOptimizationExemption();
+      }
+
+      // 1. تشغيل التدفق المباشر للموقع في التطبيق فوراً
+      if (_positionStreamSubscription == null) {
+        _startLocationUpdates(userId);
+      }
+
+      // 2. التقاط ورفع موقع أولي فوري للتسجيل اللحظي
+      unawaited(_captureInstantLocation(userId));
+
+      // 3. تشغيل خدمة الخلفية للأندرويد والآيفون
+      try {
+        final service = FlutterBackgroundService();
+        final isRunning = await service.isRunning();
+        if (!isRunning) {
+          await service.startService();
+        }
+      } catch (e) {
+        debugPrint('⚠️ تعذر تشغيل BackgroundService: $e');
+      }
+
+      debugPrint('✅ تم تفعيل وتشغيل نظام التتبع الجغرافي بنجاح للموظف: $userId');
+    } catch (e) {
+      debugPrint('⚠️ خطأ أثناء بدء التتبع الجغرافي: $e');
     }
-
-    // تشغيل فحص دوري كل دقيقة للتحقق من حالة دوام الموظف وبدء/إيقاف التتبع الفعلي
-    _trackingTimer = Timer.periodic(const Duration(minutes: 1), (timer) async {
-      await _evaluateTrackingState();
-    });
-    
-    // تشغيل التقييم الأولي فوراً عند فتح التطبيق
-    _evaluateTrackingState();
-    
-    debugPrint('تم تشغيل مؤقت خدمة التتبع الجغرافي الذكي بنجاح.');
   }
 
-  /// إيقاف التتبع الجغرافي بالكامل وإلغاء كافة الاشتراكات
-  static void stopTracking() {
-    _trackingTimer?.cancel();
-    _trackingTimer = null;
+  /// إيقاف التتبع الجغرافي بالكامل عند الانصراف
+  static Future<void> stopTracking() async {
+    try {
+      final service = FlutterBackgroundService();
+      service.invoke('stopService');
+    } catch (_) {}
+
     _isTracking = false;
+    _activeEmployeeId = null;
     _stopLocationUpdates();
     _lastGeofenceStates.clear();
-    debugPrint('تم إيقاف خدمة التتبع الجغرافي بالكامل.');
+
+    // حفظ انتهاء الدوام محلياً
+    final todayStr = DateTime.now().toIso8601String().split('T')[0];
+    await _saveTrackingStateOffline(
+      hasCheckedIn: false,
+      checkedInDate: todayStr,
+      userId: null,
+    );
+
+    debugPrint('🛑 تم إيقاف خدمة التتبع الجغرافي بالكامل.');
   }
 
-  /// تقييم حالة التتبع الحالية للموظف
-  static Future<void> _evaluateTrackingState() async {
-    final user = SupabaseService.currentUser;
-    if (user == null) {
+  /// تسجيل موقع لحظي فوري (يُستدعى عند البصمة)
+  static Future<void> recordInstantLocation({
+    required String employeeId,
+    required double latitude,
+    required double longitude,
+    bool isMoving = false,
+  }) async {
+    final locationData = {
+      'employee_id': employeeId,
+      'latitude': latitude,
+      'longitude': longitude,
+      'battery_level': 100,
+      'is_moving': isMoving,
+      'timestamp': DateTime.now().toUtc().toIso8601String(),
+    };
+
+    try {
+      await SupabaseService.client.from('location_tracking').insert(locationData);
+      debugPrint('📍 تم تسجيل نقطة موقع فورية: ($latitude, $longitude)');
+      unawaited(_syncOfflineLocations());
+    } catch (e) {
+      debugPrint('⚠️ تعذر رفع الموقع الفوري، سيتم حفظه محلياً أوفلاين: $e');
+      await _cacheLocationOffline(locationData);
+    }
+  }
+
+  /// التقاط الموقع الحالي فوراً ورفعه
+  static Future<void> _captureInstantLocation(String userId) async {
+    try {
+      Position? position = await Geolocator.getLastKnownPosition();
+      position ??= await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 10),
+        ),
+      );
+
+      if (position != null) {
+        _lastUploadedPosition = position;
+        _lastUploadedTime = DateTime.now();
+        await recordInstantLocation(
+          employeeId: userId,
+          latitude: position.latitude,
+          longitude: position.longitude,
+          isMoving: position.speed > 0.5,
+        );
+      }
+    } catch (e) {
+      debugPrint('⚠️ خطأ في التقاط الموقع الأولي: $e');
+    }
+  }
+
+  /// تقييم حالة التتبع الحالية للموظف داخل الخدمة
+  static Future<void> _evaluateTrackingStateInService(ServiceInstance service) async {
+    String? userId = _activeEmployeeId ?? SupabaseService.currentUser?.id;
+
+    if (userId == null) {
+      final cached = await _getTrackingStateOffline();
+      userId = cached?['user_id'] as String?;
+    }
+
+    if (userId == null) {
       _stopLocationUpdates();
       return;
     }
 
-    final bool shouldTrack = await _shouldTrackLocation(user.id);
+    final bool shouldTrack = await _shouldTrackLocation(userId);
     if (shouldTrack) {
       if (_positionStreamSubscription == null) {
-        _startLocationUpdates(user.id);
+        _startLocationUpdates(userId);
       }
     } else {
       if (_positionStreamSubscription != null) {
         _stopLocationUpdates();
       }
     }
+
+    // تحديث إشعار الخدمة الخلفية للأندرويد بشكل تفاعلي
+    if (service is AndroidServiceInstance) {
+      if (shouldTrack) {
+        service.setForegroundNotificationInfo(
+          title: 'HR Pro: التتبع الجغرافي نشط 📍',
+          content: 'يتم تسجيل مسار العمل المعتمد أثناء ساعات الدوام',
+        );
+      } else {
+        service.setForegroundNotificationInfo(
+          title: 'HR Pro: المزامنة السحابية نشطة',
+          content: 'يتم تحديث البيانات وجدول العمل تلقائياً',
+        );
+      }
+    }
   }
 
-  /// التحقق من صلاحية اليوم والوقت وحالة تسجيل الدخول لتحديد ما إذا كان يجب بدء التتبع
+  /// التحقق من صلاحية اليوم والوقت وحالة تسجيل الدخول لتحديد ما إذا كان يجب استمرار التتبع
   static Future<bool> _shouldTrackLocation(String userId) async {
     final todayStr = DateTime.now().toIso8601String().split('T')[0];
-    
-    // 1. محاولة قراءة الحالة المخزنة محلياً للتحقق من التوقيت الفاصل
+
+    // 1. محاولة قراءة الحالة المخزنة محلياً
     final cached = await _getTrackingStateOffline();
     if (cached != null && cached['checked_in_date'] == todayStr) {
       final updatedAtStr = cached['updated_at'] as String?;
@@ -118,17 +326,15 @@ class LocationService {
         final updatedAt = DateTime.tryParse(updatedAtStr);
         if (updatedAt != null) {
           final difference = DateTime.now().difference(updatedAt.toLocal());
-          // إذا كان التحديث الأخير قبل أقل من 15 دقيقة، نعتمد على الكاش مباشرة لتجنب كثرة طلبات الشبكة
-          if (difference < const Duration(minutes: 15)) {
+          if (difference < const Duration(minutes: 10)) {
             return _evaluateStateFromCache(cached);
           }
         }
       }
     }
 
-    // 2. إذا مضى أكثر من 15 دقيقة أو لم يوجد كاش، نحاول التحديث من السيرفر
+    // 2. إذا مضى وقت أو لم يوجد كاش، نحاول التحديث من السيرفر
     try {
-      // التحقق من حالة البصمة اليومية للموظف من السيرفر
       final attendanceData = await SupabaseService.client
           .from('attendance')
           .select()
@@ -143,17 +349,16 @@ class LocationService {
         }
       }
 
-      // جلب جدول التتبع المخصص للموظف
       final trackingSchedule = await SupabaseService.client
           .from('tracking_schedules')
           .select()
           .eq('employee_id', userId)
           .maybeSingle();
 
-      // حفظ الحالة الجديدة في الكاش للعمل دون اتصال بالإنترنت
       await _saveTrackingStateOffline(
         hasCheckedIn: hasCheckedIn,
         checkedInDate: todayStr,
+        userId: userId,
         schedule: trackingSchedule,
       );
 
@@ -162,12 +367,12 @@ class LocationService {
 
       return _evaluateSchedule(trackingSchedule);
     } catch (e) {
-      debugPrint('⚠️ فشل التحديث من السيرفر (قد لا يتوفر إنترنت)، استخدام الكاش المحلي كبديل: $e');
-      // عند فشل الشبكة، نعتمد على الكاش المحلي دون حد زمني
+      debugPrint('⚠️ وضع الأوفلاين نشط، الاعتماد على الحالة المحلية: $e');
       if (cached != null && cached['checked_in_date'] == todayStr) {
         return _evaluateStateFromCache(cached);
       }
-      return false;
+      // إذا كان الموظف مسجلاً في الجلسة الحالية نعتبره نشطاً
+      return _isTracking;
     }
   }
 
@@ -185,182 +390,187 @@ class LocationService {
     final now = DateTime.now();
     final int pgDay = now.weekday % 7; // Sunday = 0, Monday = 1, etc.
     final List<dynamic> trackingDays = schedule['tracking_days'] ?? [];
-    
-    if (!trackingDays.contains(pgDay)) {
+
+    if (trackingDays.isNotEmpty && !trackingDays.contains(pgDay)) {
       return false;
     }
 
     final String startTimeStr = schedule['start_time'] ?? '08:00:00';
-    final String endTimeStr = schedule['end_time'] ?? '17:00:00';
+    final String endTimeStr = schedule['end_time'] ?? '18:00:00';
 
     return _isCurrentTimeBetween(startTimeStr, endTimeStr);
   }
 
-  /// بدء الاستماع لتدفق إحداثيات الموقع الفعلي في الخلفية
+  /// بدء الاستماع لتدفق إحداثيات الموقع الفعلي في الخلفية والواجهة
   static void _startLocationUpdates(String userId) {
-    debugPrint('بدء تشغيل تدفق التتبع الجغرافي للموظف: $userId');
+    debugPrint('🚀 بدء تشغيل تدفق التتبع الجغرافي الحي للموظف: $userId');
 
-    // إعدادات الموقع بناءً على نظام التشغيل لضمان الامتثال لمتطلبات المتاجر
+    // إعدادات الموقع للأندرويد والآيفون مع الامتثال الصارم لسياسات آبل
     LocationSettings locationSettings;
 
     if (Platform.isAndroid) {
       locationSettings = AndroidSettings(
         accuracy: LocationAccuracy.high,
-        distanceFilter: 10,
-        intervalDuration: const Duration(seconds: 10),
-        // تخصيص إشعار الخدمة ليكون غير ملفت ويظهر كمزامنة عادية للبيانات
-        foregroundNotificationConfig: const ForegroundNotificationConfig(
-          notificationTitle: 'HR Pro: المزامنة السحابية نشطة',
-          notificationText: 'يتم تحديث البيانات وجدول العمل تلقائياً',
-          enableWakeLock: true,
-          setOngoing: true,
-        ),
+        distanceFilter: 20, // تحديث كل 20 متر
+        intervalDuration: const Duration(seconds: 15),
       );
     } else if (Platform.isIOS) {
       locationSettings = AppleSettings(
         accuracy: LocationAccuracy.high,
-        distanceFilter: 10,
+        distanceFilter: 20,
         allowBackgroundLocationUpdates: true,
-        // منع نظام iOS من إيقاف الخدمة تلقائياً عند التوقف
         pauseLocationUpdatesAutomatically: false,
-        // إخفاء الشريط الأزرق ليكون التتبع غير ملفت للانتباه في الخلفية
-        showBackgroundLocationIndicator: false,
+        showBackgroundLocationIndicator: true, // مؤشر أزرق شفاف أثناء فترة الدوام امتثالاً لآبل
       );
     } else {
       locationSettings = const LocationSettings(
         accuracy: LocationAccuracy.high,
-        distanceFilter: 10,
+        distanceFilter: 20,
       );
     }
+
+    try {
+      _positionStreamSubscription?.cancel();
+    } catch (_) {}
 
     _positionStreamSubscription = Geolocator.getPositionStream(
       locationSettings: locationSettings,
     ).listen((Position position) async {
-      // 1. كشف تزييف الموقع الجغرافي (Mock GPS)
-      if (position.isMocked) {
-        await _recordMockGpsAttempt(userId, position);
-        return;
-      }
+      try {
+        // 1. كشف تزييف الموقع الجغرافي (Mock GPS)
+        if (position.isMocked) {
+          await _recordMockGpsAttempt(userId, position);
+          return;
+        }
 
-      // 2. فلترة التحديثات لتقليل الاستهلاك المفرط للبطارية والسيرفر (كل 5 دقائق أو عند تحرك 50 متر)
-      final now = DateTime.now();
-      bool shouldUpload = false;
+        // 2. تصفية النقاط غير الدقيقة (دقة ضعيفة تتجاوز 100 متر)
+        if (position.accuracy > 100.0) {
+          debugPrint('⚠️ تم تجاهل نقطة موقع ذات دقة منخفضة: ${position.accuracy}m');
+          return;
+        }
 
-      if (_lastUploadedPosition == null || _lastUploadedTime == null) {
-        shouldUpload = true;
-      } else {
-        final double distance = Geolocator.distanceBetween(
-          _lastUploadedPosition!.latitude,
-          _lastUploadedPosition!.longitude,
-          position.latitude,
-          position.longitude,
-        );
-        final difference = now.difference(_lastUploadedTime!);
+        // 3. فلترة التحديثات: رفع عند التحرك >= 25 متر أو مرور دقيقتين أثناء الحركة أو 5 دقائق عند الثبات
+        final now = DateTime.now();
+        bool shouldUpload = false;
 
-        if (distance >= 50 || difference >= const Duration(minutes: 5)) {
+        if (_lastUploadedPosition == null || _lastUploadedTime == null) {
           shouldUpload = true;
+        } else {
+          final double distance = Geolocator.distanceBetween(
+            _lastUploadedPosition!.latitude,
+            _lastUploadedPosition!.longitude,
+            position.latitude,
+            position.longitude,
+          );
+          final difference = now.difference(_lastUploadedTime!);
+          final bool isMoving = position.speed > 0.6;
+
+          if (distance >= 25 || (isMoving && difference >= const Duration(minutes: 2)) || difference >= const Duration(minutes: 5)) {
+            shouldUpload = true;
+          }
         }
-      }
 
-      if (shouldUpload) {
-        _lastUploadedPosition = position;
-        _lastUploadedTime = now;
+        if (shouldUpload) {
+          _lastUploadedPosition = position;
+          _lastUploadedTime = now;
 
-        final locationData = {
-          'employee_id': userId,
-          'latitude': position.latitude,
-          'longitude': position.longitude,
-          'battery_level': 100, // قيمة افتراضية للبطارية
-          'is_moving': position.speed > 0.5,
-          'timestamp': DateTime.now().toUtc().toIso8601String(),
-        };
+          final locationData = {
+            'employee_id': userId,
+            'latitude': position.latitude,
+            'longitude': position.longitude,
+            'battery_level': 100,
+            'is_moving': position.speed > 0.6,
+            'timestamp': DateTime.now().toUtc().toIso8601String(),
+          };
 
-        try {
-          // محاولة إرسال الإحداثي للسيرفر فوراً
-          await SupabaseService.client.from('location_tracking').insert(locationData);
-          debugPrint('تم تسجيل ورفع موقع جديد: (${position.latitude}, ${position.longitude})');
-          
-          // بعد نجاح الإرسال، نقوم بمحاولة رفع النقاط المخزنة محلياً سابقاً (إذا وجدت)
-          _syncOfflineLocations();
-        } catch (e) {
-          debugPrint('فشل رفع الموقع للسيرفر (قد لا يتوفر إنترنت)، يتم الحفظ محلياً: $e');
-          await _cacheLocationOffline(locationData);
+          try {
+            await SupabaseService.client.from('location_tracking').insert(locationData);
+            debugPrint('📍 تم رفع نقطة تتبع حية للسيرفر: (${position.latitude}, ${position.longitude})');
+            unawaited(_syncOfflineLocations());
+          } catch (e) {
+            debugPrint('💾 وضع أوفلاين: تعذر الاتصال، تم تخزين النقطة محلياً: $e');
+            await _cacheLocationOffline(locationData);
+          }
         }
+
+        // 4. مطابقة إحداثيات الموقع مع السياج الجغرافي
+        await _verifyGeofences(userId, position);
+      } catch (e, stack) {
+        debugPrint('⚠️ خطأ داخل مستمع الموقع: $e\n$stack');
       }
-
-      // 3. مطابقة إحداثيات الموقع الجغرافي مع السياج الجغرافي المخصص للموظف
-      await _verifyGeofences(userId, position);
-
     }, onError: (e) {
-      debugPrint('حدث خطأ في استقبال تدفق بيانات الموقع: $e');
+      debugPrint('⚠️ خطأ في استقبال تدفق بيانات الموقع: $e');
     });
   }
 
   /// إيقاف اشتراك الموقع الجغرافي
   static void _stopLocationUpdates() {
-    _positionStreamSubscription?.cancel();
+    try {
+      _positionStreamSubscription?.cancel();
+    } catch (_) {}
     _positionStreamSubscription = null;
     _lastUploadedPosition = null;
     _lastUploadedTime = null;
-    debugPrint('تم إيقاف اشتراك تدفق الموقع الجغرافي وإلغاء إشعار الخدمة.');
+    debugPrint('تم إيقاف تدفق الموقع الجغرافي.');
   }
 
   /// التحقق من وقوع الوقت الحالي بين وقت البدء والنهاية
   static bool _isCurrentTimeBetween(String startStr, String endStr) {
-    final now = DateTime.now();
-    final startParts = startStr.split(':');
-    final endParts = endStr.split(':');
+    try {
+      final now = DateTime.now();
+      final startParts = startStr.split(':');
+      final endParts = endStr.split(':');
 
-    if (startParts.length < 2 || endParts.length < 2) return false;
+      if (startParts.length < 2 || endParts.length < 2) return false;
 
-    final int startHour = int.tryParse(startParts[0]) ?? 8;
-    final int startMinute = int.tryParse(startParts[1]) ?? 0;
-    final int endHour = int.tryParse(endParts[0]) ?? 17;
-    final int endMinute = int.tryParse(endParts[1]) ?? 0;
+      final int startHour = int.tryParse(startParts[0]) ?? 8;
+      final int startMinute = int.tryParse(startParts[1]) ?? 0;
+      final int endHour = int.tryParse(endParts[0]) ?? 18;
+      final int endMinute = int.tryParse(endParts[1]) ?? 0;
 
-    final start = DateTime(
-      now.year,
-      now.month,
-      now.day,
-      startHour,
-      startMinute,
-    );
+      final start = DateTime(
+        now.year,
+        now.month,
+        now.day,
+        startHour,
+        startMinute,
+      );
 
-    var end = DateTime(
-      now.year,
-      now.month,
-      now.day,
-      endHour,
-      endMinute,
-    );
+      var end = DateTime(
+        now.year,
+        now.month,
+        now.day,
+        endHour,
+        endMinute,
+      );
 
-    // إذا كان وقت الانتهاء في اليوم التالي
-    if (end.isBefore(start)) {
-      end = end.add(const Duration(days: 1));
+      if (end.isBefore(start)) {
+        end = end.add(const Duration(days: 1));
+      }
+
+      return now.isAfter(start) && now.isBefore(end);
+    } catch (_) {
+      return false;
     }
-
-    return now.isAfter(start) && now.isBefore(end);
   }
 
   /// تسجيل محاولات التزييف الفوري وإرسال إشعارات
   static Future<void> _recordMockGpsAttempt(String employeeId, Position position) async {
     try {
-      // 1. تسجيل المحاولة الخبيثة في mock_gps_attempts
       await SupabaseService.client.from('mock_gps_attempts').insert({
         'employee_id': employeeId,
         'latitude': position.latitude,
         'longitude': position.longitude,
-        'app_used': 'تطبيق تزييف موقع مكتشف في الخلفية',
+        'app_used': 'تطبيق تزييف موقع مكتشف',
       });
 
-      // 2. إرسال إشعار فوري في لوحة الإشعارات
       await SupabaseService.client.from('notifications').insert({
         'employee_id': employeeId,
         'title': 'إنذار أمني: محاولة تزييف موقع 🚨',
-        'body': 'تم رصد محاولة تشغيل موقع وهمي في الخلفية لتسجيل الحضور والتتبع الجغرافي. تم تدوين المخالفة وحظر التتبع مؤقتاً.',
+        'body': 'تم رصد محاولة تشغيل موقع وهمي لتسجيل الحضور والتتبع الجغرافي. تم تدوين المخالفة وحظر التتبع مؤقتاً.',
         'type': 'system',
       });
-      
+
       debugPrint('🚨 تم كشف وتوثيق محاولة تزييف موقع جغرافي للموظف: $employeeId');
     } catch (e) {
       debugPrint('خطأ في تسجيل خرق تزييف الموقع: $e');
@@ -370,41 +580,66 @@ class LocationService {
   /// التحقق من مناطق الجيوفينس ومطابقة الإحداثيات للموظف
   static Future<void> _verifyGeofences(String employeeId, Position position) async {
     try {
-      // 1. جلب التعيينات والمناطق المخصصة للموظف
-      final assignments = await SupabaseService.client
-          .from('employee_geofence_assignments')
-          .select('zone_id, geofence_zones(*)')
-          .eq('employee_id', employeeId);
+      final now = DateTime.now();
 
-      if (assignments.isEmpty) return;
+      if (_cachedGeofenceZones == null ||
+          _lastGeofencesFetchTime == null ||
+          now.difference(_lastGeofencesFetchTime!) > const Duration(minutes: 15)) {
+        try {
+          final assignments = await SupabaseService.client
+              .from('employee_geofence_assignments')
+              .select('zone_id, geofence_zones(*)')
+              .eq('employee_id', employeeId);
+
+          _cachedGeofenceZones = assignments;
+          _lastGeofencesFetchTime = now;
+        } catch (e) {
+          debugPrint('⚠️ فشل جلب السياج الجغرافي من السيرفر: $e');
+        }
+      }
+
+      if (_cachedGeofenceZones == null || _cachedGeofenceZones!.isEmpty) return;
 
       final currentLatLng = LatLng(position.latitude, position.longitude);
 
-      for (var assignment in assignments) {
-        final zone = assignment['geofence_zones'];
+      for (var assignment in _cachedGeofenceZones!) {
+        dynamic zoneRaw = assignment['geofence_zones'];
+        if (zoneRaw == null) continue;
+
+        Map<String, dynamic>? zone;
+        if (zoneRaw is Map<String, dynamic>) {
+          zone = zoneRaw;
+        } else if (zoneRaw is List && zoneRaw.isNotEmpty && zoneRaw.first is Map) {
+          zone = Map<String, dynamic>.from(zoneRaw.first);
+        }
+
         if (zone == null) continue;
 
-        final String zoneId = zone['id'];
-        final String zoneName = zone['name'] ?? 'منطقة مجهولة';
-        
-        // جلب الإحداثيات المرسومة للمضلع الجغرافي
+        final String? zoneId = zone['id']?.toString();
+        if (zoneId == null) continue;
+        final String zoneName = zone['name']?.toString() ?? 'منطقة مجهولة';
+
         final dynamic coordsRaw = zone['coordinates'];
         List<LatLng> polygon = [];
 
         try {
-          List<dynamic> coordsList;
+          List<dynamic> coordsList = [];
           if (coordsRaw is String) {
-            coordsList = jsonDecode(coordsRaw);
-          } else {
-            coordsList = coordsRaw as List<dynamic>;
+            final decoded = jsonDecode(coordsRaw);
+            if (decoded is List) coordsList = decoded;
+          } else if (coordsRaw is List) {
+            coordsList = coordsRaw;
           }
 
-          polygon = coordsList.map((item) {
-            final lat = (item['lat'] as num).toDouble();
-            final lng = (item['lng'] as num).toDouble();
-            return LatLng(lat, lng);
-          }).toList();
-
+          for (var item in coordsList) {
+            if (item is Map) {
+              final double lat = double.tryParse(item['lat']?.toString() ?? '0') ?? 0.0;
+              final double lng = double.tryParse(item['lng']?.toString() ?? '0') ?? 0.0;
+              if (lat != 0.0 && lng != 0.0) {
+                polygon.add(LatLng(lat, lng));
+              }
+            }
+          }
         } catch (e) {
           debugPrint('خطأ في فك تشفير إحداثيات الجيوفينس للمنطقة $zoneName: $e');
           continue;
@@ -412,35 +647,34 @@ class LocationService {
 
         if (polygon.isEmpty) continue;
 
-        // التحقق مما إذا كان الإحداثي الحالي يقع داخل المضلع
         final bool isCurrentlyInside = _isPointInPolygon(currentLatLng, polygon);
         final bool? lastState = _lastGeofenceStates[zoneId];
 
-        // في حال تغيرت الحالة، نسجل مخالفة
         if (lastState != null && lastState != isCurrentlyInside) {
           final String violationType = isCurrentlyInside ? 'entry' : 'exit';
           final String violationName = isCurrentlyInside ? 'دخول' : 'خروج';
 
-          // 1. تسجيل المخالفة في geofence_violations
-          await SupabaseService.client.from('geofence_violations').insert({
-            'employee_id': employeeId,
-            'zone_id': zoneId,
-            'violation_type': violationType,
-            'timestamp': DateTime.now().toUtc().toIso8601String(),
-          });
+          try {
+            await SupabaseService.client.from('geofence_violations').insert({
+              'employee_id': employeeId,
+              'zone_id': zoneId,
+              'violation_type': violationType,
+              'timestamp': DateTime.now().toUtc().toIso8601String(),
+            });
 
-          // 2. إشعار الموظف والمدراء عبر جدول الإشعارات
-          await SupabaseService.client.from('notifications').insert({
-            'employee_id': employeeId,
-            'title': 'تنبيه سياج جغرافي 📍',
-            'body': 'تم رصد حالة ($violationName) من حدود منطقة السياج الجغرافي المعينة لك: ($zoneName).',
-            'type': 'system',
-          });
+            await SupabaseService.client.from('notifications').insert({
+              'employee_id': employeeId,
+              'title': 'تنبيه سياج جغرافي 📍',
+              'body': 'تم رصد حالة ($violationName) من حدود منطقة السياج الجغرافي المعينة لك: ($zoneName).',
+              'type': 'system',
+            });
 
-          debugPrint('📍 مخالفة جيوفينس: تم رصد $violationName للموظف من منطقة $zoneName');
+            debugPrint('📍 مخالفة جيوفينس: تم رصد $violationName للموظف من منطقة $zoneName');
+          } catch (e) {
+            debugPrint('⚠️ فشل تسجيل خرق السياج الجغرافي (أوفلاين): $e');
+          }
         }
 
-        // تحديث الحالة الأخيرة
         _lastGeofenceStates[zoneId] = isCurrentlyInside;
       }
     } catch (e) {
@@ -488,18 +722,20 @@ class LocationService {
   static Future<void> _saveTrackingStateOffline({
     required bool hasCheckedIn,
     required String checkedInDate,
-    required Map<String, dynamic>? schedule,
+    String? userId,
+    Map<String, dynamic>? schedule,
   }) async {
     try {
       final file = await _trackingStateFile;
       final data = {
         'has_checked_in': hasCheckedIn,
         'checked_in_date': checkedInDate,
+        'user_id': userId,
         'schedule': schedule,
         'updated_at': DateTime.now().toUtc().toIso8601String(),
       };
       await file.writeAsString(jsonEncode(data));
-      debugPrint('💾 تم حفظ حالة التتبع والجدول محلياً للعمل أوفلاين.');
+      debugPrint('💾 تم حفظ حالة التتبع محلياً للعمل أوفلاين.');
     } catch (e) {
       debugPrint('❌ فشل في حفظ حالة التتبع محلياً: $e');
     }
@@ -526,17 +762,17 @@ class LocationService {
     try {
       final file = await _cacheFile;
       List<dynamic> cachedList = [];
-      
+
       if (await file.exists()) {
         final content = await file.readAsString();
         if (content.isNotEmpty) {
           cachedList = jsonDecode(content) as List<dynamic>;
         }
       }
-      
+
       cachedList.add(locationData);
       await file.writeAsString(jsonEncode(cachedList));
-      debugPrint('📍 تم تخزين الموقع محلياً (أوفلاين). إجمالي المواقع المخزنة: ${cachedList.length}');
+      debugPrint('📍 تم تخزين نقطة الموقع محلياً (أوفلاين). الإجمالي المخزن: ${cachedList.length}');
     } catch (e) {
       debugPrint('❌ فشل في تخزين الموقع محلياً: $e');
     }
@@ -554,16 +790,14 @@ class LocationService {
       final List<dynamic> cachedList = jsonDecode(content) as List<dynamic>;
       if (cachedList.isEmpty) return;
 
-      debugPrint('🔄 جارٍ مزامنة ${cachedList.length} موقع مخزن محلياً...');
-      
-      // رفع كافة المواقع دفعة واحدة للسيرفر
+      debugPrint('🔄 جارٍ مزامنة ${cachedList.length} موقع مخزن محلياً إلى السيرفر...');
+
       await SupabaseService.client.from('location_tracking').insert(cachedList);
-      
-      // حذف ملف الكاش المؤقت عند نجاح المزامنة
+
       await file.delete();
-      debugPrint('✅ تم مزامنة ورفع كافة النقاط المخزنة محلياً بنجاح.');
+      debugPrint('✅ تم بنجاح مزامنة ورفع كافة نقاط المسار المخزنة محلياً إلى السيرفر.');
     } catch (e) {
-      debugPrint('⚠️ فشل مزامنة المواقع المخزنة محلياً (قد لا يتوفر إنترنت حتى الآن): $e');
+      debugPrint('⚠️ لم تكتمل مزامنة النقاط المحلية بعد (الشبكة غير متاحة): $e');
     }
   }
 
@@ -572,7 +806,7 @@ class LocationService {
     try {
       final status = await Permission.ignoreBatteryOptimizations.status;
       if (!status.isGranted) {
-        debugPrint('🔋 طلب استثناء التطبيق من قيود البطارية لضمان استمراره بالخلفية...');
+        debugPrint('🔋 طلب استثناء التطبيق من قيود البطارية...');
         await Permission.ignoreBatteryOptimizations.request();
       }
     } catch (e) {

@@ -11,6 +11,7 @@ import '../../core/services/file_upload_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/constants/constants.dart';
 import '../shared/widgets/glass_container.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class LoanRequestScreen extends StatefulWidget {
   const LoanRequestScreen({super.key});
@@ -96,6 +97,26 @@ class _LoanRequestScreenState extends State<LoanRequestScreen> with SingleTicker
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('يجب عليك تصوير وإرفاق التعهد الخطي الموقّع لاستكمال الطلب ⚠️', style: TextStyle(fontFamily: 'Cairo')),
+          backgroundColor: AppTheme.dangerRed,
+        ),
+      );
+      return;
+    }
+
+    if (_requestedAmount <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('مبلغ السلفة يجب أن يكون أكبر من الصفر ⚠️', style: TextStyle(fontFamily: 'Cairo')),
+          backgroundColor: AppTheme.dangerRed,
+        ),
+      );
+      return;
+    }
+
+    if (_monthlyInstallment <= 0 || _monthlyInstallment > _requestedAmount) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('القسط الشهري غير صحيح، يجب أن يكون أكبر من الصفر ولا يتجاوز مبلغ السلفة ⚠️', style: TextStyle(fontFamily: 'Cairo')),
           backgroundColor: AppTheme.dangerRed,
         ),
       );
@@ -258,7 +279,7 @@ class _LoanRequestScreenState extends State<LoanRequestScreen> with SingleTicker
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
-                        color: AppTheme.neonCyan.withOpacity(_isSubmitting ? 0.1 : 0.3),
+                        color: AppTheme.neonCyan.withValues(alpha: _isSubmitting ? 0.1 : 0.3),
                         blurRadius: 16,
                         spreadRadius: 1,
                       )
@@ -304,10 +325,10 @@ class _LoanRequestScreenState extends State<LoanRequestScreen> with SingleTicker
       padding: const EdgeInsets.all(20),
       borderRadius: 24,
       opacity: 0.1,
-      borderColor: AppTheme.neonCyan.withOpacity(0.2),
+      borderColor: AppTheme.neonCyan.withValues(alpha: 0.2),
       boxShadow: [
         BoxShadow(
-          color: AppTheme.neonCyan.withOpacity(0.04),
+          color: AppTheme.neonCyan.withValues(alpha: 0.04),
           blurRadius: 20,
         )
       ],
@@ -338,13 +359,13 @@ class _LoanRequestScreenState extends State<LoanRequestScreen> with SingleTicker
             style: const TextStyle(color: Colors.white, fontSize: 14, fontFamily: 'Cairo', fontWeight: FontWeight.bold),
             decoration: InputDecoration(
               filled: true,
-              fillColor: Colors.white.withOpacity(0.04),
+              fillColor: Colors.white.withValues(alpha: 0.04),
               prefixIcon: const Icon(Icons.edit_note_rounded, color: AppTheme.neonCyan),
               suffixText: 'د.ع',
               suffixStyle: const TextStyle(color: AppTheme.neonCyan, fontFamily: 'Cairo', fontSize: 12, fontWeight: FontWeight.bold),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(16),
-                borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
+                borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(16),
@@ -375,13 +396,13 @@ class _LoanRequestScreenState extends State<LoanRequestScreen> with SingleTicker
             style: const TextStyle(color: Colors.white, fontSize: 14, fontFamily: 'Cairo', fontWeight: FontWeight.bold),
             decoration: InputDecoration(
               filled: true,
-              fillColor: Colors.white.withOpacity(0.04),
+              fillColor: Colors.white.withValues(alpha: 0.04),
               prefixIcon: const Icon(Icons.edit_calendar_rounded, color: AppTheme.neonCyan),
               suffixText: 'د.ع / شهر',
               suffixStyle: const TextStyle(color: AppTheme.neonCyan, fontFamily: 'Cairo', fontSize: 12, fontWeight: FontWeight.bold),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(16),
-                borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
+                borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(16),
@@ -404,7 +425,7 @@ class _LoanRequestScreenState extends State<LoanRequestScreen> with SingleTicker
             padding: const EdgeInsets.all(16),
             borderRadius: 16,
             opacity: 0.12,
-            borderColor: AppTheme.neonCyan.withOpacity(0.3),
+            borderColor: AppTheme.neonCyan.withValues(alpha: 0.3),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -430,10 +451,10 @@ class _LoanRequestScreenState extends State<LoanRequestScreen> with SingleTicker
       padding: const EdgeInsets.all(20),
       borderRadius: 24,
       opacity: 0.1,
-      borderColor: AppTheme.warningOrange.withOpacity(0.2),
+      borderColor: AppTheme.warningOrange.withValues(alpha: 0.2),
       boxShadow: [
         BoxShadow(
-          color: AppTheme.warningOrange.withOpacity(0.04),
+          color: AppTheme.warningOrange.withValues(alpha: 0.04),
           blurRadius: 20,
         )
       ],
@@ -463,7 +484,7 @@ class _LoanRequestScreenState extends State<LoanRequestScreen> with SingleTicker
               padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
               borderRadius: 16,
               opacity: 0.08,
-              borderColor: _pledgeFile != null ? AppTheme.successGreen.withOpacity(0.4) : Colors.white12,
+              borderColor: _pledgeFile != null ? AppTheme.successGreen.withValues(alpha: 0.4) : Colors.white12,
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -544,10 +565,10 @@ class _LoanRequestScreenState extends State<LoanRequestScreen> with SingleTicker
             padding: const EdgeInsets.all(18),
             borderRadius: 20,
             opacity: 0.1,
-            borderColor: color.withOpacity(0.2),
+            borderColor: color.withValues(alpha: 0.2),
             boxShadow: [
               BoxShadow(
-                color: color.withOpacity(0.04),
+                color: color.withValues(alpha: 0.04),
                 blurRadius: 16,
               )
             ],
@@ -564,9 +585,9 @@ class _LoanRequestScreenState extends State<LoanRequestScreen> with SingleTicker
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
-                        color: color.withOpacity(0.15),
+                        color: color.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: color.withOpacity(0.3), width: 1),
+                        border: Border.all(color: color.withValues(alpha: 0.3), width: 1),
                       ),
                       child: Text(
                         statusLabel[status] ?? 'غير معروف',
@@ -622,58 +643,69 @@ class _LoanRequestScreenState extends State<LoanRequestScreen> with SingleTicker
                     height: 120,
                     child: Container(
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.02),
+                        color: Colors.white.withValues(alpha: 0.02),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(color: Colors.white10),
                       ),
-                      child: ListView.builder(
-                        shrinkWrap: true,
-                        physics: const ClampingScrollPhysics(),
-                        itemCount: (loan['loan_installments'] as List).length,
-                        itemBuilder: (context, i) {
-                          final inst = loan['loan_installments'][i];
-                          final double instAmount = (inst['amount'] as num).toDouble();
-                          final String dueDate = inst['due_date'] ?? '';
-                          final bool isPaid = inst['is_paid'] ?? false;
+                      child: Builder(
+                        builder: (context) {
+                          final List installmentsList = List.from(loan['loan_installments'] as List? ?? []);
+                          installmentsList.sort((a, b) {
+                            final String ad = a['due_date'] ?? '';
+                            final String bd = b['due_date'] ?? '';
+                            return ad.compareTo(bd);
+                          });
                           
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  'القسط ${i + 1}: ${dueDate}',
-                                  style: const TextStyle(fontSize: 10, color: Colors.white60, fontFamily: 'Cairo'),
-                                ),
-                                Row(
+                          return ListView.builder(
+                            shrinkWrap: true,
+                            physics: const ClampingScrollPhysics(),
+                            itemCount: installmentsList.length,
+                            itemBuilder: (context, i) {
+                              final inst = installmentsList[i];
+                              final double instAmount = (inst['amount'] as num).toDouble();
+                              final String dueDate = inst['due_date'] ?? '';
+                              final bool isPaid = inst['is_paid'] ?? false;
+                              
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
                                     Text(
-                                      '${instAmount.toStringAsFixed(0)} ${AppConstants.currency}',
-                                      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white, fontFamily: 'Cairo'),
+                                      'القسط ${i + 1}: ${dueDate}',
+                                      style: const TextStyle(fontSize: 10, color: Colors.white60, fontFamily: 'Cairo'),
                                     ),
-                                    const SizedBox(width: 8),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color: isPaid ? AppTheme.successGreen.withOpacity(0.15) : AppTheme.warningOrange.withOpacity(0.15),
-                                        borderRadius: BorderRadius.circular(6),
-                                      ),
-                                      child: Text(
-                                        isPaid ? 'مدفوع' : 'غير مدفوع',
-                                        style: TextStyle(
-                                          fontSize: 8,
-                                          fontWeight: FontWeight.bold,
-                                          color: isPaid ? AppTheme.successGreen : AppTheme.warningOrange,
-                                          fontFamily: 'Cairo',
+                                    Row(
+                                      children: [
+                                        Text(
+                                          AppConstants.formatMoney(instAmount),
+                                          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white, fontFamily: 'Cairo'),
                                         ),
-                                      ),
+                                        const SizedBox(width: 8),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: isPaid ? AppTheme.successGreen.withValues(alpha: 0.15) : AppTheme.warningOrange.withValues(alpha: 0.15),
+                                            borderRadius: BorderRadius.circular(6),
+                                          ),
+                                          child: Text(
+                                            isPaid ? 'مدفوع' : 'غير مدفوع',
+                                            style: TextStyle(
+                                              fontSize: 8,
+                                              fontWeight: FontWeight.bold,
+                                              color: isPaid ? AppTheme.successGreen : AppTheme.warningOrange,
+                                              fontFamily: 'Cairo',
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ],
                                 ),
-                              ],
-                            ),
+                              );
+                            },
                           );
-                        },
+                        }
                       ),
                     ),
                   ),
@@ -681,7 +713,18 @@ class _LoanRequestScreenState extends State<LoanRequestScreen> with SingleTicker
                 if (loan['pledge_url'] != null) ...[
                   const SizedBox(height: 14),
                   InkWell(
-                    onTap: () {},
+                    onTap: () async {
+                      final url = Uri.parse(loan['pledge_url'] ?? '');
+                      if (await canLaunchUrl(url)) {
+                        await launchUrl(url, mode: LaunchMode.externalApplication);
+                      } else {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('تعذر فتح رابط التعهد المالي')),
+                          );
+                        }
+                      }
+                    },
                     child: Row(
                       children: [
                         Icon(Icons.attachment, size: 16, color: color),

@@ -2,6 +2,9 @@
 // نظام HR Pro v6.0 - شاشة تغيير كلمة المرور الإجبارية (Mandatory Password Change Screen)
 // =========================================================================
 
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/routes/app_router.dart';
@@ -43,7 +46,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
     });
 
     try {
-      await AuthService.changePassword(_passwordController.text.trim());
+      await AuthService.changePassword(_passwordController.text.trim()).timeout(const Duration(seconds: 15));
       
       if (mounted) {
         // إشعار المستخدم بالنجاح
@@ -59,10 +62,24 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
         // التوجيه للرئيسية بعد النجاح
         context.go(AppRoutes.employeeHome);
       }
+    } on TimeoutException {
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'انتهى وقت الطلب، تأكد من جودة اتصالك بالإنترنت';
+        });
+      }
+    } on SocketException {
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'لا يوجد اتصال بالإنترنت، يرجى التحقق من الشبكة';
+        });
+      }
     } catch (e) {
-      setState(() {
-        _errorMessage = 'حدث خطأ أثناء تحديث كلمة المرور. يرجى المحاولة لاحقاً.';
-      });
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'حدث خطأ أثناء تحديث كلمة المرور. يرجى المحاولة لاحقاً.';
+        });
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -91,7 +108,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                   color: isDark ? const Color(0xFF1E293B) : Colors.white,
                   boxShadow: [
                     BoxShadow(
-                      color: AppTheme.warningOrange.withOpacity(0.3),
+                      color: AppTheme.warningOrange.withValues(alpha: 0.3),
                       blurRadius: 24,
                       spreadRadius: 4,
                     )
@@ -201,10 +218,10 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                             },
                           ),
                           filled: true,
-                          fillColor: isDark ? Colors.white.withOpacity(0.04) : Colors.black.withOpacity(0.02),
+                          fillColor: isDark ? Colors.white.withValues(alpha: 0.04) : Colors.black.withValues(alpha: 0.02),
                           enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(16),
-                            borderSide: BorderSide(color: isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.08)),
+                            borderSide: BorderSide(color: isDark ? Colors.white.withValues(alpha: 0.1) : Colors.black.withValues(alpha: 0.08)),
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(16),
@@ -260,10 +277,10 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                             },
                           ),
                           filled: true,
-                          fillColor: isDark ? Colors.white.withOpacity(0.04) : Colors.black.withOpacity(0.02),
+                          fillColor: isDark ? Colors.white.withValues(alpha: 0.04) : Colors.black.withValues(alpha: 0.02),
                           enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(16),
-                            borderSide: BorderSide(color: isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.08)),
+                            borderSide: BorderSide(color: isDark ? Colors.white.withValues(alpha: 0.1) : Colors.black.withValues(alpha: 0.08)),
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(16),
@@ -289,7 +306,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                           boxShadow: [
                             if (!_isLoading)
                               BoxShadow(
-                                color: AppTheme.warningOrange.withOpacity(0.3),
+                                color: AppTheme.warningOrange.withValues(alpha: 0.3),
                                 blurRadius: 12,
                                 offset: const Offset(0, 4),
                               )

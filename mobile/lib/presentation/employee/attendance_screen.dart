@@ -3,12 +3,16 @@
 // =========================================================================
 
 import 'dart:async';
+import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:dio/dio.dart';
 import '../../core/services/supabase_service.dart';
+import '../../core/services/attendance_sync_service.dart';
+import '../../core/services/location_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../shared/widgets/glass_container.dart';
 
@@ -40,6 +44,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
   final MapController _mapController = MapController();
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
+  StreamSubscription<Position>? _positionStreamSubscription;
 
   @override
   void initState() {
@@ -59,11 +64,100 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
 
   @override
   void dispose() {
+    _positionStreamSubscription?.cancel();
     _pulseController.dispose();
     super.dispose();
   }
 
-  // تهيئة وتحديد موقع الموظف والفرع المخصص له
+  // بدء الاستماع المباشر والمستمر للموقع الجغرافي لتحديث الإحداثيات فورياً دون تأخير
+  void _startPositionStream() {
+    _positionStreamSubscription?.cancel();
+    const locationSettings = LocationSettings(
+      accuracy: LocationAccuracy.best,
+      distanceFilter: 1, // تحديث كل متر واحد للحصول على دقة فورية
+    );
+
+    _positionStreamSubscription = Geolocator.getPositionStream(locationSettings: locationSettings).listen(
+      (Position position) {
+        if (!mounted) return;
+        if (position.isMocked) {
+          setState(() {
+            _mockDetected = true;
+            _errorMessage = 'تم رصد محاولة استخدام تطبيق لتزييف الموقع (Mock GPS). تم إيقاف التبصيم.';
+          });
+          return;
+        }
+
+        setState(() {
+          _currentPosition = position;
+          _isLocating = false;
+          _distanceToBranch = Geolocator.distanceBetween(
+            position.latitude,
+            position.longitude,
+            _branchLat,
+            _branchLng,
+          );
+        });
+      },
+      onError: (e) {
+        debugPrint('GPS Stream Error: $e');
+      },
+    );
+  }
+
+  // إعادة تحديث الموقع الجغرافي يدوياً أو تلقائياً بسرعة فائقة
+  Future<void> _refreshGpsLocation({bool userInitiated = false}) async {
+    if (userInitiated) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('جاري جلب إحداثيات الـ GPS الفورية بأعلى دقة... 📍', style: TextStyle(fontFamily: 'Cairo')),
+          duration: Duration(seconds: 1),
+          backgroundColor: AppTheme.primaryTeal,
+        ),
+      );
+    }
+
+    try {
+      final freshPos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.best,
+        ),
+      ).timeout(const Duration(seconds: 3));
+
+      if (mounted) {
+        setState(() {
+          _currentPosition = freshPos;
+          _isLocating = false;
+          _distanceToBranch = Geolocator.distanceBetween(
+            freshPos.latitude,
+            freshPos.longitude,
+            _branchLat,
+            _branchLng,
+          );
+        });
+
+        _mapController.move(LatLng(freshPos.latitude, freshPos.longitude), 16.0);
+      }
+    } catch (_) {
+      // الهبوط السريع إلى آخر موقع
+      final lastPos = await Geolocator.getLastKnownPosition();
+      if (lastPos != null && mounted) {
+        setState(() {
+          _currentPosition = lastPos;
+          _isLocating = false;
+          _distanceToBranch = Geolocator.distanceBetween(
+            lastPos.latitude,
+            lastPos.longitude,
+            _branchLat,
+            _branchLng,
+          );
+        });
+      }
+    }
+  }
+
+  // تهيئة وتحديد موقع الموظف والفرع المخصص له بسرعة فائقة (Dual-phase Fast Init)
   Future<void> _initLocationAndBranch() async {
     setState(() {
       _isLocating = true;
@@ -75,39 +169,19 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
       final user = SupabaseService.currentUser;
       if (user == null) return;
 
-      // 1. جلب بيانات فرع الموظف
-      final empData = await SupabaseService.client
-          .from('employees')
-          .select('branch_id, department_id, branches(name, latitude, longitude, radius_meters)')
-          .eq('id', user.id)
-          .maybeSingle();
-
-      if (empData != null && empData['branches'] != null) {
-        final branch = empData['branches'];
-        _branchId = empData['branch_id'];
+      // 1. قراءة البيانات من الكاش المحلي أولاً للرسم الفوري للواجهة بدون انتظار الإنترنت
+      final cached = await AttendanceSyncService.getCachedData();
+      if (cached != null && cached['branch'] != null) {
+        final branch = cached['branch'];
+        _branchId = branch['id'];
         _branchName = branch['name'] ?? 'فرع الشركة';
         _branchLat = (branch['latitude'] as num).toDouble();
         _branchLng = (branch['longitude'] as num).toDouble();
         _branchRadius = (branch['radius_meters'] as num).toDouble();
-      } else {
-        _branchName = 'لا يوجد فرع معين حالياً';
+        _workSchedule = cached['schedule'];
       }
 
-      // Fetch Work Schedule
-      final schedData = await SupabaseService.client
-          .from('work_schedules')
-          .select()
-          .or('employee_id.eq.${user.id},department_id.eq.${empData?['department_id']},branch_id.eq.${empData?['branch_id']}')
-          .limit(1)
-          .maybeSingle();
-          
-      if (schedData != null) {
-        setState(() {
-          _workSchedule = schedData;
-        });
-      }
-
-      // 2. فحص صلاحيات وتتبع الـ GPS
+      // 2. فحص صلاحيات الـ GPS
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
         throw Exception('خدمة تحديد الموقع الجغرافي (GPS) معطلة في هاتفك. يرجى تفعيلها.');
@@ -125,104 +199,155 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
         throw Exception('تم رفض صلاحية الموقع الجغرافي نهائياً، يرجى تفعيلها من إعدادات الهاتف.');
       }
 
-      // 3. جلب الموقع الحالي بدقة عالية مع مهلة انتظار وهبوط تلقائي آمن
-      Position? position;
-      try {
-        position = await Geolocator.getCurrentPosition(
-          locationSettings: const LocationSettings(
-            accuracy: LocationAccuracy.high,
-            distanceFilter: 2,
-          ),
-        ).timeout(const Duration(seconds: 8));
-      } catch (e) {
-        // هبوط تلقائي آمن إلى آخر موقع معروف للجهاز
-        position = await Geolocator.getLastKnownPosition();
-      }
-
-      if (position == null) {
-        throw Exception('تعذر تحديد موقعك الجغرافي الحالي بشكل دقيق. يرجى التأكد من تشغيل الـ GPS والوقوف في مكان مكشوف لتلقي إشارة الأقمار الصناعية، ثم المحاولة مرة أخرى.');
-      }
-
-      // 4. كشف تزييف المواقع الحاسم (Mock GPS Detection)
-      if (position.isMocked) {
-        _mockDetected = true;
-        // تسجيل محاولة التزييف في قاعدة البيانات للرقابة الفورية
-        await SupabaseService.client.from('mock_gps_attempts').insert({
-          'employee_id': user.id,
-          'latitude': position.latitude,
-          'longitude': position.longitude,
-          'app_used': 'تطبيق تزييف موقع مكتشف',
-        });
-        
-        await SupabaseService.client.from('notifications').insert({
-          'employee_id': user.id,
-          'title': 'محاولة تزييف موقع جغرافي 🚨',
-          'body': 'تم رصد محاولة استخدام تطبيق Mock GPS لتسجيل الدوام والحضور. تم منع الإجراء بنجاح.',
-          'type': 'attendance',
-        });
-        
-        throw Exception('عذراً! تم الكشف عن استخدام تطبيق لتزييف الموقع الجغرافي (Mock GPS). تم منع العملية وتسجيل الخرق الإداري.');
-      }
-
-      setState(() {
-        _currentPosition = position;
-        if (position != null) {
+      // 3. المرحلة الأولى الفورية (Fast-Path): قراءة آخر موقع معروف في أقل من 20ms لتجهيز الشاشة فوراً
+      Position? initialPosition = await Geolocator.getLastKnownPosition();
+      if (initialPosition != null && mounted) {
+        setState(() {
+          _currentPosition = initialPosition;
+          _isLocating = false;
           _distanceToBranch = Geolocator.distanceBetween(
-            position.latitude,
-            position.longitude,
+            initialPosition.latitude,
+            initialPosition.longitude,
             _branchLat,
             _branchLng,
           );
-        } else {
-          _distanceToBranch = null;
-        }
-      });
+        });
 
-      // 5. جلب حالة البصمة اليومية
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            try {
+              _mapController.move(LatLng(initialPosition.latitude, initialPosition.longitude), 16.0);
+            } catch (_) {}
+          }
+        });
+      }
+
+      // 4. بدء تتبع الإحداثيات المباشر (Active GPS Stream)
+      _startPositionStream();
+
+      // 5. محاولة جلب أحدث بيانات الفرع والجدول والبصمات من Supabase بشكل متوازي
       final todayStr = DateTime.now().toIso8601String().split('T')[0];
-      final attendanceData = await SupabaseService.client
-          .from('attendance')
-          .select()
-          .eq('employee_id', user.id)
-          .eq('work_date', todayStr)
-          .maybeSingle();
+      try {
+        final List<Future<dynamic>> parallelQueries = [
+          SupabaseService.client
+              .from('employees')
+              .select('branch_id, department_id, branches(id, name, latitude, longitude, radius_meters)')
+              .eq('id', user.id)
+              .maybeSingle(),
+          SupabaseService.client
+              .from('attendance')
+              .select()
+              .eq('employee_id', user.id)
+              .eq('work_date', todayStr)
+              .maybeSingle(),
+        ];
 
-      setState(() {
+        final results = await Future.wait(parallelQueries);
+        final empData = results[0];
+        final attendanceData = results[1];
+
+        if (empData != null && empData['branches'] != null) {
+          final branch = empData['branches'];
+          _branchId = branch['id'];
+          _branchName = branch['name'] ?? 'فرع الشركة';
+          _branchLat = (branch['latitude'] as num).toDouble();
+          _branchLng = (branch['longitude'] as num).toDouble();
+          _branchRadius = (branch['radius_meters'] as num).toDouble();
+
+          final List<String> orFilters = ['employee_id.eq.${user.id}'];
+          if (empData['department_id'] != null) {
+            orFilters.add('department_id.eq.${empData['department_id']}');
+          }
+          if (empData['branch_id'] != null) {
+            orFilters.add('branch_id.eq.${empData['branch_id']}');
+          }
+
+          final schedData = await SupabaseService.client
+              .from('work_schedules')
+              .select()
+              .or(orFilters.join(','))
+              .limit(1)
+              .maybeSingle();
+
+          _workSchedule = schedData;
+
+          // تحديث الكاش المحلي
+          await AttendanceSyncService.cacheBranchAndSchedule(
+            branchData: Map<String, dynamic>.from(branch),
+            scheduleData: schedData,
+          );
+        }
+
         _todayAttendance = attendanceData;
-        if (attendanceData != null) {
-          if (attendanceData['check_in_time'] != null && attendanceData['check_out_time'] == null) {
-            _selectedPunchType = 'check_out';
+        AttendanceSyncService.syncOfflinePunches();
+
+      } catch (networkError) {
+        debugPrint('⚠️ وضع الأوفلاين نشط: $networkError');
+      }
+
+      // 6. دمج البصمات المحلية المعلقة في طابور التزامن
+      final offlinePunches = await AttendanceSyncService.getOfflinePunchesQueue();
+      final todayOfflinePunches = offlinePunches.where((p) => p['work_date'] == todayStr).toList();
+      
+      Map<String, dynamic> combinedAttendance = _todayAttendance != null 
+          ? Map<String, dynamic>.from(_todayAttendance!) 
+          : {};
+
+      for (var punch in todayOfflinePunches) {
+        if (punch['type'] == 'check_in') {
+          combinedAttendance['check_in_time'] = punch['time'];
+          combinedAttendance['check_in_lat'] = punch['latitude'];
+          combinedAttendance['check_in_lng'] = punch['longitude'];
+          combinedAttendance['status'] = punch['status'];
+        } else if (punch['type'] == 'check_out') {
+          combinedAttendance['check_out_time'] = punch['time'];
+          combinedAttendance['check_out_lat'] = punch['latitude'];
+          combinedAttendance['check_out_lng'] = punch['longitude'];
+          combinedAttendance['status'] = punch['status'];
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          if (combinedAttendance.isNotEmpty) {
+            _todayAttendance = combinedAttendance;
+            if (combinedAttendance['check_in_time'] != null && combinedAttendance['check_out_time'] == null) {
+              _selectedPunchType = 'check_out';
+            } else {
+              _selectedPunchType = 'check_in';
+            }
           } else {
+            _todayAttendance = null;
             _selectedPunchType = 'check_in';
           }
-        } else {
-          _selectedPunchType = 'check_in';
-        }
-      });
 
-      // تحريك الكاميرا في الخريطة للتركيز على موقع الموظف والفرع بأمان
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          try {
-            _mapController.move(LatLng(_branchLat, _branchLng), 16.0);
-          } catch (e) {
-            debugPrint('Failed to move map: $e');
+          if (_currentPosition != null) {
+            _distanceToBranch = Geolocator.distanceBetween(
+              _currentPosition!.latitude,
+              _currentPosition!.longitude,
+              _branchLat,
+              _branchLng,
+            );
           }
-        }
-      });
+        });
+      }
 
     } catch (e) {
-      setState(() {
-        _errorMessage = e.toString().replaceAll('Exception:', '');
-      });
+      if (mounted) {
+        setState(() {
+          _errorMessage = e.toString().replaceAll('Exception:', '');
+        });
+      }
     } finally {
-      setState(() {
-        _isLocating = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLocating = false;
+        });
+      }
     }
   }
 
-  // إجراء عملية البصمة (حضور أو انصراف)
+  // إجراء عملية البصمة (حضور أو انصراف) - فوري وفائق السرعة دون أي تأخير شبكة مصطنع
   Future<void> _handleAttendanceSubmit() async {
     if (_currentPosition == null || _branchId == null || _mockDetected) return;
 
@@ -235,7 +360,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
     if (user == null) return;
 
     try {
-      // 1. حساب المسافة الجغرافية الفاصلة بين الموظف وحدود الفرع
+      // 1. حساب المسافة الجغرافية الفاصلة بين الموظف وحدود الفرع (محلياً)
       double distanceInMeters = Geolocator.distanceBetween(
         _currentPosition!.latitude,
         _currentPosition!.longitude,
@@ -248,99 +373,180 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
         throw Exception('أنت خارج نطاق الفرع الجغرافي المسموح به للتبصيم. المتبقي لتصل للفرع: ${outOfRange.toStringAsFixed(1)} متر.');
       }
 
-      final todayStr = DateTime.now().toIso8601String().split('T')[0];
-      final nowUtcStr = DateTime.now().toUtc().toIso8601String();
+      // التوقيت المباشر الدقيق
+      final now = DateTime.now();
+      final String todayStr = now.toIso8601String().split('T')[0];
+      final String nowUtcStr = now.toUtc().toIso8601String();
 
-      if (_selectedPunchType == 'check_in') {
-        // فحص ما إذا كان قد سجّل حضور بالفعل
-        if (_todayAttendance != null && _todayAttendance!['check_in_time'] != null) {
-          throw Exception('لقد قمت بتسجيل بصمة الحضور مسبقاً لهذا اليوم!');
+      // تحديد حالة البصمة (حاضر/متأخر/خروج مبكر) محلياً بناءً على الجدول المتاح
+      final status = _selectedPunchType == 'check_in' 
+          ? _determineAttendanceStatus() 
+          : _determineCheckOutStatus(_todayAttendance?['status'] ?? 'present');
+
+      bool isSynced = true;
+
+      try {
+        if (_selectedPunchType == 'check_in') {
+          // فحص ما إذا كان قد سجّل حضور بالفعل
+          if (_todayAttendance != null && _todayAttendance!['check_in_time'] != null) {
+            throw Exception('لقد قمت بتسجيل بصمة الحضور مسبقاً لهذا اليوم!');
+          }
+          
+          if (_todayAttendance != null) {
+            // يوجد سطر (مثلاً تبصم انصراف أولاً بالخطأ)، نقوم بتحديث الحضور فيه
+            await SupabaseService.client.from('attendance').update({
+              'check_in_time': nowUtcStr,
+              'check_in_lat': _currentPosition!.latitude,
+              'check_in_lng': _currentPosition!.longitude,
+              'status': status,
+            }).eq('employee_id', user.id).eq('work_date', todayStr);
+          } else {
+            // سطر جديد بالكامل
+            await SupabaseService.client.from('attendance').insert({
+              'employee_id': user.id,
+              'branch_id': _branchId,
+              'check_in_time': nowUtcStr,
+              'check_in_lat': _currentPosition!.latitude,
+              'check_in_lng': _currentPosition!.longitude,
+              'status': status,
+              'work_date': todayStr,
+            });
+          }
+
+          // تسجيل نقطة انطلاق التتبع في جدول location_tracking
+          try {
+            await SupabaseService.client.from('location_tracking').insert({
+              'employee_id': user.id,
+              'latitude': _currentPosition!.latitude,
+              'longitude': _currentPosition!.longitude,
+              'battery_level': 100,
+              'is_moving': false,
+              'timestamp': nowUtcStr,
+            });
+          } catch (_) {}
+
+          // تسجيل إشعار بنجاح الحضور في السيرفر
+          try {
+            await SupabaseService.client.from('notifications').insert({
+              'employee_id': user.id,
+              'title': 'بصمة حضور ناجحة 🟢',
+              'body': 'تم تسجيل حضورك اليوم بنجاح في فرع ($_branchName). دواماً موفقاً!',
+              'type': 'attendance',
+            });
+          } catch (_) {}
+        } else {
+          // تسجيل انصراف
+          if (_todayAttendance != null && _todayAttendance!['check_out_time'] != null) {
+            throw Exception('لقد قمت بتسجيل بصمة الانصراف مسبقاً لهذا اليوم!');
+          }
+
+          if (_todayAttendance == null) {
+            // لم يبصم حضور اليوم! ننشئ بصمة انصراف مع Missed Check-in ونوع دوام نصف يوم
+            await SupabaseService.client.from('attendance').insert({
+              'employee_id': user.id,
+              'branch_id': _branchId,
+              'check_out_time': nowUtcStr,
+              'check_out_lat': _currentPosition!.latitude,
+              'check_out_lng': _currentPosition!.longitude,
+              'status': 'half_day',
+              'work_date': todayStr,
+            });
+          } else {
+            // تحديث بصمة الانصراف
+            await SupabaseService.client.from('attendance').update({
+              'check_out_time': nowUtcStr,
+              'check_out_lat': _currentPosition!.latitude,
+              'check_out_lng': _currentPosition!.longitude,
+              'status': status,
+            }).eq('employee_id', user.id).eq('work_date', todayStr);
+          }
+
+          // تسجيل نقطة الانصراف في جدول location_tracking
+          try {
+            await SupabaseService.client.from('location_tracking').insert({
+              'employee_id': user.id,
+              'latitude': _currentPosition!.latitude,
+              'longitude': _currentPosition!.longitude,
+              'battery_level': 100,
+              'is_moving': false,
+              'timestamp': nowUtcStr,
+            });
+          } catch (_) {}
+
+          // تسجيل إشعار بنجاح الانصراف في السيرفر
+          try {
+            await SupabaseService.client.from('notifications').insert({
+              'employee_id': user.id,
+              'title': 'بصمة انصراف ناجحة 🔴',
+              'body': 'تم تسجيل انصرافك بنجاح من فرع ($_branchName). يعطيك العافية!',
+              'type': 'attendance',
+            });
+          } catch (_) {}
         }
-
-        final status = _determineAttendanceStatus();
+      } catch (networkError) {
+        debugPrint('⚠️ تعذر الاتصال بالسيرفر لتسجيل البصمة. سيتم حفظها محلياً: $networkError');
         
-        if (_todayAttendance != null) {
-          // يوجد سطر (مثلاً تبصم انصراف أولاً بالخطأ)، نقوم بتحديث الحضور فيه
-          await SupabaseService.client.from('attendance').update({
-            'check_in_time': nowUtcStr,
-            'check_in_lat': _currentPosition!.latitude,
-            'check_in_lng': _currentPosition!.longitude,
-            'status': status,
-          }).eq('employee_id', user.id).eq('work_date', todayStr);
-        } else {
-          // سطر جديد بالكامل
-          await SupabaseService.client.from('attendance').insert({
-            'employee_id': user.id,
-            'branch_id': _branchId,
-            'check_in_time': nowUtcStr,
-            'check_in_lat': _currentPosition!.latitude,
-            'check_in_lng': _currentPosition!.longitude,
-            'status': status,
-            'work_date': todayStr,
-          });
+        // التحقق الإضافي لمنع تكرار البصمة محلياً
+        if (_selectedPunchType == 'check_in' && _todayAttendance != null && _todayAttendance!['check_in_time'] != null) {
+          throw Exception('لقد قمت بتسجيل بصمة الحضور مسبقاً لهذا اليوم (محلياً)!');
+        }
+        if (_selectedPunchType == 'check_out' && _todayAttendance != null && _todayAttendance!['check_out_time'] != null) {
+          throw Exception('لقد قمت بتسجيل بصمة الانصراف مسبقاً لهذا اليوم (محلياً)!');
         }
 
-        // تسجيل إشعار بنجاح الحضور
-        await SupabaseService.client.from('notifications').insert({
+        isSynced = false;
+
+        // حفظ البصمة في طابور الانتظار المحلي
+        final punchData = {
           'employee_id': user.id,
-          'title': 'بصمة حضور ناجحة 🟢',
-          'body': 'تم تسجيل حضورك اليوم بنجاح في فرع ($_branchName). دواماً موفقاً!',
-          'type': 'attendance',
-        });
-      } else {
-        // تسجيل انصراف
-        if (_todayAttendance != null && _todayAttendance!['check_out_time'] != null) {
-          throw Exception('لقد قمت بتسجيل بصمة الانصراف مسبقاً لهذا اليوم!');
-        }
-
-        if (_todayAttendance == null) {
-          // لم يبصم حضور اليوم! ننشئ بصمة انصراف مع Missed Check-in ونوع دوام نصف يوم
-          await SupabaseService.client.from('attendance').insert({
-            'employee_id': user.id,
-            'branch_id': _branchId,
-            'check_out_time': nowUtcStr,
-            'check_out_lat': _currentPosition!.latitude,
-            'check_out_lng': _currentPosition!.longitude,
-            'status': 'half_day',
-            'work_date': todayStr,
-          });
-        } else {
-          final currentStatus = _todayAttendance!['status'] ?? 'present';
-          final newStatus = _determineCheckOutStatus(currentStatus);
-          // تحديث بصمة الانصراف
-          await SupabaseService.client.from('attendance').update({
-            'check_out_time': nowUtcStr,
-            'check_out_lat': _currentPosition!.latitude,
-            'check_out_lng': _currentPosition!.longitude,
-            'status': newStatus,
-          }).eq('employee_id', user.id).eq('work_date', todayStr);
-        }
-
-        // تسجيل إشعار بنجاح الانصراف
-        await SupabaseService.client.from('notifications').insert({
-          'employee_id': user.id,
-          'title': 'بصمة انصراف ناجحة 🔴',
-          'body': 'تم تسجيل انصرافك بنجاح من فرع ($_branchName). يعطيك العافية!',
-          'type': 'attendance',
-        });
+          'branch_id': _branchId,
+          'work_date': todayStr,
+          'type': _selectedPunchType,
+          'latitude': _currentPosition!.latitude,
+          'longitude': _currentPosition!.longitude,
+          'time': nowUtcStr,
+          'status': status,
+        };
+        await AttendanceSyncService.queueOfflinePunch(punchData);
       }
 
-      // إظهار حوار النجاح الخلاب
+      // تشغيل التتبع الجغرافي عند الحضور أو إيقافه عند الانصراف فوراً
+      if (_selectedPunchType == 'check_in') {
+        LocationService.recordInstantLocation(
+          employeeId: user.id,
+          latitude: _currentPosition!.latitude,
+          longitude: _currentPosition!.longitude,
+        );
+        LocationService.startTracking(employeeId: user.id);
+      } else {
+        LocationService.recordInstantLocation(
+          employeeId: user.id,
+          latitude: _currentPosition!.latitude,
+          longitude: _currentPosition!.longitude,
+        );
+        LocationService.stopTracking();
+      }
+
+      // إظهار حوار النجاح (مع توضيح حالة الحفظ المحلي إن كان أوفلاين)
       if (mounted) {
-        _showSuccessDialog(_selectedPunchType == 'check_in');
+        _showSuccessDialog(_selectedPunchType == 'check_in', isSynced);
       }
 
       // تحديث البيانات بعد البصمة
       _initLocationAndBranch();
 
     } catch (e) {
-      setState(() {
-        _errorMessage = e.toString().replaceAll('Exception:', '');
-      });
+      if (mounted) {
+        setState(() {
+          _errorMessage = e.toString().replaceAll('Exception:', '');
+        });
+      }
     } finally {
-      setState(() {
-        _isSubmitting = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+      }
     }
   }
 
@@ -401,19 +607,17 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
     return currentStatus;
   }
 
-  void _showSuccessDialog(bool isCheckIn) {
+  void _showSuccessDialog(bool isCheckIn, bool isSynced) {
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (BuildContext context) {
-        return BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: AlertDialog(
-            backgroundColor: const Color(0xFF1E293B).withOpacity(0.85),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(24),
-              side: BorderSide(color: AppTheme.successGreen.withOpacity(0.3), width: 1.5),
-            ),
+        return AlertDialog(
+          backgroundColor: const Color(0xFF1E293B),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+            side: BorderSide(color: (isSynced ? AppTheme.successGreen : AppTheme.warningOrange).withValues(alpha: 0.3), width: 1.5),
+          ),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -422,19 +626,19 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                   duration: const Duration(milliseconds: 500),
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: AppTheme.successGreen.withOpacity(0.2),
+                    color: (isSynced ? AppTheme.successGreen : AppTheme.warningOrange).withValues(alpha: 0.2),
                     shape: BoxShape.circle,
-                    border: Border.all(color: AppTheme.successGreen, width: 2),
+                    border: Border.all(color: isSynced ? AppTheme.successGreen : AppTheme.warningOrange, width: 2),
                     boxShadow: [
                       BoxShadow(
-                        color: AppTheme.successGreen.withOpacity(0.3),
+                        color: (isSynced ? AppTheme.successGreen : AppTheme.warningOrange).withValues(alpha: 0.3),
                         blurRadius: 16,
                       ),
                     ],
                   ),
-                  child: const Icon(
-                    Icons.check_circle_outline_rounded,
-                    color: AppTheme.successGreen,
+                  child: Icon(
+                    isSynced ? Icons.check_circle_outline_rounded : Icons.cloud_off_rounded,
+                    color: isSynced ? AppTheme.successGreen : AppTheme.warningOrange,
                     size: 64,
                   ),
                 ),
@@ -445,10 +649,17 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 12),
-                const Text(
-                  'نتمنى لك يوماً رائعاً ودواماً موفقاً مع عائلة شركتكم الموقرة.',
+                Text(
+                  isSynced
+                      ? 'نتمنى لك يوماً رائعاً ودواماً موفقاً مع عائلة شركتكم الموقرة.'
+                      : 'تم حفظ بصمتك محلياً بنجاح (بسبب انقطاع الإنترنت). سيتم رفعها تلقائياً فور عودة الاتصال.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 12, color: Colors.white70, fontFamily: 'Cairo'),
+                  style: TextStyle(
+                    fontSize: 12, 
+                    color: isSynced ? Colors.white70 : AppTheme.warningOrange, 
+                    fontWeight: isSynced ? FontWeight.normal : FontWeight.bold,
+                    fontFamily: 'Cairo'
+                  ),
                 ),
                 const SizedBox(height: 24),
                 ElevatedButton(
@@ -462,9 +673,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                   ),
                   child: Ink(
-                    decoration: const BoxDecoration(
-                      gradient: AppTheme.cyberGradient,
-                      borderRadius: BorderRadius.all(Radius.circular(14)),
+                    decoration: BoxDecoration(
+                      gradient: isSynced 
+                          ? AppTheme.cyberGradient 
+                          : const LinearGradient(colors: [AppTheme.warningOrange, Colors.orange]),
+                      borderRadius: const BorderRadius.all(Radius.circular(14)),
                     ),
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
@@ -474,11 +687,10 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                 ),
               ],
             ),
-          ),
-        );
-      },
-    );
-  }
+          );
+        },
+      );
+    }
 
   @override
   Widget build(BuildContext context) {
@@ -525,7 +737,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                 circles: [
                   CircleMarker(
                     point: LatLng(_branchLat, _branchLng),
-                    color: AppTheme.neonCyan.withOpacity(0.15),
+                    color: AppTheme.neonCyan.withValues(alpha: 0.15),
                     borderStrokeWidth: 2,
                     borderColor: AppTheme.neonCyan,
                     useRadiusInMeter: true,
@@ -549,7 +761,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                             decoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.65),
+                              color: Colors.black.withValues(alpha: 0.65),
                               borderRadius: BorderRadius.circular(6),
                               border: Border.all(color: AppTheme.neonCyan, width: 1),
                             ),
@@ -579,6 +791,81 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
             ],
           ),
 
+          // 1.5 لافتة معلوماتية بحدود زجاجية جذابة لتوضيح تتبع الموقع للموظف
+          Positioned(
+            top: 16,
+            left: 16,
+            right: 16,
+            child: GlassContainer(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              borderRadius: 16,
+              opacity: 0.2,
+              borderColor: AppTheme.neonCyan.withValues(alpha: 0.4),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.3),
+                  blurRadius: 10,
+                )
+              ],
+              child: Row(
+                children: [
+                  const Icon(Icons.info_outline_rounded, color: AppTheme.neonCyan, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'يتم استخدام الموقع لتأكيد التواجد ضمن الفروع المعتمدة ولأغراض إثبات الحضور والانصراف الذكي تلقائياً أثناء ساعات العمل الرسمية فقط.',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.9),
+                        fontSize: 10.5,
+                        fontFamily: 'Cairo',
+                        fontWeight: FontWeight.w600,
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // زر إعادة تمركز وتحديث الـ GPS الفوري عالي الدقة
+          Positioned(
+            bottom: 275,
+            left: 16,
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () => _refreshGpsLocation(userInitiated: true),
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0F172A).withValues(alpha: 0.85),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AppTheme.neonCyan.withValues(alpha: 0.5), width: 1.5),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppTheme.neonCyan.withValues(alpha: 0.2),
+                        blurRadius: 10,
+                      )
+                    ],
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.my_location_rounded, color: AppTheme.neonCyan, size: 18),
+                      SizedBox(width: 6),
+                      Text(
+                        'تحديث الموقع 📍',
+                        style: TextStyle(fontFamily: 'Cairo', fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+
           // 2. لوحة التحكم السفلية المتميزة بتقنية الزجاج
           Positioned(
             bottom: 16,
@@ -588,10 +875,10 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
               padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
               borderRadius: 28,
               opacity: 0.15,
-              borderColor: AppTheme.neonCyan.withOpacity(0.3),
+              borderColor: AppTheme.neonCyan.withValues(alpha: 0.3),
               boxShadow: [
                 BoxShadow(
-                  color: AppTheme.neonCyan.withOpacity(0.08),
+                  color: AppTheme.neonCyan.withValues(alpha: 0.08),
                   blurRadius: 24,
                   spreadRadius: 2,
                 )
@@ -666,9 +953,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                         padding: const EdgeInsets.all(12),
                         margin: const EdgeInsets.only(bottom: 16),
                         decoration: BoxDecoration(
-                          color: AppTheme.neonPink.withOpacity(0.1),
+                          color: AppTheme.neonPink.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: AppTheme.neonPink.withOpacity(0.3)),
+                          border: Border.all(color: AppTheme.neonPink.withValues(alpha: 0.3)),
                         ),
                         child: Row(
                           children: [
@@ -683,7 +970,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                                     style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13, fontFamily: 'Cairo'),
                                   ),
                                   Text(
-                                    'الدخول: ${_formatTimeString12Hr(_workSchedule!['check_in_time']?.toString())} | الخروج: ${_formatTimeString12Hr(_workSchedule!['check_out_time']?.toString())}\nسماحية التأخير: ${_workSchedule!['grace_period_minutes'] ?? 15} دقيقة',
+                                    'الدخول: ${_formatTimeString12Hr(_workSchedule!['check_in_time']?.toString())} | الخروج: ${_formatTimeString12Hr(_workSchedule!['check_out_time']?.toString())}',
                                     style: const TextStyle(color: Colors.white70, fontSize: 11, fontFamily: 'Cairo'),
                                   ),
                                 ],
@@ -750,9 +1037,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                             decoration: BoxDecoration(
-                              color: AppTheme.successGreen.withOpacity(0.15),
+                              color: AppTheme.successGreen.withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: AppTheme.successGreen.withOpacity(0.3)),
+                              border: Border.all(color: AppTheme.successGreen.withValues(alpha: 0.3)),
                             ),
                             child: Row(
                               children: [
@@ -788,7 +1075,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                                   : AppTheme.cyberGradient,
                               boxShadow: [
                                 BoxShadow(
-                                  color: (_selectedPunchType == 'check_out' ? AppTheme.neonPink : AppTheme.neonCyan).withOpacity(0.4),
+                                  color: (_selectedPunchType == 'check_out' ? AppTheme.neonPink : AppTheme.neonCyan).withValues(alpha: 0.4),
                                   blurRadius: 20,
                                   spreadRadius: 2,
                                 )
@@ -812,9 +1099,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                         width: double.infinity,
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         decoration: BoxDecoration(
-                          color: AppTheme.successGreen.withOpacity(0.15),
+                          color: AppTheme.successGreen.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: AppTheme.successGreen.withOpacity(0.3)),
+                          border: Border.all(color: AppTheme.successGreen.withValues(alpha: 0.3)),
                         ),
                         child: const Center(
                           child: Text(
@@ -845,9 +1132,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
       margin: const EdgeInsets.only(bottom: 20),
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
+        color: Colors.white.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.1)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
       ),
       child: Row(
         children: [
@@ -865,11 +1152,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(12),
                   color: _selectedPunchType == 'check_in'
-                      ? AppTheme.neonCyan.withOpacity(0.2)
+                      ? AppTheme.neonCyan.withValues(alpha: 0.2)
                       : Colors.transparent,
                   border: Border.all(
                     color: _selectedPunchType == 'check_in'
-                        ? AppTheme.neonCyan.withOpacity(0.5)
+                        ? AppTheme.neonCyan.withValues(alpha: 0.5)
                         : Colors.transparent,
                     width: 1,
                   ),
@@ -915,11 +1202,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(12),
                   color: _selectedPunchType == 'check_out'
-                      ? AppTheme.neonPink.withOpacity(0.2)
+                      ? AppTheme.neonPink.withValues(alpha: 0.2)
                       : Colors.transparent,
                   border: Border.all(
                     color: _selectedPunchType == 'check_out'
-                        ? AppTheme.neonPink.withOpacity(0.5)
+                        ? AppTheme.neonPink.withValues(alpha: 0.5)
                         : Colors.transparent,
                     width: 1,
                   ),

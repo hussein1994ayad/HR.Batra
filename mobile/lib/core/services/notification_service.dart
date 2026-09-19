@@ -22,7 +22,7 @@ class NotificationService {
   static bool _initialized = false;
   static String lastError = '';
 
-  static const String channelId = 'hr_pro_channel_v4';
+  static const String channelId = 'hr_pro_channel_v5';
   static const String channelName = 'HR Pro Notifications';
 
   static Future<void> init() async {
@@ -40,19 +40,34 @@ class NotificationService {
       );
 
       // 3. إنشاء قناة إشعارات عالية الأهمية للأندرويد مع الصوت المخصص
-      await _localNotifications
+      final androidPlugin = _localNotifications
           .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin>()
-          ?.createNotificationChannel(
-            const AndroidNotificationChannel(
-              channelId,
-              channelName,
-              description: 'إشعارات إدارية وتنبيهات هامة',
-              importance: Importance.max,
-              sound: RawResourceAndroidNotificationSound('special_chime'),
-              playSound: true,
-            ),
-          );
+              AndroidFlutterLocalNotificationsPlugin>();
+
+      if (androidPlugin != null) {
+        await androidPlugin.createNotificationChannel(
+          const AndroidNotificationChannel(
+            channelId,
+            channelName,
+            description: 'إشعارات إدارية وتنبيهات هامة',
+            importance: Importance.max,
+            sound: RawResourceAndroidNotificationSound('special_chime'),
+            playSound: true,
+          ),
+        );
+
+        // إنشاء قناة الخدمة الخلفية للتتبع الجغرافي لتفادي ForegroundServiceStartNotAllowedException
+        await androidPlugin.createNotificationChannel(
+          const AndroidNotificationChannel(
+            'hrpro_location_service',
+            'HR Pro Background Sync & Location',
+            description: 'خدمة التتبع والمزامنة بالخلفية لتوثيق الحضور',
+            importance: Importance.low,
+            playSound: false,
+            enableVibration: false,
+          ),
+        );
+      }
 
       // 4. الاستماع للإشعارات أثناء فتح التطبيق
       FirebaseMessaging.onMessage.listen((RemoteMessage message) {

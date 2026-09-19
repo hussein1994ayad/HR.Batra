@@ -11,6 +11,13 @@ class AppConstants {
   static const String currency = 'د.ع'; // العملة المعتمدة: دينار عراقي
   static const String appName = 'HR Pro';
 
+  // دالة لتنسيق المبالغ المالية مع فواصل الآلاف (نقاط)
+  static String formatMoney(num amount) {
+    final String str = amount.round().toString();
+    final RegExp reg = RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))');
+    return '${str.replaceAllMapped(reg, (Match m) => '${m[1]}.')} $currency';
+  }
+
   // معايير التتبع الجغرافي وكشف التزييف
   static const int minStopDurationMinutes = 5; // مدة الوقفة المعتمدة (5 دقائق)
   static const double mockGpsThresholdAccuracy = 1.0; // دقة الكشف

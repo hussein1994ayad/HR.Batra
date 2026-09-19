@@ -25,11 +25,13 @@ class MainLayout extends StatefulWidget {
 
 class _MainLayoutState extends State<MainLayout> {
   late int _currentIndex;
+  final Set<int> _loadedTabs = {};
 
   @override
   void initState() {
     super.initState();
     _currentIndex = widget.initialTab;
+    _loadedTabs.add(widget.initialTab);
   }
 
   @override
@@ -39,6 +41,7 @@ class _MainLayoutState extends State<MainLayout> {
     if (oldWidget.initialTab != widget.initialTab) {
       setState(() {
         _currentIndex = widget.initialTab;
+        _loadedTabs.add(widget.initialTab);
       });
     }
   }
@@ -46,27 +49,44 @@ class _MainLayoutState extends State<MainLayout> {
   void _onTabChanged(int index) {
     setState(() {
       _currentIndex = index;
+      _loadedTabs.add(index);
     });
+  }
+
+  Widget _buildScreen(int index) {
+    switch (index) {
+      case 0:
+        return HomeScreen(onTabChange: _onTabChanged);
+      case 1:
+        return const AttendanceScreen();
+      case 2:
+        return const LeaveRequestScreen();
+      case 3:
+        return const LoanRequestScreen();
+      case 4:
+        return const SettingsScreen();
+      default:
+        return const SizedBox.shrink();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    // قائمة الشاشات المرتبطة بشريط التنقل
-    // نمرر دوال التنقل للشاشة الرئيسية لتسهيل الانتقال عبر بطاقاتها الفعالة
-    final List<Widget> screens = [
-      HomeScreen(onTabChange: _onTabChanged),
-      const AttendanceScreen(),
-      const LeaveRequestScreen(),
-      const LoanRequestScreen(),
-      const SettingsScreen(),
-    ];
-
     return GlassBackground(
       child: Scaffold(
         backgroundColor: Colors.transparent,
         body: IndexedStack(
           index: _currentIndex,
-          children: screens,
+          children: List.generate(5, (index) {
+            final isLoaded = _loadedTabs.contains(index);
+            if (!isLoaded) {
+              return const SizedBox.shrink();
+            }
+            return TickerMode(
+              enabled: _currentIndex == index,
+              child: _buildScreen(index),
+            );
+          }),
         ),
         bottomNavigationBar: PremiumBottomNavBar(
           currentIndex: _currentIndex,

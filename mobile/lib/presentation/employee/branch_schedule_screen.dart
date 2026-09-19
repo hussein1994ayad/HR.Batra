@@ -31,8 +31,27 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
   }
 
   Future<void> _loadBranches() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
+
+    final user = SupabaseService.currentUser;
+    if (user == null) {
+      if (mounted) Navigator.pop(context);
+      return;
+    }
+
     try {
+      final employeeRes = await SupabaseService.client
+          .from('employees')
+          .select('role')
+          .eq('id', user.id)
+          .maybeSingle();
+
+      if (employeeRes == null || (employeeRes['role'] != 'admin' && employeeRes['role'] != 'manager')) {
+        if (mounted) Navigator.pop(context);
+        return;
+      }
+
       // جلب بيانات الأفرع وجداول العمل بالتوازي
       final results = await Future.wait([
         SupabaseService.client
@@ -71,7 +90,7 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
     } catch (e) {
       debugPrint('خطأ في تحميل الأفرع: $e');
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -107,7 +126,7 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
               decoration: BoxDecoration(
                 color: const Color(0xFF1A1F3A),
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-                border: Border.all(color: AppTheme.neonCyan.withOpacity(0.2)),
+                border: Border.all(color: AppTheme.neonCyan.withValues(alpha: 0.2)),
               ),
               child: Column(
                 children: [
@@ -129,7 +148,7 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
                         Container(
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
-                            color: AppTheme.neonCyan.withOpacity(0.15),
+                            color: AppTheme.neonCyan.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: const Icon(Icons.schedule_rounded, color: AppTheme.neonCyan, size: 22),
@@ -153,7 +172,7 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
                                 style: TextStyle(
                                   fontFamily: 'Cairo',
                                   fontSize: 11,
-                                  color: Colors.white.withOpacity(0.5),
+                                  color: Colors.white.withValues(alpha: 0.5),
                                 ),
                               ),
                             ],
@@ -193,8 +212,8 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
                                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                                 decoration: BoxDecoration(
                                   color: isSelected
-                                      ? (isFriday ? AppTheme.warningOrange.withOpacity(0.2) : AppTheme.neonCyan.withOpacity(0.2))
-                                      : Colors.white.withOpacity(0.05),
+                                      ? (isFriday ? AppTheme.warningOrange.withValues(alpha: 0.2) : AppTheme.neonCyan.withValues(alpha: 0.2))
+                                      : Colors.white.withValues(alpha: 0.05),
                                   borderRadius: BorderRadius.circular(12),
                                   border: Border.all(
                                     color: isSelected
@@ -304,7 +323,7 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                                     decoration: BoxDecoration(
-                                      color: AppTheme.warningOrange.withOpacity(0.15),
+                                      color: AppTheme.warningOrange.withValues(alpha: 0.15),
                                       borderRadius: BorderRadius.circular(8),
                                     ),
                                     child: DropdownButton<int>(
@@ -329,7 +348,7 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                                     decoration: BoxDecoration(
-                                      color: AppTheme.neonCyan.withOpacity(0.15),
+                                      color: AppTheme.neonCyan.withValues(alpha: 0.15),
                                       borderRadius: BorderRadius.circular(8),
                                     ),
                                     child: DropdownButton<int>(
@@ -359,6 +378,18 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
                       child: ElevatedButton(
                         onPressed: () async {
                           try {
+                            if (shiftStart.hour > shiftEnd.hour || (shiftStart.hour == shiftEnd.hour && shiftStart.minute >= shiftEnd.minute)) {
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('يجب أن يكون وقت البداية قبل وقت النهاية!', style: TextStyle(fontFamily: 'Cairo')),
+                                    backgroundColor: AppTheme.dangerRed,
+                                  ),
+                                );
+                              }
+                              return;
+                            }
+
                             final data = {
                               'branch_id': branch['zone_id'],
                               'name': 'دوام فرع ${branch['zone_name']}',
@@ -443,12 +474,12 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
         padding: const EdgeInsets.all(14),
         borderRadius: 14,
         opacity: 0.08,
-        borderColor: color.withOpacity(0.3),
+        borderColor: color.withValues(alpha: 0.3),
         child: Column(
           children: [
             Icon(icon, color: color, size: 20),
             const SizedBox(height: 6),
-            Text(label, style: TextStyle(fontFamily: 'Cairo', fontSize: 10, color: Colors.white.withOpacity(0.5))),
+            Text(label, style: TextStyle(fontFamily: 'Cairo', fontSize: 10, color: Colors.white.withValues(alpha: 0.5))),
             const SizedBox(height: 4),
             Text(
               formattedTime,
@@ -543,8 +574,8 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
                           borderRadius: 20,
                           opacity: 0.08,
                           borderColor: hasSchedule
-                              ? AppTheme.successGreen.withOpacity(0.25)
-                              : AppTheme.warningOrange.withOpacity(0.25),
+                              ? AppTheme.successGreen.withValues(alpha: 0.25)
+                              : AppTheme.warningOrange.withValues(alpha: 0.25),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -553,7 +584,7 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
                                   Container(
                                     padding: const EdgeInsets.all(8),
                                     decoration: BoxDecoration(
-                                      color: (hasSchedule ? AppTheme.successGreen : AppTheme.warningOrange).withOpacity(0.15),
+                                      color: (hasSchedule ? AppTheme.successGreen : AppTheme.warningOrange).withValues(alpha: 0.15),
                                       borderRadius: BorderRadius.circular(10),
                                     ),
                                     child: Icon(
@@ -628,11 +659,11 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
                                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                       decoration: BoxDecoration(
                                         color: isWork
-                                            ? AppTheme.neonCyan.withOpacity(0.15)
-                                            : AppTheme.dangerRed.withOpacity(0.08),
+                                            ? AppTheme.neonCyan.withValues(alpha: 0.15)
+                                            : AppTheme.dangerRed.withValues(alpha: 0.08),
                                         borderRadius: BorderRadius.circular(6),
                                         border: Border.all(
-                                          color: isWork ? AppTheme.neonCyan.withOpacity(0.3) : Colors.white10,
+                                          color: isWork ? AppTheme.neonCyan.withValues(alpha: 0.3) : Colors.white10,
                                         ),
                                       ),
                                       child: Text(
@@ -663,12 +694,12 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 6),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
+          color: color.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Column(
           children: [
-            Text(label, style: TextStyle(fontFamily: 'Cairo', fontSize: 8, color: color.withOpacity(0.7))),
+            Text(label, style: TextStyle(fontFamily: 'Cairo', fontSize: 8, color: color.withValues(alpha: 0.7))),
             Text(value, style: TextStyle(fontFamily: 'Cairo', fontSize: 12, fontWeight: FontWeight.bold, color: color)),
           ],
         ),

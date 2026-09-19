@@ -38,8 +38,8 @@ class GlassBackground extends StatelessWidget {
                         shape: BoxShape.circle,
                         gradient: RadialGradient(
                           colors: [
-                            (isDark ? AppTheme.primaryTeal : AppTheme.primaryTealLight).withOpacity(isDark ? 0.3 : 0.15),
-                            (isDark ? AppTheme.primaryTeal : AppTheme.primaryTealLight).withOpacity(0.0),
+                            (isDark ? AppTheme.primaryTeal : AppTheme.primaryTealLight).withValues(alpha: isDark ? 0.3 : 0.15),
+                            (isDark ? AppTheme.primaryTeal : AppTheme.primaryTealLight).withValues(alpha: 0.0),
                           ],
                         ),
                       ),
@@ -57,8 +57,8 @@ class GlassBackground extends StatelessWidget {
                         shape: BoxShape.circle,
                         gradient: RadialGradient(
                           colors: [
-                            AppTheme.accentIndigo.withOpacity(isDark ? 0.25 : 0.12),
-                            AppTheme.accentIndigo.withOpacity(0.0),
+                            AppTheme.accentIndigo.withValues(alpha: isDark ? 0.25 : 0.12),
+                            AppTheme.accentIndigo.withValues(alpha: 0.0),
                           ],
                         ),
                       ),
@@ -76,8 +76,8 @@ class GlassBackground extends StatelessWidget {
                         shape: BoxShape.circle,
                         gradient: RadialGradient(
                           colors: [
-                            AppTheme.neonPink.withOpacity(isDark ? 0.18 : 0.08),
-                            AppTheme.neonPink.withOpacity(0.0),
+                            AppTheme.neonPink.withValues(alpha: isDark ? 0.18 : 0.08),
+                            AppTheme.neonPink.withValues(alpha: 0.0),
                           ],
                         ),
                       ),

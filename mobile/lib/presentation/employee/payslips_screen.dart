@@ -3,8 +3,10 @@
 // =========================================================================
 
 import 'package:flutter/material.dart';
+import '../../core/services/pdf_export_service.dart';
 import '../../core/services/supabase_service.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/constants/constants.dart';
 import '../shared/widgets/glass_background.dart';
 
 class PayslipsScreen extends StatefulWidget {
@@ -16,6 +18,8 @@ class PayslipsScreen extends StatefulWidget {
 
 class _PayslipsScreenState extends State<PayslipsScreen> {
   bool _isLoading = true;
+  String? _exportingSlipId;
+  Map<String, dynamic>? _employeeProfile;
   List<Map<String, dynamic>> _slips = [];
   Map<String, List<Map<String, dynamic>>> _slipsDetails = {}; // Record of slip_id -> list of details
   int _cycleStartDay = 25;
@@ -37,6 +41,7 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
 
       if (data != null && data['value'] != null) {
         final policy = data['value'] as Map<String, dynamic>;
+        if (!mounted) return;
         setState(() {
           _cycleStartDay = policy['cycle_start_day'] != null ? int.parse(policy['cycle_start_day'].toString()) : 25;
           _cycleEndDay = policy['cycle_end_day'] != null ? int.parse(policy['cycle_end_day'].toString()) : 24;
@@ -90,20 +95,31 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
     if (user == null) return;
 
     try {
-      final data = await SupabaseService.client
-          .from('salary_slips')
-          .select('*')
-          .eq('employee_id', user.id)
-          .eq('status', 'published')
-          .order('work_month', ascending: false);
+      final results = await Future.wait([
+        SupabaseService.client
+            .from('salary_slips')
+            .select('*')
+            .eq('employee_id', user.id)
+            .eq('status', 'published')
+            .order('work_month', ascending: false),
+        SupabaseService.client
+            .from('employees')
+            .select('full_name, branch_id, branches(name)')
+            .eq('id', user.id)
+            .maybeSingle(),
+      ]);
 
+      if (!mounted) return;
       setState(() {
-        _slips = List<Map<String, dynamic>>.from(data);
+        _slips = List<Map<String, dynamic>>.from(results[0] as List);
+        if (results[1] != null) {
+          _employeeProfile = results[1] as Map<String, dynamic>;
+        }
       });
     } catch (e) {
       debugPrint('خطأ في تحميل كشوف الرواتب: $e');
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -126,11 +142,147 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
           .lte('issue_date', cycle['end']!)
           .order('issue_date', ascending: true);
 
+      if (!mounted) return;
       setState(() {
         _slipsDetails[slipId] = List<Map<String, dynamic>>.from(detailsData);
       });
     } catch (e) {
       debugPrint('خطأ في تحميل تفاصيل المكافآت والخصومات: $e');
+    }
+  }
+
+  // تصدير كشف الراتب الشهري بصيغة PDF
+  Future<void> _exportPayslipToPdf(Map<String, dynamic> slip) async {
+    final String slipId = slip['id'] ?? '';
+    final String workMonth = slip['work_month'] ?? '0000-00';
+    setState(() => _exportingSlipId = slipId);
+
+    try {
+      // 1. التأكد من تحميل التفاصيل
+      if (!_slipsDetails.containsKey(slipId)) {
+        await _loadSlipDetails(slipId, workMonth);
+      }
+
+      final List<Map<String, dynamic>> details = _slipsDetails[slipId] ?? [];
+      final bonuses = details.where((d) => d['type'] == 'bonus').toList();
+      final deductions = details.where((d) => d['type'] == 'deduction').toList();
+
+      final String empName = _employeeProfile?['full_name'] ?? 'الموظف';
+      final String branchName = _employeeProfile?['branches']?['name'] ?? '';
+
+      final String filePath = await PdfExportService.generatePayslipPdf(
+        employeeName: empName,
+        branchName: branchName,
+        workMonth: workMonth,
+        basicSalary: (slip['basic_salary'] as num?)?.toDouble() ?? 0.0,
+        allowances: (slip['allowances'] as num?)?.toDouble() ?? 0.0,
+        deductions: (slip['deductions'] as num?)?.toDouble() ?? 0.0,
+        loansDeduction: (slip['loans_deduction'] as num?)?.toDouble() ?? 0.0,
+        netSalary: (slip['net_salary'] as num?)?.toDouble() ?? 0.0,
+        bonusesList: bonuses,
+        deductionsList: deductions,
+      );
+
+      if (mounted) {
+        // فتح الملف مباشرة عبر عارض المستندات
+        await PdfExportService.openPdfFile(filePath);
+
+        if (!mounted) return;
+        showModalBottomSheet(
+          context: context,
+          backgroundColor: const Color(0xFF0F172A),
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          builder: (ctx) => Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2)),
+                ),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: AppTheme.successGreen.withValues(alpha: 0.2),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.check_circle_rounded, color: AppTheme.successGreen, size: 24),
+                    ),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('تم إنشاء كشف الراتب بنجاح! 📄', style: TextStyle(fontFamily: 'Cairo', fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white)),
+                          Text('تم حفظ نسخة رسمية في مجلد المستندات والتنزيلات (Downloads)', style: TextStyle(fontFamily: 'Cairo', fontSize: 11, color: Colors.white60)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          PdfExportService.openPdfFile(filePath);
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.primaryTeal,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        icon: const Icon(Icons.visibility_rounded, size: 18),
+                        label: const Text('فتح الكشف 📄', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 12)),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          PdfExportService.sharePdfFile(filePath);
+                        },
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppTheme.neonCyan,
+                          side: const BorderSide(color: AppTheme.neonCyan),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        icon: const Icon(Icons.share_rounded, size: 18),
+                        label: const Text('مشاركة / واتساب 📤', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 12)),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('خطأ في تصدير PDF للراتب: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('فشل إنشاء ملف PDF: $e', style: const TextStyle(fontFamily: 'Cairo')),
+            backgroundColor: AppTheme.dangerRed,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _exportingSlipId = null);
     }
   }
 
@@ -196,19 +348,22 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
   }
 
   Widget _buildSlipCard(Map<String, dynamic> slip, bool isDark) {
-    final String slipId = slip['id'];
+    final String slipId = slip['id'] ?? '';
     final String workMonth = slip['work_month'] ?? '0000-00';
-    final double basic = (slip['basic_salary'] as num).toDouble();
-    final double allowances = (slip['allowances'] as num).toDouble();
-    final double deductions = (slip['deductions'] as num).toDouble();
-    final double loans = (slip['loans_deduction'] as num).toDouble();
-    final double net = (slip['net_salary'] as num).toDouble();
+    final double basic = (slip['basic_salary'] as num?)?.toDouble() ?? 0.0;
+    final double allowances = (slip['allowances'] as num?)?.toDouble() ?? 0.0;
+    final double deductions = (slip['deductions'] as num?)?.toDouble() ?? 0.0;
+    final double loans = (slip['loans_deduction'] as num?)?.toDouble() ?? 0.0;
+    final double net = (slip['net_salary'] as num?)?.toDouble() ?? 0.0;
 
-    final String arabicMonth = _getArabicMonthName(workMonth);
+    final parts = workMonth.split('-');
+    final String monthNum = parts.length > 1 ? int.parse(parts[1]).toString() : '0';
+    final String year = parts.isNotEmpty ? parts[0] : '2026';
+    final String arabicMonth = 'شهر $monthNum / $year';
 
     return ExpansionTile(
       title: Text(
-        'كشف راتب شهر: $arabicMonth',
+        'كشف راتب $arabicMonth',
         style: const TextStyle(
           color: Colors.white,
           fontWeight: FontWeight.w800,
@@ -217,7 +372,7 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
         ),
       ),
       subtitle: Text(
-        'صافي الراتب: ${net.toStringAsFixed(0)} د.ع',
+        'صافي الراتب: ${AppConstants.formatMoney(net)}',
         style: const TextStyle(
           color: AppTheme.neonCyan,
           fontWeight: FontWeight.bold,
@@ -227,14 +382,14 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
       ),
       collapsedShape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
-        side: BorderSide(color: AppTheme.neonCyan.withOpacity(0.2)),
+        side: BorderSide(color: AppTheme.neonCyan.withValues(alpha: 0.2)),
       ),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
         side: const BorderSide(color: AppTheme.neonCyan),
       ),
-      backgroundColor: const Color(0xFF1E293B).withOpacity(0.35),
-      collapsedBackgroundColor: const Color(0xFF1E293B).withOpacity(0.15),
+      backgroundColor: const Color(0xFF1E293B).withValues(alpha: 0.35),
+      collapsedBackgroundColor: const Color(0xFF1E293B).withValues(alpha: 0.15),
       iconColor: AppTheme.neonCyan,
       collapsedIconColor: Colors.white70,
       onExpansionChanged: (expanded) {
@@ -272,7 +427,7 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
                     ),
                   ),
                   Text(
-                    '${net.toStringAsFixed(0)} د.ع',
+                    AppConstants.formatMoney(net),
                     style: const TextStyle(
                       fontFamily: 'Cairo',
                       fontWeight: FontWeight.w900,
@@ -313,7 +468,7 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
                       : Column(
                           children: _slipsDetails[slipId]!.map((item) {
                             final String type = item['type'] ?? 'bonus';
-                            final double amount = (item['amount'] as num).toDouble();
+                            final double amount = (item['amount'] as num?)?.toDouble() ?? 0.0;
                             final String reason = item['reason'] ?? '';
                             final String date = item['issue_date'] ?? '';
 
@@ -332,7 +487,7 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
                                     ),
                                   ),
                                   Text(
-                                    '${isBonus ? "+" : "-"}${amount.toStringAsFixed(0)} د.ع',
+                                    '${isBonus ? "+" : "-"}${AppConstants.formatMoney(amount)}',
                                     style: TextStyle(
                                       fontFamily: 'Cairo',
                                       fontSize: 10,
@@ -347,6 +502,31 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
                         ),
                 ),
               ],
+
+              const SizedBox(height: 16),
+
+              // 4. زر تحميل وطباعة كشف الراتب PDF
+              SizedBox(
+                width: double.infinity,
+                height: 44,
+                child: ElevatedButton.icon(
+                  onPressed: _exportingSlipId == slipId ? null : () => _exportPayslipToPdf(slip),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.primaryTeal.withValues(alpha: 0.3),
+                    foregroundColor: AppTheme.neonCyan,
+                    side: const BorderSide(color: AppTheme.neonCyan, width: 1.2),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    elevation: 0,
+                  ),
+                  icon: _exportingSlipId == slipId
+                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.neonCyan))
+                      : const Icon(Icons.picture_as_pdf_rounded, size: 20),
+                  label: Text(
+                    _exportingSlipId == slipId ? 'جاري إنشاء ملف PDF...' : 'تحميل وطباعة كشف الراتب PDF 📄',
+                    style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 12),
+                  ),
+                ),
+              ),
             ],
           ),
         ),
@@ -368,7 +548,7 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
             style: const TextStyle(fontFamily: 'Cairo', fontSize: 12, color: Colors.white70),
           ),
           Text(
-            '${isDeduction ? "-" : "+"}${val.toStringAsFixed(0)} د.ع',
+            '${isDeduction ? "-" : "+"}${AppConstants.formatMoney(val)}',
             style: TextStyle(
               fontFamily: 'Cairo',
               fontSize: 12,
@@ -379,19 +559,5 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
         ],
       ),
     );
-  }
-
-  String _getArabicMonthName(String monthStr) {
-    try {
-      final parts = monthStr.split('-');
-      final int month = int.parse(parts[1]);
-      final List<String> arabicMonths = [
-        'كانون الثاني', 'شباط', 'آذار', 'نيسان', 'أيار', 'حزيران',
-        'تموز', 'آب', 'أيلول', 'تشرين الأول', 'تشرين الثاني', 'كانون الأول'
-      ];
-      return "${arabicMonths[month - 1]} ${parts[0]}";
-    } catch (_) {
-      return monthStr;
-    }
   }
 }

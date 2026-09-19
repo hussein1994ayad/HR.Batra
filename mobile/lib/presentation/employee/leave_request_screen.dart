@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
 import '../../core/services/supabase_service.dart';
 import '../../core/services/file_upload_service.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../core/theme/app_theme.dart';
 import '../shared/widgets/glass_container.dart';
 
@@ -188,6 +189,68 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
   Future<void> _submitLeaveRequest() async {
     if (!_formKey.currentState!.validate()) return;
 
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final startDay = DateTime(_startDate.year, _startDate.month, _startDate.day);
+    
+    if (startDay.isBefore(today)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('لا يمكن طلب إجازة لتاريخ مضى', style: TextStyle(fontFamily: 'Cairo')), backgroundColor: AppTheme.dangerRed)
+        );
+      }
+      return;
+    }
+
+    if (!_isHourly) {
+      final endDay = DateTime(_endDate.year, _endDate.month, _endDate.day);
+      if (endDay.isBefore(startDay)) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('تاريخ النهاية يجب أن يكون بعد تاريخ البداية أو مساوياً له', style: TextStyle(fontFamily: 'Cairo')), backgroundColor: AppTheme.dangerRed)
+          );
+        }
+        return;
+      }
+    } else {
+      final startMin = _startHour.hour * 60 + _startHour.minute;
+      final endMin = _endHour.hour * 60 + _endHour.minute;
+      if (endMin <= startMin) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('وقت النهاية يجب أن يكون بعد وقت البداية', style: TextStyle(fontFamily: 'Cairo')), backgroundColor: AppTheme.dangerRed)
+          );
+        }
+        return;
+      }
+    }
+
+    bool isOverlap = false;
+    for (var req in _leaveHistory) {
+      if (req['status'] == 'rejected' || req['status'] == 'cancelled') continue;
+      if (req['start_date'] == null || req['end_date'] == null) continue;
+      
+      final reqStart = DateTime.parse(req['start_date']).toLocal();
+      final reqEnd = DateTime.parse(req['end_date']).toLocal();
+      final rStartDay = DateTime(reqStart.year, reqStart.month, reqStart.day);
+      final rEndDay = DateTime(reqEnd.year, reqEnd.month, reqEnd.day);
+      final endDay = _isHourly ? startDay : DateTime(_endDate.year, _endDate.month, _endDate.day);
+      
+      if (!(endDay.isBefore(rStartDay) || startDay.isAfter(rEndDay))) {
+        isOverlap = true;
+        break;
+      }
+    }
+
+    if (isOverlap) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('توجد إجازة سابقة تتعارض مع التواريخ المحددة', style: TextStyle(fontFamily: 'Cairo')), backgroundColor: AppTheme.dangerRed)
+        );
+      }
+      return;
+    }
+
     setState(() => _isUploading = true);
     final user = SupabaseService.currentUser;
     if (user == null) return;
@@ -203,7 +266,7 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
 
         attachmentUrl = await FileUploadService.uploadFile(
           file: _attachmentFile!,
-          bucketName: 'documents',
+          bucketName: 'employee-documents',
           remotePath: remotePath,
         );
       }
@@ -419,10 +482,10 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
       padding: const EdgeInsets.all(16),
       borderRadius: 20,
       opacity: 0.12,
-      borderColor: color.withOpacity(0.3),
+      borderColor: color.withValues(alpha: 0.3),
       boxShadow: [
         BoxShadow(
-          color: color.withOpacity(0.08),
+          color: color.withValues(alpha: 0.08),
           blurRadius: 16,
           spreadRadius: 1,
         )
@@ -447,10 +510,10 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
       padding: const EdgeInsets.all(20),
       borderRadius: 24,
       opacity: 0.1,
-      borderColor: AppTheme.neonCyan.withOpacity(0.2),
+      borderColor: AppTheme.neonCyan.withValues(alpha: 0.2),
       boxShadow: [
         BoxShadow(
-          color: AppTheme.neonCyan.withOpacity(0.04),
+          color: AppTheme.neonCyan.withValues(alpha: 0.04),
           blurRadius: 20,
         )
       ],
@@ -467,11 +530,11 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
               style: const TextStyle(color: Colors.white, fontSize: 13, fontFamily: 'Cairo'),
               decoration: InputDecoration(
                 filled: true,
-                fillColor: Colors.white.withOpacity(0.04),
+                fillColor: Colors.white.withValues(alpha: 0.04),
                 prefixIcon: const Icon(Icons.category_rounded, color: AppTheme.neonCyan),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(16),
-                  borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
+                  borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(16),
@@ -507,7 +570,7 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
                 Switch.adaptive(
                   value: _isHourly,
                   activeColor: AppTheme.neonCyan,
-                  activeTrackColor: AppTheme.neonCyan.withOpacity(0.3),
+                  activeTrackColor: AppTheme.neonCyan.withValues(alpha: 0.3),
                   onChanged: (val) {
                     setState(() => _isHourly = val);
                   },
@@ -530,9 +593,9 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: _isPaid ? AppTheme.successGreen.withOpacity(0.15) : AppTheme.dangerRed.withOpacity(0.15),
+                    color: _isPaid ? AppTheme.successGreen.withValues(alpha: 0.15) : AppTheme.dangerRed.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: _isPaid ? AppTheme.successGreen.withOpacity(0.3) : AppTheme.dangerRed.withOpacity(0.3)),
+                    border: Border.all(color: _isPaid ? AppTheme.successGreen.withValues(alpha: 0.3) : AppTheme.dangerRed.withValues(alpha: 0.3)),
                   ),
                   child: Row(
                     children: [
@@ -549,9 +612,9 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
                       Switch.adaptive(
                         value: _isPaid,
                         activeColor: AppTheme.successGreen,
-                        activeTrackColor: AppTheme.successGreen.withOpacity(0.3),
+                        activeTrackColor: AppTheme.successGreen.withValues(alpha: 0.3),
                         inactiveThumbColor: AppTheme.dangerRed,
-                        inactiveTrackColor: AppTheme.dangerRed.withOpacity(0.3),
+                        inactiveTrackColor: AppTheme.dangerRed.withValues(alpha: 0.3),
                         onChanged: (val) {
                           setState(() => _isPaid = val);
                         },
@@ -578,9 +641,9 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
                           child: Container(
                             padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
                             decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.04),
+                              color: Colors.white.withValues(alpha: 0.04),
                               borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: Colors.white.withOpacity(0.1)),
+                              border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
                             ),
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -606,9 +669,9 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
                           child: Container(
                             padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
                             decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.04),
+                              color: Colors.white.withValues(alpha: 0.04),
                               borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: Colors.white.withOpacity(0.1)),
+                              border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
                             ),
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -636,9 +699,9 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.04),
+                        color: Colors.white.withValues(alpha: 0.04),
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Colors.white.withOpacity(0.1)),
+                        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
                       ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -663,9 +726,9 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
                               child: Container(
                                 padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
                                 decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.04),
+                                  color: Colors.white.withValues(alpha: 0.04),
                                   borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(color: Colors.white.withOpacity(0.1)),
+                                  border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
                                 ),
                                 child: Row(
                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -691,9 +754,9 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
                               child: Container(
                                 padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
                                 decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.04),
+                                  color: Colors.white.withValues(alpha: 0.04),
                                   borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(color: Colors.white.withOpacity(0.1)),
+                                  border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
                                 ),
                                 child: Row(
                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -725,10 +788,10 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
                 hintText: 'اكتب الأسباب بالتفصيل هنا...',
                 hintStyle: const TextStyle(color: Colors.white38, fontSize: 12, fontFamily: 'Cairo'),
                 filled: true,
-                fillColor: Colors.white.withOpacity(0.04),
+                fillColor: Colors.white.withValues(alpha: 0.04),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(16),
-                  borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
+                  borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(16),
@@ -752,10 +815,10 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
               child: Container(
                 padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.04),
+                  color: Colors.white.withValues(alpha: 0.04),
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
-                    color: _attachmentFile != null ? AppTheme.successGreen : Colors.white.withOpacity(0.1),
+                    color: _attachmentFile != null ? AppTheme.successGreen : Colors.white.withValues(alpha: 0.1),
                     width: _attachmentFile != null ? 1.5 : 1,
                   ),
                 ),
@@ -791,7 +854,7 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
                 boxShadow: [
                   if (!_isUploading)
                     BoxShadow(
-                      color: AppTheme.neonCyan.withOpacity(0.3),
+                      color: AppTheme.neonCyan.withValues(alpha: 0.3),
                       blurRadius: 12,
                       offset: const Offset(0, 4),
                     )
@@ -892,10 +955,10 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
             padding: const EdgeInsets.all(16),
             borderRadius: 20,
             opacity: 0.08,
-            borderColor: cardColor.withOpacity(0.3),
+            borderColor: cardColor.withValues(alpha: 0.3),
             boxShadow: [
               BoxShadow(
-                color: cardColor.withOpacity(0.04),
+                color: cardColor.withValues(alpha: 0.04),
                 blurRadius: 10,
               )
             ],
@@ -912,9 +975,9 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
-                        color: cardColor.withOpacity(0.15),
+                        color: cardColor.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: cardColor.withOpacity(0.3)),
+                        border: Border.all(color: cardColor.withValues(alpha: 0.3)),
                       ),
                       child: Text(
                         statusLabel[status] ?? 'غير معروف',
@@ -945,7 +1008,15 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
                 if (req['attachment_url'] != null) ...[
                   const SizedBox(height: 12),
                   InkWell(
-                    onTap: () {}, // فتح المرفق
+                    onTap: () async {
+                      final url = req['attachment_url'];
+                      if (url != null && url.toString().isNotEmpty) {
+                        final uri = Uri.parse(url.toString());
+                        if (await canLaunchUrl(uri)) {
+                          await launchUrl(uri, mode: LaunchMode.externalApplication);
+                        }
+                      }
+                    }, // فتح المرفق
                     child: const Row(
                       children: [
                         Icon(Icons.attachment_rounded, size: 16, color: AppTheme.neonCyan),

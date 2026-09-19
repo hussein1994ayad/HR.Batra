@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 
 class GlassContainer extends StatelessWidget {
@@ -37,38 +36,43 @@ class GlassContainer extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     
-    // الألوان الافتراضية المناسبة للنمط البلوري
+    // الألوان الافتراضية عالية الأداء لنمط الزجاج المعتم والخفيف جداً على المعالج
+    final effectiveOpacity = opacity <= 0.1 
+        ? (isDark ? 0.75 : 0.85) 
+        : opacity;
+    
     final baseColor = color ?? (isDark ? const Color(0xFF1E293B) : Colors.white);
     final finalBorderColor = borderColor ?? 
-        (isDark ? Colors.white.withAlpha(20) : Colors.black.withAlpha(15));
+        (isDark ? Colors.white.withAlpha(25) : Colors.black.withAlpha(15));
+
+    final effectiveShadow = boxShadow ?? [
+      BoxShadow(
+        color: isDark 
+            ? Colors.black.withValues(alpha: 0.2) 
+            : Colors.black.withValues(alpha: 0.04),
+        blurRadius: 16,
+        spreadRadius: 0,
+        offset: const Offset(0, 4),
+      ),
+    ];
 
     return Container(
       width: width,
       height: height,
       margin: margin,
+      padding: padding,
       alignment: alignment,
       decoration: BoxDecoration(
+        color: baseColor.withValues(alpha: effectiveOpacity),
         borderRadius: BorderRadius.circular(borderRadius),
-        boxShadow: boxShadow,
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(borderRadius),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
-          child: Container(
-            padding: padding,
-            decoration: BoxDecoration(
-              color: baseColor.withOpacity(opacity),
-              borderRadius: BorderRadius.circular(borderRadius),
-              border: border ?? Border.all(
-                color: finalBorderColor,
-                width: 1.2,
-              ),
-            ),
-            child: child,
-          ),
+        border: border ?? Border.all(
+          color: finalBorderColor,
+          width: 1.0,
         ),
+        boxShadow: effectiveShadow,
       ),
+      child: child,
     );
   }
 }
+

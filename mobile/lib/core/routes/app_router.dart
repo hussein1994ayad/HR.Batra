@@ -21,6 +21,8 @@ import '../../presentation/employee/branch_management_screen.dart';
 import '../../presentation/employee/announcement_screen.dart';
 import '../../presentation/employee/attendance_report_screen.dart';
 import '../../presentation/employee/payslips_screen.dart';
+import '../../presentation/employee/admin_loans_management_screen.dart';
+import '../../presentation/employee/admin_live_tracking_screen.dart';
 
 // تعريف المسارات كمسميات
 class AppRoutes {
@@ -37,6 +39,8 @@ class AppRoutes {
   static const String employeeNotifications = '/employee/notifications';
   static const String employeePayslips = '/employee/payslips';
   static const String adminDashboard = '/admin/dashboard';
+  static const String adminLoans = '/admin/loans';
+  static const String adminTracking = '/admin/tracking';
   static const String adminTrash = '/admin/trash';
   static const String adminStorage = '/admin/storage';
   static const String adminBranchSchedule = '/admin/branch-schedule';
@@ -64,6 +68,13 @@ final GoRouter appRouter = GoRouter(
       return AppRoutes.employeeHome;
     }
     
+    if (loggedIn && state.matchedLocation.startsWith('/admin')) {
+      final role = AuthService.currentUserRole;
+      if (role != 'admin' && role != 'manager') {
+        return AppRoutes.employeeHome;
+      }
+    }
+
     return null;
   },
   
@@ -205,6 +216,20 @@ final GoRouter appRouter = GoRouter(
         return const AttendanceReportScreen();
       },
     ),
+    
+    GoRoute(
+      path: AppRoutes.adminLoans,
+      builder: (BuildContext context, GoRouterState state) {
+        return const AdminLoansManagementScreen();
+      },
+    ),
+    
+    GoRoute(
+      path: AppRoutes.adminTracking,
+      builder: (BuildContext context, GoRouterState state) {
+        return const AdminLiveTrackingScreen();
+      },
+    ),
   ],
 );
 
@@ -224,8 +249,8 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _checkAuth() async {
-    // محاكاة تأخير بسيط لإظهار شعار الشركة الأنيق وتجهيز الاتصال بـ Supabase
-    await Future.delayed(const Duration(seconds: 2));
+    // تشغيل فحص الجلسة بسرعة فائقة وسلاسة دون تأخير مصطنع
+    await Future.delayed(const Duration(milliseconds: 400));
     if (!mounted) return;
 
     if (SupabaseService.isAuthenticated) {

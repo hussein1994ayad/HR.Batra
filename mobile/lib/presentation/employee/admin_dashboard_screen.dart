@@ -3,12 +3,14 @@
 // =========================================================================
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../core/services/supabase_service.dart';
 import '../../core/theme/app_theme.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/routes/app_router.dart';
 import '../shared/widgets/glass_background.dart';
 import '../shared/widgets/glass_container.dart';
+import '../../core/constants/constants.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -58,7 +60,31 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
 
   // تحميل البيانات الشاملة من قاعدة بيانات Supabase
   Future<void> _loadDashboardData() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
+
+    final user = SupabaseService.currentUser;
+    if (user == null) {
+      if (mounted) context.go(AppRoutes.login);
+      return;
+    }
+
+    try {
+      final employeeRes = await SupabaseService.client
+          .from('employees')
+          .select('role')
+          .eq('id', user.id)
+          .maybeSingle();
+
+      if (employeeRes == null || (employeeRes['role'] != 'admin' && employeeRes['role'] != 'manager')) {
+        if (mounted) context.go(AppRoutes.employeeHome);
+        return;
+      }
+    } catch (e) {
+      debugPrint('Error verifying role: $e');
+      if (mounted) context.go(AppRoutes.employeeHome);
+      return;
+    }
 
     // تحميل الفروع والموظفين أولاً وبشكل متوازي إن وجدوا فارغين لتجهيز قائمة الموظفين المفردين
     try {
@@ -352,6 +378,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
       secLogs.sort((a, b) => DateTime.parse(b['timestamp']).compareTo(DateTime.parse(a['timestamp'])));
     }
 
+    if (!mounted) return;
     setState(() {
       _presentCount = present;
       _absentCount = absent;
@@ -374,15 +401,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
     final adminUser = SupabaseService.currentUser;
     if (adminUser == null) return;
 
-    try {
-      setState(() => _isLoading = true);
+    if (!mounted) return;
+    setState(() => _isLoading = true);
 
+    try {
       if (applyDeduction) {
         // تحديث السجل الفعلي الموجود مسبقاً
         await SupabaseService.client.from('attendance').update({
           'deduction_applied': applyDeduction,
           'deduction_reason': reason,
-          'deduction_status': applyDeduction ? 'applied' : 'ignored',
+          'deduction_status': 'applied',
         }).eq('id', attendanceId);
 
         // إدراج الخصم في جدول المكافآت/الخصومات
@@ -445,7 +473,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
     } catch (e) {
       debugPrint('خطأ في معالجة القرار: $e');
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -514,7 +542,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
       // 2. إشعار الموظف
       final String actionTitle = approve ? 'الموافقة على طلب السلفة 💸' : 'رفض طلب السلفة ❌';
       final String actionBody = approve 
-          ? 'تمت الموافقة على سلفة بقيمة ${amount.toStringAsFixed(0)} د.ع وتوزيعها على $months أقساط شهرية.'
+          ? 'تمت الموافقة على سلفة بقيمة ${AppConstants.formatMoney(amount)} وتوزيعها على $months أقساط شهرية.'
           : 'نأسف، تم رفض طلب السلفة المقدم من قبلك.';
 
       await SupabaseService.client.from('notifications').insert({
@@ -649,6 +677,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
           ),
           actions: [
             IconButton(
+              icon: const Icon(Icons.location_searching_rounded, color: AppTheme.neonCyan),
+              tooltip: 'خريطة التتبع الحي للموظفين',
+              onPressed: () => context.push(AppRoutes.adminTracking),
+            ),
+            IconButton(
+              icon: const Icon(Icons.account_balance_wallet_rounded, color: AppTheme.neonCyan),
+              tooltip: 'متابعة السلف وكشوف Excel',
+              onPressed: () => context.push(AppRoutes.adminLoans),
+            ),
+            IconButton(
               icon: const Icon(Icons.bar_chart_rounded, color: AppTheme.neonCyan),
               tooltip: 'تقارير الحضور',
               onPressed: () => context.push(AppRoutes.adminAttendanceReport),
@@ -689,9 +727,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                           height: 38,
                           padding: const EdgeInsets.symmetric(horizontal: 10),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.06),
+                            color: Colors.white.withValues(alpha: 0.06),
                             borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: AppTheme.neonCyan.withOpacity(0.2)),
+                            border: Border.all(color: AppTheme.neonCyan.withValues(alpha: 0.2)),
                           ),
                           child: DropdownButtonHideUnderline(
                             child: DropdownButton<String>(
@@ -729,9 +767,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                           height: 38,
                           padding: const EdgeInsets.symmetric(horizontal: 10),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.06),
+                            color: Colors.white.withValues(alpha: 0.06),
                             borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: AppTheme.successGreen.withOpacity(0.2)),
+                            border: Border.all(color: AppTheme.successGreen.withValues(alpha: 0.2)),
                           ),
                           child: DropdownButtonHideUnderline(
                             child: DropdownButton<String>(
@@ -802,9 +840,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                             height: 34,
                             padding: const EdgeInsets.symmetric(horizontal: 12),
                             decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.06),
+                              color: Colors.white.withValues(alpha: 0.06),
                               borderRadius: BorderRadius.circular(10),
-                              border: Border.all(color: AppTheme.warningOrange.withOpacity(0.2)),
+                              border: Border.all(color: AppTheme.warningOrange.withValues(alpha: 0.2)),
                             ),
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -844,9 +882,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                             height: 34,
                             padding: const EdgeInsets.symmetric(horizontal: 12),
                             decoration: BoxDecoration(
-                              color: AppTheme.dangerRed.withOpacity(0.15),
+                              color: AppTheme.dangerRed.withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(10),
-                              border: Border.all(color: AppTheme.dangerRed.withOpacity(0.3)),
+                              border: Border.all(color: AppTheme.dangerRed.withValues(alpha: 0.3)),
                             ),
                             child: const Row(
                               children: [
@@ -934,7 +972,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
       decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.08))),
+        border: Border(bottom: BorderSide(color: Colors.white.withValues(alpha: 0.08))),
       ),
       child: Row(
         children: [
@@ -953,13 +991,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
       borderRadius: 14,
       opacity: 0.12,
-      borderColor: color.withOpacity(0.35),
+      borderColor: color.withValues(alpha: 0.35),
       child: Row(
         children: [
           Container(
             padding: const EdgeInsets.all(4),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.15),
+              color: color.withValues(alpha: 0.15),
               shape: BoxShape.circle,
             ),
             child: Icon(icon, color: color, size: 16),
@@ -1078,14 +1116,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
         if (status == 'غياب') suggestedAmount = 25000.0;
 
         TextEditingController reasonCtrl = TextEditingController(text: missedMinutes > 0 ? 'تأخير مفقود: ${_formatDurationArabic(missedMinutes)}' : '');
-        TextEditingController amountCtrl = TextEditingController(text: suggestedAmount > 0 ? suggestedAmount.toStringAsFixed(0) : '');
+        final String suggestedText = suggestedAmount > 0 
+            ? suggestedAmount.round().toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.')
+            : '';
+        TextEditingController amountCtrl = TextEditingController(text: suggestedText);
 
         return GlassContainer(
           margin: const EdgeInsets.only(bottom: 14),
           padding: const EdgeInsets.all(16),
           borderRadius: 20,
           opacity: 0.08,
-          borderColor: status == 'غياب' ? AppTheme.dangerRed.withOpacity(0.3) : AppTheme.warningOrange.withOpacity(0.3),
+          borderColor: status == 'غياب' ? AppTheme.dangerRed.withValues(alpha: 0.3) : AppTheme.warningOrange.withValues(alpha: 0.3),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1099,9 +1140,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: status == 'غياب' ? AppTheme.dangerRed.withOpacity(0.15) : AppTheme.warningOrange.withOpacity(0.15),
+                      color: status == 'غياب' ? AppTheme.dangerRed.withValues(alpha: 0.15) : AppTheme.warningOrange.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: status == 'غياب' ? AppTheme.dangerRed.withOpacity(0.3) : AppTheme.warningOrange.withOpacity(0.3)),
+                      border: Border.all(color: status == 'غياب' ? AppTheme.dangerRed.withValues(alpha: 0.3) : AppTheme.warningOrange.withValues(alpha: 0.3)),
                     ),
                     child: Text(
                       status,
@@ -1131,12 +1172,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                     child: TextField(
                       controller: amountCtrl,
                       keyboardType: TextInputType.number,
+                      inputFormatters: [DotThousandsSeparatorInputFormatter()],
                       style: const TextStyle(fontFamily: 'Cairo', color: Colors.white, fontSize: 12),
                       decoration: InputDecoration(
                         hintText: 'مبلغ الخصم (د.ع)',
                         hintStyle: const TextStyle(color: Colors.white38),
                         filled: true,
-                        fillColor: Colors.white.withOpacity(0.05),
+                        fillColor: Colors.white.withValues(alpha: 0.05),
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
                         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                       ),
@@ -1152,7 +1194,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                         hintText: 'سبب الخصم...',
                         hintStyle: const TextStyle(color: Colors.white38),
                         filled: true,
-                        fillColor: Colors.white.withOpacity(0.05),
+                        fillColor: Colors.white.withValues(alpha: 0.05),
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
                         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                       ),
@@ -1166,7 +1208,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                   Expanded(
                     child: ElevatedButton(
                       onPressed: () {
-                        final amt = double.tryParse(amountCtrl.text) ?? 0;
+                        final cleanText = amountCtrl.text.replaceAll('.', '').replaceAll(',', '').trim();
+                        final amt = double.tryParse(cleanText) ?? 0;
                         _processDecision(item['id'], item['employee_id'], status, true, reasonCtrl.text.isEmpty ? 'تم الخصم بناءً على تعليمات الإدارة' : reasonCtrl.text, amt);
                       },
                       style: ElevatedButton.styleFrom(
@@ -1227,7 +1270,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
           padding: const EdgeInsets.all(16),
           borderRadius: 20,
           opacity: 0.08,
-          borderColor: AppTheme.neonCyan.withOpacity(0.25),
+          borderColor: AppTheme.neonCyan.withValues(alpha: 0.25),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1241,9 +1284,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: AppTheme.neonCyan.withOpacity(0.15),
+                      color: AppTheme.neonCyan.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: AppTheme.neonCyan.withOpacity(0.3)),
+                      border: Border.all(color: AppTheme.neonCyan.withValues(alpha: 0.3)),
                     ),
                     child: Text(
                       _getLeaveTypeText(leaveType),
@@ -1301,26 +1344,93 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
 
   // تبويب طلبات السلف
   Widget _buildLoansTab(bool isDark) {
-    if (_pendingLoans.isEmpty) {
-      return _buildEmptyState('لا توجد طلبات سلف معلقة حالياً 💸');
-    }
-
-    return ListView.builder(
+    return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-      itemCount: _pendingLoans.length,
-      itemBuilder: (context, index) {
-        final item = _pendingLoans[index];
-        final empName = item['employees']?['full_name'] ?? 'موظف غير معروف';
-        final double amount = (item['amount'] as num).toDouble();
-        final int months = item['installment_count'] as int;
-        final double monthly = (item['installment_amount'] as num).toDouble();
+      children: [
+        // بطاقة الانتقال إلى سجل ومتابعة المستلفين وكشوف حساب Excel
+        GestureDetector(
+          onTap: () => context.push(AppRoutes.adminLoans),
+          child: Container(
+            margin: const EdgeInsets.only(bottom: 16),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  AppTheme.primaryTeal.withValues(alpha: 0.35),
+                  AppTheme.cyberPurple.withValues(alpha: 0.25),
+                ],
+                begin: Alignment.topRight,
+                end: Alignment.bottomLeft,
+              ),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: AppTheme.neonCyan.withValues(alpha: 0.4), width: 1.5),
+              boxShadow: [
+                BoxShadow(
+                  color: AppTheme.neonCyan.withValues(alpha: 0.12),
+                  blurRadius: 16,
+                  spreadRadius: 1,
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryTeal,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Icon(Icons.table_chart_rounded, color: Colors.white, size: 24),
+                ),
+                const SizedBox(width: 14),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'سجل ومتابعة المستلفين وكشوف Excel 📊',
+                        style: TextStyle(
+                          fontFamily: 'Cairo',
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                          color: Colors.white,
+                        ),
+                      ),
+                      SizedBox(height: 2),
+                      Text(
+                        'عرض مبالغ السلف، الأقساط المسددة والمتبقية، صور التعهدات، وتصدير كشف Excel احترافي',
+                        style: TextStyle(
+                          fontFamily: 'Cairo',
+                          fontSize: 10,
+                          color: Colors.white70,
+                          height: 1.3,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                const Icon(Icons.arrow_forward_ios_rounded, color: AppTheme.neonCyan, size: 16),
+              ],
+            ),
+          ),
+        ),
 
-        return GlassContainer(
+        if (_pendingLoans.isEmpty)
+          _buildEmptyState('لا توجد طلبات سلف جديدة معلقة حالياً 💸')
+        else ...
+          _pendingLoans.map((item) {
+            final empName = item['employees']?['full_name'] ?? 'موظف غير معروف';
+            final double amount = (item['amount'] as num).toDouble();
+            final int months = item['installment_count'] as int;
+            final double monthly = (item['installment_amount'] as num).toDouble();
+
+            return GlassContainer(
           margin: const EdgeInsets.only(bottom: 14),
           padding: const EdgeInsets.all(16),
           borderRadius: 20,
           opacity: 0.08,
-          borderColor: AppTheme.cyberPurple.withOpacity(0.25),
+          borderColor: AppTheme.cyberPurple.withValues(alpha: 0.25),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1332,7 +1442,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white, fontFamily: 'Cairo'),
                   ),
                   Text(
-                    '${amount.toStringAsFixed(0)} د.ع',
+                    AppConstants.formatMoney(amount),
                     style: const TextStyle(color: AppTheme.neonCyan, fontWeight: FontWeight.w900, fontSize: 14, fontFamily: 'Cairo'),
                   ),
                 ],
@@ -1343,7 +1453,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
               ),
               _buildInfoRow(Icons.schedule_rounded, 'عدد الأقساط', '$months أشهر متتالية'),
               const SizedBox(height: 10),
-              _buildInfoRow(Icons.price_change_rounded, 'القسط الشهري', '${monthly.toStringAsFixed(0)} د.ع / الشهر'),
+              _buildInfoRow(Icons.price_change_rounded, 'القسط الشهري', '${AppConstants.formatMoney(monthly)} / الشهر'),
               if (item['pledge_url'] != null && (item['pledge_url'] as String).isNotEmpty) ...[
                 const SizedBox(height: 10),
                 _buildInfoRow(Icons.draw_rounded, 'تعهد السلفة الموقّع', 'رابط التعهد الإلزامي المرفق 📝', isLink: true, url: item['pledge_url']),
@@ -1380,9 +1490,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
             ],
           ),
         );
-      },
-    );
-  }
+      }).toList(),
+    ],
+  );
+}
 
   // تبويب الأجهزة المعتمدة
   Widget _buildDevicesTab(bool isDark) {
@@ -1405,7 +1516,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
           padding: const EdgeInsets.all(16),
           borderRadius: 20,
           opacity: 0.08,
-          borderColor: AppTheme.neonPink.withOpacity(0.25),
+          borderColor: AppTheme.neonPink.withValues(alpha: 0.25),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1479,10 +1590,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
           padding: const EdgeInsets.all(16),
           borderRadius: 20,
           opacity: 0.12,
-          borderColor: AppTheme.dangerRed.withOpacity(0.35),
+          borderColor: AppTheme.dangerRed.withValues(alpha: 0.35),
           boxShadow: [
             BoxShadow(
-              color: AppTheme.dangerRed.withOpacity(0.12),
+              color: AppTheme.dangerRed.withValues(alpha: 0.12),
               blurRadius: 10,
             )
           ],
@@ -1499,9 +1610,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: AppTheme.dangerRed.withOpacity(0.15),
+                      color: AppTheme.dangerRed.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: AppTheme.dangerRed.withOpacity(0.3)),
+                      border: Border.all(color: AppTheme.dangerRed.withValues(alpha: 0.3)),
                     ),
                     child: const Text(
                       'خطر أمني ⚠️',
@@ -1639,5 +1750,57 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
       default:
         return 'إجازة أخرى';
     }
+  }
+
+  Color _getStatusColor(String status) {
+    switch (status) {
+      case 'approved':
+        return AppTheme.successGreen;
+      case 'rejected':
+        return AppTheme.neonPink;
+      default:
+        return AppTheme.warningOrange;
+    }
+  }
+}
+
+class DotThousandsSeparatorInputFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
+    if (newValue.text.isEmpty) {
+      return newValue;
+    }
+    final String cleanText = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
+    if (cleanText.isEmpty) {
+      return newValue.copyWith(text: '');
+    }
+    final double? parsed = double.tryParse(cleanText);
+    if (parsed == null) return oldValue;
+    
+    final String formatted = parsed.round().toString().replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+      (Match m) => '${m[1]}.',
+    );
+    
+    int digitsBeforeCursor = 0;
+    for (int i = 0; i < newValue.selection.baseOffset; i++) {
+      if (newValue.text[i].contains(RegExp(r'[0-9]'))) {
+        digitsBeforeCursor++;
+      }
+    }
+    
+    int newOffset = 0;
+    int digitCount = 0;
+    while (digitCount < digitsBeforeCursor && newOffset < formatted.length) {
+      if (formatted[newOffset].contains(RegExp(r'[0-9]'))) {
+        digitCount++;
+      }
+      newOffset++;
+    }
+    
+    return TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: newOffset),
+    );
   }
 }

@@ -6,13 +6,18 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:open_filex/open_filex.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../core/routes/app_router.dart';
+import '../../core/services/auth_service.dart';
 import '../../core/services/supabase_service.dart';
 import '../../core/services/file_upload_service.dart';
 import '../../core/services/device_service.dart';
 import '../../core/services/notification_service.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/constants/constants.dart';
 import '../shared/widgets/glass_container.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -64,7 +69,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           .eq('id', user.id)
           .maybeSingle();
 
-      if (data != null) {
+      if (data != null && mounted) {
         setState(() {
           _employeeName = data['full_name'] ?? 'موظف';
           _email = data['email'] ?? 'name@company.com';
@@ -82,16 +87,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final model = await DeviceService.getDeviceModel();
       final os = await DeviceService.getOSVersion();
 
-      setState(() {
-        _deviceUUID = uuid;
-        _deviceModel = model;
-        _osVersion = os;
-      });
+      if (mounted) {
+        setState(() {
+          _deviceUUID = uuid;
+          _deviceModel = model;
+          _osVersion = os;
+        });
+      }
 
     } catch (e) {
       debugPrint('خطأ في تحميل ملف الموظف: $e');
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -129,19 +136,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
       final remotePath = '${user.id}/${DateTime.now().millisecondsSinceEpoch}.$fileExtension';
 
-      // رفع الصورة الشخصية الجديدة وحذف القديمة تلقائياً من الـ Bucket
+      // 1. رفع الصورة الشخصية الجديدة المضغوطة إلى التخزين أولاً دون مسح الصورة القديمة
       final newAvatarUrl = await FileUploadService.uploadFile(
         file: file,
         bucketName: 'avatars',
         remotePath: remotePath,
-        oldRemotePath: oldPath,
       );
 
-      // تحديث الأفاتار في جدول الموظفين
+      // 2. تحديث رابط الصورة في جدول الموظفين في قاعدة البيانات
       await SupabaseService.client
           .from('employees')
           .update({'avatar_url': newAvatarUrl})
           .eq('id', user.id);
+
+      // 3. التحقق والتأكد من نجاح التحديث في قاعدة البيانات، ثم حذف الصورة القديمة بأمان من التخزين
+      if (oldPath != null && oldPath.isNotEmpty && oldPath != remotePath) {
+        try {
+          await SupabaseService.client.storage
+              .from('avatars')
+              .remove([oldPath]);
+        } catch (storageErr) {
+          debugPrint('تحذير: تعذر حذف الصورة القديمة من التخزين بعد التحديث: $storageErr');
+        }
+      }
 
       setState(() {
         _avatarUrl = newAvatarUrl;
@@ -187,7 +204,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
       final newDocUrl = await FileUploadService.uploadFile(
         file: file,
-        bucketName: 'documents',
+        bucketName: 'employee-documents',
         remotePath: remotePath,
       );
 
@@ -224,22 +241,112 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  // Delete Document
+  // معاينة وفتح وتنزيل الوثيقة
+  Future<void> _previewDocument(String url) async {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: const Color(0xFF0F172A),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Row(
+                    children: [
+                      Icon(Icons.description_rounded, color: AppTheme.neonCyan, size: 20),
+                      SizedBox(width: 8),
+                      Text('معاينة الوثيقة المعتمدة 📄', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: Colors.white, fontSize: 13)),
+                    ],
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, color: Colors.white60, size: 18),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  constraints: const BoxConstraints(maxHeight: 300),
+                  color: Colors.black26,
+                  child: Image.network(
+                    url,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => const Padding(
+                      padding: EdgeInsets.all(30),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.picture_as_pdf_rounded, color: AppTheme.neonPink, size: 48),
+                          SizedBox(height: 8),
+                          Text('مستند PDF أو ملف رقمي', style: TextStyle(fontFamily: 'Cairo', color: Colors.white70, fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () async {
+                        Navigator.pop(ctx);
+                        await Share.shareUri(Uri.parse(url));
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.primaryTeal,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      icon: const Icon(Icons.share_rounded, size: 16),
+                      label: const Text('مشاركة / تحميل 📤', style: TextStyle(fontFamily: 'Cairo', fontSize: 11, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Delete Document (مخصص للآدمن والمدراء فقط)
   Future<void> _deleteDocument(String url) async {
+    final bool isAdminOrManager = AuthService.currentUserRole == 'admin' || AuthService.currentUserRole == 'manager';
+    if (!isAdminOrManager) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('عذراً، حذف الوثائق المعتمدة مخصص للآدمن ومسؤول الـ HR فقط 🔒', style: TextStyle(fontFamily: 'Cairo')),
+          backgroundColor: AppTheme.dangerRed,
+        ),
+      );
+      return;
+    }
+
     final user = SupabaseService.currentUser;
     if (user == null) return;
     
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('حذف وثيقة', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
-        content: const Text('هل أنت متأكد أنك تريد حذف هذه الوثيقة من السيرفر بشكل نهائي؟', style: TextStyle(fontFamily: 'Cairo')),
+        backgroundColor: const Color(0xFF0F172A),
+        title: const Text('حذف وثيقة', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: Colors.white)),
+        content: const Text('هل أنت متأكد أنك تريد حذف هذه الوثيقة من السيرفر بشكل نهائي؟', style: TextStyle(fontFamily: 'Cairo', color: Colors.white70)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('إلغاء', style: TextStyle(fontFamily: 'Cairo', color: Colors.grey))),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: AppTheme.dangerRed),
             onPressed: () => Navigator.pop(context, true), 
-            child: const Text('حذف', style: TextStyle(fontFamily: 'Cairo'))
+            child: const Text('حذف نهائي', style: TextStyle(fontFamily: 'Cairo'))
           ),
         ],
       )
@@ -251,14 +358,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
       try {
         final uri = Uri.parse(url);
         final segments = uri.pathSegments;
-        final index = segments.indexOf('documents');
+        int index = segments.indexOf('employee-documents');
+        if (index == -1) index = segments.indexOf('documents');
         if (index != -1 && index + 1 < segments.length) {
           pathToDelete = segments.sublist(index + 1).join('/');
         }
       } catch (_) {}
 
       if (pathToDelete != null) {
-        await SupabaseService.client.storage.from('documents').remove([pathToDelete]);
+        await SupabaseService.client.storage.from('employee-documents').remove([pathToDelete]);
       }
 
       final updatedList = _documentUrls.where((u) => u != url).toList();
@@ -303,6 +411,162 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  // طلب حذف الحساب
+  Future<void> _handleDeleteAccountRequest() async {
+    final user = SupabaseService.currentUser;
+    if (user == null) return;
+
+    // إظهار مؤشر انتظار
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(color: AppTheme.neonCyan),
+      ),
+    );
+
+    try {
+      // 1. تحقق من القروض النشطة بذمة الموظف
+      final loans = await SupabaseService.client
+          .from('loans')
+          .select('remaining_amount')
+          .eq('employee_id', user.id)
+          .eq('status', 'approved');
+
+      // إغلاق مؤشر الانتظار
+      if (mounted) Navigator.pop(context);
+
+      double totalRemaining = 0.0;
+      if (loans != null && loans.isNotEmpty) {
+        for (var loan in loans) {
+          totalRemaining += (loan['remaining_amount'] as num?)?.toDouble() ?? 0.0;
+        }
+      }
+
+      if (totalRemaining > 0) {
+        // حظر الطلب لوجود سلفة غير مسددة بالكامل
+        if (mounted) {
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('⚠️ عذراً، لا يمكن حذف الحساب', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+              content: Text(
+                'لا يمكنك تقديم طلب حذف الحساب لوجود سلف غير مكتملة السداد بذمتك بقيمة إجمالية قدرها (${AppConstants.formatMoney(totalRemaining)}). يرجى سداد الأقساط المتبقية ومراجعة الإدارة.',
+                style: const TextStyle(fontFamily: 'Cairo', fontSize: 13),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('حسناً', style: TextStyle(fontFamily: 'Cairo', color: AppTheme.neonCyan)),
+                ),
+              ],
+            ),
+          );
+        }
+        return;
+      }
+
+      // 2. تأكيد إرسال الطلب للآدمن
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('طلب حذف الحساب ⚠️', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+            content: const Text(
+              'هل أنت متأكد من رغبتك في تقديم طلب حذف حسابك نهائياً؟ سيتم إرسال الطلب للمسؤول (الأدمن) للمراجعة والموافقة عليه.',
+              style: TextStyle(fontFamily: 'Cairo', fontSize: 13),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('إلغاء', style: TextStyle(fontFamily: 'Cairo', color: Colors.grey)),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  Navigator.pop(context); // إغلاق الديالوج
+                  
+                  // إظهار مؤشر إرسال الطلب
+                  showDialog(
+                    context: context,
+                    barrierDismissible: false,
+                    builder: (context) => const Center(
+                      child: CircularProgressIndicator(color: AppTheme.neonCyan),
+                    ),
+                  );
+
+                  try {
+                    // جلب معرّف الآدمن الأول لتوجيه الإشعار له
+                    final adminRes = await SupabaseService.client
+                        .from('employees')
+                        .select('id')
+                        .eq('role', 'admin')
+                        .limit(1)
+                        .maybeSingle();
+
+                    String? adminId;
+                    if (adminRes != null) {
+                      adminId = adminRes['id'] as String?;
+                    }
+
+                    // في حال لم نجد آدمن، نستخدم آدمن افتراضي أو نترك الحقل
+                    adminId ??= user.id;
+
+                    // تسجيل إشعار للأدمن
+                    await SupabaseService.client.from('notifications').insert({
+                      'employee_id': adminId,
+                      'title': 'طلب حذف حساب موظف ⚠️',
+                      'body': 'الموظف ($_employeeName) قدم طلباً لحذف حسابه. يرجى مراجعة حسابه المالي وإجراءات الإغلاق بالموافقة من لوحة الإدارة.',
+                      'type': 'system',
+                    });
+
+                    if (mounted) {
+                      Navigator.pop(context); // إغلاق مؤشر الانتظار
+                      showDialog(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          title: const Text('تم تقديم الطلب ✅', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: Colors.green)),
+                          content: const Text(
+                            'تم إرسال طلب حذف حسابك بنجاح للمدير العام. سيتم مراجعة المديونيات والأقساط والموافقة على الحذف قريباً.',
+                            style: TextStyle(fontFamily: 'Cairo', fontSize: 13),
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context),
+                              child: const Text('حسناً', style: TextStyle(fontFamily: 'Cairo', color: AppTheme.neonCyan)),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+                  } catch (e) {
+                    if (mounted) Navigator.pop(context); // إغلاق مؤشر الانتظار
+                    debugPrint('Failed to submit deletion request: $e');
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('فشل تقديم طلب حذف الحساب، يرجى المحاولة لاحقاً', style: TextStyle(fontFamily: 'Cairo'))),
+                      );
+                    }
+                  }
+                },
+                style: ElevatedButton.styleFrom(backgroundColor: AppTheme.dangerRed),
+                child: const Text('تأكيد الطلب', style: TextStyle(fontFamily: 'Cairo')),
+              ),
+            ],
+          ),
+        );
+      }
+
+    } catch (e) {
+      if (mounted) Navigator.pop(context); // إغلاق مؤشر الانتظار
+      debugPrint('Failed to check loans for deletion: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('حدث خطأ أثناء فحص البيانات، يرجى المحاولة لاحقاً', style: TextStyle(fontFamily: 'Cairo'))),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -339,10 +603,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
               padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
               borderRadius: 24,
               opacity: 0.1,
-              borderColor: AppTheme.neonCyan.withOpacity(0.2),
+              borderColor: AppTheme.neonCyan.withValues(alpha: 0.2),
               boxShadow: [
                 BoxShadow(
-                  color: AppTheme.neonCyan.withOpacity(0.04),
+                  color: AppTheme.neonCyan.withValues(alpha: 0.04),
                   blurRadius: 20,
                 )
               ],
@@ -357,7 +621,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           border: Border.all(color: AppTheme.neonCyan, width: 3),
                           boxShadow: [
                             BoxShadow(
-                              color: AppTheme.neonCyan.withOpacity(0.3),
+                              color: AppTheme.neonCyan.withValues(alpha: 0.3),
                               blurRadius: 16,
                               spreadRadius: 1,
                             )
@@ -365,7 +629,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                         child: CircleAvatar(
                           radius: 50,
-                          backgroundColor: Colors.white.withOpacity(0.04),
+                          backgroundColor: Colors.white.withValues(alpha: 0.04),
                           backgroundImage: _avatarUrl.isNotEmpty ? NetworkImage(_avatarUrl) : null,
                           child: _avatarUrl.isEmpty
                               ? const Icon(Icons.person, size: 50, color: AppTheme.neonCyan)
@@ -406,9 +670,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: AppTheme.neonCyan.withOpacity(0.15),
+                      color: AppTheme.neonCyan.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: AppTheme.neonCyan.withOpacity(0.3), width: 1),
+                      border: Border.all(color: AppTheme.neonCyan.withValues(alpha: 0.3), width: 1),
                     ),
                     child: Text(
                       _employeeCode,
@@ -433,10 +697,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
               padding: const EdgeInsets.all(20),
               borderRadius: 24,
               opacity: 0.1,
-              borderColor: AppTheme.warningOrange.withOpacity(0.2),
+              borderColor: AppTheme.warningOrange.withValues(alpha: 0.2),
               boxShadow: [
                 BoxShadow(
-                  color: AppTheme.warningOrange.withOpacity(0.04),
+                  color: AppTheme.warningOrange.withValues(alpha: 0.04),
                   blurRadius: 20,
                 )
               ],
@@ -481,7 +745,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               padding: const EdgeInsets.all(20),
               borderRadius: 24,
               opacity: 0.1,
-              borderColor: AppTheme.neonCyan.withOpacity(0.2),
+              borderColor: AppTheme.neonCyan.withValues(alpha: 0.2),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -507,13 +771,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
                       color: _notificationPermissionGranted
-                          ? AppTheme.successGreen.withOpacity(0.1)
-                          : AppTheme.dangerRed.withOpacity(0.1),
+                          ? AppTheme.successGreen.withValues(alpha: 0.1)
+                          : AppTheme.dangerRed.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
                         color: _notificationPermissionGranted
-                            ? AppTheme.successGreen.withOpacity(0.3)
-                            : AppTheme.dangerRed.withOpacity(0.3),
+                            ? AppTheme.successGreen.withValues(alpha: 0.3)
+                            : AppTheme.dangerRed.withValues(alpha: 0.3),
                       ),
                     ),
                     child: Row(
@@ -578,7 +842,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               padding: const EdgeInsets.all(20),
               borderRadius: 24,
               opacity: 0.1,
-              borderColor: Colors.blueAccent.withOpacity(0.2),
+              borderColor: Colors.blueAccent.withValues(alpha: 0.2),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -617,43 +881,68 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   const SizedBox(height: 16),
                   if (_documentUrls.isEmpty)
-                    const Text('لا توجد وثائق مرفوعة.', style: TextStyle(color: Colors.white54, fontSize: 12, fontFamily: 'Cairo'))
+                    const Text('لا توجد وثائق مرفوعة حالياً.', style: TextStyle(color: Colors.white54, fontSize: 12, fontFamily: 'Cairo'))
                   else
                     Wrap(
                       spacing: 12,
                       runSpacing: 12,
                       children: _documentUrls.map((url) {
-                        return Stack(
-                          clipBehavior: Clip.none,
-                          children: [
-                            Container(
-                              width: 60,
-                              height: 60,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: Colors.blueAccent.withOpacity(0.3)),
-                                image: DecorationImage(
-                                  image: NetworkImage(url),
-                                  fit: BoxFit.cover,
+                        final bool isAdminOrManager = AuthService.currentUserRole == 'admin' || AuthService.currentUserRole == 'manager';
+
+                        return GestureDetector(
+                          onTap: () => _previewDocument(url),
+                          child: Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              Container(
+                                width: 68,
+                                height: 68,
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.05),
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(color: AppTheme.neonCyan.withValues(alpha: 0.4)),
                                 ),
-                              ),
-                            ),
-                            Positioned(
-                              top: -6,
-                              right: -6,
-                              child: GestureDetector(
-                                onTap: () => _deleteDocument(url),
-                                child: Container(
-                                  padding: const EdgeInsets.all(4),
-                                  decoration: const BoxDecoration(
-                                    color: AppTheme.dangerRed,
-                                    shape: BoxShape.circle,
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(14),
+                                  child: Image.network(
+                                    url,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) => const Center(
+                                      child: Icon(Icons.picture_as_pdf_rounded, color: AppTheme.neonPink, size: 28),
+                                    ),
                                   ),
-                                  child: const Icon(Icons.close, color: Colors.white, size: 12),
                                 ),
                               ),
-                            ),
-                          ],
+
+                              // شارة القفل للموظف العادي، أو زر الحذف للآدمن فقط
+                              Positioned(
+                                top: -6,
+                                right: -6,
+                                child: isAdminOrManager
+                                    ? GestureDetector(
+                                        onTap: () => _deleteDocument(url),
+                                        child: Container(
+                                          padding: const EdgeInsets.all(4),
+                                          decoration: const BoxDecoration(
+                                            color: AppTheme.dangerRed,
+                                            shape: BoxShape.circle,
+                                            boxShadow: [BoxShadow(color: Colors.black45, blurRadius: 4)],
+                                          ),
+                                          child: const Icon(Icons.close, color: Colors.white, size: 12),
+                                        ),
+                                      )
+                                    : Container(
+                                        padding: const EdgeInsets.all(4),
+                                        decoration: const BoxDecoration(
+                                          color: AppTheme.successGreen,
+                                          shape: BoxShape.circle,
+                                          boxShadow: [BoxShadow(color: Colors.black45, blurRadius: 4)],
+                                        ),
+                                        child: const Icon(Icons.lock_rounded, color: Colors.white, size: 10),
+                                      ),
+                              ),
+                            ],
+                          ),
                         );
                       }).toList(),
                     ),
@@ -667,7 +956,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               padding: const EdgeInsets.all(20),
               borderRadius: 24,
               opacity: 0.1,
-              borderColor: AppTheme.neonCyan.withOpacity(0.2),
+              borderColor: AppTheme.neonCyan.withValues(alpha: 0.2),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -695,13 +984,47 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 13),
                     ),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.neonCyan.withOpacity(0.2),
+                      backgroundColor: AppTheme.neonCyan.withValues(alpha: 0.2),
                       foregroundColor: AppTheme.neonCyan,
-                      side: BorderSide(color: AppTheme.neonCyan.withOpacity(0.4)),
+                      side: BorderSide(color: AppTheme.neonCyan.withValues(alpha: 0.4)),
                       minimumSize: const Size(double.infinity, 48),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                   ),
+                  if (AuthService.currentUserRole == 'admin' || AuthService.currentUserRole == 'manager') ...[
+                    const SizedBox(height: 10),
+                    ElevatedButton.icon(
+                      onPressed: () => context.push(AppRoutes.adminTracking),
+                      icon: const Icon(Icons.location_searching_rounded, size: 18),
+                      label: const Text(
+                        'خريطة التتبع الحي للموظفين 📍',
+                        style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 13),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.cyberPurple.withValues(alpha: 0.2),
+                        foregroundColor: AppTheme.neonCyan,
+                        side: BorderSide(color: AppTheme.neonCyan.withValues(alpha: 0.4)),
+                        minimumSize: const Size(double.infinity, 48),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    ElevatedButton.icon(
+                      onPressed: () => context.push(AppRoutes.adminLoans),
+                      icon: const Icon(Icons.table_chart_rounded, size: 18),
+                      label: const Text(
+                        'متابعة سلف الموظفين وكشوف Excel 📊',
+                        style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 13),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.successGreen.withValues(alpha: 0.2),
+                        foregroundColor: AppTheme.successGreen,
+                        side: BorderSide(color: AppTheme.successGreen.withValues(alpha: 0.4)),
+                        minimumSize: const Size(double.infinity, 48),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -715,7 +1038,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
-                    color: AppTheme.neonPink.withOpacity(0.3),
+                    color: AppTheme.neonPink.withValues(alpha: 0.3),
                     blurRadius: 16,
                     spreadRadius: 1,
                   )
@@ -745,6 +1068,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     ),
                   ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextButton.icon(
+              onPressed: _handleDeleteAccountRequest,
+              icon: const Icon(Icons.delete_forever_rounded, color: Colors.redAccent),
+              label: const Text(
+                'طلب حذف الحساب',
+                style: TextStyle(
+                  fontFamily: 'Cairo',
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                  color: Colors.redAccent,
+                ),
+              ),
+              style: TextButton.styleFrom(
+                minimumSize: const Size(double.infinity, 50),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  side: const BorderSide(color: Colors.redAccent, width: 1.5),
                 ),
               ),
             ),

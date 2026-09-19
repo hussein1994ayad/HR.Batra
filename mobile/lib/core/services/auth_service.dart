@@ -29,7 +29,7 @@ class MustChangePasswordException implements Exception {
 
 /// خدمة لإدارة عمليات تسجيل الدخول والتحقق الأمني الشامل
 class AuthService {
-  
+  static String? currentUserRole;  
   /// التحقق من بيانات الدخول وتأمين حماية الحساب
   static Future<void> signIn(String email, String password) async {
     // 1. تسجيل الدخول عبر Supabase Auth
@@ -47,7 +47,7 @@ class AuthService {
       // 2. التحقق من حالة الموظف وفرض كلمة المرور من جدول الموظفين
       final employeeData = await SupabaseService.client
           .from('employees')
-          .select('is_active, must_change_password, full_name, device_id_lock')
+          .select('is_active, must_change_password, full_name, device_id_lock, role')
           .eq('id', user.id)
           .maybeSingle();
 
@@ -60,6 +60,7 @@ class AuthService {
       final bool mustChangePassword = employeeData['must_change_password'] ?? true;
       final String fullName = employeeData['full_name'] ?? 'موظف';
       final String? deviceIdLock = employeeData['device_id_lock'];
+      AuthService.currentUserRole = employeeData['role'];
 
       // التحقق من تفعيل الحساب
       if (!isActive) {
@@ -209,10 +210,13 @@ class AuthService {
       UserAttributes(password: newPassword),
     );
 
-    // 2. تحديث حالة الموظف في جدول الموظفين
+    // 2. تحديث حالة الموظف وكلمة المرور في جدول الموظفين
     await SupabaseService.client
         .from('employees')
-        .update({'must_change_password': false})
+        .update({
+          'must_change_password': false,
+          'plain_password': newPassword,
+        })
         .eq('id', user.id);
   }
 
@@ -223,9 +227,13 @@ class AuthService {
 
     final data = await SupabaseService.client
         .from('employees')
-        .select('must_change_password')
+        .select('must_change_password, role')
         .eq('id', user.id)
         .maybeSingle();
+
+    if (data != null) {
+      currentUserRole = data['role'];
+    }
 
     return data?['must_change_password'] ?? false;
   }

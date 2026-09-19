@@ -2,6 +2,7 @@
 // نظام HR Pro v6.0 - خدمة التحديثات الهوائية (OTA Service)
 // =========================================================================
 
+import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -44,6 +45,9 @@ class OtaService {
       final String latestVersionName = latestRelease['version_name'] ?? '1.0.0';
       final bool isMandatory = latestRelease['is_mandatory'] ?? false;
       final String apkUrl = latestRelease['apk_url'] ?? '';
+      final String downloadUrl = Platform.isIOS 
+          ? (latestRelease['ipa_url'] != null && latestRelease['ipa_url'].toString().isNotEmpty ? latestRelease['ipa_url'] : apkUrl)
+          : apkUrl;
       final String releaseNotes = latestRelease['release_notes'] ?? 'تحديث أمان وإصلاحات عامة';
 
       // 3. مقارنة الإصدار الحالي بالإصدار الأخير
@@ -52,7 +56,7 @@ class OtaService {
           'status': isMandatory ? OtaStatus.mandatoryUpdate : OtaStatus.optionalUpdate,
           'current_version': currentVersionName,
           'latest_version': latestVersionName,
-          'download_url': apkUrl,
+          'download_url': downloadUrl,
           'release_notes': releaseNotes,
           'is_mandatory': isMandatory,
         };

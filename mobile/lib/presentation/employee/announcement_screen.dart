@@ -71,12 +71,13 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
         targetEmployeeIds = _employees.map((e) => e['id'] as String).toList();
       } else if (_selectedTarget == 'branch') {
         // Get employees in this branch
-        final assignments = await SupabaseService.client
-            .from('branch_assignments')
-            .select('employee_id')
-            .eq('branch_id', _selectedBranchId!);
+        final branchEmps = await SupabaseService.client
+            .from('employees')
+            .select('id')
+            .eq('branch_id', _selectedBranchId!)
+            .eq('is_active', true);
         
-        targetEmployeeIds = (assignments as List).map((e) => e['employee_id'] as String).toList();
+        targetEmployeeIds = (branchEmps as List).map((e) => e['id'] as String).toList();
       } else if (_selectedTarget == 'employees') {
         if (_selectedEmployeeIds.isEmpty) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -162,7 +163,7 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
                         labelText: 'عنوان التعميم (مثال: هام وعاجل)',
                         labelStyle: const TextStyle(fontFamily: 'Cairo', color: Colors.white54, fontSize: 12),
                         filled: true,
-                        fillColor: Colors.white.withOpacity(0.05),
+                        fillColor: Colors.white.withValues(alpha: 0.05),
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
                         focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: AppTheme.neonCyan)),
                       ),
@@ -176,7 +177,7 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
                         labelText: 'نص التعميم التفصيلي...',
                         labelStyle: const TextStyle(fontFamily: 'Cairo', color: Colors.white54, fontSize: 12),
                         filled: true,
-                        fillColor: Colors.white.withOpacity(0.05),
+                        fillColor: Colors.white.withValues(alpha: 0.05),
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
                         focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: AppTheme.neonCyan)),
                       ),
@@ -214,7 +215,7 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.05),
+                          color: Colors.white.withValues(alpha: 0.05),
                           borderRadius: BorderRadius.circular(14),
                         ),
                         child: DropdownButtonHideUnderline(
@@ -244,7 +245,7 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
                           icon: const Icon(Icons.person_search_rounded, color: AppTheme.neonCyan),
                           label: Text(_selectedEmployeeIds.isEmpty ? 'اختر الموظفين' : 'تم تحديد ${_selectedEmployeeIds.length} موظف', style: const TextStyle(fontFamily: 'Cairo', color: Colors.white)),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.white.withOpacity(0.05),
+                            backgroundColor: Colors.white.withValues(alpha: 0.05),
                             padding: const EdgeInsets.symmetric(vertical: 14),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                           ),
@@ -292,7 +293,7 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(vertical: 14),
         decoration: BoxDecoration(
-          color: isSelected ? AppTheme.neonCyan.withOpacity(0.2) : Colors.white.withOpacity(0.05),
+          color: isSelected ? AppTheme.neonCyan.withValues(alpha: 0.2) : Colors.white.withValues(alpha: 0.05),
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: isSelected ? AppTheme.neonCyan : Colors.white10),
         ),

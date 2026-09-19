@@ -38,9 +38,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           .eq('employee_id', user.id)
           .order('created_at', ascending: false);
 
-      setState(() {
-        _notifications = List<Map<String, dynamic>>.from(data);
-      });
+      if (mounted) {
+        setState(() {
+          _notifications = List<Map<String, dynamic>>.from(data);
+        });
+      }
 
       // 2. تحديث جميع الإشعارات غير المقروءة لتصبح مقروءة الآن
       final unreadIds = _notifications
@@ -57,7 +59,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     } catch (e) {
       debugPrint('خطأ في تحميل إشعارات الموظف: $e');
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -108,7 +112,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                           Icon(
                             Icons.notifications_off_rounded,
                             size: 48,
-                            color: Colors.white.withOpacity(0.4),
+                            color: Colors.white.withValues(alpha: 0.4),
                           ),
                           const SizedBox(height: 16),
                           const Text(
@@ -126,7 +130,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               fontSize: 12,
-                              color: Colors.white.withOpacity(0.5),
+                              color: Colors.white.withValues(alpha: 0.5),
                               fontFamily: 'Cairo',
                             ),
                           ),
@@ -154,12 +158,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                           borderRadius: 18,
                           opacity: !isRead ? 0.14 : 0.06,
                           borderColor: !isRead 
-                              ? typeColor.withOpacity(0.7) 
-                              : Colors.white.withOpacity(0.08),
+                              ? typeColor.withValues(alpha: 0.7) 
+                              : Colors.white.withValues(alpha: 0.08),
                           boxShadow: !isRead
                               ? [
                                   BoxShadow(
-                                    color: typeColor.withOpacity(0.12),
+                                    color: typeColor.withValues(alpha: 0.12),
                                     blurRadius: 12,
                                     offset: const Offset(0, 4),
                                   )
@@ -173,15 +177,15 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                               Container(
                                 padding: const EdgeInsets.all(10),
                                 decoration: BoxDecoration(
-                                  color: typeColor.withOpacity(0.15),
+                                  color: typeColor.withValues(alpha: 0.15),
                                   shape: BoxShape.circle,
                                   border: Border.all(
-                                    color: typeColor.withOpacity(0.35),
+                                    color: typeColor.withValues(alpha: 0.35),
                                     width: 1.5,
                                   ),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: typeColor.withOpacity(0.2),
+                                      color: typeColor.withValues(alpha: 0.2),
                                       blurRadius: 8,
                                     ),
                                   ],
@@ -220,7 +224,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                           style: TextStyle(
                                             fontFamily: 'Cairo',
                                             fontSize: 9, 
-                                            color: Colors.white.withOpacity(0.4),
+                                            color: Colors.white.withValues(alpha: 0.4),
                                           ),
                                         ),
                                       ],
@@ -231,7 +235,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                       style: TextStyle(
                                         fontFamily: 'Cairo',
                                         fontSize: 11,
-                                        color: Colors.white.withOpacity(0.8),
+                                        color: Colors.white.withValues(alpha: 0.8),
                                         height: 1.5,
                                       ),
                                     ),

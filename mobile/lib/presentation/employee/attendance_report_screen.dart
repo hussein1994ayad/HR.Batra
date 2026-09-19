@@ -37,15 +37,36 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
   }
 
   Future<void> _initData() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
+
+    final user = SupabaseService.currentUser;
+    if (user == null) {
+      if (mounted) Navigator.pop(context);
+      return;
+    }
+
     try {
+      final employeeRes = await SupabaseService.client
+          .from('employees')
+          .select('role')
+          .eq('id', user.id)
+          .maybeSingle();
+
+      if (employeeRes == null || (employeeRes['role'] != 'admin' && employeeRes['role'] != 'manager')) {
+        if (mounted) Navigator.pop(context);
+        return;
+      }
+
       final List<Future<dynamic>> initFutures = [
         SupabaseService.client.from('branches').select('id, name').order('name'),
         SupabaseService.client.from('employees').select('id, full_name, employee_code, branch_id, is_active').order('full_name')
       ];
       final results = await Future.wait(initFutures);
-      _branches = List<Map<String, dynamic>>.from(results[0]);
-      _employeesList = List<Map<String, dynamic>>.from(results[1]);
+      if (mounted) {
+        _branches = List<Map<String, dynamic>>.from(results[0]);
+        _employeesList = List<Map<String, dynamic>>.from(results[1]);
+      }
     } catch (e) {
       debugPrint('Error loading branches/employees: $e');
     }
@@ -135,13 +156,15 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
         return (a['employee_name'] ?? '').compareTo(b['employee_name'] ?? '');
       });
 
-      setState(() {
-        _records = processed;
-      });
+      if (mounted) {
+        setState(() {
+          _records = processed;
+        });
+      }
     } catch (e) {
       debugPrint('Error loading attendance: $e');
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -182,9 +205,11 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
     try {
       await launchUrl(url, mode: LaunchMode.externalApplication);
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('تعذر فتح الخرائط', style: TextStyle(fontFamily: 'Cairo'))),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('تعذر فتح الخرائط', style: TextStyle(fontFamily: 'Cairo'))),
+        );
+      }
     }
   }
 
@@ -291,15 +316,19 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
 
       if (updates.isNotEmpty) {
         await SupabaseService.client.from('attendance').update(updates).eq('id', recordId);
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم تحديث الأوقات بنجاح ✅', style: TextStyle(fontFamily: 'Cairo')), backgroundColor: AppTheme.successGreen));
-        _loadRecords();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم تحديث الأوقات بنجاح ✅', style: TextStyle(fontFamily: 'Cairo')), backgroundColor: AppTheme.successGreen));
+          _loadRecords();
+        }
       } else {
-        setState(() => _isLoading = false);
+        if (mounted) setState(() => _isLoading = false);
       }
     } catch (e) {
       debugPrint('Error updating time: $e');
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('حدث خطأ أثناء التحديث ❌', style: TextStyle(fontFamily: 'Cairo')), backgroundColor: AppTheme.dangerRed));
-      setState(() => _isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('حدث خطأ أثناء التحديث ❌', style: TextStyle(fontFamily: 'Cairo')), backgroundColor: AppTheme.dangerRed));
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -333,9 +362,9 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
                       height: 38,
                       padding: const EdgeInsets.symmetric(horizontal: 10),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.06),
+                        color: Colors.white.withValues(alpha: 0.06),
                         borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: AppTheme.neonCyan.withOpacity(0.2)),
+                        border: Border.all(color: AppTheme.neonCyan.withValues(alpha: 0.2)),
                       ),
                       child: DropdownButtonHideUnderline(
                         child: DropdownButton<String>(
@@ -372,9 +401,9 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
                       height: 38,
                       padding: const EdgeInsets.symmetric(horizontal: 10),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.06),
+                        color: Colors.white.withValues(alpha: 0.06),
                         borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: AppTheme.successGreen.withOpacity(0.2)),
+                        border: Border.all(color: AppTheme.successGreen.withValues(alpha: 0.2)),
                       ),
                       child: DropdownButtonHideUnderline(
                         child: DropdownButton<String>(
@@ -418,9 +447,9 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
                         height: 42,
                         padding: const EdgeInsets.symmetric(horizontal: 12),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.06),
+                          color: Colors.white.withValues(alpha: 0.06),
                           borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: AppTheme.warningOrange.withOpacity(0.2)),
+                          border: Border.all(color: AppTheme.warningOrange.withValues(alpha: 0.2)),
                         ),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -470,12 +499,12 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
                               padding: const EdgeInsets.all(12),
                               borderRadius: 14,
                               opacity: 0.05,
-                              borderColor: isAbsent ? AppTheme.dangerRed.withOpacity(0.2) : AppTheme.successGreen.withOpacity(0.2),
+                              borderColor: isAbsent ? AppTheme.dangerRed.withValues(alpha: 0.2) : AppTheme.successGreen.withValues(alpha: 0.2),
                               child: Row(
                                 children: [
                                   CircleAvatar(
                                     radius: 20,
-                                    backgroundColor: (isAbsent ? AppTheme.dangerRed : AppTheme.successGreen).withOpacity(0.15),
+                                    backgroundColor: (isAbsent ? AppTheme.dangerRed : AppTheme.successGreen).withValues(alpha: 0.15),
                                     child: Icon(
                                       isAbsent ? Icons.person_off_rounded : Icons.how_to_reg_rounded,
                                       color: isAbsent ? AppTheme.dangerRed : AppTheme.successGreen,
@@ -548,7 +577,7 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
                                   else
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                      decoration: BoxDecoration(color: AppTheme.dangerRed.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                                      decoration: BoxDecoration(color: AppTheme.dangerRed.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
                                       child: const Text('غائب', style: TextStyle(color: AppTheme.dangerRed, fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 11)),
                                     ),
                                 ],
@@ -567,9 +596,9 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.15),
+        color: color.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
