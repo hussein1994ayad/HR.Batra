@@ -5,38 +5,81 @@ import UserNotifications
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
 
+  private let iosLocationChannel = "com.batra.hrpro/ios_location"
+
   override func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
 
-    // 1) طلب صلاحيات الإشعارات مع أزرار Actions (يظهر إشعارات غنية)
+    // 1) صلاحيات الإشعارات
     UNUserNotificationCenter.current().delegate = self
     UNUserNotificationCenter.current().requestAuthorization(
       options: [.alert, .badge, .sound, .provisional, .criticalAlert]
-    ) { granted, error in
-      if let error = error {
-        NSLog("Notification authorization error: \(error.localizedDescription)")
-      }
+    ) { granted, _ in
       if granted {
-        DispatchQueue.main.async {
-          application.registerForRemoteNotifications()
-        }
+        DispatchQueue.main.async { application.registerForRemoteNotifications() }
       }
     }
-
-    // 2) تسجيل التطبيق لاستقبال Push Notifications عبر APNs
     application.registerForRemoteNotifications()
+
+    // 2) MethodChannel للتحكم بـ Region Monitoring من Dart
+    if let controller = window?.rootViewController as? FlutterViewController {
+      setupIOSLocationChannel(controller: controller)
+    }
 
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
-  // 3) تسليم Firebase التوكن الخاص بـ APNs — لازم يوصل قبل ما FCM يشتغل
+  private func setupIOSLocationChannel(controller: FlutterViewController) {
+    let channel = FlutterMethodChannel(
+      name: iosLocationChannel,
+      binaryMessenger: controller.binaryMessenger
+    )
+    channel.setMethodCallHandler { call, result in
+      switch call.method {
+      case "configure":
+        guard let args = call.arguments as? [String: Any],
+              let url = args["supabaseUrl"] as? String,
+              let anon = args["supabaseAnonKey"] as? String,
+              let employeeId = args["employeeId"] as? String
+        else {
+          result(FlutterError(code: "BAD_ARGS", message: "configure needs supabaseUrl/anonKey/employeeId", details: nil))
+          return
+        }
+        let token = (args["accessToken"] as? String) ?? anon
+        LocationMonitorIOS.shared.configure(
+          supabaseUrl: url,
+          supabaseAnonKey: anon,
+          employeeId: employeeId,
+          accessToken: token
+        )
+        result(true)
+
+      case "startMonitoring":
+        guard let args = call.arguments as? [String: Any],
+              let branches = args["branches"] as? [[String: Any]]
+        else {
+          result(FlutterError(code: "BAD_ARGS", message: "startMonitoring needs branches", details: nil))
+          return
+        }
+        LocationMonitorIOS.shared.startMonitoring(branches: branches)
+        result(true)
+
+      case "stopMonitoring":
+        LocationMonitorIOS.shared.stopMonitoring()
+        result(true)
+
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+  }
+
   override func application(
     _ application: UIApplication,
     didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
   ) {
-    // firebase_messaging plugin يتلقاه تلقائياً من super
     super.application(application, didRegisterForRemoteNotificationsWithDeviceToken: deviceToken)
   }
 
@@ -48,7 +91,6 @@ import UserNotifications
     super.application(application, didFailToRegisterForRemoteNotificationsWithError: error)
   }
 
-  // 4) عرض الإشعارات (Banner + Sound) حتى لو التطبيق مفتوح في الواجهة
   override func userNotificationCenter(
     _ center: UNUserNotificationCenter,
     willPresent notification: UNNotification,

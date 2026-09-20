@@ -12,6 +12,8 @@ import 'package:latlong2/latlong.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
+import '../constants/constants.dart';
+import 'ios_region_monitor.dart';
 import 'supabase_service.dart';
 
 /// خدمة للتحكم في التتبع الجغرافي للموظفين في الخلفية والتحقق من السياج الجغرافي وكشف التزييف
@@ -192,6 +194,21 @@ class LocationService {
         debugPrint('⚠️ تعذر تشغيل BackgroundService: $e');
       }
 
+      // على iOS: فعّل Region Monitoring لتحمّل حالة التطبيق المقفل
+      if (Platform.isIOS) {
+        try {
+          final session = SupabaseService.client.auth.currentSession;
+          await IosRegionMonitor.configureAndStartFromSupabase(
+            supabaseUrl: AppConstants.supabaseUrl,
+            supabaseAnonKey: AppConstants.supabaseAnonKey,
+            employeeId: userId,
+            accessToken: session?.accessToken,
+          );
+        } catch (e) {
+          debugPrint('⚠️ فشل تهيئة iOS Region Monitor: $e');
+        }
+      }
+
       debugPrint('✅ تم تفعيل وتشغيل نظام التتبع الجغرافي بنجاح للموظف: $userId');
     } catch (e) {
       debugPrint('⚠️ خطأ أثناء بدء التتبع الجغرافي: $e');
@@ -200,6 +217,11 @@ class LocationService {
 
   /// إيقاف التتبع الجغرافي بالكامل عند الانصراف
   static Future<void> stopTracking() async {
+    // إيقاف Region Monitoring على iOS
+    try {
+      await IosRegionMonitor.stopMonitoring();
+    } catch (_) {}
+
     try {
       final service = FlutterBackgroundService();
       service.invoke('stopService');
