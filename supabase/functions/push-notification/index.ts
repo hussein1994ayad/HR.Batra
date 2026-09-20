@@ -197,7 +197,7 @@ Deno.serve(async (req: Request) => {
                     title: notificationTitle,
                     body: notificationBody,
                   },
-                  sound: "default", // iOS default sound
+                  sound: "special_chime.wav", // iOS default sound
                   badge: 1,
                   "content-available": 1,
                   "mutable-content": 1,
