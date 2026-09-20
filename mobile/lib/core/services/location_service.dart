@@ -38,9 +38,9 @@ class LocationService {
           onStart: onStart,
           autoStart: false,
           isForegroundMode: true,
-          notificationChannelId: 'hrpro_location_service',
-          initialNotificationTitle: 'HR Pro: التتبع الجغرافي الميداني نشط 📍',
-          initialNotificationContent: 'يتم تسجيل مسار العمل المعتمد أثناء ساعات الدوام',
+          notificationChannelId: 'hrpro_sync_v2',
+          initialNotificationTitle: 'HR Pro يعمل',
+          initialNotificationContent: 'المزامنة الآمنة نشطة',
         ),
         iosConfiguration: IosConfiguration(
           autoStart: false,
@@ -302,12 +302,12 @@ class LocationService {
     if (service is AndroidServiceInstance) {
       if (shouldTrack) {
         service.setForegroundNotificationInfo(
-          title: 'HR Pro: التتبع الجغرافي نشط 📍',
-          content: 'يتم تسجيل مسار العمل المعتمد أثناء ساعات الدوام',
+          title: 'HR Pro يعمل',
+          content: 'المزامنة الآمنة نشطة',
         );
       } else {
         service.setForegroundNotificationInfo(
-          title: 'HR Pro: المزامنة السحابية نشطة',
+          title: 'HR Pro يعمل',
           content: 'يتم تحديث البيانات وجدول العمل تلقائياً',
         );
       }

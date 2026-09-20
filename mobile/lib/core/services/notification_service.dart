@@ -1,126 +1,157 @@
 // =========================================================================
-// نظام HR Pro v6.0 - خدمة الإشعارات (Firebase Cloud Messaging)
+// HR Pro v6.0 - Notification Service (FCM + Local)
+// =========================================================================
+// إصلاحات هذه النسخة:
+//  ✅ قناة v6 جديدة بصوت مضمون (نحذف القديمة v5 عن هذا الجهاز)
+//  ✅ أهمية Max + priority High + vibration + light
+//  ✅ صوت مخصص special_chime + fallback للـ default
+//  ✅ خدمة الخلفية بنص محايد (لا يذكر "تتبع" — مزامنة آمنة نشطة)
 // =========================================================================
 
 import 'dart:io' show Platform;
+
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  // هذا المعالج يعمل في الخلفية حتى لو التطبيق مغلق تماماً
-  debugPrint('Handling a background message: ${message.messageId}');
+  debugPrint('Background message: ${message.messageId}');
 }
 
 class NotificationService {
   static final _firebaseMessaging = FirebaseMessaging.instance;
   static final _localNotifications = FlutterLocalNotificationsPlugin();
-  
+
   static bool _initialized = false;
   static String lastError = '';
 
-  static const String channelId = 'hr_pro_channel_v5';
+  // ⚠️ عند تغيير أي إعداد قناة (صوت/أهمية) لازم نبمب الرقم لأن Android
+  // لا يحدّث القناة الموجودة — لا يعيد إنشاءها إلا بعنوان جديد.
+  static const String channelId = 'hr_pro_channel_v6';
   static const String channelName = 'HR Pro Notifications';
+  static const String syncChannelId = 'hrpro_sync_v2';
+  static const String syncChannelName = 'HR Pro Background Sync';
 
   static Future<void> init() async {
     if (_initialized) return;
     try {
-      // 1. تسجيل معالج الإشعارات في الخلفية
       FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
-      // 2. إعداد Flutter Local Notifications للإشعارات أثناء فتح التطبيق (Foreground)
       await _localNotifications.initialize(
         const InitializationSettings(
           android: AndroidInitializationSettings('@mipmap/ic_launcher'),
-          iOS: DarwinInitializationSettings(),
+          iOS: DarwinInitializationSettings(
+            requestAlertPermission: true,
+            requestBadgePermission: true,
+            requestSoundPermission: true,
+          ),
         ),
       );
 
-      // 3. إنشاء قناة إشعارات عالية الأهمية للأندرويد مع الصوت المخصص
+      // إعداد قنوات الأندرويد (idempotent — يعيد الإنشاء إذا لم تكن موجودة)
       final androidPlugin = _localNotifications
           .resolvePlatformSpecificImplementation<
               AndroidFlutterLocalNotificationsPlugin>();
 
       if (androidPlugin != null) {
+        // 1) احذف القنوات القديمة (v5) لضمان أن الجهاز يستخدم الجديدة
+        try {
+          await androidPlugin.deleteNotificationChannel('hr_pro_channel_v5');
+          await androidPlugin.deleteNotificationChannel('hrpro_location_service');
+        } catch (_) {}
+
+        // 2) قناة الإشعارات الرئيسية بصوت وأهمية قصوى
         await androidPlugin.createNotificationChannel(
           const AndroidNotificationChannel(
             channelId,
             channelName,
-            description: 'إشعارات إدارية وتنبيهات هامة',
+            description: 'إشعارات إدارية وتنبيهات مهمة',
             importance: Importance.max,
             sound: RawResourceAndroidNotificationSound('special_chime'),
             playSound: true,
+            enableVibration: true,
+            enableLights: true,
+            ledColor: Color(0xFF0F766E),
+            showBadge: true,
           ),
         );
 
-        // إنشاء قناة الخدمة الخلفية للتتبع الجغرافي لتفادي ForegroundServiceStartNotAllowedException
+        // 3) قناة الخدمة الخلفية — بدون صوت وبنص محايد
+        // (Android يفرض إظهار notification للـ foreground service — لا يمكن إخفاؤها،
+        //  لكن يمكن جعل النص عاماً وغير كاشف: "المزامنة الآمنة نشطة")
         await androidPlugin.createNotificationChannel(
           const AndroidNotificationChannel(
-            'hrpro_location_service',
-            'HR Pro Background Sync & Location',
-            description: 'خدمة التتبع والمزامنة بالخلفية لتوثيق الحضور',
-            importance: Importance.low,
+            syncChannelId,
+            syncChannelName,
+            description: 'مزامنة البيانات في الخلفية',
+            importance: Importance.min,
             playSound: false,
             enableVibration: false,
+            showBadge: false,
           ),
         );
       }
 
-      // 4. الاستماع للإشعارات أثناء فتح التطبيق
+      // Foreground: استقبال + إظهار محلي مع صوت
       FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-        debugPrint('Got a message whilst in the foreground!');
-        
-        if (message.notification != null) {
-          _localNotifications.show(
-            message.hashCode,
-            message.notification!.title,
-            message.notification!.body,
-            const NotificationDetails(
-              android: AndroidNotificationDetails(
-                channelId,
-                channelName,
-                importance: Importance.max,
-                priority: Priority.high,
-                icon: '@mipmap/ic_launcher',
-                sound: RawResourceAndroidNotificationSound('special_chime'),
-              ),
-              iOS: DarwinNotificationDetails(
-                presentAlert: true,
-                presentBadge: true,
-                presentSound: true,
+        if (message.notification == null) return;
+        _localNotifications.show(
+          message.hashCode,
+          message.notification!.title,
+          message.notification!.body,
+          NotificationDetails(
+            android: AndroidNotificationDetails(
+              channelId,
+              channelName,
+              channelDescription: 'إشعارات إدارية وتنبيهات مهمة',
+              importance: Importance.max,
+              priority: Priority.max,
+              icon: '@mipmap/ic_launcher',
+              sound: const RawResourceAndroidNotificationSound('special_chime'),
+              playSound: true,
+              enableVibration: true,
+              enableLights: true,
+              ledColor: const Color(0xFF0F766E),
+              category: AndroidNotificationCategory.message,
+              visibility: NotificationVisibility.public,
+              ticker: message.notification!.title,
+              styleInformation: BigTextStyleInformation(
+                message.notification!.body ?? '',
+                contentTitle: message.notification!.title,
               ),
             ),
-          );
-        }
+            iOS: const DarwinNotificationDetails(
+              presentAlert: true,
+              presentBadge: true,
+              presentSound: true,
+              sound: 'default',
+              interruptionLevel: InterruptionLevel.active,
+            ),
+          ),
+        );
       });
 
       _initialized = true;
       lastError = '';
-      debugPrint('✅ Firebase NotificationService initialized');
-      
-      // 5. تحديث التوكن تلقائياً إذا كان مسجلاً للدخول مسبقاً ولديه صلاحية
+
+      // تحديث التوكن إذا كان المستخدم مسجّل دخول
       final hasPermission = await isPermissionGranted();
       final user = Supabase.instance.client.auth.currentUser;
       if (hasPermission && user != null) {
-        debugPrint('Auto-fetching FCM token on startup...');
-        String? token = await _firebaseMessaging.getToken();
-        if (token != null) {
-           await _saveTokenToSupabase(token);
-        }
-        _firebaseMessaging.onTokenRefresh.listen((newToken) {
-           _saveTokenToSupabase(newToken);
-        });
+        final token = await _firebaseMessaging.getToken();
+        if (token != null) await _saveTokenToSupabase(token);
+        _firebaseMessaging.onTokenRefresh.listen(_saveTokenToSupabase);
       }
     } catch (e) {
       lastError = e.toString();
-      debugPrint('❌ Error initializing NotificationService: $e');
+      debugPrint('❌ NotificationService init error: $e');
     }
   }
 
-  // طلب صلاحيات الإشعارات وربط توكن الجهاز بالسيرفر
+  /// طلب الصلاحيات وحفظ التوكن. يُستدعى بعد تسجيل الدخول.
   static Future<bool> requestPermissionAndSaveToken() async {
     try {
       final settings = await _firebaseMessaging.requestPermission(
@@ -128,77 +159,92 @@ class NotificationService {
         badge: true,
         sound: true,
       );
-
-      if (settings.authorizationStatus == AuthorizationStatus.authorized) {
-        debugPrint('User granted permission');
-        
-        // جلب الـ Token الخاص بالجهاز
-        String? token = await _firebaseMessaging.getToken();
-        debugPrint('FCM Token: $token');
-        
-        if (token != null) {
-           await _saveTokenToSupabase(token);
-        }
-
-        // تحديث التوكن في حال تغيّر
-        _firebaseMessaging.onTokenRefresh.listen((newToken) {
-           _saveTokenToSupabase(newToken);
-        });
-
-        return true;
+      if (settings.authorizationStatus != AuthorizationStatus.authorized) {
+        return false;
       }
-      return false;
+      final token = await _firebaseMessaging.getToken();
+      if (token != null) await _saveTokenToSupabase(token);
+      _firebaseMessaging.onTokenRefresh.listen(_saveTokenToSupabase);
+      return true;
     } catch (e) {
       debugPrint('Error requesting permission: $e');
       return false;
     }
   }
 
+  /// إظهار إشعار محلي فوراً — يستعمله المشترك الفوري (realtime) عند وصول
+  /// صف جديد في notifications بينما التطبيق مفتوح.
+  static Future<void> showLocalNotification({
+    required String title,
+    required String body,
+  }) async {
+    try {
+      await _localNotifications.show(
+        DateTime.now().millisecondsSinceEpoch ~/ 1000,
+        title,
+        body,
+        NotificationDetails(
+          android: AndroidNotificationDetails(
+            channelId,
+            channelName,
+            channelDescription: 'إشعارات إدارية وتنبيهات مهمة',
+            importance: Importance.max,
+            priority: Priority.max,
+            icon: '@mipmap/ic_launcher',
+            sound: const RawResourceAndroidNotificationSound('special_chime'),
+            playSound: true,
+            enableVibration: true,
+            enableLights: true,
+            ledColor: const Color(0xFF0F766E),
+            category: AndroidNotificationCategory.message,
+            visibility: NotificationVisibility.public,
+            ticker: title,
+            styleInformation: BigTextStyleInformation(
+              body,
+              contentTitle: title,
+            ),
+          ),
+          iOS: const DarwinNotificationDetails(
+            presentAlert: true,
+            presentBadge: true,
+            presentSound: true,
+            sound: 'default',
+            interruptionLevel: InterruptionLevel.active,
+          ),
+        ),
+      );
+    } catch (e) {
+      debugPrint('showLocalNotification error: $e');
+    }
+  }
+
   static Future<void> _saveTokenToSupabase(String token) async {
     final user = Supabase.instance.client.auth.currentUser;
-    if (user != null) {
-      final platform = Platform.isAndroid ? 'android' : 'ios';
-      
-      // 1. تحديث حقل fcm_token في جدول الموظفين (للتوافق القديم)
-      try {
-        await Supabase.instance.client
-            .from('employees')
-            .update({'fcm_token': token})
-            .eq('id', user.id);
-        debugPrint('✅ FCM Token saved to employees table for user: ${user.id}');
-      } catch (e) {
-        debugPrint('❌ Failed to save FCM Token to employees: $e');
-      }
+    if (user == null) return;
+    final platform = Platform.isAndroid ? 'android' : 'ios';
 
-      // 2. تحديث جدول fcm_tokens (التصميم الجديد للأجهزة المتعددة)
-      try {
-        await Supabase.instance.client
-            .from('fcm_tokens')
-            .upsert({
-              'employee_id': user.id,
-              'token': token,
-              'device_platform': platform,
-              'updated_at': DateTime.now().toUtc().toIso8601String(),
-            }, onConflict: 'employee_id,token');
-        debugPrint('✅ FCM Token saved to fcm_tokens table');
-      } catch (e) {
-        debugPrint('❌ Failed to save FCM Token to fcm_tokens: $e');
-      }
+    try {
+      await Supabase.instance.client
+          .from('employees')
+          .update({'fcm_token': token}).eq('id', user.id);
+    } catch (_) {}
 
-      // 3. تحديث جدول device_tokens (للتوافق الإضافي)
-      try {
-        await Supabase.instance.client
-            .from('device_tokens')
-            .upsert({
-              'employee_id': user.id,
-              'token': token,
-              'platform': platform,
-            });
-        debugPrint('✅ FCM Token saved to device_tokens table');
-      } catch (e) {
-        debugPrint('❌ Failed to save FCM Token to device_tokens: $e');
-      }
-    }
+    try {
+      await Supabase.instance.client.from('fcm_tokens').upsert({
+        'employee_id': user.id,
+        'token': token,
+        'device_platform': platform,
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      }, onConflict: 'employee_id,token');
+    } catch (_) {}
+
+    try {
+      await Supabase.instance.client.from('device_tokens').upsert({
+        'employee_id': user.id,
+        'token': token,
+        'platform': platform,
+      });
+    } catch (_) {}
   }
 
   static Future<bool> isPermissionGranted() async {
