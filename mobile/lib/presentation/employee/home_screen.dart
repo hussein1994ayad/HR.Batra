@@ -13,6 +13,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/routes/app_router.dart';
 import '../../core/services/location_service.dart';
 import '../../core/services/ota_service.dart';
+import '../../core/services/notification_service.dart';
 import '../../core/services/supabase_service.dart';
 import '../../core/theme/app_theme.dart';
 
@@ -84,19 +85,13 @@ class _HomeScreenState extends State<HomeScreen> {
             }
 
             final data = payload.newRecord;
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    '${data['title'] ?? 'تنبيه جديد 🔔'}\n${data['body'] ?? ''}',
-                    style: const TextStyle(fontFamily: 'Cairo'),
-                  ),
-                  backgroundColor: AppTheme.successGreen,
-                  duration: const Duration(seconds: 4),
-                  behavior: SnackBarBehavior.floating,
-                ),
-              );
-            }
+            // Show a REAL system notification with sound — works even if
+            // the user is on another tab. FCM push handles this when the
+            // app is in the background; this covers the in-app case.
+            await NotificationService.showLocalNotification(
+              title: (data['title'] ?? 'تنبيه جديد 🔔').toString(),
+              body: (data['body'] ?? '').toString(),
+            );
           },
         )
         .subscribe((status, [error]) {

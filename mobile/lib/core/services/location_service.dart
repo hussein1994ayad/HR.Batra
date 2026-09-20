@@ -778,7 +778,8 @@ class LocationService {
     }
   }
 
-  /// محاولة مزامنة المواقع المخزنة محلياً ورفعها دفعة واحدة عند توفر الاتصال
+  /// محاولة مزامنة المواقع المخزنة محلياً ورفعها بحزم (batch) عند توفر الاتصال.
+  /// إذا فشلت حزمة، تبقى في المخزن للمحاولة لاحقاً — بدون تكرار في السيرفر.
   static Future<void> _syncOfflineLocations() async {
     try {
       final file = await _cacheFile;
@@ -790,14 +791,184 @@ class LocationService {
       final List<dynamic> cachedList = jsonDecode(content) as List<dynamic>;
       if (cachedList.isEmpty) return;
 
-      debugPrint('🔄 جارٍ مزامنة ${cachedList.length} موقع مخزن محلياً إلى السيرفر...');
+      // إزالة التكرارات (بنفس timestamp + employee_id) قبل الرفع
+      final seen = <String>{};
+      final dedup = <Map<String, dynamic>>[];
+      for (final raw in cachedList) {
+        if (raw is! Map) continue;
+        final key = '${raw["employee_id"]}|${raw["timestamp"]}';
+        if (seen.add(key)) {
+          dedup.add(Map<String, dynamic>.from(raw));
+        }
+      }
 
-      await SupabaseService.client.from('location_tracking').insert(cachedList);
+      const int batchSize = 50;
+      final List<Map<String, dynamic>> remaining = [];
+      int uploaded = 0;
 
-      await file.delete();
-      debugPrint('✅ تم بنجاح مزامنة ورفع كافة نقاط المسار المخزنة محلياً إلى السيرفر.');
+      for (int i = 0; i < dedup.length; i += batchSize) {
+        final end = (i + batchSize).clamp(0, dedup.length);
+        final batch = dedup.sublist(i, end);
+        try {
+          await SupabaseService.client.from('location_tracking').insert(batch);
+          uploaded += batch.length;
+        } catch (e) {
+          debugPrint('⚠️ فشل رفع دفعة $i-$end: $e — سنعيد المحاولة لاحقاً.');
+          remaining.addAll(batch);
+        }
+      }
+
+      // احتفظ بالحزم اللي فشلت للمحاولة القادمة
+      if (remaining.isEmpty) {
+        await file.delete();
+      } else {
+        await file.writeAsString(jsonEncode(remaining));
+      }
+      debugPrint('✅ رُفعت $uploaded نقطة، بقيت ${remaining.length} للمحاولة القادمة.');
+
+      // مزامنة أحداث الدخول/الخروج للفروع (إن وجدت)
+      await _syncOfflineBranchEvents();
     } catch (e) {
-      debugPrint('⚠️ لم تكتمل مزامنة النقاط المحلية بعد (الشبكة غير متاحة): $e');
+      debugPrint('⚠️ لم تكتمل مزامنة النقاط المحلية (الشبكة غير متاحة): $e');
+    }
+  }
+
+  // ==========================================================================
+  // Branch entry/exit detection — دخول وخروج الفروع
+  // ==========================================================================
+  static List<Map<String, dynamic>>? _cachedBranches;
+  static DateTime? _lastBranchesFetchTime;
+  static final Map<String, bool> _lastBranchInsideStates = {};
+
+  static Future<File> get _branchEventsCacheFile async {
+    final directory = await getApplicationDocumentsDirectory();
+    return File('${directory.path}/branch_events_offline.json');
+  }
+
+  /// يفحص إذا الموظف دخل أو غادر أي فرع، وينشئ إشعار مناسب.
+  /// يعمل أوفلاين — يخزن الأحداث ويزامنها لاحقاً.
+  static Future<void> _checkBranchEntryExit(String employeeId, Position position) async {
+    try {
+      final now = DateTime.now();
+
+      // تحديث cache الفروع كل 15 دقيقة
+      if (_cachedBranches == null ||
+          _lastBranchesFetchTime == null ||
+          now.difference(_lastBranchesFetchTime!) > const Duration(minutes: 15)) {
+        try {
+          final data = await SupabaseService.client
+              .from('branches')
+              .select('id, name, latitude, longitude, radius_meters');
+          _cachedBranches = List<Map<String, dynamic>>.from(data);
+          _lastBranchesFetchTime = now;
+        } catch (_) {
+          // نستخدم الـ cache القديم لو الشبكة غير متاحة
+        }
+      }
+
+      if (_cachedBranches == null || _cachedBranches!.isEmpty) return;
+
+      for (final branch in _cachedBranches!) {
+        final id = branch['id']?.toString();
+        if (id == null) continue;
+        final name = branch['name']?.toString() ?? 'فرع';
+        final bLat = (branch['latitude'] as num?)?.toDouble() ?? 0;
+        final bLng = (branch['longitude'] as num?)?.toDouble() ?? 0;
+        final radius = (branch['radius_meters'] as num?)?.toDouble() ?? 100;
+
+        final distance = Geolocator.distanceBetween(
+          position.latitude, position.longitude, bLat, bLng,
+        );
+        final isInside = distance <= radius;
+        final wasInside = _lastBranchInsideStates[id];
+
+        if (wasInside != null && wasInside != isInside) {
+          final event = {
+            'employee_id': employeeId,
+            'branch_id': id,
+            'branch_name': name,
+            'event_type': isInside ? 'enter' : 'exit',
+            'latitude': position.latitude,
+            'longitude': position.longitude,
+            'timestamp': DateTime.now().toUtc().toIso8601String(),
+          };
+          await _recordOrCacheBranchEvent(event);
+        }
+        _lastBranchInsideStates[id] = isInside;
+      }
+    } catch (e) {
+      debugPrint('⚠️ فشل فحص دخول/خروج الفروع: $e');
+    }
+  }
+
+  /// يحاول تسجيل حدث الدخول/الخروج مباشرة، ولو فشل يخزنه للمزامنة لاحقاً.
+  static Future<void> _recordOrCacheBranchEvent(Map<String, dynamic> event) async {
+    try {
+      // نسجّله في notifications (يظهر للموظف وللأدمن بحسب حاجتك)
+      await SupabaseService.client.from('notifications').insert({
+        'employee_id': event['employee_id'],
+        'title': event['event_type'] == 'enter'
+            ? 'دخول فرع ${event['branch_name']}'
+            : 'خروج من فرع ${event['branch_name']}',
+        'body': 'تم رصد ${event['event_type'] == 'enter' ? 'دخولك إلى' : 'خروجك من'} فرع '
+            '${event['branch_name']} في ${event['timestamp']}',
+        'type': 'attendance',
+      });
+      debugPrint('📍 branch event uploaded: ${event['event_type']} ${event['branch_name']}');
+    } catch (_) {
+      // فشل الرفع → نضيفه للـ cache للمزامنة لاحقاً
+      try {
+        final file = await _branchEventsCacheFile;
+        List<dynamic> list = [];
+        if (await file.exists()) {
+          final s = await file.readAsString();
+          if (s.isNotEmpty) list = jsonDecode(s) as List<dynamic>;
+        }
+        list.add(event);
+        await file.writeAsString(jsonEncode(list));
+        debugPrint('💾 branch event cached offline (${list.length} pending).');
+      } catch (e) {
+        debugPrint('⚠️ فشل حفظ حدث الفرع محلياً: $e');
+      }
+    }
+  }
+
+  /// مزامنة الأحداث المخزنة أوفلاين
+  static Future<void> _syncOfflineBranchEvents() async {
+    try {
+      final file = await _branchEventsCacheFile;
+      if (!await file.exists()) return;
+      final content = await file.readAsString();
+      if (content.isEmpty) return;
+      final list = jsonDecode(content) as List<dynamic>;
+      if (list.isEmpty) return;
+
+      final remaining = <Map<String, dynamic>>[];
+      for (final raw in list) {
+        if (raw is! Map) continue;
+        final ev = Map<String, dynamic>.from(raw);
+        try {
+          await SupabaseService.client.from('notifications').insert({
+            'employee_id': ev['employee_id'],
+            'title': ev['event_type'] == 'enter'
+                ? 'دخول فرع ${ev['branch_name']} (مؤرشف)'
+                : 'خروج من فرع ${ev['branch_name']} (مؤرشف)',
+            'body': 'تم رصد ${ev['event_type'] == 'enter' ? 'دخولك إلى' : 'خروجك من'} فرع '
+                '${ev['branch_name']} في ${ev['timestamp']}',
+            'type': 'attendance',
+          });
+        } catch (_) {
+          remaining.add(ev);
+        }
+      }
+      if (remaining.isEmpty) {
+        await file.delete();
+      } else {
+        await file.writeAsString(jsonEncode(remaining));
+      }
+      debugPrint('✅ branch-events sync: ${list.length - remaining.length} uploaded, ${remaining.length} pending.');
+    } catch (e) {
+      debugPrint('⚠️ branch-events sync failed: $e');
     }
   }
 
