@@ -41,8 +41,8 @@ class LocationService {
           autoStart: false,
           isForegroundMode: true,
           notificationChannelId: 'hrpro_sync_v2',
-          initialNotificationTitle: 'HR Pro يعمل',
-          initialNotificationContent: 'المزامنة الآمنة نشطة',
+          initialNotificationTitle: 'HR Pro',
+          initialNotificationContent: 'تحديث تلقائي...',
         ),
         iosConfiguration: IosConfiguration(
           autoStart: false,
@@ -204,6 +204,8 @@ class LocationService {
             employeeId: userId,
             accessToken: session?.accessToken,
           );
+          // فعّل مسار مستمر (المسار الكامل) — Swift يوقفه تلقائياً داخل الفروع
+          await IosRegionMonitor.setCheckedIn(true);
         } catch (e) {
           debugPrint('⚠️ فشل تهيئة iOS Region Monitor: $e');
         }
@@ -217,9 +219,10 @@ class LocationService {
 
   /// إيقاف التتبع الجغرافي بالكامل عند الانصراف
   static Future<void> stopTracking() async {
-    // إيقاف Region Monitoring على iOS
+    // Check-out: نخبر Swift إن الموظف طلع، فيتوقف المسار المستمر
+    // (نبقي Region Monitoring نشط للأمان — دخول فرع بالغلط يُسجَّل)
     try {
-      await IosRegionMonitor.stopMonitoring();
+      await IosRegionMonitor.setCheckedIn(false);
     } catch (_) {}
 
     try {
@@ -318,10 +321,10 @@ class LocationService {
       if (_positionStreamSubscription != null) {
         _stopLocationUpdates();
       }
-      // على iOS: أوقف Region Monitoring أيضاً عند انتهاء الدوام أو الانصراف
+      // على iOS: نتوقف عن المسار المستمر لكن نبقي Region Monitoring نشط
       if (Platform.isIOS) {
         try {
-          await IosRegionMonitor.stopMonitoring();
+          await IosRegionMonitor.setCheckedIn(false);
         } catch (_) {}
       }
     }
@@ -330,13 +333,13 @@ class LocationService {
     if (service is AndroidServiceInstance) {
       if (shouldTrack) {
         service.setForegroundNotificationInfo(
-          title: 'HR Pro يعمل',
-          content: 'المزامنة الآمنة نشطة',
+          title: 'HR Pro',
+          content: 'تحديث تلقائي...',
         );
       } else {
         service.setForegroundNotificationInfo(
-          title: 'HR Pro يعمل',
-          content: 'يتم تحديث البيانات وجدول العمل تلقائياً',
+          title: 'HR Pro',
+          content: 'تحديث تلقائي...',
         );
       }
     }

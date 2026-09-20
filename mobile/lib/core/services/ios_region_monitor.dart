@@ -1,16 +1,20 @@
 // =========================================================================
 // HR Pro v6.0 - iOS Region Monitor Bridge
 // =========================================================================
-// جسر Dart ⇄ Swift يتحكم بـ Region Monitoring على iOS.
-// على Android: هذي الطبقة NOP — نستخدم flutter_background_service بدلاً منها.
+// جسر Dart ⇄ Swift يتحكم بـ LocationMonitorIOS.
+// على Android: هذي الطبقة NOP.
 //
-// كيف يشتغل الحل الكامل على iOS:
-//   1. الموظف يعمل check-in                → configure() ثم startMonitoring([فروع])
-//   2. iOS يوقظ التطبيق عند دخول/خروج فرع  → Swift يرفع لـ Supabase مباشرة
-//   3. الموظف يعمل check-out              → stopMonitoring()
-//   4. أوقات الدوام انتهت                → auto-stop عبر schedule check
-//
-// حدود Apple: 20 منطقة كحد أقصى في نفس الوقت.
+// كيف يعمل الحل الكامل:
+//   1. عند تسجيل الدخول (login)       → configure() لتخزين مفاتيح Supabase
+//   2. تلقائياً أو عند login/check-in → startMonitoring([فروع])
+//   3. عند check-in                    → setCheckedIn(true)
+//                                          → iOS يبدي المسار المستمر
+//                                          → عند دخول فرع، يوقف المسار
+//                                          → عند خروج فرع، يفعّل المسار
+//   4. عند check-out                   → setCheckedIn(false)
+//                                          → المسار المستمر يتوقف
+//                                          → Region Monitoring يبقى للأمان
+//   5. عند logout                       → stopMonitoring() (يوقف كل شي)
 // =========================================================================
 
 import 'dart:io';
@@ -25,11 +29,8 @@ class IosRegionMonitor {
 
   static const _channel = MethodChannel('com.batra.hrpro/ios_location');
 
-  /// هل الطبقة هذه فعّالة؟ (iOS فقط)
   static bool get isSupported => Platform.isIOS;
 
-  /// إعداد Supabase URL + anon key + employee id + optional access token.
-  /// يُستدعى مرة واحدة عند تسجيل الدخول.
   static Future<void> configure({
     required String supabaseUrl,
     required String supabaseAnonKey,
@@ -49,8 +50,6 @@ class IosRegionMonitor {
     }
   }
 
-  /// بدء مراقبة قائمة الفروع (max 20 من Apple).
-  /// كل branch: {id, name, lat, lng, radius}
   static Future<void> startMonitoring(
       List<Map<String, dynamic>> branches) async {
     if (!isSupported) return;
@@ -66,19 +65,27 @@ class IosRegionMonitor {
     }
   }
 
-  /// إيقاف كل المراقبة — يُستدعى عند check-out أو انتهاء الدوام.
+  /// إبلاغ الطبقة الأصلية بحالة check-in (يفعّل/يوقف المسار المستمر)
+  static Future<void> setCheckedIn(bool checkedIn) async {
+    if (!isSupported) return;
+    try {
+      await _channel.invokeMethod('setCheckedIn', {'value': checkedIn});
+      debugPrint('iOS: setCheckedIn($checkedIn)');
+    } catch (e) {
+      debugPrint('IosRegionMonitor.setCheckedIn error: $e');
+    }
+  }
+
   static Future<void> stopMonitoring() async {
     if (!isSupported) return;
     try {
       await _channel.invokeMethod('stopMonitoring');
-      debugPrint('iOS: توقفت المراقبة الجغرافية');
+      debugPrint('iOS: توقفت المراقبة تماماً');
     } catch (e) {
       debugPrint('IosRegionMonitor.stopMonitoring error: $e');
     }
   }
 
-  /// راحة: جلب فروع من Supabase وتشغيل المراقبة عليها.
-  /// يُستدعى من LocationService.startTracking() على iOS.
   static Future<void> configureAndStartFromSupabase({
     required String supabaseUrl,
     required String supabaseAnonKey,

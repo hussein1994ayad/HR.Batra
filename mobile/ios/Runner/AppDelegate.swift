@@ -12,7 +12,6 @@ import UserNotifications
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
 
-    // 1) صلاحيات الإشعارات
     UNUserNotificationCenter.current().delegate = self
     UNUserNotificationCenter.current().requestAuthorization(
       options: [.alert, .badge, .sound, .provisional, .criticalAlert]
@@ -23,7 +22,6 @@ import UserNotifications
     }
     application.registerForRemoteNotifications()
 
-    // 2) MethodChannel للتحكم بـ Region Monitoring من Dart
     if let controller = window?.rootViewController as? FlutterViewController {
       setupIOSLocationChannel(controller: controller)
     }
@@ -44,7 +42,7 @@ import UserNotifications
               let anon = args["supabaseAnonKey"] as? String,
               let employeeId = args["employeeId"] as? String
         else {
-          result(FlutterError(code: "BAD_ARGS", message: "configure needs supabaseUrl/anonKey/employeeId", details: nil))
+          result(FlutterError(code: "BAD_ARGS", message: "configure needs args", details: nil))
           return
         }
         let token = (args["accessToken"] as? String) ?? anon
@@ -64,6 +62,16 @@ import UserNotifications
           return
         }
         LocationMonitorIOS.shared.startMonitoring(branches: branches)
+        result(true)
+
+      case "setCheckedIn":
+        guard let args = call.arguments as? [String: Any],
+              let value = args["value"] as? Bool
+        else {
+          result(FlutterError(code: "BAD_ARGS", message: "setCheckedIn needs value", details: nil))
+          return
+        }
+        LocationMonitorIOS.shared.setCheckedIn(value)
         result(true)
 
       case "stopMonitoring":
