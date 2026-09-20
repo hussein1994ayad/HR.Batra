@@ -318,6 +318,12 @@ class LocationService {
       if (_positionStreamSubscription != null) {
         _stopLocationUpdates();
       }
+      // على iOS: أوقف Region Monitoring أيضاً عند انتهاء الدوام أو الانصراف
+      if (Platform.isIOS) {
+        try {
+          await IosRegionMonitor.stopMonitoring();
+        } catch (_) {}
+      }
     }
 
     // تحديث إشعار الخدمة الخلفية للأندرويد بشكل تفاعلي
@@ -371,11 +377,27 @@ class LocationService {
         }
       }
 
-      final trackingSchedule = await SupabaseService.client
+      dynamic trackingSchedule = await SupabaseService.client
           .from('tracking_schedules')
           .select()
           .eq('employee_id', userId)
           .maybeSingle();
+
+      // Fallback: لو ما فيه tracking_schedule، استخدم work_schedule (الأوقات الرسمية للدوام)
+      if (trackingSchedule == null) {
+        final workSchedule = await SupabaseService.client
+            .from('work_schedules')
+            .select('check_in_time, check_out_time, work_days')
+            .eq('employee_id', userId)
+            .maybeSingle();
+        if (workSchedule != null) {
+          trackingSchedule = {
+            'start_time': workSchedule['check_in_time'],
+            'end_time': workSchedule['check_out_time'],
+            'tracking_days': workSchedule['work_days'],
+          };
+        }
+      }
 
       await _saveTrackingStateOffline(
         hasCheckedIn: hasCheckedIn,
