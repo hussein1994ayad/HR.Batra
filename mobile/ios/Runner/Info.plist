@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Hr Pro</string>
+	<string>HR Pro</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -26,40 +26,87 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
-	
+
+	<!-- App Store category -->
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.business</string>
+
+	<!-- No non-exempt encryption (skip export compliance for App Store) -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
-	  <string>https</string>
-	  <string>http</string>
-	  <string>comgooglemaps</string>
-	  <string>iosamap</string>
-	  <string>waze</string>
+		<string>https</string>
+		<string>http</string>
+		<string>comgooglemaps</string>
+		<string>iosamap</string>
+		<string>waze</string>
 	</array>
-	
-	<!-- إعدادات صلاحيات الموقع الجغرافي لأجهزة الآيفون -->
+
+	<!-- ================================================================
+	     Location permissions
+	     =============================================================== -->
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>يطلب التطبيق الوصول إلى موقعك الجغرافي للتحقق من تواجدك داخل حدود السياج الجغرافي للفروع عند تسجيل الحضور والانصراف.</string>
 	<key>NSLocationAlwaysUsageDescription</key>
 	<string>يطلب التطبيق الوصول الدائم لموقعك الجغرافي للتحقق من تواجدك داخل حدود السياج الجغرافي للفروع ولتتبع مسار الحركة أثناء ساعات العمل الرسمية.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>يطلب التطبيق الوصول الدائم لموقعك الجغرافي للتحقق من تواجدك داخل حدود السياج الجغرافي للفروع ولتتبع مسار الحركة أثناء ساعات العمل الرسمية.</string>
-	
-	<!-- صلاحيات الكاميرا ومعرض الصور -->
+	<key>NSLocationTemporaryUsageDescriptionDictionary</key>
+	<dict>
+		<key>PreciseLocationAttendance</key>
+		<string>يحتاج التطبيق للموقع الدقيق عند تسجيل الحضور والانصراف فقط، لضمان دقة التحقق من الفرع.</string>
+	</dict>
+
+	<!-- Camera + Photos -->
 	<key>NSCameraUsageDescription</key>
 	<string>يحتاج التطبيق للوصول إلى الكاميرا لالتقاط صورة شخصية وإرفاق تعهدات السلف والمستندات الرسمية.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>يحتاج التطبيق للوصول إلى معرض الصور لاختيار صور المستندات والوثائق الرسمية والمرفقات.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>يحتاج التطبيق للوصول إلى معرض الصور لحفظ كشوف الرواتب والوثائق الرسمية على هاتفك.</string>
-	
-	<!-- صلاحيات الإشعارات وتحديث الخلفية -->
+
+	<!-- Face ID / Touch ID (for future biometric login) -->
+	<key>NSFaceIDUsageDescription</key>
+	<string>يستخدم التطبيق Face ID لتسريع تسجيل الدخول الآمن دون كتابة كلمة المرور في كل مرة.</string>
+
+	<!-- Motion (for step detection / activity, optional future use) -->
+	<key>NSMotionUsageDescription</key>
+	<string>يستخدم التطبيق مستشعرات الحركة لتحسين دقة تحديد نشاط الحضور.</string>
+
+	<!-- Speech / microphone / contacts / calendar — NOT USED, so we omit them -->
+
+	<!-- ================================================================
+	     Background modes
+	     =============================================================== -->
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>fetch</string>
 		<string>remote-notification</string>
 		<string>location</string>
+		<string>processing</string>
 	</array>
 
+	<!-- Background task identifiers — required by iOS 13+ BGTaskScheduler -->
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.batra.hrpro.location-sync</string>
+		<string>com.batra.hrpro.notification-refresh</string>
+	</array>
+
+	<!-- ================================================================
+	     Push notifications
+	     =============================================================== -->
+	<!-- We use APNs indirectly via Firebase FCM. No custom sound registration
+	     needed in Info.plist — the sound file `special_chime.wav` in Runner
+	     is looked up by name at notification time. -->
+	<key>FirebaseAppDelegateProxyEnabled</key>
+	<false/>
+
+	<!-- ================================================================
+	     Scene / launch / orientation
+	     =============================================================== -->
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
