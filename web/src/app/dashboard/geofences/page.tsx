@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import type { AttendanceRecord, Branch } from '@/lib/db-types';
+import { errorMessage } from '@/lib/error-utils';
 import MapComponent from '@/components/MapComponent';
 import { 
   Building, 
@@ -10,7 +12,6 @@ import {
   Trash2, 
   Loader2,
   Globe,
-  Navigation,
   Edit,
   Users,
   ExternalLink,
@@ -21,7 +22,7 @@ import toast from 'react-hot-toast';
 
 export default function GeofencesPage() {
   const [loading, setLoading] = useState(true);
-  const [branches, setBranches] = useState<any[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
@@ -31,8 +32,7 @@ export default function GeofencesPage() {
   const [mapZoom, setMapZoom] = useState<number>(12);
   
   // Attendance States
-  const [todayLogs, setTodayLogs] = useState<any[]>([]);
-  const [loadingAttendance, setLoadingAttendance] = useState(false);
+  const [todayLogs, setTodayLogs] = useState<AttendanceRecord[]>([]);
 
   // Async URL resolution loading states
   const [resolvingUrl, setResolvingUrl] = useState(false);
@@ -61,7 +61,7 @@ export default function GeofencesPage() {
     let decoded = text;
     try {
       decoded = decodeURIComponent(text);
-    } catch (e) {}
+    } catch {}
 
     // Regex 1: look for @latitude,longitude (most common google maps format)
     const regexAt = /@(-?\d+\.\d+),(-?\d+\.\d+)/;
@@ -216,6 +216,67 @@ export default function GeofencesPage() {
     }
   };
 
+
+  const fetchBranches = async (hasCache = false) => {
+    if (!hasCache) {
+      setLoading(true);
+    }
+    try {
+      const { data, error } = await supabase
+        .from('branches')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      if (data) {
+        setBranches(data);
+        
+        // Cache branches and existing todayLogs
+        const currentLogs = localStorage.getItem('batra_cache_geofences');
+        let logs = [];
+        if (currentLogs) {
+          try { logs = JSON.parse(currentLogs).todayLogs || []; } catch {}
+        }
+        localStorage.setItem('batra_cache_geofences', JSON.stringify({
+          branches: data,
+          todayLogs: logs
+        }));
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchTodayAttendance = async () => {
+    try {
+      const todayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD in local time
+      const { data, error } = await supabase
+        .from('attendance')
+        .select('*, employees!employee_id(full_name, phone, email, branch_id)')
+        .eq('work_date', todayStr);
+
+      if (error) throw error;
+      if (data) {
+        setTodayLogs(data);
+
+        // Update todayLogs in cache
+        const cached = localStorage.getItem('batra_cache_geofences');
+        if (cached) {
+          try {
+            const parsed = JSON.parse(cached);
+            parsed.todayLogs = data;
+            localStorage.setItem('batra_cache_geofences', JSON.stringify(parsed));
+          } catch {}
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching today attendance:', err);
+    } finally {
+    }
+  };
+
   useEffect(() => {
     // 1. Try to load cached branches and today logs instantly
     const cachedData = localStorage.getItem('batra_cache_geofences');
@@ -234,66 +295,6 @@ export default function GeofencesPage() {
     fetchBranches(!!cachedData);
     fetchTodayAttendance();
   }, []);
-
-  const fetchBranches = async (hasCache = false) => {
-    if (!hasCache) {
-      setLoading(true);
-    }
-    try {
-      const { data, error } = await supabase
-        .from('branches')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (data) {
-        setBranches(data);
-        
-        // Cache branches and existing todayLogs
-        const currentLogs = localStorage.getItem('batra_cache_geofences');
-        let logs = [];
-        if (currentLogs) {
-          try { logs = JSON.parse(currentLogs).todayLogs || []; } catch (e) {}
-        }
-        localStorage.setItem('batra_cache_geofences', JSON.stringify({
-          branches: data,
-          todayLogs: logs
-        }));
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchTodayAttendance = async () => {
-    setLoadingAttendance(true);
-    try {
-      const todayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD in local time
-      const { data, error } = await supabase
-        .from('attendance')
-        .select('*, employees!employee_id(full_name, phone, email, branch_id)')
-        .eq('work_date', todayStr);
-
-      if (data) {
-        setTodayLogs(data);
-
-        // Update todayLogs in cache
-        const cached = localStorage.getItem('batra_cache_geofences');
-        if (cached) {
-          try {
-            const parsed = JSON.parse(cached);
-            parsed.todayLogs = data;
-            localStorage.setItem('batra_cache_geofences', JSON.stringify(parsed));
-          } catch (e) {}
-        }
-      }
-    } catch (err) {
-      console.error('Error fetching today attendance:', err);
-    } finally {
-      setLoadingAttendance(false);
-    }
-  };
 
   // Haversine formula to compute distance in meters between two coordinates
   const getDistanceMeters = (lat1: number, lon1: number, lat2: number, lon2: number) => {
@@ -366,7 +367,7 @@ export default function GeofencesPage() {
     }
   };
 
-  const handleOpenEditModal = (b: Record<string, any>) => {
+  const handleOpenEditModal = (b: Branch) => {
     setEditBranchId(b.id);
     setEditBranchName(b.name);
     setEditLatVal(b.latitude);
@@ -393,8 +394,8 @@ export default function GeofencesPage() {
         setSelectedBranchId(null);
       }
       toast.success('تم حذف الفرع الجغرافي ونطاق البصمة الخاص به بنجاح 🗑️');
-    } catch (err: any) {
-      toast.error(`فشل حذف الفرع: ${err.message}`);
+    } catch (err: unknown) {
+      toast.error(`فشل حذف الفرع: ${errorMessage(err)}`);
     } finally {
       setActionLoading(null);
     }
@@ -438,8 +439,8 @@ export default function GeofencesPage() {
       });
 
       toast.success('تم إضافة الفرع الجغرافي الجديد ورسم حدود بصمته بنجاح! 🏢');
-    } catch (err: any) {
-      toast.error(err.message || 'حدث خطأ غير متوقع');
+    } catch (err: unknown) {
+      toast.error(errorMessage(err) || 'حدث خطأ غير متوقع');
     } finally {
       setActionLoading(null);
     }
@@ -483,8 +484,8 @@ export default function GeofencesPage() {
       });
 
       toast.success('تم تحديث بيانات الفرع ونطاق البصمة بنجاح! 💾');
-    } catch (err: any) {
-      toast.error(err.message || 'حدث خطأ غير متوقع');
+    } catch (err: unknown) {
+      toast.error(errorMessage(err) || 'حدث خطأ غير متوقع');
     } finally {
       setActionLoading(null);
     }

@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { errorMessage } from '@/lib/error-utils';
 import { Lock, Mail, AlertTriangle, ShieldCheck, Eye, EyeOff, Loader2 } from 'lucide-react';
 
 export default function LoginPage() {
@@ -19,7 +20,7 @@ export default function LoginPage() {
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
         // Double check admin role
-        const { data: emp, error: empErr } = await supabase
+        const { data: emp } = await supabase
           .from('employees')
           .select('role')
           .eq('id', session.user.id)
@@ -73,8 +74,8 @@ export default function LoginPage() {
 
       // Redirect on success
       router.replace('/dashboard');
-    } catch (err: any) {
-      setError(err.message || 'حدث خطأ غير متوقع');
+    } catch (err: unknown) {
+      setError(errorMessage(err) || 'حدث خطأ غير متوقع');
     } finally {
       setLoading(false);
     }

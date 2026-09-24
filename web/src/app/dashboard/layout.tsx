@@ -3,6 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import type { User } from '@supabase/supabase-js';
+import type { AppNotification } from '@/lib/db-types';
 import { Toaster } from 'react-hot-toast';
 import Link from 'next/link';
 import { DashboardErrorBoundary } from '@/components/DashboardErrorBoundary';
@@ -23,11 +25,12 @@ import {
   Bell,
   Banknote
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 
 interface SidebarItem {
   name: string;
   href: string;
-  icon: React.ComponentType<any>;
+  icon: LucideIcon;
 }
 
 
@@ -40,13 +43,13 @@ export default function DashboardLayout({
   const pathname = usePathname();
   const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [adminUser, setAdminUser] = useState<any>(null);
+  const [adminUser, setAdminUser] = useState<User | null>(null);
   const [adminName, setAdminName] = useState<string>('مدير النظام');
   const [pendingLeaves, setPendingLeaves] = useState(0);
   const [pendingLoans, setPendingLoans] = useState(0);
   const [showNotifications, setShowNotifications] = useState(false);
 
-  const [systemNotifs, setSystemNotifs] = useState<any[]>([]);
+  const [systemNotifs, setSystemNotifs] = useState<AppNotification[]>([]);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -116,7 +119,7 @@ export default function DashboardLayout({
         }));
 
         setLoading(false);
-      } catch (err) {
+      } catch {
         localStorage.removeItem('batra_cache_admin');
         router.replace('/login');
       }
@@ -127,7 +130,7 @@ export default function DashboardLayout({
 
   const playBeep = () => {
     try {
-      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
       if (!AudioContextClass) return;
       const ctx = new AudioContextClass();
       const osc = ctx.createOscillator();
@@ -140,7 +143,7 @@ export default function DashboardLayout({
       osc.start();
       gainNode.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + 0.5);
       osc.stop(ctx.currentTime + 0.5);
-    } catch (e) {
+    } catch {
     }
   };
 
@@ -205,7 +208,7 @@ export default function DashboardLayout({
         },
         async (payload) => {
           if (payload.new) {
-            setSystemNotifs(prev => [payload.new, ...prev]);
+            setSystemNotifs(prev => [payload.new as AppNotification, ...prev]);
             playBeep();
             // Optional: We can show a toast or alert, but toast() blocks the UI.
             // Using a simple notification state if needed.

@@ -2,6 +2,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import { errorMessage } from '@/lib/error-utils';
+import type {
+  AttendanceRecord, BonusDeduction, Branch, Employee, LeaveRequest, LoanInstallment, SalarySlip, WorkSchedule,
+} from '@/lib/db-types';
 import { 
   Banknote, 
   Search, 
@@ -11,7 +15,6 @@ import {
   TrendingUp, 
   TrendingDown, 
   CheckCircle,
-  FileText,
   Printer,
   Loader2,
   CalendarRange,
@@ -55,6 +58,25 @@ const getCycleDates = (monthStr: string, startDay: number = 25, endDay: number =
   }
 };
 
+// قيد يُنشأ مع كشف الراتب داخل approve_salary_slip
+// سطر في تفصيل الحضور اليومي لموظف ضمن كشف الراتب
+type DetailLog = {
+  date: string;
+  status: string;
+  time: string;
+  note: string;
+  isAbsenceDay: boolean;
+  isExcused?: boolean;
+};
+
+type SlipAdjustment = {
+  type: 'bonus' | 'deduction';
+  amount: number;
+  reason: string;
+  issue_date: string;
+  skip_if_exists: boolean;
+};
+
 const formatLateDurationArabic = (minutes: number) => {
   if (minutes <= 0) return '0 دقيقة';
   const hrs = Math.floor(minutes / 60);
@@ -93,7 +115,7 @@ const getBaghdadMinutesFromIso = (isoStr: string): number => {
     // Iraq / Baghdad is UTC+3
     const baghdadHours = (utcHours + 3) % 24;
     return baghdadHours * 60 + utcMins;
-  } catch (_) {
+  } catch {
     return 0;
   }
 };
@@ -108,15 +130,18 @@ export default function PayrollPage() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [sendingNotifs, setSendingNotifs] = useState(false);
   
+  // صف محسوب في جدول الرواتب (بيانات الموظف + الحضور + الخصومات)
+  type PayrollRow = (typeof processedPayroll)[number];
+
   // Data States
-  const [employees, setEmployees] = useState<any[]>([]);
-  const [branches, setBranches] = useState<any[]>([]);
-  const [bonusesAndDeductions, setBonusesAndDeductions] = useState<any[]>([]);
-  const [loanInstallments, setLoanInstallments] = useState<any[]>([]);
-  const [attendanceLogs, setAttendanceLogs] = useState<any[]>([]);
-  const [leaveRequests, setLeaveRequests] = useState<any[]>([]);
-  const [workSchedules, setWorkSchedules] = useState<any[]>([]);
-  const [existingSlips, setExistingSlips] = useState<any[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [branches, setBranches] = useState<Pick<Branch, 'id' | 'name'>[]>([]);
+  const [bonusesAndDeductions, setBonusesAndDeductions] = useState<BonusDeduction[]>([]);
+  const [loanInstallments, setLoanInstallments] = useState<LoanInstallment[]>([]);
+  const [attendanceLogs, setAttendanceLogs] = useState<AttendanceRecord[]>([]);
+  const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
+  const [workSchedules, setWorkSchedules] = useState<WorkSchedule[]>([]);
+  const [existingSlips, setExistingSlips] = useState<SalarySlip[]>([]);
   const [archivedMonths, setArchivedMonths] = useState<string[]>([]);
   
   // Filter States
@@ -144,7 +169,7 @@ export default function PayrollPage() {
 
   // Modal States
   const [showAddBDModal, setShowAddBDModal] = useState(false);
-  const [selectedEmpForBD, setSelectedEmpForBD] = useState<any>(null);
+  const [selectedEmpForBD, setSelectedEmpForBD] = useState<Employee | null>(null);
   const [bdType, setBdType] = useState<'bonus' | 'deduction'>('bonus');
   const [bdAmount, setBdAmount] = useState<number>(0);
   const [bdReason, setBdReason] = useState('');
@@ -158,9 +183,6 @@ export default function PayrollPage() {
   const [cycleStartDay, setCycleStartDay] = useState(25);
   const [cycleEndDay, setCycleEndDay] = useState(24);
 
-  useEffect(() => {
-    fetchPayrollData();
-  }, [startDate, endDate]);
 
   const saveOverride = (employeeId: string, field: 'bonuses' | 'attendanceDeductions' | 'otherDeductions', value: number) => {
     setPayrollOverrides(prev => {
@@ -193,7 +215,7 @@ export default function PayrollPage() {
     toast.success('تمت استعادة القيمة التلقائية المحتسبة! 🔄');
   };
 
-  const renderEditableCell = (emp: any, field: 'bonuses' | 'attendanceDeductions' | 'otherDeductions', displayValue: number, colorClass: string, prefixSign: string = '') => {
+  const renderEditableCell = (emp: PayrollRow, field: 'bonuses' | 'attendanceDeductions' | 'otherDeductions', displayValue: number, colorClass: string, prefixSign: string = '') => {
     const isEditing = editingCell && editingCell.employeeId === emp.id && editingCell.field === field;
     const empOverrides = payrollOverrides[emp.id] || {};
     const isOverridden = empOverrides[field] !== undefined;
@@ -362,7 +384,8 @@ export default function PayrollPage() {
       ]);
 
       if (resBrs.data) setBranches(resBrs.data);
-      if (resEmps.data) setEmployees(resEmps.data);
+      // supabase-js بدون أنواع مولّدة يستنتج العلاقة branches كمصفوفة، وهي فعلياً كائن واحد
+      if (resEmps.data) setEmployees(resEmps.data as unknown as Employee[]);
       if (resBds.data) setBonusesAndDeductions(resBds.data);
       if (resLoans.data) setLoanInstallments(resLoans.data);
       if (resAtt.data) setAttendanceLogs(resAtt.data);
@@ -370,7 +393,7 @@ export default function PayrollPage() {
       if (resScheds.data) setWorkSchedules(resScheds.data);
       if (resSlips.data) setExistingSlips(resSlips.data);
       if (resArchived.data) {
-        setArchivedMonths(resArchived.data.map((r: Record<string, any>) => r.work_month));
+        setArchivedMonths(resArchived.data.map((r: { work_month: string }) => r.work_month));
       }
 
     } catch (err) {
@@ -379,6 +402,10 @@ export default function PayrollPage() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchPayrollData();
+  }, [startDate, endDate]);
 
   const handleAddBonusDeduction = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -407,264 +434,107 @@ export default function PayrollPage() {
       toast.success('تم إضافة السجل بنجاح! ✅');
       
       fetchPayrollData();
-    } catch (err) {
+    } catch {
       toast.error('حدث خطأ أثناء الإضافة');
     } finally {
       setActionLoading(null);
     }
   };
 
-  const handleGenerateSlip = async (empData: Record<string, any>) => {
+  // قيود المكافآت والخصومات التي تُنشأ مع كشف الراتب (تسويات يدوية + تفاصيل خصومات الحضور)
+  const buildSlipAdjustments = (empData: PayrollRow): SlipAdjustment[] => {
+    const adjustments: SlipAdjustment[] = [];
+    const add = (type: SlipAdjustment['type'], amount: number, reason: string, skipIfExists = false) => {
+      if (amount > 0) adjustments.push({ type, amount, reason, issue_date: endDate, skip_if_exists: skipIfExists });
+    };
+
+    if (empData.isBonusesOverridden) {
+      const diff = empData.totalBonuses - empData.computedBonuses;
+      if (diff > 0) add('bonus', diff, `تسوية زيادة مكافآت يدوياً لشهر ${selectedMonth}`);
+      else add('deduction', Math.abs(diff), `تسوية تخفيض مكافآت يدوياً لشهر ${selectedMonth}`);
+    }
+
+    if (empData.isOtherDeductionsOverridden) {
+      const diff = (empData.totalDeductions - empData.totalAttendanceDeductions) - empData.computedOtherDeductions;
+      if (diff > 0) add('deduction', diff, `تسوية زيادة خصومات يدوياً لشهر ${selectedMonth}`);
+      else add('bonus', Math.abs(diff), `تسوية تخفيض خصومات يدوياً لشهر ${selectedMonth}`);
+    }
+
+    if (empData.isAttendanceDeductionsOverridden) {
+      add('deduction', empData.totalAttendanceDeductions, `خصم غياب وحضور معدل يدوياً للفترة من ${startDate} إلى ${endDate}`);
+    } else if (empData.totalAttendanceDeductions > 0) {
+      // تفاصيل خصومات الحضور التلقائية للتدقيق (لا تُكرر إن وُجدت سابقاً)
+      add('deduction', empData.absenceDeduction, `خصم غياب غير مبرر (${empData.absencesCount} يوم) للفترة من ${startDate} إلى ${endDate}`, true);
+      add('deduction', empData.halfDayDeduction, `خصم نصف يوم (${empData.halfDaysCount} يوم) للفترة من ${startDate} إلى ${endDate}`, true);
+      add('deduction', empData.latenessDeduction, `خصم تأخير الحضور (${formatLateDurationArabic(empData.totalLateMinutes)}) للفترة من ${startDate} إلى ${endDate}`, true);
+      add('deduction', empData.earlyExitDeduction, `خصم خروج مبكر (${formatLateDurationArabic(empData.totalEarlyExitMinutes)}) للفترة من ${startDate} إلى ${endDate}`, true);
+    }
+
+    return adjustments;
+  };
+
+  // الكشف + تسديد الأقساط + القيود كلها في transaction واحدة بالسيرفر
+  const approveSlip = async (empData: PayrollRow) => {
+    const { error } = await supabase.rpc('approve_salary_slip', {
+      p_employee_id: empData.id,
+      p_work_month: selectedMonth,
+      p_basic_salary: empData.basic,
+      p_allowances: empData.totalBonuses,
+      p_deductions: empData.totalDeductions,
+      p_loans_deduction: empData.loanDeduction,
+      p_net_salary: empData.netSalary,
+      p_installment_ids: empData.loanInstallmentIds ?? [],
+      p_adjustments: buildSlipAdjustments(empData),
+    });
+    if (error) throw error;
+  };
+
+  const handleGenerateSlip = async (empData: PayrollRow) => {
+    if (existingSlips.some(s => s.employee_id === empData.id && s.work_month === selectedMonth)) {
+      toast.error('تم صرف الراتب مسبقاً لهذا الموظف في هذا الشهر.');
+      return;
+    }
+
     setActionLoading(`slip_${empData.id}`);
     try {
-      // Prevent double generation
-      if (existingSlips.some(s => s.employee_id === empData.id && s.work_month === selectedMonth)) {
-        toast.error('تم صرف الراتب مسبقاً لهذا الموظف في هذا الشهر.');
-        setActionLoading(null);
-        return;
-      }
-
-      // Create a salary slip record (status is published according to CHECK constraint)
-      const { error } = await supabase.from('salary_slips').insert({
-        employee_id: empData.id,
-        work_month: selectedMonth,
-        basic_salary: empData.basic,
-        allowances: empData.totalBonuses,
-        deductions: empData.totalDeductions,
-        loans_deduction: empData.loanDeduction,
-        net_salary: empData.netSalary,
-        status: 'published'
-      });
-      
-      if (error) throw error;
-
-      // Mark loan installments as paid if any were deducted
-      if (empData.loanInstallmentIds && empData.loanInstallmentIds.length > 0) {
-        await supabase
-          .from('loan_installments')
-          .update({ is_paid: true, paid_at: new Date().toISOString() })
-          .in('id', empData.loanInstallmentIds);
-      }
-
-      // Record override adjustments for bonuses, attendance deductions, and other deductions
-      if (empData.isBonusesOverridden) {
-        const diff = empData.totalBonuses - empData.computedBonuses;
-        if (diff > 0) {
-          await supabase.from('bonuses_deductions').insert({
-            employee_id: empData.id,
-            type: 'bonus',
-            amount: diff,
-            reason: `تسوية زيادة مكافآت يدوياً لشهر ${selectedMonth}`,
-            issue_date: endDate
-          });
-        } else if (diff < 0) {
-          await supabase.from('bonuses_deductions').insert({
-            employee_id: empData.id,
-            type: 'deduction',
-            amount: Math.abs(diff),
-            reason: `تسوية تخفيض مكافآت يدوياً لشهر ${selectedMonth}`,
-            issue_date: endDate
-          });
-        }
-      }
-
-      if (empData.isOtherDeductionsOverridden) {
-        const diff = (empData.totalDeductions - empData.totalAttendanceDeductions) - empData.computedOtherDeductions;
-        if (diff > 0) {
-          await supabase.from('bonuses_deductions').insert({
-            employee_id: empData.id,
-            type: 'deduction',
-            amount: diff,
-            reason: `تسوية زيادة خصومات يدوياً لشهر ${selectedMonth}`,
-            issue_date: endDate
-          });
-        } else if (diff < 0) {
-          await supabase.from('bonuses_deductions').insert({
-            employee_id: empData.id,
-            type: 'bonus',
-            amount: Math.abs(diff),
-            reason: `تسوية تخفيض خصومات يدوياً لشهر ${selectedMonth}`,
-            issue_date: endDate
-          });
-        }
-      }
-
-      if (empData.isAttendanceDeductionsOverridden) {
-        if (empData.totalAttendanceDeductions > 0) {
-          await supabase.from('bonuses_deductions').insert({
-            employee_id: empData.id,
-            type: 'deduction',
-            amount: empData.totalAttendanceDeductions,
-            reason: `خصم غياب وحضور معدل يدوياً للفترة من ${startDate} إلى ${endDate}`,
-            issue_date: endDate
-          });
-        }
-      } else if (empData.totalAttendanceDeductions > 0) {
-        // Add detailed deduction log entries for the automatic attendance deductions for auditability
-        const insertBDIfNotExist = async (amount: number, reason: string) => {
-          if (amount <= 0) return;
-          const { data: existingBD } = await supabase
-            .from('bonuses_deductions')
-            .select('id')
-            .eq('employee_id', empData.id)
-            .eq('type', 'deduction')
-            .eq('reason', reason)
-            .maybeSingle();
-
-          if (!existingBD) {
-            await supabase.from('bonuses_deductions').insert({
-              employee_id: empData.id,
-              type: 'deduction',
-              amount: amount,
-              reason: reason,
-              issue_date: endDate
-            });
-          }
-        };
-
-        await insertBDIfNotExist(empData.absenceDeduction, `خصم غياب غير مبرر (${empData.absencesCount} يوم) للفترة من ${startDate} إلى ${endDate}`);
-        await insertBDIfNotExist(empData.halfDayDeduction, `خصم نصف يوم (${empData.halfDaysCount} يوم) للفترة من ${startDate} إلى ${endDate}`);
-        await insertBDIfNotExist(empData.latenessDeduction, `خصم تأخير الحضور (${formatLateDurationArabic(empData.totalLateMinutes)}) للفترة من ${startDate} إلى ${endDate}`);
-        await insertBDIfNotExist(empData.earlyExitDeduction, `خصم خروج مبكر (${formatLateDurationArabic(empData.totalEarlyExitMinutes)}) للفترة من ${startDate} إلى ${endDate}`);
-      }
-
+      await approveSlip(empData);
       confetti({ particleCount: 100, spread: 60, colors: ['#10B981', '#059669'] });
       toast.success('تم اعتماد راتب الموظف بنجاح! 💸');
       fetchPayrollData();
-    } catch (err: any) {
-      toast.error(`فشل اعتماد الراتب: ${err.message || err}`);
+    } catch (err: unknown) {
+      toast.error(`فشل اعتماد الراتب: ${errorMessage(err)}`);
     } finally {
       setActionLoading(null);
     }
   };
 
-  const handleBulkGenerateSlips = async (empsToProcess: any[]) => {
+  const handleBulkGenerateSlips = async (empsToProcess: PayrollRow[]) => {
     setActionLoading('bulk_generate');
+    let successCount = 0;
+    const failed: string[] = [];
     try {
-      let successCount = 0;
       for (const empData of empsToProcess) {
-        // Prevent double generation
         if (existingSlips.some(s => s.employee_id === empData.id && s.work_month === selectedMonth)) {
           continue;
         }
-        
-        // Create a salary slip record
-        const { error } = await supabase.from('salary_slips').insert({
-          employee_id: empData.id,
-          work_month: selectedMonth,
-          basic_salary: empData.basic,
-          allowances: empData.totalBonuses,
-          deductions: empData.totalDeductions,
-          loans_deduction: empData.loanDeduction,
-          net_salary: empData.netSalary,
-          status: 'published'
-        });
-        
-        if (error) {
-          console.error(`Error generating slip for ${empData.full_name}:`, error);
-          continue;
+        try {
+          await approveSlip(empData);
+          successCount++;
+        } catch (err: unknown) {
+          console.error(`Error generating slip for ${empData.full_name}:`, err);
+          failed.push(empData.full_name);
         }
-
-        successCount++;
-
-        // Mark loan installments as paid if any were deducted
-        if (empData.loanInstallmentIds && empData.loanInstallmentIds.length > 0) {
-          await supabase
-            .from('loan_installments')
-            .update({ is_paid: true, paid_at: new Date().toISOString() })
-            .in('id', empData.loanInstallmentIds);
-        }
-
-        // Record override adjustments for bonuses, attendance deductions, and other deductions
-        if (empData.isBonusesOverridden) {
-          const diff = empData.totalBonuses - empData.computedBonuses;
-          if (diff > 0) {
-            await supabase.from('bonuses_deductions').insert({
-              employee_id: empData.id,
-              type: 'bonus',
-              amount: diff,
-              reason: `تسوية زيادة مكافآت يدوياً لشهر ${selectedMonth}`,
-              issue_date: endDate
-            });
-          } else if (diff < 0) {
-            await supabase.from('bonuses_deductions').insert({
-              employee_id: empData.id,
-              type: 'deduction',
-              amount: Math.abs(diff),
-              reason: `تسوية تخفيض مكافآت يدوياً لشهر ${selectedMonth}`,
-              issue_date: endDate
-            });
-          }
-        }
-
-        if (empData.isOtherDeductionsOverridden) {
-          const diff = (empData.totalDeductions - empData.totalAttendanceDeductions) - empData.computedOtherDeductions;
-          if (diff > 0) {
-            await supabase.from('bonuses_deductions').insert({
-              employee_id: empData.id,
-              type: 'deduction',
-              amount: diff,
-              reason: `تسوية زيادة خصومات يدوياً لشهر ${selectedMonth}`,
-              issue_date: endDate
-            });
-          } else if (diff < 0) {
-            await supabase.from('bonuses_deductions').insert({
-              employee_id: empData.id,
-              type: 'bonus',
-              amount: Math.abs(diff),
-              reason: `تسوية تخفيض خصومات يدوياً لشهر ${selectedMonth}`,
-              issue_date: endDate
-            });
-          }
-        }
-
-        if (empData.isAttendanceDeductionsOverridden) {
-          if (empData.totalAttendanceDeductions > 0) {
-            await supabase.from('bonuses_deductions').insert({
-              employee_id: empData.id,
-              type: 'deduction',
-              amount: empData.totalAttendanceDeductions,
-              reason: `خصم غياب وحضور معدل يدوياً للفترة من ${startDate} إلى ${endDate}`,
-              issue_date: endDate
-            });
-          }
-        } else if (empData.totalAttendanceDeductions > 0) {
-          // Add detailed deduction log entries for the automatic attendance deductions for auditability
-          const insertBDIfNotExist = async (amount: number, reason: string) => {
-            if (amount <= 0) return;
-            const { data: existingBD } = await supabase
-              .from('bonuses_deductions')
-              .select('id')
-              .eq('employee_id', empData.id)
-              .eq('type', 'deduction')
-              .eq('reason', reason)
-              .maybeSingle();
-
-            if (!existingBD) {
-              await supabase.from('bonuses_deductions').insert({
-                employee_id: empData.id,
-                type: 'deduction',
-                amount: amount,
-                reason: reason,
-                issue_date: endDate
-              });
-            }
-          };
-
-          await insertBDIfNotExist(empData.absenceDeduction, `خصم غياب غير مبرر (${empData.absencesCount} يوم) للفترة من ${startDate} إلى ${endDate}`);
-          await insertBDIfNotExist(empData.halfDayDeduction, `خصم نصف يوم (${empData.halfDaysCount} يوم) للفترة من ${startDate} إلى ${endDate}`);
-          await insertBDIfNotExist(empData.latenessDeduction, `خصم تأخير الحضور (${formatLateDurationArabic(empData.totalLateMinutes)}) للفترة من ${startDate} إلى ${endDate}`);
-          await insertBDIfNotExist(empData.earlyExitDeduction, `خصم خروج مبكر (${formatLateDurationArabic(empData.totalEarlyExitMinutes)}) للفترة من ${startDate} إلى ${endDate}`);
-        }
-
       }
 
-      confetti({ particleCount: 150, spread: 80, colors: ['#10B981', '#3B82F6'] });
-      toast(`تم اعتماد رواتب (${successCount}) موظف بنجاح! 💸`);
+      if (successCount > 0) {
+        confetti({ particleCount: 150, spread: 80, colors: ['#10B981', '#3B82F6'] });
+        toast.success(`تم اعتماد رواتب (${successCount}) موظف بنجاح! 💸`);
+      }
+      if (failed.length > 0) {
+        toast.error(`تعذر اعتماد رواتب (${failed.length}) موظف: ${failed.join('، ')}`);
+      }
       setShowBulkModal(false);
       fetchPayrollData();
-    } catch (err: any) {
-      toast.error(`فشل اعتماد الرواتب: ${err.message || err}`);
     } finally {
       setActionLoading(null);
     }
@@ -721,14 +591,14 @@ export default function PayrollPage() {
 
       confetti({ particleCount: 80, spread: 50, colors: ['#3B82F6', '#60A5FA'] });
       toast.success(`تم إرسال إشعارات كشوف الرواتب بنجاح لـ (${slips.length}) موظف في الفرع! 🔔`);
-    } catch (err: any) {
-      toast.error(`فشل إرسال إشعارات الفرع: ${err.message || err}`);
+    } catch (err: unknown) {
+      toast.error(`فشل إرسال إشعارات الفرع: ${errorMessage(err)}`);
     } finally {
       setSendingNotifs(false);
     }
   };
 
-  const handleRevertSlip = async (empData: Record<string, any>) => {
+  const handleRevertSlip = async (empData: PayrollRow) => {
     if (archivedMonths.includes(selectedMonth)) {
       toast.error('هذا الشهر مؤرشف مالياً ومقفل تماماً 🔒');
       return;
@@ -740,33 +610,18 @@ export default function PayrollPage() {
 
     setActionLoading(`revert_${empData.id}`);
     try {
-      // 1. Delete the slip
-      const { error: delErr } = await supabase.from('salary_slips').delete().eq('id', slip.id);
-      if (delErr) throw delErr;
-
-      // 2. Delete auto-generated bonuses_deductions and adjustments
-      await supabase.from('bonuses_deductions')
-        .delete()
-        .eq('employee_id', empData.id)
-        .eq('issue_date', endDate)
-        .or(`reason.like.%للفترة من ${startDate} إلى ${endDate}%,reason.like.%لشهر ${selectedMonth}%`);
-
-      // 3. Mark loan installments back to unpaid
-      const { data: userLoans } = await supabase.from('loans').select('id').eq('employee_id', empData.id);
-      if (userLoans && userLoans.length > 0) {
-        const loanIds = userLoans.map((l: Record<string, any>) => l.id);
-        await supabase.from('loan_installments')
-          .update({ is_paid: false, paid_at: null })
-          .in('loan_id', loanIds)
-          .gte('due_date', startDate)
-          .lte('due_date', endDate)
-          .eq('is_paid', true);
-      }
+      // يحذف الكشف ويُرجع نفس الأقساط والقيود التي أنشأها (transaction واحدة)
+      const { error } = await supabase.rpc('revert_salary_slip', {
+        p_slip_id: slip.id,
+        p_period_start: startDate,
+        p_period_end: endDate,
+      });
+      if (error) throw error;
 
       toast.success('تم التراجع عن اعتماد الراتب بنجاح! 🔄');
       fetchPayrollData();
-    } catch (err: any) {
-      toast.error(`فشل في التراجع عن الاعتماد: ${err.message || err}`);
+    } catch (err: unknown) {
+      toast.error(`فشل في التراجع عن الاعتماد: ${errorMessage(err)}`);
     } finally {
       setActionLoading(null);
     }
@@ -807,9 +662,9 @@ export default function PayrollPage() {
         confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
         fetchPayrollData();
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      toast.error(`خطأ أثناء الأرشفة: ${err.message || err}`);
+      toast.error(`خطأ أثناء الأرشفة: ${errorMessage(err)}`);
     } finally {
       setActionLoading(null);
     }
@@ -894,7 +749,7 @@ export default function PayrollPage() {
     let scheduledWorkDays = 0;
     let unconfirmedAbsencesCount = 0;
 
-    const detailLogs: any[] = [];
+    const detailLogs: DetailLog[] = [];
     const empExcuses = excusedDays[emp.id] || [];
 
     let joinDay: Date | null = null;
@@ -903,7 +758,7 @@ export default function PayrollPage() {
       joinDay = new Date(jd.getFullYear(), jd.getMonth(), jd.getDate());
     }
 
-    let loopDate = new Date(start);
+    const loopDate = new Date(start);
     while (loopDate <= end) {
       const year = loopDate.getFullYear();
       const month = loopDate.getMonth() + 1;
@@ -970,7 +825,7 @@ export default function PayrollPage() {
                   // Calculate late minutes
                   const schedCheckIn = empSched ? empSched.check_in_time : '09:00:00';
                   const schedInMins = parseScheduleMinutes(schedCheckIn);
-                  const actualInMins = getBaghdadMinutesFromIso(attRecord.check_in_time);
+                  const actualInMins = attRecord.check_in_time ? getBaghdadMinutesFromIso(attRecord.check_in_time) : schedInMins;
                   const diffLate = actualInMins - schedInMins;
                   const lateMins = diffLate > 0 ? diffLate : 0;
                   totalLateMinutes += lateMins;
@@ -989,13 +844,13 @@ export default function PayrollPage() {
             }
             
             let statusAr = 'حاضر ✅';
-            let noteParts = [];
+            const noteParts = [];
             if (status === 'late') {
               statusAr = isApplied ? 'متأخر (تم تطبيق الخصم) ⚠️' : (isIgnored ? 'متأخر (تم تجاهل الخصم) 🟢' : 'متأخر (معلق) ⏳');
               // Calculate late minutes for display
               const schedCheckIn = empSched ? empSched.check_in_time : '09:00:00';
               const schedInMins = parseScheduleMinutes(schedCheckIn);
-              const actualInMins = getBaghdadMinutesFromIso(attRecord.check_in_time);
+              const actualInMins = attRecord.check_in_time ? getBaghdadMinutesFromIso(attRecord.check_in_time) : schedInMins;
               const diffLate = actualInMins - schedInMins;
               const lateMins = diffLate > 0 ? diffLate : 0;
               noteParts.push(`تأخير: ${formatLateDurationArabic(lateMins)}`);
@@ -1806,7 +1661,7 @@ export default function PayrollPage() {
 
                 {selectedEmpForBreakdown.bonusesList && selectedEmpForBreakdown.bonusesList.length > 0 ? (
                   <div className="space-y-2 max-h-[140px] overflow-y-auto">
-                    {selectedEmpForBreakdown.bonusesList.map((b: any, idx: number) => (
+                    {selectedEmpForBreakdown.bonusesList.map((b: BonusDeduction, idx: number) => (
                       <div key={idx} className="p-2 bg-slate-950/40 rounded-xl border border-emerald-500/10 text-xs flex justify-between items-start gap-2">
                         <div>
                           <div className="text-white font-bold">{b.reason || 'مكافأة تشجيعية'}</div>
@@ -1849,7 +1704,7 @@ export default function PayrollPage() {
 
                 {selectedEmpForBreakdown.otherDeductionsList && selectedEmpForBreakdown.otherDeductionsList.length > 0 ? (
                   <div className="space-y-2 max-h-[140px] overflow-y-auto">
-                    {selectedEmpForBreakdown.otherDeductionsList.map((d: any, idx: number) => (
+                    {selectedEmpForBreakdown.otherDeductionsList.map((d: BonusDeduction, idx: number) => (
                       <div key={idx} className="p-2 bg-slate-950/40 rounded-xl border border-rose-500/10 text-xs flex justify-between items-start gap-2">
                         <div>
                           <div className="text-white font-bold">{d.reason || 'خصم إداري'}</div>
@@ -1894,7 +1749,7 @@ export default function PayrollPage() {
             </h4>
             
             <div className="overflow-y-auto max-h-[250px] border border-slate-800 rounded-2xl bg-slate-950/20 divide-y divide-slate-800/80">
-              {selectedEmpForBreakdown.detailLogs.map((log: any, idx: number) => (
+              {selectedEmpForBreakdown.detailLogs.map((log: DetailLog, idx: number) => (
                 <div key={idx} className="p-3 flex items-center justify-between text-xs hover:bg-slate-900/40 transition-colors">
                   <div className="flex items-center gap-3">
                     <span className="font-mono text-slate-400 font-semibold">{log.date}</span>

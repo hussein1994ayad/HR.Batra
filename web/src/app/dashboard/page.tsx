@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import type { Branch, Department, Employee, LeaveRequest, WorkSchedule } from '@/lib/db-types';
+import { errorMessage } from '@/lib/error-utils';
 import imageCompression from 'browser-image-compression';
 import { 
   Users, 
@@ -11,13 +13,11 @@ import {
   Coins, 
   Smartphone, 
   ArrowUpRight, 
-  HardDrive,
   UserPlus,
   Send,
   AlertTriangle,
   Clock,
   CheckCircle,
-  FileSpreadsheet,
   Loader2,
   X,
   Upload,
@@ -26,6 +26,17 @@ import {
 import confetti from 'canvas-confetti';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
+
+type EmployeeSummary = Pick<Employee, 'id' | 'full_name' | 'branch_id' | 'department_id'>;
+
+type SecurityLog = {
+  id: string;
+  type: 'mock_gps' | 'geofence';
+  name: string;
+  timestamp: Date | string;
+  details: string;
+  coords: string;
+};
 
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
@@ -40,16 +51,16 @@ export default function DashboardPage() {
     totalStorageBytes: 0,
   });
 
-  const [securityLogs, setSecurityLogs] = useState<any[]>([]);
+  const [securityLogs, setSecurityLogs] = useState<SecurityLog[]>([]);
   const [announcement, setAnnouncement] = useState('');
   const [showAnnounceModal, setShowAnnounceModal] = useState(false);
   const [showAddEmployeeModal, setShowAddEmployeeModal] = useState(false);
-  const [absentList, setAbsentList] = useState<any[]>([]);
+  const [absentList, setAbsentList] = useState<EmployeeSummary[]>([]);
   // Targeted Announcements States
   const [targetType, setTargetType] = useState<'all' | 'branch' | 'employee'>('all');
   const [targetBranchId, setTargetBranchId] = useState('');
   const [targetEmployeeIds, setTargetEmployeeIds] = useState<string[]>([]);
-  const [employeesList, setEmployeesList] = useState<any[]>([]);
+  const [employeesList, setEmployeesList] = useState<EmployeeSummary[]>([]);
   const [empSearchTerm, setEmpSearchTerm] = useState('');
 
   // Form fields for new employee
@@ -62,33 +73,11 @@ export default function DashboardPage() {
   const [newEmpBranch, setNewEmpBranch] = useState('');
   const [newEmpDept, setNewEmpDept] = useState('');
   const [newDocuments, setNewDocuments] = useState<File[]>([]);
-  const [branches, setBranches] = useState<any[]>([]);
-  const [departments, setDepartments] = useState<any[]>([]);
+  const [branches, setBranches] = useState<Pick<Branch, 'id' | 'name'>[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  useEffect(() => {
-    // 1. Try to load cached dashboard stats instantly to bypass blocking spinners
-    const cachedData = localStorage.getItem('batra_cache_dashboard');
-    if (cachedData) {
-      try {
-        const parsed = JSON.parse(cachedData);
-        if (parsed) {
-          if (parsed.stats) setStats(parsed.stats);
-          setSecurityLogs((parsed.securityLogs || []).filter((l: Record<string, any>) => l && l.id));
-          setBranches((parsed.branches || []).filter((b: Record<string, any>) => b && b.id));
-          setDepartments((parsed.departments || []).filter((d: Record<string, any>) => d && d.id));
-          setEmployeesList((parsed.employeesList || []).filter((e: Record<string, any>) => e && e.id));
-          setLoading(false); // Instant render!
-        }
-      } catch (e) {
-        console.error('Error parsing dashboard cache:', e);
-      }
-    }
-
-    // 2. Fetch fresh data silently in the background
-    fetchDashboardData(!!cachedData);
-  }, []);
 
   const fetchDashboardData = async (hasCache = false) => {
     if (!hasCache) {
@@ -148,7 +137,7 @@ export default function DashboardPage() {
       let present = 0;
       let absent = 0;
       const presentEmpIds = new Set<string>();
-      const calculatedAbsentList: any[] = [];
+      const calculatedAbsentList: EmployeeSummary[] = [];
 
       if (attToday) {
         attToday.forEach(r => {
@@ -156,10 +145,10 @@ export default function DashboardPage() {
             present++;
             presentEmpIds.add(r.employee_id);
           } else if (r.status === 'absent') {
-            const emp = empList?.find((e: Record<string, any>) => e.id === r.employee_id);
-            const empSched = workSchedulesData?.find((s: Record<string, any>) => s.employee_id === r.employee_id) || 
-                             workSchedulesData?.find((s: Record<string, any>) => s.department_id === emp?.department_id && !s.employee_id) ||
-                             workSchedulesData?.find((s: Record<string, any>) => s.branch_id === emp?.branch_id && !s.employee_id && !s.department_id);
+            const emp = empList?.find((e: EmployeeSummary) => e.id === r.employee_id);
+            const empSched = workSchedulesData?.find((s: WorkSchedule) => s.employee_id === r.employee_id) || 
+                             workSchedulesData?.find((s: WorkSchedule) => s.department_id === emp?.department_id && !s.employee_id) ||
+                             workSchedulesData?.find((s: WorkSchedule) => s.branch_id === emp?.branch_id && !s.employee_id && !s.department_id);
             const workDays = empSched ? empSched.work_days : [6, 0, 1, 2, 3, 4];
             const isWorkingDay = workDays.includes(weekday);
 
@@ -182,15 +171,15 @@ export default function DashboardPage() {
 
       // Calculate virtual absentees
       if (empList) {
-        empList.forEach((emp: Record<string, any>) => {
+        empList.forEach((emp: EmployeeSummary) => {
           if (presentEmpIds.has(emp.id)) return; // Already checked in or explicitly absent
           
           // Check if on leave
-          const isOnLeave = leavesData?.some((l: Record<string, any>) => l.employee_id === emp.id && isDateWithinRange(todayStr, l.start_date, l.end_date));
+          const isOnLeave = leavesData?.some((l: LeaveRequest) => l.employee_id === emp.id && isDateWithinRange(todayStr, l.start_date, l.end_date));
           if (!isOnLeave) {
-            const empSched = workSchedulesData?.find((s: Record<string, any>) => s.employee_id === emp.id) || 
-                             workSchedulesData?.find((s: Record<string, any>) => s.department_id === emp.department_id && !s.employee_id) ||
-                             workSchedulesData?.find((s: Record<string, any>) => s.branch_id === emp.branch_id && !s.employee_id && !s.department_id);
+            const empSched = workSchedulesData?.find((s: WorkSchedule) => s.employee_id === emp.id) || 
+                             workSchedulesData?.find((s: WorkSchedule) => s.department_id === emp.department_id && !s.employee_id) ||
+                             workSchedulesData?.find((s: WorkSchedule) => s.branch_id === emp.branch_id && !s.employee_id && !s.department_id);
             const workDays = empSched ? empSched.work_days : [6, 0, 1, 2, 3, 4];
             const isWorkingDay = workDays.includes(weekday);
 
@@ -211,7 +200,7 @@ export default function DashboardPage() {
 
       let actualStorageBytes = 0;
       if (statsData) {
-        statsData.forEach((stat: Record<string, any>) => {
+        statsData.forEach((stat: { total_size: number | null }) => {
           actualStorageBytes += Number(stat.total_size || 0);
         });
       }
@@ -219,7 +208,7 @@ export default function DashboardPage() {
       const combinedTotalStorage = trashBytes + actualStorageBytes;
 
       // Format combined security logs
-      const combinedLogs: any[] = [];
+      const combinedLogs: SecurityLog[] = [];
       if (mockAttempts) {
         mockAttempts.forEach(log => {
           combinedLogs.push({
@@ -244,7 +233,7 @@ export default function DashboardPage() {
           });
         });
       }
-      combinedLogs.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+      combinedLogs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
       const finalStats = {
         employees: empCount || 0,
@@ -282,6 +271,29 @@ export default function DashboardPage() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    // 1. Try to load cached dashboard stats instantly to bypass blocking spinners
+    const cachedData = localStorage.getItem('batra_cache_dashboard');
+    if (cachedData) {
+      try {
+        const parsed = JSON.parse(cachedData);
+        if (parsed) {
+          if (parsed.stats) setStats(parsed.stats);
+          setSecurityLogs((parsed.securityLogs || []).filter((l: SecurityLog) => l && l.id));
+          setBranches((parsed.branches || []).filter((b: Branch) => b && b.id));
+          setDepartments((parsed.departments || []).filter((d: Department) => d && d.id));
+          setEmployeesList((parsed.employeesList || []).filter((e: EmployeeSummary) => e && e.id));
+          setLoading(false); // Instant render!
+        }
+      } catch (e) {
+        console.error('Error parsing dashboard cache:', e);
+      }
+    }
+
+    // 2. Fetch fresh data silently in the background
+    fetchDashboardData(!!cachedData);
+  }, []);
 
   const handlePostAnnouncement = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -351,8 +363,8 @@ export default function DashboardPage() {
         origin: { y: 0.8 }
       });
       toast.success('تم إرسال وبث التعميم الإداري بنجاح! 🚀');
-    } catch (err: any) {
-      toast.error(`فشل إرسال التعميم: ${err.message || err}`);
+    } catch (err: unknown) {
+      toast.error(`فشل إرسال التعميم: ${errorMessage(err)}`);
     } finally {
       setActionLoading(false);
     }
@@ -386,7 +398,7 @@ export default function DashboardPage() {
       const empCode = 'EMP-' + Math.floor(1000 + Math.random() * 9000);
 
       // 2. Compress and Upload Documents if any
-      let uploadedDocs: string[] = [];
+      const uploadedDocs: string[] = [];
       if (newDocuments.length > 0) {
         for (const file of newDocuments) {
           try {
@@ -415,15 +427,15 @@ export default function DashboardPage() {
               .getPublicUrl(fileName);
 
             uploadedDocs.push(publicUrl);
-          } catch (uploadE: any) {
+          } catch (uploadE: unknown) {
             console.error('Error uploading document:', uploadE);
-            throw new Error(`فشل رفع إحدى المستمسكات: ${uploadE.message}`);
+            throw new Error(`فشل رفع إحدى المستمسكات: ${errorMessage(uploadE)}`);
           }
         }
       }
 
       // 3. Create user in Supabase auth system & employees table securely via RPC
-      const { data: createdId, error: createError } = await supabase.rpc('create_employee_secure', {
+      const { error: createError } = await supabase.rpc('create_employee_secure', {
         p_email: newEmpEmail,
         p_password: newEmpPassword,
         p_full_name: newEmpName,
@@ -459,8 +471,8 @@ export default function DashboardPage() {
       });
 
       toast.success('تم إضافة الموظف الجديد وتوليد بياناته بنجاح! 🎉');
-    } catch (err: any) {
-      setActionError(err.message || 'حدث خطأ أثناء الإضافة');
+    } catch (err: unknown) {
+      setActionError(errorMessage(err) || 'حدث خطأ أثناء الإضافة');
     } finally {
       setActionLoading(false);
     }
@@ -725,7 +737,7 @@ export default function DashboardPage() {
                 <label className="text-xs text-slate-400 font-bold block text-right">المستلمون المستهدفون (نطاق الإرسال)</label>
                 <select
                   value={targetType}
-                  onChange={(e) => setTargetType(e.target.value as any)}
+                  onChange={(e) => setTargetType(e.target.value as 'all' | 'branch' | 'employee')}
                   className="w-full bg-slate-950 border border-slate-850 text-white rounded-xl p-3 text-xs focus:border-blue-500 outline-none"
                 >
                   <option value="all">📢 الكل (جميع موظفي الشركة)</option>

@@ -2,9 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import { errorMessage } from '@/lib/error-utils';
 import { 
-  HardDrive, 
-  AlertTriangle, 
   Trash2, 
   RefreshCw,
   Loader2,
@@ -102,9 +101,6 @@ export default function StoragePage() {
   const maxStorageBytes = 1.0 * 1024 * 1024 * 1024; // 1 GB Storage
   const maxDbBytes = 500 * 1024 * 1024; // 500 MB Database
 
-  useEffect(() => {
-    fetchAllStats();
-  }, []);
 
   const fetchAllStats = async () => {
     setLoading(true);
@@ -129,7 +125,7 @@ export default function StoragePage() {
       // Buckets
       let avatars = 0, documents = 0, pledges = 0, others = 0;
       if (storageResult.data) {
-        storageResult.data.forEach((stat: Record<string, any>) => {
+        storageResult.data.forEach((stat: { bucket_name: string; total_size: number; file_count?: number }) => {
           const bucket = stat.bucket_name;
           const size = Number(stat.total_size || 0);
           if (bucket === 'avatars') avatars += size;
@@ -160,6 +156,10 @@ export default function StoragePage() {
     }
   };
 
+  useEffect(() => {
+    fetchAllStats();
+  }, []);
+
   const handleEmptyTrash = async () => {
     if (!confirm('تحذير شديد! هل أنت متأكد من رغبتك في إفراغ سلة المحذوفات بالكامل وتطهير السحابة؟ سيتم مسح كافة الملفات الموجودة نهائياً ولن تتمكن من استعادتها أبداً.')) return;
     
@@ -187,8 +187,8 @@ export default function StoragePage() {
       setTrashSizeBytes(0);
       confetti({ particleCount: 100, spread: 70, colors: ['#EF4444', '#F87171'] });
       toast('تم إفراغ سلة المحذوفات بالكامل وتطهير المساحة السحابية! 🗑️');
-    } catch (err: any) {
-      toast.error(`فشل إفراغ السلة: ${err.message}`);
+    } catch (err: unknown) {
+      toast.error(`فشل إفراغ السلة: ${errorMessage(err)}`);
     } finally {
       setActionLoading(false);
     }

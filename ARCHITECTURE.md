@@ -191,7 +191,9 @@ Login flow:
 - **Static Export** (`output: "export"` في `next.config.ts`)
 - كل صفحة `'use client'` — لا SSR (متعمّد لتبسيط النشر)
 - المصادقة عبر `@supabase/supabase-js` client-side فقط
-- `middleware.ts` يحمي `/dashboard/*` عبر كوكيز Supabase
+- لا يوجد middleware: الـ static export لا يشغّل أي كود على السيرفر. `dashboard/layout.tsx`
+  يتحقق من الجلسة والدور في المتصفح لأغراض الواجهة فقط — **الحماية الفعلية هي RLS
+  وفحوصات الصلاحية داخل دوال قاعدة البيانات** (require_admin وغيرها)
 - **ErrorBoundary** في `components/DashboardErrorBoundary.tsx`
 
 **اقتراح مستقبلي**: تفعيل SSR لصفحات القوائم لتحسين وقت التحميل، لكن يتطلب مغادرة `output: "export"` والانتقال لـ Vercel أو Node host.

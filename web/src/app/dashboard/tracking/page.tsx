@@ -2,13 +2,14 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import { errorMessage } from '@/lib/error-utils';
+import type {
+  AttendanceRecord, Branch, Employee, EmployeeRef, LeaveRequest, LocationPoint, WorkSchedule,
+} from '@/lib/db-types';
 import MapComponent from '@/components/MapComponent';
 import { 
   MapPin, 
   Users, 
-  User,
-  ShieldAlert, 
-  CheckCircle,
   Loader2,
   RefreshCw,
   Clock,
@@ -18,9 +19,7 @@ import {
   Calendar as CalendarIcon,
   Building2,
   Map,
-  Download,
-  FileSpreadsheet,
-  ArrowLeftRight
+  Download
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import toast from 'react-hot-toast';
@@ -55,11 +54,51 @@ const formatLateDurationArabic = (minutes: number) => {
   }
 };
 
+// الإحداثيات مخزنة بأكثر من شكل عبر إصدارات التطبيق: [lat, lng] أو {lat, lng} أو {latitude, longitude}
+type RawPoint =
+  | [number | string, number | string]
+  | { lat?: number | string; lng?: number | string; latitude?: number | string; longitude?: number | string };
+
+type RawZone = { id: string; name: string; coordinates?: unknown; polygon_coordinates?: unknown };
+
+type MockGpsAttempt = {
+  id: string;
+  employee_id: string;
+  latitude: number | null;
+  longitude: number | null;
+  app_used: string | null;
+  timestamp: string;
+  employees?: EmployeeRef | null;
+};
+
+type TrackedEmployee = Pick<Employee, 'id' | 'full_name' | 'branch_id' | 'department_id' | 'role'> & {
+  departments?: { name: string } | null;
+};
+
+type AttendanceRow = AttendanceRecord & { is_virtual: boolean };
+
+type DetectedStop = { lat: number; lng: number; startTime: Date; endTime: Date; duration: number };
+
+type MapMarker = { lat: number; lng: number; popupText: string; isViolation?: boolean; color?: string };
+
+type Decision = {
+  id: string | null;
+  type: 'late' | 'absent' | 'virtual_absent';
+  employee: TrackedEmployee;
+  date: string;
+  time: string;
+  duration: string;
+  typeName: string;
+  deductionStatus: string;
+  reason: string;
+  suggestedAmount: number;
+};
+
 export default function TrackingPage() {
   const [loading, setLoading] = useState(true);
-  const [attendanceLogs, setAttendanceLogs] = useState<any[]>([]);
-  const [securityLogs, setSecurityLogs] = useState<any[]>([]);
-  const [geofenceZones, setGeofenceZones] = useState<any[]>([]);
+  const [attendanceLogs, setAttendanceLogs] = useState<AttendanceRecord[]>([]);
+  const [securityLogs, setSecurityLogs] = useState<MockGpsAttempt[]>([]);
+  const [geofenceZones, setGeofenceZones] = useState<RawZone[]>([]);
   const [selectedCenter, setSelectedCenter] = useState<[number, number]>([33.3152, 44.3661]); // Baghdad default
   const [selectedZoom, setSelectedZoom] = useState(12);
 
@@ -72,16 +111,16 @@ export default function TrackingPage() {
   // New states for advanced attendance — date range
   const [startDate, setStartDate] = useState(getLocalDateStr());
   const [endDate, setEndDate] = useState(getLocalDateStr());
-  const [editingRecord, setEditingRecord] = useState<any>(null);
+  const [editingRecord, setEditingRecord] = useState<AttendanceRecord | null>(null);
   const [editCheckIn, setEditCheckIn] = useState('');
   const [editCheckOut, setEditCheckOut] = useState('');
   
-  const [branches, setBranches] = useState<any[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
   const [selectedBranch, setSelectedBranch] = useState('all');
   const [selectedEmployee, setSelectedEmployee] = useState('all');
 
   // Manual attendance states
-  const [employees, setEmployees] = useState<any[]>([]);
+  const [employees, setEmployees] = useState<TrackedEmployee[]>([]);
   const [showManualModal, setShowManualModal] = useState(false);
   const [manualEmpId, setManualEmpId] = useState('');
   const [manualDate, setManualDate] = useState(startDate);
@@ -90,65 +129,50 @@ export default function TrackingPage() {
 
   // Decisions states
   const [activeTab, setActiveTab] = useState<'monitoring' | 'decisions'>('monitoring');
-  const [workSchedules, setWorkSchedules] = useState<any[]>([]);
-  const [leaveRequests, setLeaveRequests] = useState<any[]>([]);
+  const [workSchedules, setWorkSchedules] = useState<WorkSchedule[]>([]);
+  const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
   const [selectedReasons, setSelectedReasons] = useState<Record<string, string>>({});
   const [selectedAmounts, setSelectedAmounts] = useState<Record<string, string>>({});
   
   // Live Trail States
   const [selectedEmployeeForTrail, setSelectedEmployeeForTrail] = useState<string | null>(null);
   const [trailCoordinates, setTrailCoordinates] = useState<[number, number][]>([]);
-  const [detectedStops, setDetectedStops] = useState<any[]>([]);
+  const [detectedStops, setDetectedStops] = useState<DetectedStop[]>([]);
   const [liveTrackingActive, setLiveTrackingActive] = useState(false);
 
-  useEffect(() => {
-    fetchTrackingData();
-  }, [startDate, endDate, selectedBranch, selectedEmployee]);
 
   const fetchTrackingData = async () => {
     setLoading(true);
     try {
-      const promises: any[] = [
+      const [resZones, resBranches, resEmps, resScheds, resLeaves] = await Promise.all([
         supabase.from('geofence_zones').select('*').eq('is_active', true),
         supabase.from('branches').select('*'),
         supabase.from('employees').select('id, full_name, branch_id, department_id, role, departments:departments!employees_department_id_fkey(name)').eq('is_active', true).order('full_name'),
         supabase.from('work_schedules').select('*'),
         supabase.from('leave_requests').select('*').eq('status', 'approved')
-      ];
+      ]);
 
-      // Query attendance for the date range
+      if (resZones.data) setGeofenceZones(resZones.data);
+      if (resBranches.data) setBranches(resBranches.data);
+      // supabase-js بدون أنواع مولّدة يستنتج العلاقة departments كمصفوفة، وهي فعلياً كائن واحد
+      if (resEmps.data) setEmployees(resEmps.data as unknown as TrackedEmployee[]);
+      if (resScheds.data) setWorkSchedules(resScheds.data);
+      if (resLeaves.data) setLeaveRequests(resLeaves.data);
+
+      // الحضور ومحاولات التزييف ضمن الفترة المحددة
       if (startDate && endDate) {
         let attQuery = supabase.from('attendance').select('*, employees!employee_id(full_name, branch_id)').gte('work_date', startDate).lte('work_date', endDate);
         if (selectedEmployee !== 'all') {
           attQuery = attQuery.eq('employee_id', selectedEmployee);
         }
-        promises.push(
+        const [resAtt, resMock] = await Promise.all([
           attQuery,
           supabase.from('mock_gps_attempts').select('*, employees(full_name)').order('timestamp', { ascending: false })
-        );
-      }
+        ]);
 
-      const results = await Promise.all(promises);
-
-      const resZones = results[0];
-      const resBranches = results[1];
-      const resEmps = results[2];
-      const resScheds = results[3];
-      const resLeaves = results[4];
-
-      if (resZones.data) setGeofenceZones(resZones.data);
-      if (resBranches.data) setBranches(resBranches.data);
-      if (resEmps.data) setEmployees(resEmps.data);
-      if (resScheds.data) setWorkSchedules(resScheds.data);
-      if (resLeaves.data) setLeaveRequests(resLeaves.data);
-
-      if (startDate && endDate) {
-        const resAtt = results[5];
-        const resMock = results[6];
-
-        let filteredAtt = resAtt.data || [];
+        let filteredAtt: AttendanceRecord[] = resAtt.data || [];
         if (selectedBranch !== 'all') {
-          filteredAtt = filteredAtt.filter((log: Record<string, any>) => log.employees?.branch_id === selectedBranch);
+          filteredAtt = filteredAtt.filter((log) => log.employees?.branch_id === selectedBranch);
         }
         setAttendanceLogs(filteredAtt);
         if (resMock.data) setSecurityLogs(resMock.data);
@@ -162,6 +186,10 @@ export default function TrackingPage() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchTrackingData();
+  }, [startDate, endDate, selectedBranch, selectedEmployee]);
 
   const fetchTrailData = async (employeeId: string, dateStr: string) => {
     try {
@@ -179,7 +207,7 @@ export default function TrackingPage() {
       if (error) throw error;
 
       if (data) {
-        const rawCoords: [number, number][] = data.map((item: Record<string, any>) => [Number(item.latitude), Number(item.longitude)]);
+        const rawCoords: [number, number][] = data.map((item: Pick<LocationPoint, 'latitude' | 'longitude'>) => [Number(item.latitude), Number(item.longitude)]);
         
         // 1. Filter out contiguous duplicates (stationary points) to prevent redundant paths
         const filteredCoords: [number, number][] = [];
@@ -199,7 +227,7 @@ export default function TrackingPage() {
         setTrailCoordinates(filteredCoords);
 
         // 2. Detect stops (stationary for >= 5 minutes)
-        const stops: any[] = [];
+        const stops: DetectedStop[] = [];
         let stopStart: number | null = null;
         let stopCoords: [number, number] | null = null;
 
@@ -291,7 +319,7 @@ export default function TrackingPage() {
           table: 'location_tracking',
           filter: `employee_id=eq.${selectedEmployeeForTrail}`,
         },
-        (payload: Record<string, any>) => {
+        (payload: { new: LocationPoint }) => {
           const newLat = Number(payload.new.latitude);
           const newLng = Number(payload.new.longitude);
           if (newLat && newLng) {
@@ -331,7 +359,7 @@ export default function TrackingPage() {
       toast.success('تم تحديث أوقات الدوام بنجاح! ✅');
       setEditingRecord(null);
       fetchTrackingData();
-    } catch (err) {
+    } catch {
       toast.error('حدث خطأ أثناء التحديث.');
     } finally {
       setLoading(false);
@@ -393,8 +421,8 @@ export default function TrackingPage() {
       toast.success('تم تسجيل الحضور اليدوي بنجاح! ✅');
       setShowManualModal(false);
       fetchTrackingData();
-    } catch (err: any) {
-      toast.error(`حدث خطأ: ${err.message || err}`);
+    } catch (err: unknown) {
+      toast.error(`حدث خطأ: ${errorMessage(err)}`);
     } finally {
       setLoading(false);
     }
@@ -415,7 +443,7 @@ export default function TrackingPage() {
       if (error) throw error;
       toast.success('تم تسجيل خروج الموظف بنجاح!');
       fetchTrackingData();
-    } catch (err) {
+    } catch {
       toast.error('حدث خطأ أثناء تسجيل الخروج.');
     } finally {
       setLoading(false);
@@ -423,7 +451,7 @@ export default function TrackingPage() {
   };
 
   const handleDecision = async (
-    emp: any,
+    emp: TrackedEmployee,
     type: string,
     infractionDate: string,
     status: 'applied' | 'ignored',
@@ -513,14 +541,14 @@ export default function TrackingPage() {
 
       toast.success('تم حفظ القرار وإرسال إشعار للموظف بنجاح! 🔔');
       fetchTrackingData();
-    } catch (err: any) {
-      toast.error(`حدث خطأ أثناء حفظ القرار: ${err.message || err}`);
+    } catch (err: unknown) {
+      toast.error(`حدث خطأ أثناء حفظ القرار: ${errorMessage(err)}`);
     } finally {
       setLoading(false);
     }
   };
 
-  const formatHours = (checkIn: string, checkOut: string) => {
+  const formatHours = (checkIn?: string | null, checkOut?: string | null) => {
     if (!checkIn || !checkOut) return '-';
     const diffMs = new Date(checkOut).getTime() - new Date(checkIn).getTime();
     if (diffMs <= 0) return '-';
@@ -529,7 +557,7 @@ export default function TrackingPage() {
     return `${diffHrs} س و ${diffMins} د`;
   };
 
-  const formatTimeInputValue = (dateString: string | null) => {
+  const formatTimeInputValue = (dateString?: string | null) => {
     if (!dateString) return '';
     const d = new Date(dateString);
     const h = d.getHours().toString().padStart(2, '0');
@@ -537,19 +565,25 @@ export default function TrackingPage() {
     return `${h}:${m}`;
   };
 
+  // سجلات الحضور + صفوف غياب افتراضية للموظفين الذين لم يبصموا في يوم عمل
+  const buildAttendanceRows = (): AttendanceRow[] => [
+    ...attendanceLogs.map(log => ({ ...log, is_virtual: false })),
+    ...decisionsList.filter(d => d.type === 'virtual_absent').map(d => ({
+      id: `virtual_${d.employee.id}_${d.date}`,
+      is_virtual: true,
+      employee_id: d.employee.id,
+      branch_id: d.employee.branch_id ?? '',
+      status: 'absent',
+      work_date: d.date,
+      check_in_time: null,
+      check_out_time: null,
+      employees: d.employee,
+    })),
+  ];
+
   const handleExportExcel = () => {
     try {
-      const fullList = [
-        ...attendanceLogs,
-        ...decisionsList.filter(d => d.type === 'virtual_absent').map(d => ({
-          is_virtual: true,
-          employee_id: d.employee.id,
-          work_date: d.date,
-          check_in_time: null,
-          check_out_time: null,
-          employees: d.employee
-        }))
-      ];
+      const fullList = buildAttendanceRows();
       
       const excelData = fullList.map((log, index) => {
         const emp = log.employees;
@@ -575,16 +609,18 @@ export default function TrackingPage() {
         let decStatusStr = 'لا يوجد خصم';
         let decAmountStr = '-';
         if (dec) {
-          if (dec.deductionStatus === 'approved') {
+          // نفس مفتاح المبلغ المستعمل في جدول القرارات
+          const rowKey = `${dec.employee.id}_${dec.type}_${dec.date}`;
+          if (dec.deductionStatus === 'applied') {
             decStatusStr = 'تم اعتماد الخصم ✅';
-            const amt = selectedAmounts[dec.id] || dec.suggestedAmount || 0;
+            const amt = selectedAmounts[rowKey] || dec.suggestedAmount || 0;
             decAmountStr = `${Number(amt).toLocaleString('ar-IQ')} د.ع`;
           } else if (dec.deductionStatus === 'ignored') {
             decStatusStr = 'معفى من الخصم 🔓';
             decAmountStr = '0 د.ع (إعفاء)';
           } else {
             decStatusStr = 'بانتظار القرار ⏳';
-            const amt = selectedAmounts[dec.id] || dec.suggestedAmount || 0;
+            const amt = selectedAmounts[rowKey] || dec.suggestedAmount || 0;
             decAmountStr = `${Number(amt).toLocaleString('ar-IQ')} د.ع (مقترح)`;
           }
         }
@@ -606,7 +642,7 @@ export default function TrackingPage() {
         });
 
         // Formulate detailed notes
-        let notes = [];
+        const notes = [];
         if (spoofing.length > 0) {
           notes.push(`🚨 تنبيه: كشف موقع وهمي (${spoofing.length} محاولة)`);
         }
@@ -689,13 +725,13 @@ export default function TrackingPage() {
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, "كشف الانضباط والتتبع");
       XLSX.writeFile(workbook, `تقرير_الانضباط_والتتبع_شركة_بترى_${startDate}_الى_${endDate}.xlsx`);
-    } catch (err) {
+    } catch {
       toast.error("حدث خطأ أثناء تصدير التقرير");
     }
   };
 
   const getMapMarkers = () => {
-    const markers: any[] = [];
+    const markers: MapMarker[] = [];
     attendanceLogs.forEach((log) => {
       if (log.check_in_lat && log.check_in_lng) {
         markers.push({
@@ -705,7 +741,7 @@ export default function TrackingPage() {
           popupText: `
             <strong style="color: #0D9488; font-size: 13px;">حضور موظف فعال ✅</strong><br/>
             <strong>الاسم:</strong> ${log.employees?.full_name || 'موظف'}<br/>
-            <strong>الوقت:</strong> ${new Date(log.check_in_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}<br/>
+            <strong>الوقت:</strong> ${new Date(log.check_in_time!).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}<br/>
             <strong>الحالة:</strong> ${log.status === 'late' ? 'متأخر ⚠️' : 'في الوقت المعتمد'}<br/>
             <strong>الجهاز:</strong> هاتف مسجل معتمد
           `
@@ -775,7 +811,7 @@ export default function TrackingPage() {
           const parsed = typeof rawCoords === 'string' ? JSON.parse(rawCoords) : rawCoords;
           if (Array.isArray(parsed)) {
             coords = parsed
-              .map((pt: any): [number, number] => {
+              .map((pt: RawPoint): [number, number] => {
                 if (Array.isArray(pt)) return [Number(pt[0]), Number(pt[1])];
                 return [Number(pt.lat ?? pt.latitude), Number(pt.lng ?? pt.longitude)];
               })
@@ -796,7 +832,7 @@ export default function TrackingPage() {
   // Compile infractions (absences and latenesses) for decisions across date range
   const getDecisionsList = () => {
     if (!startDate || !endDate) return [];
-    const list: any[] = [];
+    const list: Decision[] = [];
 
     // Generate array of all dates in range
     const allDates: string[] = [];
@@ -839,7 +875,7 @@ export default function TrackingPage() {
         if (attRecord) {
           if (attRecord.status === 'late') {
             const schedCheckIn = empSched ? empSched.check_in_time : '09:00:00';
-            const checkIn = new Date(attRecord.check_in_time);
+            const checkIn = new Date(attRecord.check_in_time ?? `${dateStr}T00:00:00`);
             const [h, m, s] = schedCheckIn.split(':').map(Number);
             const sched = new Date(checkIn);
             sched.setHours(h, m, s || 0, 0);
@@ -904,6 +940,7 @@ export default function TrackingPage() {
   const markers = getMapMarkers();
   const polygons = getMapPolygons();
   const decisionsList = getDecisionsList();
+  const attendanceRows = buildAttendanceRows();
 
   return (
     <div className="space-y-8 pb-12 flex-grow flex flex-col">
@@ -1089,36 +1126,14 @@ export default function TrackingPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/60 bg-slate-950/30">
-                    {[
-                      ...attendanceLogs,
-                      ...decisionsList.filter(d => d.type === 'virtual_absent').map(d => ({
-                        id: `virtual_${d.employee.id}_${d.date}`,
-                        is_virtual: true,
-                        employee_id: d.employee.id,
-                        work_date: d.date,
-                        check_in_time: null,
-                        check_out_time: null,
-                        employees: d.employee
-                      }))
-                    ].length === 0 ? (
+                    {attendanceRows.length === 0 ? (
                       <tr>
                         <td colSpan={6} className="px-4 py-12 text-center text-slate-500 text-xs">
                           لا توجد سجلات حضور لهذه الفترة
                         </td>
                       </tr>
                     ) : (
-                      [
-                        ...attendanceLogs,
-                        ...decisionsList.filter(d => d.type === 'virtual_absent').map(d => ({
-                          id: `virtual_${d.employee.id}_${d.date}`,
-                          is_virtual: true,
-                          employee_id: d.employee.id,
-                          work_date: d.date,
-                          check_in_time: null,
-                          check_out_time: null,
-                          employees: d.employee
-                        }))
-                      ].map((log) => (
+                      attendanceRows.map((log) => (
                         <tr key={log.id} className={`hover:bg-slate-900/40 transition-colors ${log.is_virtual ? 'bg-rose-500/5' : ''}`}>
                           <td className="px-4 py-3 font-bold text-white text-xs flex items-center gap-2">
                             {log.employees?.full_name || 'موظف'}
@@ -1254,7 +1269,7 @@ export default function TrackingPage() {
             <div className="flex items-center justify-between">
               <div>
                 <h4 className="text-md font-bold text-white">إجراءات المخالفات وقرارات الخصم من الراتب</h4>
-                <p className="text-[11px] text-slate-400">حدد "تطبيق" لتخصيم القيمة من صافي الراتب، أو "تجاهل" للعفو عن الموظف دون تأثر راتبه</p>
+                <p className="text-[11px] text-slate-400">حدد «تطبيق» لتخصيم القيمة من صافي الراتب، أو «تجاهل» للعفو عن الموظف دون تأثر راتبه</p>
               </div>
             </div>
 

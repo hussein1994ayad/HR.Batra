@@ -2,14 +2,14 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import type { DeletedFile } from '@/lib/db-types';
+import { errorMessage } from '@/lib/error-utils';
 import { 
   Trash2, 
   RotateCcw, 
   Trash, 
-  AlertTriangle,
   Loader2,
   FileIcon,
-  ShieldAlert,
   Clock
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
@@ -17,12 +17,9 @@ import toast from 'react-hot-toast';
 
 export default function TrashPage() {
   const [loading, setLoading] = useState(true);
-  const [deletedFiles, setDeletedFiles] = useState<any[]>([]);
+  const [deletedFiles, setDeletedFiles] = useState<DeletedFile[]>([]);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchDeletedFiles();
-  }, []);
 
   const fetchDeletedFiles = async () => {
     setLoading(true);
@@ -33,6 +30,7 @@ export default function TrashPage() {
         .is('restored_at', null)
         .order('deleted_at', { ascending: false });
 
+      if (error) throw error;
       if (data) setDeletedFiles(data);
     } catch (err) {
       console.error(err);
@@ -40,6 +38,10 @@ export default function TrashPage() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchDeletedFiles();
+  }, []);
 
   const getBucketName = (fileType: string) => {
     switch (fileType) {
@@ -68,7 +70,7 @@ export default function TrashPage() {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
-  const handleRestoreFile = async (fileRow: Record<string, any>) => {
+  const handleRestoreFile = async (fileRow: DeletedFile) => {
     setActionLoading(fileRow.id);
     try {
       const { error } = await supabase
@@ -90,14 +92,14 @@ export default function TrashPage() {
       });
 
       toast.success('تم استعادة الملف بنجاح وإرجاعه لمساره الأصلي ✅');
-    } catch (err: any) {
-      toast.error(`فشل استعادة الملف: ${err.message}`);
+    } catch (err: unknown) {
+      toast.error(`فشل استعادة الملف: ${errorMessage(err)}`);
     } finally {
       setActionLoading(null);
     }
   };
 
-  const handlePermanentDelete = async (fileRow: Record<string, any>) => {
+  const handlePermanentDelete = async (fileRow: DeletedFile) => {
     if (!confirm('تحذير: هل أنت متأكد من رغبتك في حذف هذا الملف وإتلافه بشكل نهائي من الخادم؟ لا يمكن التراجع عن هذا الإجراء.')) return;
     
     setActionLoading(fileRow.id + '_delete');
@@ -123,8 +125,8 @@ export default function TrashPage() {
       setDeletedFiles(prev => prev.filter(f => f.id !== fileRow.id));
 
       toast('تم إتلاف وحذف الملف نهائياً وتصفية مساحته السحابية 🗑️');
-    } catch (err: any) {
-      toast.error(`فشل إتلاف الملف: ${err.message}`);
+    } catch (err: unknown) {
+      toast.error(`فشل إتلاف الملف: ${errorMessage(err)}`);
     } finally {
       setActionLoading(null);
     }
@@ -180,7 +182,7 @@ export default function TrashPage() {
 
                     <div className="space-y-1.5 text-[10px] text-slate-400 border-b border-slate-900 pb-3">
                       <p>نوع المستند: <span className="text-slate-200">{getFileTypeNameArabic(file.file_type)}</span></p>
-                      <p>الحجم الكلي: <span className="text-slate-200 font-mono">{formatBytes(file.file_size_bytes)}</span></p>
+                      <p>الحجم الكلي: <span className="text-slate-200 font-mono">{formatBytes(file.file_size_bytes ?? 0)}</span></p>
                       <p>حذف بواسطة: <span className="text-slate-200">{deletedBy}</span></p>
                     </div>
 

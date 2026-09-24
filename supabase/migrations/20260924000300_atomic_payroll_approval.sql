@@ -28,6 +28,11 @@ ALTER TABLE loan_installments
   ADD COLUMN IF NOT EXISTS paid_by_slip_id UUID REFERENCES salary_slips(id) ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS idx_loan_installments_paid_by_slip ON loan_installments(paid_by_slip_id);
 
+-- أعمدة طريقة السداد التي تكتبها صفحة السلف (سداد نقدي / خصم من الراتب)
+-- كانت مستعملة في الويب بدون أي migration يضيفها
+ALTER TABLE loan_installments ADD COLUMN IF NOT EXISTS payment_type TEXT;
+ALTER TABLE loan_installments ADD COLUMN IF NOT EXISTS payment_note TEXT;
+
 COMMENT ON COLUMN bonuses_deductions.salary_slip_id IS
 'الكشف الذي أنشأ هذا القيد تلقائياً عند الاعتماد. يُحذف القيد مع الكشف عند التراجع. NULL = قيد يدوي.';
 COMMENT ON COLUMN loan_installments.paid_by_slip_id IS

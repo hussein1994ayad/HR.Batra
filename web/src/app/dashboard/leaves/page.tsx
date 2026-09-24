@@ -2,12 +2,12 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import type { LeaveRequest } from '@/lib/db-types';
 import { 
   CalendarRange, 
   Check, 
   X, 
   Calendar,
-  AlertTriangle,
   Loader2,
   FileText,
   User,
@@ -18,7 +18,7 @@ import toast from 'react-hot-toast';
 
 export default function LeavesPage() {
   const [loading, setLoading] = useState(true);
-  const [leaveRequests, setLeaveRequests] = useState<any[]>([]);
+  const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   // Tab State: pending, approved, rejected
@@ -26,9 +26,6 @@ export default function LeavesPage() {
   // State for Admin to override is_paid when approving
   const [leavePaymentOverride, setLeavePaymentOverride] = useState<Record<string, boolean>>({});
 
-  useEffect(() => {
-    fetchLeaveRequests();
-  }, [activeTab]);
 
   const fetchLeaveRequests = async () => {
     setLoading(true);
@@ -52,6 +49,10 @@ export default function LeavesPage() {
     }
   };
 
+  useEffect(() => {
+    fetchLeaveRequests();
+  }, [activeTab]);
+
   const handleProcessLeave = async (requestId: string, employeeId: string, approve: boolean, isPaidValue: boolean) => {
     let rejectionReason = '';
     if (!approve) {
@@ -68,13 +69,15 @@ export default function LeavesPage() {
       if (!session) return;
 
       // 1. Update leave request record
-      const updateData: any = {
+      const updateData: Partial<LeaveRequest> = {
         status: statusText,
         approved_by: session.user.id,
         approved_at: new Date().toISOString(),
       };
       if (approve) {
         updateData.is_paid = isPaidValue;
+      } else if (rejectionReason.trim()) {
+        updateData.rejection_reason = rejectionReason.trim();
       }
 
       const { error: updErr } = await supabase
@@ -84,18 +87,7 @@ export default function LeavesPage() {
 
       if (updErr) throw updErr;
 
-      // 2. Broadcast live notification to employee
-      const actionTitle = approve ? 'الموافقة على طلب إجازتك 🎉' : 'رفض طلب إجازتك ❌';
-      const actionBody = approve 
-          ? 'تهانينا! تمت الموافقة على طلب إجازتك المقدم مسبقاً.' 
-          : `نأسف لإعلامك بأنه تم رفض طلب إجازتك من قبل الإدارة.${rejectionReason ? `\nالسبب: ${rejectionReason}` : ''}`;
-
-      await supabase.from('notifications').insert({
-        employee_id: employeeId,
-        title: actionTitle,
-        body: actionBody,
-        type: 'leave',
-      });
+      // إشعار الموظف بالقرار (مع سبب الرفض) يُرسل من قاعدة البيانات: trg_notify_employee_leave_decision
 
       // Update state locally (remove from pending grid)
       setLeaveRequests(prev => prev.filter(req => req.id !== requestId));
@@ -109,7 +101,7 @@ export default function LeavesPage() {
       }
 
       toast.success(approve ? 'تمت الموافقة على طلب الإجازة بنجاح ✅' : 'تم رفض طلب الإجازة بنجاح ❌');
-    } catch (err) {
+    } catch {
       toast.error('فشل في معالجة طلب الإجازة');
     } finally {
       setActionLoading(null);
@@ -260,7 +252,7 @@ export default function LeavesPage() {
                         </div>
                         <div className="flex items-center gap-1.5">
                           <User className="w-3.5 h-3.5 text-teal-500" />
-                          <span>تاريخ القرار: <span className="font-mono text-slate-300">{new Date(req.approved_at).toLocaleString('ar-IQ')}</span></span>
+                          <span>تاريخ القرار: <span className="font-mono text-slate-300">{req.approved_at ? new Date(req.approved_at).toLocaleString('ar-IQ') : '—'}</span></span>
                         </div>
                       </div>
                     )}

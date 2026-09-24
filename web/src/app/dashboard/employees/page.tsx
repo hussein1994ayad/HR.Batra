@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import type { ArchivedEmployee, Branch, Department, Employee, EmployeeDevice } from '@/lib/db-types';
+import { errorMessage } from '@/lib/error-utils';
 import imageCompression from 'browser-image-compression';
 import { 
   Users, 
@@ -11,8 +13,6 @@ import {
   Unlock, 
   Check, 
   X, 
-  AlertCircle,
-  TrendingUp,
   Loader2,
   Trash2,
   Plus,
@@ -49,10 +49,10 @@ function normalizeArabic(text: string = ''): string {
 
 export default function EmployeesPage() {
   const [loading, setLoading] = useState(true);
-  const [employees, setEmployees] = useState<any[]>([]);
-  const [deviceRequests, setDeviceRequests] = useState<any[]>([]);
-  const [branches, setBranches] = useState<any[]>([]);
-  const [departments, setDepartments] = useState<any[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [deviceRequests, setDeviceRequests] = useState<EmployeeDevice[]>([]);
+  const [branches, setBranches] = useState<Pick<Branch, 'id' | 'name'>[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDirectoryBranch, setSelectedDirectoryBranch] = useState('all');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -60,19 +60,19 @@ export default function EmployeesPage() {
   // Modal States
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [selectedEmployee, setSelectedEmployee] = useState<any>(null);
+  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [showProfileModal, setShowProfileModal] = useState(false);
-  const [profileEmployee, setProfileEmployee] = useState<any>(null);
+  const [profileEmployee, setProfileEmployee] = useState<Employee | null>(null);
   const [previewDocUrl, setPreviewDocUrl] = useState<string | null>(null);
   const [previewDocTitle, setPreviewDocTitle] = useState<string>('');
 
   // Archives & Deletions States
   const [activeTab, setActiveTab] = useState<'active' | 'archived'>('active');
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [employeeToDelete, setEmployeeToDelete] = useState<any>(null);
+  const [employeeToDelete, setEmployeeToDelete] = useState<Employee | null>(null);
   const [deleteReason, setDeleteReason] = useState('');
   const [deleteType, setDeleteType] = useState<'immediate' | 'archive' | 'scheduled'>('archive');
-  const [archivedEmployees, setArchivedEmployees] = useState<any[]>([]);
+  const [archivedEmployees, setArchivedEmployees] = useState<ArchivedEmployee[]>([]);
 
   // Form Fields
   const [fullName, setFullName] = useState('');
@@ -90,26 +90,6 @@ export default function EmployeesPage() {
   const [newDocuments, setNewDocuments] = useState<File[]>([]);
   const [existingDocuments, setExistingDocuments] = useState<string[]>([]);
 
-  useEffect(() => {
-    // 1. Try to load cached employees data instantly to avoid blank page or spinners
-    const cachedData = localStorage.getItem('batra_cache_employees');
-    if (cachedData) {
-      try {
-        const parsed = JSON.parse(cachedData);
-        setEmployees(parsed.employees || []);
-        setDeviceRequests(parsed.deviceRequests || []);
-        setBranches(parsed.branches || []);
-        setArchivedEmployees(parsed.archivedEmployees || []);
-        setLoading(false); // Render page immediately!
-      } catch (e) {
-        console.error('Error parsing employees cache:', e);
-      }
-    }
-
-    // 2. Fetch fresh data silently in the background
-    fetchEmployeesData(!!cachedData);
-    fetchArchivedEmployees();
-  }, []);
 
   const fetchEmployeesData = async (hasCache = false) => {
     if (!hasCache) {
@@ -120,7 +100,8 @@ export default function EmployeesPage() {
       const [
         { data: emps, error: empsErr },
         { data: reqs, error: reqsErr },
-        { data: brs }
+        { data: brs },
+        { data: depts }
       ] = await Promise.all([
         supabase
           .from('employees')
@@ -133,9 +114,17 @@ export default function EmployeesPage() {
         supabase
           .from('branches')
           .select('id, name')
+          .order('name'),
+        // تُستعمل في البحث بالقسم (كانت القائمة فارغة دائماً)
+        supabase
+          .from('departments')
+          .select('id, name')
           .order('name')
       ]);
 
+      if (empsErr) throw empsErr;
+      if (reqsErr) throw reqsErr;
+      if (depts) setDepartments(depts);
       if (emps) setEmployees(emps);
       if (reqs) setDeviceRequests(reqs);
       if (brs) setBranches(brs);
@@ -144,7 +133,7 @@ export default function EmployeesPage() {
       const currentArchive = localStorage.getItem('batra_cache_employees');
       let arch = [];
       if (currentArchive) {
-        try { arch = JSON.parse(currentArchive).archivedEmployees || []; } catch (e) {}
+        try { arch = JSON.parse(currentArchive).archivedEmployees || []; } catch {}
       }
 
       localStorage.setItem('batra_cache_employees', JSON.stringify({
@@ -185,7 +174,7 @@ export default function EmployeesPage() {
         spread: 40,
         colors: ['#0D9488', '#10B981']
       });
-    } catch (err) {
+    } catch {
       toast.error('فشل تغيير قفل الجهاز');
     } finally {
       setActionLoading(null);
@@ -220,7 +209,7 @@ export default function EmployeesPage() {
       }));
 
       toast.success('تم فك قفل وربط هاتف الموظف بنجاح ✅');
-    } catch (err) {
+    } catch {
       toast.error('فشل فك ربط الهاتف');
     } finally {
       setActionLoading(null);
@@ -279,8 +268,8 @@ export default function EmployeesPage() {
         spread: 50,
       });
       toast.success(approve ? 'تم اعتماد وتثبيت الجهاز بنجاح! ✅' : 'تم رفض وإزالة طلب ربط الجهاز. ❌');
-    } catch (err: any) {
-      toast.error(`فشل إتمام العملية: ${err.message}`);
+    } catch (err: unknown) {
+      toast.error(`فشل إتمام العملية: ${errorMessage(err)}`);
     } finally {
       setActionLoading(null);
     }
@@ -313,7 +302,7 @@ export default function EmployeesPage() {
       const empCode = `EMP-${Math.floor(100 + Math.random() * 900)}`;
 
       // 2. Compress and upload documents
-      let uploadedUrls: string[] = [];
+      const uploadedUrls: string[] = [];
       if (newDocuments.length > 0) {
         for (const file of newDocuments) {
           try {
@@ -342,7 +331,7 @@ export default function EmployeesPage() {
       }
 
       // 3. Create employee & auth credentials in a single RPC transaction to bypass client-side rate limit
-      const { data: createdId, error: createError } = await supabase.rpc('create_employee_secure', {
+      const { error: createError } = await supabase.rpc('create_employee_secure', {
         p_email: email,
         p_password: password,
         p_full_name: fullName,
@@ -379,17 +368,17 @@ export default function EmployeesPage() {
         colors: ['#0D9488', '#10B981']
       });
       toast.success('تم إضافة الموظف الجديد بنجاح وإنشاء حسابه الجغرافي! ✅');
-    } catch (err: any) {
-      toast.error(`فشل إضافة الموظف: ${err.message || 'حدث خطأ غير متوقع'}`);
+    } catch (err: unknown) {
+      toast.error(`فشل إضافة الموظف: ${errorMessage(err) || 'حدث خطأ غير متوقع'}`);
     } finally {
       setActionLoading(null);
     }
   };
 
-  const handleOpenEditModal = (emp: Record<string, any>) => {
+  const handleOpenEditModal = (emp: Employee) => {
     setSelectedEmployee(emp);
     setFullName(emp.full_name);
-    setEmail(emp.email);
+    setEmail(emp.email ?? '');
     setPhone(emp.phone || '');
     setRole(emp.role);
     setBranchId(emp.branch_id || '');
@@ -441,7 +430,7 @@ export default function EmployeesPage() {
       }
 
       // Upload new documents
-      let newUploadedUrls: string[] = [];
+      const newUploadedUrls: string[] = [];
       if (newDocuments.length > 0) {
         for (const file of newDocuments) {
           try {
@@ -501,8 +490,8 @@ export default function EmployeesPage() {
         colors: ['#3B82F6', '#10B981']
       });
       toast.success('تم تحديث بيانات الموظف وسجلاته بنجاح! ✅');
-    } catch (err: any) {
-      toast.error(`فشل تعديل بيانات الموظف: ${err.message}`);
+    } catch (err: unknown) {
+      toast.error(`فشل تعديل بيانات الموظف: ${errorMessage(err)}`);
     } finally {
       setActionLoading(null);
     }
@@ -514,6 +503,7 @@ export default function EmployeesPage() {
         .from('archived_employees')
         .select('*')
         .order('archived_at', { ascending: false });
+      if (error) throw error;
       if (data) {
         setArchivedEmployees(data);
         
@@ -524,7 +514,7 @@ export default function EmployeesPage() {
             const parsed = JSON.parse(cached);
             parsed.archivedEmployees = data;
             localStorage.setItem('batra_cache_employees', JSON.stringify(parsed));
-          } catch (e) {}
+          } catch {}
         }
       }
     } catch (err) {
@@ -532,7 +522,28 @@ export default function EmployeesPage() {
     }
   };
 
-  const handleOpenDeleteModal = (emp: Record<string, any>) => {
+  useEffect(() => {
+    // 1. Try to load cached employees data instantly to avoid blank page or spinners
+    const cachedData = localStorage.getItem('batra_cache_employees');
+    if (cachedData) {
+      try {
+        const parsed = JSON.parse(cachedData);
+        setEmployees(parsed.employees || []);
+        setDeviceRequests(parsed.deviceRequests || []);
+        setBranches(parsed.branches || []);
+        setArchivedEmployees(parsed.archivedEmployees || []);
+        setLoading(false); // Render page immediately!
+      } catch (e) {
+        console.error('Error parsing employees cache:', e);
+      }
+    }
+
+    // 2. Fetch fresh data silently in the background
+    fetchEmployeesData(!!cachedData);
+    fetchArchivedEmployees();
+  }, []);
+
+  const handleOpenDeleteModal = (emp: Employee) => {
     setEmployeeToDelete(emp);
     setDeleteReason('');
     setDeleteType('archive');
@@ -618,14 +629,14 @@ export default function EmployeesPage() {
         colors: ['#EF4444', '#F59E0B']
       });
       toast.success('تم تنفيذ عملية الحذف/الأرشفة المطلوبة للموظف بنجاح! ✅');
-    } catch (err: any) {
-      toast.error(`فشل إتمام العملية: ${err.message}`);
+    } catch (err: unknown) {
+      toast.error(`فشل إتمام العملية: ${errorMessage(err)}`);
     } finally {
       setActionLoading(null);
     }
   };
 
-  const handleRestoreArchivedEmployee = async (archRecord: Record<string, any>) => {
+  const handleRestoreArchivedEmployee = async (archRecord: ArchivedEmployee) => {
     if (!confirm(`هل أنت متأكد من رغبتك في استعادة الموظف (${archRecord.full_name}) وتنشيط حسابه الجغرافي للدوام مجدداً؟`)) return;
     setActionLoading('restore_' + archRecord.id);
 
@@ -651,14 +662,14 @@ export default function EmployeesPage() {
         colors: ['#10B981', '#34D399']
       });
       toast.success('تم استعادة الموظف وتنشيط حسابه بالكامل بنجاح! ✅');
-    } catch (err: any) {
-      toast.error(`فشل استعادة الموظف: ${err.message}`);
+    } catch (err: unknown) {
+      toast.error(`فشل استعادة الموظف: ${errorMessage(err)}`);
     } finally {
       setActionLoading(null);
     }
   };
 
-  const handlePermanentDeleteArchived = async (archRecord: Record<string, any>) => {
+  const handlePermanentDeleteArchived = async (archRecord: ArchivedEmployee) => {
     if (!confirm(`تحذير نهائي: هل تريد حقاً حذف الموظف (${archRecord.full_name}) وإتلاف حسابه وسجلاته وبصماته من قاعدة البيانات بشكل كامل ونهائي؟ لا يمكن استعادة البيانات بعد ذلك.`)) return;
     setActionLoading('perm_del_' + archRecord.id);
 
@@ -681,8 +692,8 @@ export default function EmployeesPage() {
       await fetchArchivedEmployees();
 
       toast.success('تم إتلاف بيانات وحساب الموظف نهائياً وبنجاح! 🗑️');
-    } catch (err: any) {
-      toast.error(`فشل الإتلاف النهائي: ${err.message}`);
+    } catch (err: unknown) {
+      toast.error(`فشل الإتلاف النهائي: ${errorMessage(err)}`);
     } finally {
       setActionLoading(null);
     }
@@ -697,7 +708,8 @@ export default function EmployeesPage() {
     const normEmail = (emp.email || '').toLowerCase();
     const normPhone = (emp.phone_number || emp.phone || '').toLowerCase();
     const normCode = (emp.employee_code || '').toLowerCase();
-    const normDept = normalizeArabic(emp.department || '');
+    const deptName = departments.find(d => d.id === emp.department_id)?.name;
+    const normDept = normalizeArabic(deptName || '');
     const branchName = branches.find(b => b.id === emp.branch_id)?.name || emp.branches?.name || '';
     const normBranchName = normalizeArabic(branchName);
 
@@ -746,7 +758,7 @@ export default function EmployeesPage() {
                     </span>
                   </div>
                   <div className="space-y-1 text-[10px] text-slate-400">
-                    <p>موديل الجهاز: <span className="text-slate-200 font-bold">{req.device_model || 'غير محدد'}</span></p>
+                    <p>موديل الجهاز: <span className="text-slate-200 font-bold">{req.model || 'غير محدد'}</span></p>
                     <p>نظام التشغيل: <span className="text-slate-200">{req.os_version || 'غير محدد'}</span></p>
                     <p className="font-mono text-purple-300">ID: {req.device_id}</p>
                   </div>
@@ -970,7 +982,7 @@ export default function EmployeesPage() {
 
                           <button
                             disabled={actionLoading === emp.id}
-                            onClick={() => handleToggleDeviceLock(emp.id, emp.device_id_lock)}
+                            onClick={() => handleToggleDeviceLock(emp.id, emp.device_id_lock ?? null)}
                             className={`p-2 rounded-lg border transition-all cursor-pointer ${
                               isLocked 
                                 ? 'bg-amber-500/10 border-amber-500/20 text-amber-400 hover:bg-amber-500/20' 
@@ -1058,7 +1070,7 @@ export default function EmployeesPage() {
                               : 'أرشفة مؤقتة'}
                           </span>
                         </td>
-                        <td className="p-4 max-w-xs truncate" title={arch.archive_reason}>{arch.archive_reason || '-'}</td>
+                        <td className="p-4 max-w-xs truncate" title={arch.archive_reason ?? undefined}>{arch.archive_reason || '-'}</td>
                         <td className="p-4 font-mono">
                           {expiryDate ? (
                             <span className="text-amber-400 font-bold">
@@ -1736,7 +1748,7 @@ export default function EmployeesPage() {
                   {profileEmployee.document_urls && profileEmployee.document_urls.length > 0 && (
                     <button
                       onClick={() => {
-                        const urls = profileEmployee.document_urls.join('\n');
+                        const urls = (profileEmployee.document_urls ?? []).join('\n');
                         navigator.clipboard.writeText(urls);
                         toast.success('تم نسخ روابط كافة الوثائق 📋');
                       }}

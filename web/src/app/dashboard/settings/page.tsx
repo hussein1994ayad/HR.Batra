@@ -2,13 +2,14 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import type { Announcement, Branch, Department, Employee, WorkSchedule } from '@/lib/db-types';
+import { errorMessage } from '@/lib/error-utils';
 import { 
   Settings, 
   Building, 
   ShieldAlert, 
   Save, 
   Loader2, 
-  MapPin, 
   Phone, 
   Mail, 
   Globe, 
@@ -45,19 +46,19 @@ export default function SettingsPage() {
   // Leave Policy Settings
   const [defaultAnnual, setDefaultAnnual] = useState(21);
   const [defaultSick, setDefaultSick] = useState(15);
-  const [leaveTypes, setLeaveTypes] = useState<any[]>([]);
+  const [leaveTypes, setLeaveTypes] = useState<{ id: string; name: string }[]>([]);
   const [newLeaveTypeId, setNewLeaveTypeId] = useState('');
   const [newLeaveTypeName, setNewLeaveTypeName] = useState('');
 
   // Announcements Management Settings
-  const [announcements, setAnnouncements] = useState<any[]>([]);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [loadingAnnouncements, setLoadingAnnouncements] = useState(false);
 
   // Work Schedules Settings
-  const [workSchedules, setWorkSchedules] = useState<any[]>([]);
-  const [branchesList, setBranchesList] = useState<any[]>([]);
-  const [departmentsList, setDepartmentsList] = useState<any[]>([]);
-  const [employeesList, setEmployeesList] = useState<any[]>([]);
+  const [workSchedules, setWorkSchedules] = useState<WorkSchedule[]>([]);
+  const [branchesList, setBranchesList] = useState<Pick<Branch, 'id' | 'name'>[]>([]);
+  const [departmentsList, setDepartmentsList] = useState<Department[]>([]);
+  const [employeesList, setEmployeesList] = useState<Pick<Employee, 'id' | 'full_name'>[]>([]);
 
   // Work Schedule form states
   const [schedName, setSchedName] = useState('');
@@ -131,17 +132,14 @@ export default function SettingsPage() {
         spread: 60,
         colors: ['#F59E0B', '#EF4444', '#10B981']
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error during manual purge:', err);
-      toast.error(`فشل تنفيذ عملية التنظيف: ${err.message || 'خطأ غير معروف'}`);
+      toast.error(`فشل تنفيذ عملية التنظيف: ${errorMessage(err) || 'خطأ غير معروف'}`);
     } finally {
       setPurging(false);
     }
   };
 
-  useEffect(() => {
-    fetchSettings();
-  }, []);
 
   const fetchAnnouncements = async () => {
     setLoadingAnnouncements(true);
@@ -235,6 +233,10 @@ export default function SettingsPage() {
     }
   };
 
+  useEffect(() => {
+    fetchSettings();
+  }, []);
+
   const handleAddLeaveType = (e: React.MouseEvent) => {
     e.preventDefault();
     if (!newLeaveTypeId.trim() || !newLeaveTypeName.trim()) {
@@ -270,8 +272,8 @@ export default function SettingsPage() {
       
       toast.success('تم حذف التعميم بنجاح! ✅');
       fetchAnnouncements();
-    } catch (err: any) {
-      toast.error(`فشل حذف التعميم: ${err.message}`);
+    } catch (err: unknown) {
+      toast.error(`فشل حذف التعميم: ${errorMessage(err)}`);
     }
   };
 
@@ -286,8 +288,8 @@ export default function SettingsPage() {
       
       toast.success('تم إخلاء أرشيف التعميمات بنجاح! 🧹');
       fetchAnnouncements();
-    } catch (err: any) {
-      toast.error(`فشل إخلاء الأرشيف: ${err.message}`);
+    } catch (err: unknown) {
+      toast.error(`فشل إخلاء الأرشيف: ${errorMessage(err)}`);
     }
   };
 
@@ -419,8 +421,8 @@ export default function SettingsPage() {
       
       // Update app state
       fetchSettings();
-    } catch (err: any) {
-      toast.error(`فشل حفظ الإعدادات: ${err.message}`);
+    } catch (err: unknown) {
+      toast.error(`فشل حفظ الإعدادات: ${errorMessage(err)}`);
     } finally {
       setSaving(false);
     }
@@ -439,7 +441,7 @@ export default function SettingsPage() {
     return days[dayNum] || '';
   };
 
-  const getScheduleTargetName = (sched: Record<string, any>) => {
+  const getScheduleTargetName = (sched: WorkSchedule) => {
     if (sched.employee_id) {
       const emp = employeesList.find(e => e.id === sched.employee_id);
       return `👤 موظف: ${emp ? emp.full_name : 'غير معروف'}`;
@@ -467,7 +469,7 @@ export default function SettingsPage() {
     }
     setAddingSchedule(true);
     try {
-      const scheduleData: any = {
+      const scheduleData: Omit<WorkSchedule, 'id'> = {
         name: schedName.trim(),
         check_in_time: schedCheckIn + ':00',
         check_out_time: schedCheckOut + ':00',
@@ -496,8 +498,8 @@ export default function SettingsPage() {
 
       // Refresh settings
       fetchSettings();
-    } catch (err: any) {
-      toast.error(`فشل إضافة الجدول: ${err.message}`);
+    } catch (err: unknown) {
+      toast.error(`فشل إضافة الجدول: ${errorMessage(err)}`);
     } finally {
       setAddingSchedule(false);
     }
@@ -514,8 +516,8 @@ export default function SettingsPage() {
 
       toast.success('تم حذف جدول الدوام بنجاح! ✅');
       fetchSettings();
-    } catch (err: any) {
-      toast.error(`فشل حذف الجدول: ${err.message}`);
+    } catch (err: unknown) {
+      toast.error(`فشل حذف الجدول: ${errorMessage(err)}`);
     }
   };
 
@@ -1039,7 +1041,7 @@ export default function SettingsPage() {
                 <select
                   value={schedScope}
                   onChange={(e) => {
-                    setSchedScope(e.target.value as any);
+                    setSchedScope(e.target.value as 'branch' | 'department' | 'employee');
                     setSchedTargetId('');
                   }}
                   className="w-full bg-slate-950 border border-slate-800 focus:border-teal-500 rounded-xl p-2.5 text-xs text-white outline-none"
@@ -1372,7 +1374,7 @@ const formatTime12h = (timeStr: string | null | undefined): string => {
     if (hour === 0) hour = 12;
     const minuteStr = minute.toString().padStart(2, '0');
     return `${hour}:${minuteStr} ${period}`;
-  } catch (e) {
+  } catch {
     return timeStr;
   }
 };

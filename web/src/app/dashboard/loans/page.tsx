@@ -2,17 +2,14 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import { errorMessage } from '@/lib/error-utils';
+import type { Loan, LoanInstallment } from '@/lib/db-types';
 import { 
   Coins, 
-  Check, 
   X, 
-  AlertCircle,
-  TrendingUp,
   Loader2,
   Calendar,
-  DollarSign,
   Settings,
-  ArrowRightLeft,
   CreditCard,
   Save
 } from 'lucide-react';
@@ -20,25 +17,41 @@ import confetti from 'canvas-confetti';
 import toast from 'react-hot-toast';
 import { Trash2 } from 'lucide-react';
 
+type ApprovalModalState = {
+  isOpen: boolean;
+  loan: Loan;
+  amount: number;
+  months: number;
+  startDate: string;
+};
+
+type EditLoanModalState = {
+  isOpen: boolean;
+  loan: Loan;
+  amount: number;
+  installmentAmount: number;
+  installmentCount: number;
+  remainingAmount: number;
+};
+
+type InstallmentPrompt = { installmentId: string; amount: number };
+
 export default function LoansPage() {
   const [loading, setLoading] = useState(true);
-  const [loanRequests, setLoanRequests] = useState<any[]>([]);
-  const [activeLoans, setActiveLoans] = useState<any[]>([]);
-  const [approvalModal, setApprovalModal] = useState<any>(null);
+  const [loanRequests, setLoanRequests] = useState<Loan[]>([]);
+  const [activeLoans, setActiveLoans] = useState<Loan[]>([]);
+  const [approvalModal, setApprovalModal] = useState<ApprovalModalState | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [editLoanModal, setEditLoanModal] = useState<any>(null);
+  const [editLoanModal, setEditLoanModal] = useState<EditLoanModalState | null>(null);
   const [loansTab, setLoansTab] = useState<'active' | 'completed'>('active');
 
   // New States for Advanced Installment Management
-  const [selectedLoanForInstallments, setSelectedLoanForInstallments] = useState<any>(null);
-  const [cashPaymentPrompt, setCashPaymentPrompt] = useState<any>(null); // { installmentId, amount }
+  const [selectedLoanForInstallments, setSelectedLoanForInstallments] = useState<Loan | null>(null);
+  const [cashPaymentPrompt, setCashPaymentPrompt] = useState<InstallmentPrompt | null>(null);
   const [cashNote, setCashNote] = useState('');
-  const [editInstallmentPrompt, setEditInstallmentPrompt] = useState<any>(null); // { installmentId, amount }
+  const [editInstallmentPrompt, setEditInstallmentPrompt] = useState<InstallmentPrompt | null>(null);
   const [newInstallmentAmtVal, setNewInstallmentAmtVal] = useState(0);
 
-  useEffect(() => {
-    fetchLoanRequests();
-  }, []);
 
   useEffect(() => {
     if (selectedLoanForInstallments) {
@@ -71,6 +84,8 @@ export default function LoansPage() {
           .order('created_at', { ascending: false })
       ]);
 
+      if (pErr) throw pErr;
+      if (aErr) throw aErr;
       if (pending) setLoanRequests(pending);
       if (active) setActiveLoans(active);
     } catch (err) {
@@ -80,7 +95,11 @@ export default function LoansPage() {
     }
   };
 
-  const handleProcessLoan = async (loan: any, approve: boolean) => {
+  useEffect(() => {
+    fetchLoanRequests();
+  }, []);
+
+  const handleProcessLoan = async (loan: Loan, approve: boolean) => {
     if (approve) {
       const hasActive = activeLoans.some(l => l.employee_id === loan.employee_id && l.status === 'approved');
       if (hasActive) {
@@ -100,6 +119,9 @@ export default function LoansPage() {
       return;
     }
 
+    const rejectionReason = prompt('يرجى إدخال سبب الرفض (اختياري):');
+    if (rejectionReason === null) return;
+
     setActionLoading(loan.id);
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -111,22 +133,18 @@ export default function LoansPage() {
           status: 'rejected',
           approved_by: session.user.id,
           approved_at: new Date().toISOString(),
+          rejection_reason: rejectionReason.trim() || null,
         })
         .eq('id', loan.id);
 
       if (updErr) throw updErr;
 
-      await supabase.from('notifications').insert({
-        employee_id: loan.employee_id,
-        title: 'رفض طلب السلفة ❌',
-        body: 'نأسف، تم رفض طلب السلفة المقدم من قبلك.',
-        type: 'loan',
-      });
+      // إشعار الموظف بالرفض يُرسل من قاعدة البيانات: trg_notify_employee_loan_decision
 
       setLoanRequests(prev => prev.filter(req => req.id !== loan.id));
       toast.success('تم رفض طلب السلفة بنجاح. ❌');
-    } catch (err: any) {
-      toast.error(`فشل إتمام معالجة الطلب: ${err.message}`);
+    } catch (err: unknown) {
+      toast.error(`فشل إتمام معالجة الطلب: ${errorMessage(err)}`);
     } finally {
       setActionLoading(null);
     }
@@ -176,7 +194,7 @@ export default function LoansPage() {
       if (updErr) throw updErr;
 
       const installments = [];
-      let currentDueDate = new Date(approvalModal.startDate);
+      const currentDueDate = new Date(approvalModal.startDate);
 
       for (let i = 0; i < newMonths; i++) {
         // Last installment absorbs the rounding difference to ensure Sum(installments) === newAmount
@@ -193,51 +211,14 @@ export default function LoansPage() {
       const { error: instErr } = await supabase.from('loan_installments').insert(installments);
       if (instErr) throw instErr;
 
-      await supabase.from('notifications').insert({
-        employee_id: approvalModal.loan.employee_id,
-        title: 'الموافقة على طلب السلفة 💸',
-        body: `تم اعتماد سلفة بقيمة ${newAmount.toLocaleString()} د.ع وجدولتها بذكاء.`,
-        type: 'loan',
-      });
+      // إشعار الموظف بالموافقة (مع المبلغ والأقساط) يُرسل من قاعدة البيانات: trg_notify_employee_loan_decision
 
       setApprovalModal(null);
       fetchLoanRequests();
       confetti({ particleCount: 100, spread: 70, colors: ['#0D9488', '#34D399', '#6EE7B7'] });
       toast.success('تم اعتماد السلفة وتوليد الأقساط بذكاء! ✅');
-    } catch (err: any) {
-      toast.error(`فشل الاعتماد: ${err.message}`);
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  const handleSkipInstallment = async (loanId: string) => {
-    if (!window.confirm('هل أنت متأكد من تخطي القسط لهذا الشهر؟ سيتم تأجيل جميع الدفعات المتبقية شهراً إضافياً.')) return;
-    
-    try {
-      setActionLoading('skip_' + loanId);
-      const { data: installments, error: getErr } = await supabase
-        .from('loan_installments')
-        .select('*')
-        .eq('loan_id', loanId)
-        .eq('is_paid', false)
-        .order('due_date', { ascending: true });
-        
-      if (getErr || !installments || installments.length === 0) return;
-      
-      for (const inst of installments) {
-        const oldDate = new Date(inst.due_date);
-        oldDate.setMonth(oldDate.getMonth() + 1);
-        await supabase
-          .from('loan_installments')
-          .update({ due_date: oldDate.toISOString().split('T')[0] })
-          .eq('id', inst.id);
-      }
-      
-      toast('تم تخطي القسط وتأجيل الدفعات القادمة بذكاء لمدة شهر! ✨');
-      fetchLoanRequests();
-    } catch (err) {
-      toast.error('فشل تخطي القسط.');
+    } catch (err: unknown) {
+      toast.error(`فشل الاعتماد: ${errorMessage(err)}`);
     } finally {
       setActionLoading(null);
     }
@@ -287,7 +268,7 @@ export default function LoansPage() {
       const remainingCount = newCount - paidCount;
       if (remainingCount > 0) {
         const installments = [];
-        let currentDueDate = new Date();
+        const currentDueDate = new Date();
         currentDueDate.setMonth(currentDueDate.getMonth() + 1);
         currentDueDate.setDate(1);
         
@@ -319,8 +300,8 @@ export default function LoansPage() {
       setEditLoanModal(null);
       fetchLoanRequests();
       toast.success('تم تعديل السلفة وإعادة جدولة الأقساط المتبقية بنجاح! ✅');
-    } catch (err: any) {
-      toast.error(`فشل التعديل: ${err.message || err}`);
+    } catch (err: unknown) {
+      toast.error(`فشل التعديل: ${errorMessage(err)}`);
     } finally {
       setActionLoading(null);
     }
@@ -348,8 +329,8 @@ export default function LoansPage() {
       setCashPaymentPrompt(null);
       setCashNote('');
       fetchLoanRequests();
-    } catch (err: any) {
-      toast.error(`فشل تسجيل السداد: ${err.message || err}`);
+    } catch (err: unknown) {
+      toast.error(`فشل تسجيل السداد: ${errorMessage(err)}`);
     } finally {
       setActionLoading(null);
     }
@@ -372,8 +353,8 @@ export default function LoansPage() {
       
       toast.success('تم التراجع عن السداد بنجاح! 🔄');
       fetchLoanRequests();
-    } catch (err: any) {
-      toast.error(`فشل التراجع عن السداد: ${err.message || err}`);
+    } catch (err: unknown) {
+      toast.error(`فشل التراجع عن السداد: ${errorMessage(err)}`);
     } finally {
       setActionLoading(null);
     }
@@ -394,7 +375,7 @@ export default function LoansPage() {
       toast.success('تم حذف القسط المسدد نهائياً من قاعدة البيانات! 🗑️');
       
       if (selectedLoanForInstallments) {
-        const updatedInsts = (selectedLoanForInstallments.loan_installments || []).filter((i: Record<string, any>) => i.id !== installmentId);
+        const updatedInsts = (selectedLoanForInstallments.loan_installments || []).filter((i: LoanInstallment) => i.id !== installmentId);
         setSelectedLoanForInstallments({
           ...selectedLoanForInstallments,
           loan_installments: updatedInsts
@@ -402,8 +383,8 @@ export default function LoansPage() {
       }
       
       fetchLoanRequests();
-    } catch (err: any) {
-      toast.error(`فشل حذف القسط: ${err.message || err}`);
+    } catch (err: unknown) {
+      toast.error(`فشل حذف القسط: ${errorMessage(err)}`);
     } finally {
       setActionLoading(null);
     }
@@ -428,8 +409,8 @@ export default function LoansPage() {
       setEditInstallmentPrompt(null);
       setNewInstallmentAmtVal(0);
       fetchLoanRequests();
-    } catch (err: any) {
-      toast.error(`فشل تعديل القسط: ${err.message || err}`);
+    } catch (err: unknown) {
+      toast.error(`فشل تعديل القسط: ${errorMessage(err)}`);
     } finally {
       setActionLoading(null);
     }
@@ -460,14 +441,14 @@ export default function LoansPage() {
       
       toast.success('تم تأجيل القسط والأقساط اللاحقة شهراً إضافياً بنجاح! 🔄');
       fetchLoanRequests();
-    } catch (err) {
+    } catch {
       toast.error('فشل تأجيل القسط.');
     } finally {
       setActionLoading(null);
     }
   };
 
-  const handleDeleteCompletedLoan = async (loan: Record<string, any>) => {
+  const handleDeleteCompletedLoan = async (loan: Loan) => {
     if (Number(loan.remaining_amount) > 0) {
       toast.error('لا يمكن حذف سلفة غير مكتملة السداد.');
       return;
@@ -497,8 +478,8 @@ export default function LoansPage() {
       
       toast.success('تم حذف السلفة وتوفير مساحة التخزين بنجاح! 🗑️');
       fetchLoanRequests();
-    } catch (err: any) {
-      toast.error(`فشل الحذف: ${err.message || err}`);
+    } catch (err: unknown) {
+      toast.error(`فشل الحذف: ${errorMessage(err)}`);
     } finally {
       setActionLoading(null);
     }
@@ -668,7 +649,7 @@ export default function LoansPage() {
                   </tr>
                 ) : (
                   displayedLoans.map((loan) => {
-                    const unpaid = (loan.loan_installments || []).filter((i: Record<string, any>) => !i.is_paid).sort((a: any, b: any) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
+                    const unpaid = (loan.loan_installments || []).filter((i: LoanInstallment) => !i.is_paid).sort((a: LoanInstallment, b: LoanInstallment) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
                     const nextInstallment = unpaid.length > 0 ? unpaid[0] : null;
                     
                     return (
@@ -954,8 +935,8 @@ export default function LoansPage() {
 
             <div className="overflow-y-auto max-h-[300px] border border-slate-800 rounded-2xl bg-slate-950/20 divide-y divide-slate-800/80">
               {(selectedLoanForInstallments.loan_installments || [])
-                .sort((a: any, b: any) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime())
-                .map((inst: any, idx: number) => {
+                .sort((a: LoanInstallment, b: LoanInstallment) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime())
+                .map((inst: LoanInstallment, idx: number) => {
                   const isPaid = inst.is_paid;
                   
                   return (
@@ -1195,8 +1176,8 @@ export default function LoansPage() {
             </thead>
             <tbody>
               {(selectedLoanForInstallments.loan_installments || [])
-                .sort((a: any, b: any) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime())
-                .map((inst: any, idx: number) => (
+                .sort((a: LoanInstallment, b: LoanInstallment) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime())
+                .map((inst: LoanInstallment, idx: number) => (
                   <tr key={inst.id} className="border-b border-slate-300">
                     <td className="border border-slate-400 p-2 font-bold">قسط #{idx + 1}</td>
                     <td className="border border-slate-400 p-2 font-mono">{inst.due_date}</td>

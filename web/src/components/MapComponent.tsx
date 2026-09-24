@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
+import type * as Leaflet from 'leaflet';
+import type { Layer, LeafletMouseEvent, Map as LeafletMap } from 'leaflet';
 
 interface MapMarker {
   lat: number;
@@ -53,9 +55,9 @@ export default function MapComponent({
   onCircleClick
 }: MapComponentProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<any>(null);
-  const layersRef = useRef<any[]>([]);
-  const [leafletInstance, setLeafletInstance] = useState<any>(null);
+  const mapRef = useRef<LeafletMap | null>(null);
+  const layersRef = useRef<Layer[]>([]);
+  const [leafletInstance, setLeafletInstance] = useState<typeof Leaflet | null>(null);
 
   // Dynamically load Leaflet library only on the client side
   useEffect(() => {
@@ -107,7 +109,7 @@ export default function MapComponent({
     }).addTo(mapInstance);
 
     if (onMapClick) {
-      mapInstance.on('click', (e: Record<string, any>) => {
+      mapInstance.on('click', (e: LeafletMouseEvent) => {
         onMapClick(e.latlng.lat, e.latlng.lng);
       });
     }
@@ -154,7 +156,7 @@ export default function MapComponent({
     });
     layersRef.current = [];
 
-    const newLayers: any[] = [];
+    const newLayers: Layer[] = [];
 
     // Add Polygons (Geofence Zones)
     polygons.forEach((poly) => {

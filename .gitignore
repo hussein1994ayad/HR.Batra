@@ -2,3 +2,13 @@ scratch/
 *.apk
 *.aab
 *.ipa
+
+# ملفات محلية مؤقتة (سكربتات ترقيع قديمة وخطط اختبار TestSprite)
+_to_delete/
+test_*.json
+.agents/
+
+# أسرار التوقيع — لا تُرفع أبداً
+mobile/android/key.properties
+*.jks
+*.keystore
