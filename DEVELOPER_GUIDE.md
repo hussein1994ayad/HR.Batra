@@ -275,8 +275,10 @@ await SupabaseService.signOut()
 ### 2. `AuthService` — المصادقة وإدارة الجلسة
 **المسؤوليات:**
 - تسجيل الدخول مع فحص `is_active` و`must_change_password`
-- قفل الجهاز الواحد: يمنع الموظف من الدخول على أكثر من جهاز
-- انتهاء الجلسة تلقائياً بعد فترة عدم استخدام (SessionTimeout)
+- قفل الجهاز الواحد عبر دالة `register_device_login` في السيرفر. معرّف الجهاز ثابت
+  (Android: `ANDROID_ID`، iOS: Keychain) ويبقى بعد حذف التطبيق
+- فحص الجلسة عند الفتح (`resolveStartupDestination`): انتهاء 30 يوم، حساب معطّل،
+  جهاز أُلغي اعتماده. بدون إنترنت يبقى المستخدم داخل
 
 ```dart
 // تسجيل الدخول
@@ -318,12 +320,15 @@ bool isActive = LocationService.isTracking;
 
 ### 5. `AttendanceSyncService` — مزامنة الدوام أوفلاين
 **المسؤوليات:**
-- حفظ بصمات الحضور/الانصراف محلياً عند انقطاع الإنترنت
-- رفعها تلقائياً لما يعود الاتصال
+- كل بصمة تمر عبر دالة `punch_attendance` في السيرفر (الوقت، المسافة، التأخير، الجهاز)
+- الطابور المحلي فقط عند انقطاع الشبكة فعلياً؛ البصمة المرفوعة لاحقاً تُقبل إذا كانت
+  خلال 48 ساعة وتُعلَّم `check_in_offline` / `check_out_offline` لمراجعة الإدارة
+- رفض السيرفر (خارج النطاق، مكررة...) يظهر للموظف ولا يُعاد إرساله
 
 ### 6. `OtaService` — تحديثات التطبيق التلقائية
 - يتحقق من وجود نسخة جديدة في جدول `app_versions` بـ Supabase
-- يُظهر نافذة للمستخدم ويوفر رابط التحميل
+- Android: `apk_url` يجب أن يكون رابط عام من bucket `ota-updates` في نفس مشروع Supabase
+  (غير ذلك يُتجاهل). iOS: `ipa_url` رابط App Store أو TestFlight فقط
 
 ---
 
@@ -418,6 +423,64 @@ GoRoute(path: AppRoutes.employeeEquipment, builder: (_, __) => const EquipmentRe
 ### عند الخطأ:
 - `Can't find ']' to match '['` → خلل في أقواس Dart، راجع الملف المذكور في الخطأ
 - `Gradle build failed` → حاول `flutter clean` ثم أعد البناء
+- تحذير `key.properties غير موجود` → النسخة موقّعة بمفتاح debug؛ لا توزعها (انظر قسم النشر)
+
+---
+
+## نشر تحديث التدقيق (سبتمبر 2026)
+
+الترتيب مهم: قاعدة البيانات أولاً، ثم الويب، ثم التطبيق.
+
+### 1) قاعدة البيانات
+```bash
+supabase migration list          # تأكد أي migrations مطبّقة فعلاً على المشروع
+cd supabase/tests && npm ci && npm test   # يجب أن تنجح كلها
+cd ../.. && supabase db push
+```
+- إذا طبّقت migrations سابقاً يدوياً من SQL Editor ولم تُسجَّل، سجّلها أولاً بـ
+  `supabase migration repair --status applied <version>` حتى لا يُعاد تشغيلها.
+- بعد التطبيق شغّل `supabase/checks/security_audit.sql` من SQL Editor —
+  الاستعلامات 1–5 يجب أن ترجع صفر نتائج.
+- دالة push-notification: `supabase functions deploy push-notification`، ويُفضَّل ضبط
+  `WEBHOOK_SECRET` في أسرار الدالة وإرسال نفس القيمة بترويسة `x-webhook-secret` في الـ Webhook.
+
+### 2) الويب
+`cd web && npm ci && npm run build` ثم ارفع `web/out/`.
+
+### 3) التطبيق
+- **مفتاح التوقيع (Android):** أنشئه مرة واحدة واحفظه بمكان آمن (ضياعه = لا تحديثات بعد الآن):
+  ```bash
+  keytool -genkey -v -keystore mobile/android/app/release.jks -keyalg RSA -keysize 2048 -validity 10000 -alias batra
+  ```
+  وأنشئ `mobile/android/key.properties` (خارج git):
+  ```
+  storeFile=release.jks
+  storePassword=...
+  keyAlias=batra
+  keyPassword=...
+  ```
+  للـ CI ضع نفس القيم في Secrets: `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`,
+  `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`.
+- **أول نسخة بالمفتاح الجديد تتطلب حذف التطبيق القديم وتثبيت الجديد** (اختلاف التوقيع)،
+  وهذا يغيّر معرّف الجهاز. قبل توزيعها أعد ضبط قفل الأجهزة مرة واحدة:
+  ```sql
+  UPDATE employees SET device_id_lock = 'force_lock_active'
+  WHERE COALESCE(device_id_lock, '') <> '';
+  ```
+  أول دخول لكل موظف بعدها يعتمد جهازه تلقائياً.
+- **iOS:** أضف تطبيق iOS في Firebase (Bundle ID `com.batra.hrpro.hrPro`) وضع في Secrets:
+  `IOS_GOOGLE_SERVICE_INFO_PLIST_BASE64`, `FIREBASE_IOS_APP_ID`, `FIREBASE_IOS_API_KEY`،
+  ومفاتيح التوقيع `IOS_CERTIFICATE_P12_BASE64`, `IOS_CERTIFICATE_PASSWORD`,
+  `IOS_PROVISIONING_PROFILE_BASE64` (مع Push Notifications و Time Sensitive), `IOS_TEAM_ID`.
+  وارفع مفتاح APNs (.p8) في Firebase → Cloud Messaging.
+
+### فحوصات قبل أي دمج
+```bash
+cd mobile && dart analyze && flutter test
+cd web && npm run lint && npx tsc --noEmit
+cd supabase/tests && npm test
+```
+نفسها تعمل تلقائياً في `.github/workflows/quality.yml`.
 
 ---
 
