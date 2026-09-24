@@ -4,6 +4,7 @@
 
 import 'dart:io' show Platform;
 
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -12,13 +13,18 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
+import 'schedule_service.dart';
+
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   debugPrint('Background message: ${message.messageId}');
 }
 
 class NotificationService {
-  static final _firebaseMessaging = FirebaseMessaging.instance;
+  // FirebaseMessaging.instance يرمي خطأ إذا لم يُهيّأ Firebase (مثلاً iOS قبل
+  // إضافة GoogleService-Info.plist)، لذلك يُستعمل فقط عندما يكون جاهزاً.
+  static FirebaseMessaging get _firebaseMessaging => FirebaseMessaging.instance;
+  static bool get _firebaseReady => Firebase.apps.isNotEmpty;
   static final _localNotifications = FlutterLocalNotificationsPlugin();
 
   static bool _initialized = false;
@@ -42,7 +48,9 @@ class NotificationService {
         debugPrint('Timezones init warning: $e');
       }
 
-      FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+      if (_firebaseReady) {
+        FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+      }
 
       await _localNotifications.initialize(
         const InitializationSettings(
@@ -119,7 +127,7 @@ class NotificationService {
       }
 
       // Foreground: استقبال + إظهار محلي مع صوت
-      FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      if (_firebaseReady) FirebaseMessaging.onMessage.listen((RemoteMessage message) {
         if (message.notification == null) return;
         _localNotifications.show(
           message.hashCode,
@@ -165,7 +173,7 @@ class NotificationService {
         try {
           final hasPermission = await isPermissionGranted();
           final user = Supabase.instance.client.auth.currentUser;
-          if (hasPermission && user != null) {
+          if (_firebaseReady && hasPermission && user != null) {
             final token = await _firebaseMessaging.getToken();
             if (token != null) await _saveTokenToSupabase(token);
             _firebaseMessaging.onTokenRefresh.listen(_saveTokenToSupabase);
@@ -186,6 +194,10 @@ class NotificationService {
 
   /// طلب الصلاحيات وحفظ التوكن. يُستدعى بعد تسجيل الدخول.
   static Future<bool> requestPermissionAndSaveToken() async {
+    if (!_firebaseReady) {
+      await scheduleAttendanceReminders();
+      return false;
+    }
     try {
       final settings = await _firebaseMessaging.requestPermission(
         alert: true,
@@ -274,34 +286,12 @@ class NotificationService {
       if (user == null) return;
 
       Map<String, dynamic>? activeSchedule = schedule;
+      final scheduleMode = await _reminderScheduleMode();
 
       // إذا لم يتم تمرير الجدول، نحاول جلبه من السيرفر
       if (activeSchedule == null) {
         try {
-          final empRes = await Supabase.instance.client
-              .from('employees')
-              .select('branch_id, department_id')
-              .eq('id', user.id)
-              .maybeSingle();
-
-          if (empRes != null) {
-            final List<String> orFilters = ['employee_id.eq.${user.id}'];
-            if (empRes['department_id'] != null) {
-              orFilters.add('department_id.eq.${empRes['department_id']}');
-            }
-            if (empRes['branch_id'] != null) {
-              orFilters.add('branch_id.eq.${empRes['branch_id']}');
-            }
-
-            final schedRes = await Supabase.instance.client
-                .from('work_schedules')
-                .select()
-                .or(orFilters.join(','))
-                .limit(1)
-                .maybeSingle();
-
-            activeSchedule = schedRes;
-          }
+          activeSchedule = await ScheduleService.fetchEffectiveSchedule();
         } catch (e) {
           debugPrint('⚠️ تعذر جلب جدول العمل للجدولة: $e');
         }
@@ -384,7 +374,7 @@ class NotificationService {
               interruptionLevel: InterruptionLevel.timeSensitive,
             ),
           ),
-          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+          androidScheduleMode: scheduleMode,
           uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
           matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
         );
@@ -422,7 +412,7 @@ class NotificationService {
               interruptionLevel: InterruptionLevel.timeSensitive,
             ),
           ),
-          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+          androidScheduleMode: scheduleMode,
           uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
           matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
         );
@@ -432,6 +422,17 @@ class NotificationService {
     } catch (e, stack) {
       debugPrint('❌ خطأ في جدولة تذكيرات الحضور والانصراف: $e\n$stack');
     }
+  }
+
+  /// المنبه الدقيق يحتاج موافقة المستخدم على Android 14+ (SCHEDULE_EXACT_ALARM).
+  /// بدونها نستعمل التذكير غير الدقيق بدل أن تفشل الجدولة كلياً.
+  static Future<AndroidScheduleMode> _reminderScheduleMode() async {
+    final android = _localNotifications.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
+    final canExact = await android?.canScheduleExactNotifications() ?? true;
+    return canExact
+        ? AndroidScheduleMode.exactAllowWhileIdle
+        : AndroidScheduleMode.inexactAllowWhileIdle;
   }
 
   /// إلغاء كافة تذكيرات البصمة المجدولة

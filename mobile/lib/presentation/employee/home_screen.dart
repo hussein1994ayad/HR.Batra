@@ -13,6 +13,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/routes/app_router.dart';
 import '../../core/services/location_service.dart';
 import '../../core/services/ota_service.dart';
+import '../../core/services/schedule_service.dart';
 import '../../core/services/notification_service.dart';
 import '../../core/services/supabase_service.dart';
 import '../../core/theme/app_theme.dart';
@@ -210,23 +211,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
       final todayStr = DateTime.now().toIso8601String().split('T')[0];
 
-      final List<String> orFilters = ['employee_id.eq.${user.id}'];
-      if (empData != null) {
-        if (empData['department_id'] != null) {
-          orFilters.add('department_id.eq.${empData['department_id']}');
-        }
-        if (empData['branch_id'] != null) {
-          orFilters.add('branch_id.eq.${empData['branch_id']}');
-        }
-      }
-      final scheduleQuery = SupabaseService.client
-          .from('work_schedules')
-          .select()
-          .or(orFilters.join(','))
-          .limit(1)
-          .maybeSingle();
+      final scheduleQuery = ScheduleService.fetchEffectiveSchedule();
 
-      final results = await Future.wait([
+      final results = await Future.wait<dynamic>([
         scheduleQuery,
         SupabaseService.client
             .from('announcements')

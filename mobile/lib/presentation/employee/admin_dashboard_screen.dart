@@ -493,18 +493,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
         'approved_at': DateTime.now().toUtc().toIso8601String(),
       }).eq('id', requestId);
 
-      // 2. إرسال إشعار فوري للموظف
-      final String actionTitle = approve ? 'الموافقة على طلب إجازتك 🎉' : 'رفض طلب إجازتك ❌';
-      final String actionBody = approve 
-          ? 'تهانينا! تمت الموافقة على طلب إجازتك المقدم مسبقاً.' 
-          : 'نأسف لإعلامك بأنه تم رفض طلب إجازتك من قبل الإدارة.';
-
-      await SupabaseService.client.from('notifications').insert({
-        'employee_id': employeeId,
-        'title': actionTitle,
-        'body': actionBody,
-        'type': 'leave',
-      });
+      // إشعار الموظف بالقرار يُرسل من قاعدة البيانات (trg_notify_employee_leave_decision)
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -539,20 +528,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
         'approved_at': DateTime.now().toUtc().toIso8601String(),
       }).eq('id', loanId);
 
-      // 2. إشعار الموظف
-      final String actionTitle = approve ? 'الموافقة على طلب السلفة 💸' : 'رفض طلب السلفة ❌';
-      final String actionBody = approve 
-          ? 'تمت الموافقة على سلفة بقيمة ${AppConstants.formatMoney(amount)} وتوزيعها على $months أقساط شهرية.'
-          : 'نأسف، تم رفض طلب السلفة المقدم من قبلك.';
+      // إشعار الموظف بالقرار يُرسل من قاعدة البيانات (trg_notify_employee_loan_decision)
 
-      await SupabaseService.client.from('notifications').insert({
-        'employee_id': employeeId,
-        'title': actionTitle,
-        'body': actionBody,
-        'type': 'loan',
-      });
-
-      // 3. إذا تمت الموافقة، توليد الأقساط الشهرية تلقائياً
+      // 2. إذا تمت الموافقة، توليد الأقساط الشهرية تلقائياً
       if (approve) {
         final double installmentAmt = (amount / months).roundToDouble();
         final List<Map<String, dynamic>> installments = [];

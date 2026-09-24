@@ -25,9 +25,9 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.VIBRATE"/>
 
-    <!-- التنبيهات الدقيقة وتذكيرات البصمة والمواعيد المجدولة -->
+    <!-- التنبيهات الدقيقة لتذكيرات البصمة (يطلبها التطبيق من المستخدم على Android 14+).
+         USE_EXACT_ALARM غير مستخدم: Google Play يقصره على تطبيقات المنبه والتقويم. -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
-    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
@@ -80,12 +80,13 @@
             android:foregroundServiceType="location"
             android:stopWithTask="false" />
 
-        <!-- Flutter Background Service -->
+        <!-- Flutter Background Service — يُشغَّل من التطبيق نفسه فقط،
+             لذلك غير مُصدَّر (exported) لمنع التطبيقات الأخرى من تشغيله -->
         <service
             android:name="id.flutter.flutter_background_service.BackgroundService"
             android:foregroundServiceType="location"
             android:enabled="true"
-            android:exported="true"
+            android:exported="false"
             tools:replace="android:exported" />
 
         <receiver

@@ -55,18 +55,19 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
         .toLowerCase();
   }
 
-  /// جلب البيانات من الـ view المخصص والمحمي بقاعدة البيانات
+  /// قائمة الزملاء من دالة get_employee_directory (أعمدة غير حساسة فقط).
+  /// الـ View مقيّد بـ RLS ويعيد صف الموظف نفسه فقط.
   Future<void> _loadDirectory() async {
     setState(() => _isLoading = true);
 
     try {
-      final data = await SupabaseService.client
-          .from('v_employee_directory')
-          .select()
-          .order('full_name');
+      final dynamic data =
+          await SupabaseService.client.rpc<dynamic>('get_employee_directory');
 
       if (!mounted) return;
-      final list = List<Map<String, dynamic>>.from(data);
+      final list = (data as List<dynamic>)
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
       final branches = {'all', ...list.map((e) => (e['branch_name'] ?? '').toString()).where((b) => b.isNotEmpty)};
 
       setState(() {

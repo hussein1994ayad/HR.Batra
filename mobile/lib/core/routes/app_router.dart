@@ -253,18 +253,17 @@ class _SplashScreenState extends State<SplashScreen> {
     
     if (!mounted) return;
 
-    if (SupabaseService.isAuthenticated) {
-      // نتحقق من ضرورة تغيير كلمة المرور للموظف عند الدخول
-      final mustChange = await AuthService.checkMustChangePassword();
-      if (!mounted) return;
+    // يفحص انتهاء الجلسة، تعطيل الحساب، والجهاز المعتمد — ولا يعلق بدون إنترنت
+    final destination = await AuthService.resolveStartupDestination();
+    if (!mounted) return;
 
-      if (mustChange) {
+    switch (destination) {
+      case StartupDestination.login:
+        context.go(AppRoutes.login);
+      case StartupDestination.changePassword:
         context.go(AppRoutes.changePassword);
-      } else {
+      case StartupDestination.home:
         context.go(AppRoutes.employeeHome);
-      }
-    } else {
-      context.go(AppRoutes.login);
     }
   }
 

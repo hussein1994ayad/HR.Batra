@@ -152,21 +152,6 @@ class _LoanRequestScreenState extends State<LoanRequestScreen> with SingleTicker
         'status': 'pending',
       });
 
-      // جلب اسم الموظف الحالي لإدراجه في نص إشعار المسؤولين
-      String empName = 'موظف';
-      try {
-        final empProfile = await SupabaseService.client
-            .from('employees')
-            .select('full_name')
-            .eq('id', user.id)
-            .maybeSingle();
-        if (empProfile != null && empProfile['full_name'] != null) {
-          empName = empProfile['full_name'];
-        }
-      } catch (e) {
-        debugPrint('خطأ في جلب اسم الموظف: $e');
-      }
-
       // 3. تسجيل الإشعار بالطلب الجديد للموظف نفسه
       await SupabaseService.client.from('notifications').insert({
         'employee_id': user.id,
@@ -175,26 +160,7 @@ class _LoanRequestScreenState extends State<LoanRequestScreen> with SingleTicker
         'type': 'loan',
       });
 
-      // 4. إشعار المدراء والمسؤولين
-      try {
-        final List<dynamic> admins = await SupabaseService.client
-            .from('employees')
-            .select('id')
-            .or('role.eq.admin,role.eq.manager');
-        
-        for (var admin in admins) {
-          if (admin['id'] != null && admin['id'] != user.id) {
-            await SupabaseService.client.from('notifications').insert({
-              'employee_id': admin['id'],
-              'title': 'طلب سلفة جديدة معلق 💰',
-              'body': 'قدم الموظف ($empName) طلب سلفة مالية بقيمة (${_requestedAmount.toStringAsFixed(0)} ${AppConstants.currency}) على أقساط لمدة ($installmentCount أشهر).',
-              'type': 'loan',
-            });
-          }
-        }
-      } catch (e) {
-        debugPrint('خطأ في إرسال إشعارات السلفة للمسؤولين: $e');
-      }
+      // إشعار المدراء بالطلب الجديد يُرسل من قاعدة البيانات (trg_notify_admins_new_loan_request)
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

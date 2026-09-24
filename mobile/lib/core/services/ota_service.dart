@@ -6,8 +6,9 @@ import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'supabase_service.dart';
+import '../constants/constants.dart';
 import '../theme/app_theme.dart';
+import 'supabase_service.dart';
 
 /// الحالات المختلفة لفحص تحديث التطبيق
 enum OtaStatus {
@@ -19,6 +20,21 @@ enum OtaStatus {
 
 /// خدمة لإدارة وفحص وتنزيل التحديثات الهوائية (OTA Updates) للحد من استخدام الإصدارات القديمة
 class OtaService {
+  /// رابط التحديث يجب أن يكون HTTPS ومن مصدر معروف:
+  /// Android → مجلد ota-updates في Supabase Storage الخاص بالمشروع.
+  /// iOS → App Store أو TestFlight.
+  /// يمنع توجيه الموظفين لتنزيل APK من أي رابط آخر لو عُدّل جدول app_versions.
+  static bool isTrustedDownloadUrl(String url, {required bool isIOS}) {
+    final uri = Uri.tryParse(url);
+    if (uri == null || uri.scheme != 'https') return false;
+    if (isIOS) {
+      return const {'apps.apple.com', 'testflight.apple.com'}.contains(uri.host);
+    }
+    final supabaseHost = Uri.parse(AppConstants.supabaseUrl).host;
+    return uri.host == supabaseHost &&
+        uri.path.startsWith('/storage/v1/object/public/ota-updates/');
+  }
+
   
   /// التحقق من توافر تحديث جديد مقارنة بجدول `app_versions` بقاعدة البيانات
   static Future<Map<String, dynamic>> checkVersion() async {
@@ -44,10 +60,15 @@ class OtaService {
       final int latestVersionCode = latestRelease['version_code'] as int;
       final String latestVersionName = latestRelease['version_name'] ?? '1.0.0';
       final bool isMandatory = latestRelease['is_mandatory'] ?? false;
-      final String apkUrl = latestRelease['apk_url'] ?? '';
-      final String downloadUrl = Platform.isIOS 
-          ? (latestRelease['ipa_url'] != null && latestRelease['ipa_url'].toString().isNotEmpty ? latestRelease['ipa_url'] : apkUrl)
-          : apkUrl;
+      // iOS: رابط App Store/TestFlight فقط (Apple ترفض تنزيل تطبيقات من خارج المتجر)
+      final String downloadUrl = (Platform.isIOS
+              ? latestRelease['ipa_url']
+              : latestRelease['apk_url'])
+          ?.toString() ?? '';
+      if (!isTrustedDownloadUrl(downloadUrl, isIOS: Platform.isIOS)) {
+        debugPrint('OTA: تم تجاهل رابط تحديث غير موثوق: $downloadUrl');
+        return {'status': OtaStatus.upToDate};
+      }
       final String releaseNotes = latestRelease['release_notes'] ?? 'تحديث أمان وإصلاحات عامة';
 
       // 3. مقارنة الإصدار الحالي بالإصدار الأخير

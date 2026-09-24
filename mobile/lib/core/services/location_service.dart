@@ -14,6 +14,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
 import '../constants/constants.dart';
 import 'ios_region_monitor.dart';
+import 'schedule_service.dart';
 import 'supabase_service.dart';
 
 /// خدمة للتحكم في التتبع الجغرافي للموظفين في الخلفية والتحقق من السياج الجغرافي وكشف التزييف
@@ -392,11 +393,7 @@ class LocationService {
 
       // Fallback: لو ما فيه tracking_schedule، استخدم work_schedule (الأوقات الرسمية للدوام)
       if (trackingSchedule == null) {
-        final workSchedule = await SupabaseService.client
-            .from('work_schedules')
-            .select('check_in_time, check_out_time, work_days')
-            .eq('employee_id', userId)
-            .maybeSingle();
+        final workSchedule = await ScheduleService.fetchEffectiveSchedule();
         if (workSchedule != null) {
           trackingSchedule = {
             'start_time': workSchedule['check_in_time'],

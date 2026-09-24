@@ -495,29 +495,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   );
 
                   try {
-                    // جلب معرّف الآدمن الأول لتوجيه الإشعار له
-                    final adminRes = await SupabaseService.client
-                        .from('employees')
-                        .select('id')
-                        .eq('role', 'admin')
-                        .limit(1)
-                        .maybeSingle();
-
-                    String? adminId;
-                    if (adminRes != null) {
-                      adminId = adminRes['id'] as String?;
-                    }
-
-                    // في حال لم نجد آدمن، نستخدم آدمن افتراضي أو نترك الحقل
-                    adminId ??= user.id;
-
-                    // تسجيل إشعار للأدمن
-                    await SupabaseService.client.from('notifications').insert({
-                      'employee_id': adminId,
-                      'title': 'طلب حذف حساب موظف ⚠️',
-                      'body': 'الموظف ($_employeeName) قدم طلباً لحذف حسابه. يرجى مراجعة حسابه المالي وإجراءات الإغلاق بالموافقة من لوحة الإدارة.',
-                      'type': 'system',
-                    });
+                    // الدالة ترسل الطلب لكل الأدمنية (الموظف لا يرى حساباتهم بسبب RLS)
+                    await SupabaseService.client.rpc<dynamic>('request_account_deletion');
 
                     if (mounted) {
                       Navigator.pop(context); // إغلاق مؤشر الانتظار

@@ -6,6 +6,7 @@ import UserNotifications
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
 
   private let iosLocationChannel = "com.batra.hrpro/ios_location"
+  private let deviceChannel = "com.batra.hrpro/device"
 
   override func application(
     _ application: UIApplication,
@@ -22,17 +23,36 @@ import UserNotifications
     }
     application.registerForRemoteNotifications()
 
-    if let controller = window?.rootViewController as? FlutterViewController {
-      setupIOSLocationChannel(controller: controller)
-    }
-
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
-  private func setupIOSLocationChannel(controller: FlutterViewController) {
+  // مع UIScene تكون window فارغة داخل didFinishLaunching، لذلك تُسجَّل القنوات
+  // هنا عبر الـ engine الضمني (كانت القناة لا تُسجَّل إطلاقاً في المكان القديم).
+  func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
+    GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "HRProNativeChannels") {
+      setupIOSLocationChannel(messenger: registrar.messenger())
+      setupDeviceChannel(messenger: registrar.messenger())
+    }
+  }
+
+  private func setupDeviceChannel(messenger: FlutterBinaryMessenger) {
+    let channel = FlutterMethodChannel(name: deviceChannel, binaryMessenger: messenger)
+    channel.setMethodCallHandler { call, result in
+      switch call.method {
+      case "getStableDeviceId":
+        result(StableDeviceId.get())
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+  }
+
+  private func setupIOSLocationChannel(messenger: FlutterBinaryMessenger) {
     let channel = FlutterMethodChannel(
       name: iosLocationChannel,
-      binaryMessenger: controller.binaryMessenger
+      binaryMessenger: messenger
     )
     channel.setMethodCallHandler { call, result in
       switch call.method {
@@ -110,9 +130,5 @@ import UserNotifications
     } else {
       completionHandler([.alert, .badge, .sound])
     }
-  }
-
-  func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
-    GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
   }
 }

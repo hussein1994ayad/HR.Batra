@@ -44,16 +44,20 @@ void main() async {
         debugPrint('⚠️ فشل تهيئة Supabase: $e\n$stack');
       }
     }),
-    // Firebase + Notifications — مستقلة عن Supabase
+    // Firebase ثم الإشعارات — الإشعارات المحلية (تذكيرات البصمة) تعمل حتى لو
+    // لم يُضبط Firebase بعد (iOS بدون GoogleService-Info.plist)
     Future(() async {
       try {
-        await Firebase.initializeApp(
-          options: DefaultFirebaseOptions.currentPlatform,
-        );
-        await NotificationService.init();
+        final options = DefaultFirebaseOptions.currentPlatform;
+        if (options.appId.startsWith('PLACEHOLDER')) {
+          debugPrint('⚠️ Firebase غير مضبوط لهذه المنصة — إشعارات Push معطلة.');
+        } else {
+          await Firebase.initializeApp(options: options);
+        }
       } catch (e, stack) {
-        debugPrint('⚠️ فشل تهيئة Firebase/Notifications: $e\n$stack');
+        debugPrint('⚠️ فشل تهيئة Firebase: $e\n$stack');
       }
+      await NotificationService.init();
     }),
   ]);
 

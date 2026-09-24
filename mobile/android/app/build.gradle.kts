@@ -1,9 +1,21 @@
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
     id("com.google.gms.google-services")
+}
+
+// مفاتيح التوقيع تُقرأ من android/key.properties (خارج git). انظر DEVELOPER_GUIDE.md.
+// في CI تُكتب هذه الملفات من GitHub Secrets قبل البناء.
+val keystoreProperties = Properties()
+val keystorePropertiesFile = rootProject.file("key.properties")
+val hasReleaseKeystore = keystorePropertiesFile.exists()
+if (hasReleaseKeystore) {
+    keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
 
 android {
@@ -30,14 +42,27 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (hasReleaseKeystore) {
+            create("release") {
+                keyAlias = keystoreProperties["keyAlias"] as String
+                keyPassword = keystoreProperties["keyPassword"] as String
+                storeFile = file(keystoreProperties["storeFile"] as String)
+                storePassword = keystoreProperties["storePassword"] as String
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO(android-release): استبدل بمفاتيح release keystore حقيقية
-            // عند الحصول على حساب Google Play Console:
-            //   1. أنشئ keystore: keytool -genkey -v -keystore batra.jks -alias batra ...
-            //   2. أضف key.properties (خارج git) بالمفاتيح
-            //   3. استبدل السطر أدناه بـ signingConfigs.getByName("release")
-            signingConfig = signingConfigs.getByName("debug")
+            // بدون key.properties يُوقَّع بمفتاح debug العام — لا تنشر نسخة كهذه للموظفين:
+            // أي شخص يستطيع توقيع APK بنفس المفتاح وتثبيته فوق التطبيق.
+            signingConfig = if (hasReleaseKeystore) {
+                signingConfigs.getByName("release")
+            } else {
+                logger.warn("⚠️ android/key.properties غير موجود — نسخة release موقّعة بمفتاح debug.")
+                signingConfigs.getByName("debug")
+            }
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(

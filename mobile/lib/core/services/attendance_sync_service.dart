@@ -1,12 +1,55 @@
 // =========================================================================
-// نظام HR Pro v6.0 - خدمة الكاش والمزامنة دون اتصال للحضور (Attendance Sync Service)
+// نظام HR Pro v6.0 - البصمة والمزامنة دون اتصال (Attendance Sync Service)
+// =========================================================================
+// كل بصمة تمر عبر الدالة punch_attendance في السيرفر: هي التي تحسب الوقت،
+// المسافة من الفرع، حالة التأخير، وتتحقق من الجهاز المعتمد.
+//
+// الطابور المحلي يُستعمل فقط عند انقطاع الشبكة فعلياً. أي رد من السيرفر
+// (رفض منطقي أو خطأ صلاحية) يُعرض للموظف ولا يُعاد إرساله.
 // =========================================================================
 
 import 'dart:convert';
 import 'dart:io';
-import 'package:flutter/material.dart';
+
+import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import 'device_service.dart';
 import 'supabase_service.dart';
+
+/// نتيجة محاولة البصمة.
+class PunchResult {
+  const PunchResult._({
+    required this.ok,
+    this.code,
+    this.message,
+    this.status,
+    this.offline = false,
+    this.queued = false,
+  });
+
+  /// سُجّلت في السيرفر.
+  factory PunchResult.saved(Map<String, dynamic> data) => PunchResult._(
+        ok: true,
+        status: data['status'] as String?,
+        offline: data['offline'] as bool? ?? false,
+      );
+
+  /// رفضها السيرفر لسبب منطقي (خارج النطاق، مكررة، موقع وهمي...).
+  factory PunchResult.rejected(String? code, String? message) =>
+      PunchResult._(ok: false, code: code, message: message);
+
+  /// لا يوجد اتصال — حُفظت محلياً وستُرفع لاحقاً.
+  const PunchResult.queued() : this._(ok: true, offline: true, queued: true);
+
+  final bool ok;
+  final String? code;
+  final String? message;
+  final String? status;
+  final bool offline;
+  final bool queued;
+}
 
 class AttendanceSyncService {
   static Future<File> get _cacheFile async {
@@ -17,6 +60,62 @@ class AttendanceSyncService {
   static Future<File> get _queueFile async {
     final directory = await getApplicationDocumentsDirectory();
     return File('${directory.path}/offline_punches.json');
+  }
+
+  /// هل الخطأ بسبب الشبكة؟ PostgrestException/AuthException تعني أن السيرفر ردّ.
+  static bool isNetworkError(Object error) =>
+      error is! PostgrestException && error is! AuthException;
+
+  /// تسجيل بصمة. عند انقطاع الشبكة تُحفظ في الطابور المحلي.
+  static Future<PunchResult> punch({
+    required String type,
+    required double latitude,
+    required double longitude,
+    bool isMocked = false,
+  }) async {
+    final punchTime = DateTime.now().toUtc();
+    try {
+      return await _sendPunch(
+        type: type,
+        latitude: latitude,
+        longitude: longitude,
+        isMocked: isMocked,
+      );
+    } catch (e) {
+      if (!isNetworkError(e)) rethrow;
+      debugPrint('⚠️ لا يوجد اتصال، حفظ البصمة محلياً: $e');
+      await _queueOfflinePunch({
+        'type': type,
+        'latitude': latitude,
+        'longitude': longitude,
+        'time': punchTime.toIso8601String(),
+      });
+      return const PunchResult.queued();
+    }
+  }
+
+  static Future<PunchResult> _sendPunch({
+    required String type,
+    required double latitude,
+    required double longitude,
+    bool isMocked = false,
+    DateTime? offlineTime,
+  }) async {
+    final dynamic response = await SupabaseService.client.rpc<dynamic>(
+      'punch_attendance',
+      params: {
+        'p_type': type,
+        'p_latitude': latitude,
+        'p_longitude': longitude,
+        'p_device_id': await DeviceService.getDeviceUUID(),
+        'p_is_mocked': isMocked,
+        if (offlineTime != null) 'p_client_time': offlineTime.toIso8601String(),
+      },
+    ).timeout(const Duration(seconds: 15));
+
+    final data = Map<String, dynamic>.from(response as Map);
+    if (data['ok'] == true) return PunchResult.saved(data);
+    return PunchResult.rejected(data['code'] as String?, data['message'] as String?);
   }
 
   /// حفظ تفاصيل الفرع والجدول محلياً للعمل دون اتصال بالإنترنت
@@ -32,7 +131,6 @@ class AttendanceSyncService {
         'cached_at': DateTime.now().toUtc().toIso8601String(),
       };
       await file.writeAsString(jsonEncode(data));
-      debugPrint('💾 تم حفظ بيانات الفرع والجدول في الكاش المحلي للحضور.');
     } catch (e) {
       debugPrint('❌ فشل حفظ كاش الحضور: $e');
     }
@@ -54,35 +152,22 @@ class AttendanceSyncService {
     return null;
   }
 
-  /// إضافة بصمة حضور/انصراف إلى طابور الانتظار (Queue) عند انقطاع الإنترنت
-  static Future<void> queueOfflinePunch(Map<String, dynamic> punchData) async {
-    try {
-      final file = await _queueFile;
-      List<dynamic> queue = [];
-      if (await file.exists()) {
-        final content = await file.readAsString();
-        if (content.isNotEmpty) {
-          queue = jsonDecode(content) as List<dynamic>;
-        }
-      }
-
-      // إضافة البصمة الجديدة
-      queue.add(punchData);
-      await file.writeAsString(jsonEncode(queue));
-      debugPrint('⏳ تم تسجيل البصمة محلياً وإضافتها لطابور الانتظار. إجمالي المتراكم: ${queue.length}');
-    } catch (e) {
-      debugPrint('❌ فشل إضافة البصمة للطابور المحلي: $e');
-    }
+  static Future<void> _queueOfflinePunch(Map<String, dynamic> punchData) async {
+    final queue = await getOfflinePunchesQueue();
+    queue.add(punchData);
+    await _writeQueue(queue);
   }
 
   /// قراءة الطابور المحلي للبصمات المعلقة
-  static Future<List<dynamic>> getOfflinePunchesQueue() async {
+  static Future<List<Map<String, dynamic>>> getOfflinePunchesQueue() async {
     try {
       final file = await _queueFile;
       if (await file.exists()) {
         final content = await file.readAsString();
         if (content.isNotEmpty) {
-          return jsonDecode(content) as List<dynamic>;
+          return (jsonDecode(content) as List<dynamic>)
+              .map((e) => Map<String, dynamic>.from(e as Map))
+              .toList();
         }
       }
     } catch (e) {
@@ -91,94 +176,55 @@ class AttendanceSyncService {
     return [];
   }
 
-  /// مزامنة البصمات المعلقة مع Supabase عند عودة الاتصال
-  static Future<void> syncOfflinePunches() async {
-    try {
-      final file = await _queueFile;
-      if (!await file.exists()) return;
+  static Future<void> _writeQueue(List<Map<String, dynamic>> queue) async {
+    final file = await _queueFile;
+    if (queue.isEmpty) {
+      if (await file.exists()) await file.delete();
+    } else {
+      await file.writeAsString(jsonEncode(queue));
+    }
+  }
 
-      final content = await file.readAsString();
-      if (content.isEmpty) return;
+  /// رفع البصمات المعلقة عند عودة الاتصال.
+  ///
+  /// ترجع البصمات التي رفضها السيرفر (مثلاً أقدم من 48 ساعة) ليُبلَّغ الموظف؛
+  /// هذه تُحذف من الطابور ولا يعاد إرسالها. فشل الشبكة يُبقيها للمحاولة القادمة.
+  static Future<List<PunchResult>> syncOfflinePunches() async {
+    final queue = await getOfflinePunchesQueue();
+    if (queue.isEmpty) return const [];
 
-      final List<dynamic> queue = jsonDecode(content) as List<dynamic>;
-      if (queue.isEmpty) return;
+    final remaining = <Map<String, dynamic>>[];
+    final rejected = <PunchResult>[];
 
-      debugPrint('🔄 جارٍ مزامنة ${queue.length} بصمة حضور معلقة مع السيرفر...');
+    for (final punch in queue) {
+      final time = DateTime.tryParse(punch['time'] as String? ?? '');
+      final lat = (punch['latitude'] as num?)?.toDouble();
+      final lng = (punch['longitude'] as num?)?.toDouble();
+      final type = punch['type'] as String?;
+      if (time == null || lat == null || lng == null || type == null) continue;
 
-      List<dynamic> remainingQueue = [];
-
-      for (var punch in queue) {
-        try {
-          final String employeeId = punch['employee_id'];
-          final String workDate = punch['work_date'];
-          final String type = punch['type']; // 'check_in' or 'check_out'
-          final double lat = punch['latitude'];
-          final double lng = punch['longitude'];
-          final String time = punch['time'];
-          final String branchId = punch['branch_id'];
-          final String status = punch['status'];
-
-          // جلب السجل الموجود لليوم إن وجد لتحديثه (upsert)
-          final existing = await SupabaseService.client
-              .from('attendance')
-              .select()
-              .eq('employee_id', employeeId)
-              .eq('work_date', workDate)
-              .maybeSingle();
-
-          if (existing != null) {
-            // تحديث السجل الحالي بالبصمة الجديدة
-            if (type == 'check_in') {
-              await SupabaseService.client.from('attendance').update({
-                'check_in_time': time,
-                'check_in_lat': lat,
-                'check_in_lng': lng,
-                'status': status,
-              }).eq('id', existing['id']);
-            } else {
-              await SupabaseService.client.from('attendance').update({
-                'check_out_time': time,
-                'check_out_lat': lat,
-                'check_out_lng': lng,
-                'status': status,
-              }).eq('id', existing['id']);
-            }
-          } else {
-            // إدراج سجل جديد
-            final Map<String, dynamic> insertData = {
-              'employee_id': employeeId,
-              'branch_id': branchId,
-              'work_date': workDate,
-              'status': status,
-            };
-            if (type == 'check_in') {
-              insertData['check_in_time'] = time;
-              insertData['check_in_lat'] = lat;
-              insertData['check_in_lng'] = lng;
-            } else {
-              insertData['check_out_time'] = time;
-              insertData['check_out_lat'] = lat;
-              insertData['check_out_lng'] = lng;
-            }
-            await SupabaseService.client.from('attendance').insert(insertData);
-          }
-        } catch (e) {
-          debugPrint('⚠️ فشل مزامنة بصمة محددة: $e');
-          remainingQueue.add(punch); // Keep failed punches in queue
+      try {
+        final result = await _sendPunch(
+          type: type,
+          latitude: lat,
+          longitude: lng,
+          offlineTime: time,
+        );
+        // مكررة = سبق رفعها؛ لا داعي لإزعاج الموظف
+        if (!result.ok && !(result.code?.startsWith('already_') ?? false)) {
+          rejected.add(result);
+        }
+      } catch (e) {
+        if (isNetworkError(e)) {
+          remaining.add(punch);
+        } else {
+          debugPrint('⚠️ رفض السيرفر بصمة محفوظة: $e');
+          rejected.add(PunchResult.rejected('server_error', e.toString()));
         }
       }
-
-      if (remainingQueue.isEmpty) {
-        // حذف ملف الطابور بعد نجاح المزامنة كلياً
-        await file.delete();
-        debugPrint('✅ تم مزامنة كافة البصمات المعلقة بنجاح وحذف ملف الطابور.');
-      } else {
-        // تحديث الملف بالبصمات المتبقية
-        await file.writeAsString(jsonEncode(remainingQueue));
-        debugPrint('⚠️ تم مزامنة بعض البصمات. تبقى ${remainingQueue.length} بصمة لإعادة المحاولة.');
-      }
-    } catch (e) {
-      debugPrint('⚠️ فشل مزامنة البصمات المعلقة: $e');
     }
+
+    await _writeQueue(remaining);
+    return rejected;
   }
 }

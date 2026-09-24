@@ -85,23 +85,11 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
           .eq('employee_id', user.id)
           .maybeSingle();
 
+      // سطر الرصيد يُنشأ ويُحدَّث تلقائياً من قاعدة البيانات
+      // (trg_create_default_leave_balance و trg_apply_leave_balance_change)
       if (data != null) {
         setState(() {
           _balances = data;
-        });
-      } else {
-        // إذا لم يكن لديه سجل رصيد إجازات، ننشئه تلقائياً
-        final defaultBalance = {
-          'employee_id': user.id,
-          'annual_entitlement': 21,
-          'annual_used': 0,
-          'sick_entitlement': 15,
-          'sick_used': 0,
-        };
-        await SupabaseService.client.from('leave_balances').insert(defaultBalance);
-        if (!mounted) return;
-        setState(() {
-          _balances = defaultBalance;
         });
       }
     } catch (e) {
@@ -295,21 +283,6 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
         'status': 'pending',
       });
 
-      // جلب اسم الموظف الحالي لإدراجه في نص إشعار المسؤولين
-      String empName = 'موظف';
-      try {
-        final empProfile = await SupabaseService.client
-            .from('employees')
-            .select('full_name')
-            .eq('id', user.id)
-            .maybeSingle();
-        if (empProfile != null && empProfile['full_name'] != null) {
-          empName = empProfile['full_name'];
-        }
-      } catch (e) {
-        debugPrint('خطأ في جلب اسم الموظف: $e');
-      }
-
       // 4. إشعار بنجاح تقديم الطلب للموظف نفسه
       await SupabaseService.client.from('notifications').insert({
         'employee_id': user.id,
@@ -318,26 +291,7 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
         'type': 'leave',
       });
 
-      // 5. إشعار المدراء والمسؤولين
-      try {
-        final List<dynamic> admins = await SupabaseService.client
-            .from('employees')
-            .select('id')
-            .or('role.eq.admin,role.eq.manager');
-        
-        for (var admin in admins) {
-          if (admin['id'] != null && admin['id'] != user.id) {
-            await SupabaseService.client.from('notifications').insert({
-              'employee_id': admin['id'],
-              'title': 'طلب إجازة جديد معلق 📝',
-              'body': 'قدم الموظف ($empName) طلب إجازة جديد. يرجى المراجعة والاتخاذ من لوحة الإدارة.',
-              'type': 'leave',
-            });
-          }
-        }
-      } catch (e) {
-        debugPrint('خطأ في إرسال إشعارات الإجازة للمسؤولين: $e');
-      }
+      // إشعار المدراء بالطلب الجديد يُرسل من قاعدة البيانات (trg_notify_admins_new_leave_request)
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

@@ -3,15 +3,15 @@
 // =========================================================================
 
 import 'dart:async';
-import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:dio/dio.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 import '../../core/services/supabase_service.dart';
 import '../../core/services/attendance_sync_service.dart';
+import '../../core/services/schedule_service.dart';
 import '../../core/services/location_service.dart';
 import '../../core/services/notification_service.dart';
 import '../../core/theme/app_theme.dart';
@@ -228,7 +228,15 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
 
       // 5. محاولة جلب أحدث بيانات الفرع والجدول والبصمات من Supabase بشكل متوازي
       final todayStr = DateTime.now().toIso8601String().split('T')[0];
+      String? syncWarning;
       try {
+        // رفع البصمات المحفوظة أوفلاين أولاً حتى تظهر حالة اليوم الصحيحة
+        final rejectedPunches = await AttendanceSyncService.syncOfflinePunches();
+        if (rejectedPunches.isNotEmpty) {
+          syncWarning = rejectedPunches.first.message ??
+              'تعذر اعتماد بصمة محفوظة بدون إنترنت. راجع الإدارة.';
+        }
+
         final List<Future<dynamic>> parallelQueries = [
           SupabaseService.client
               .from('employees')
@@ -255,20 +263,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
           _branchLng = (branch['longitude'] as num).toDouble();
           _branchRadius = (branch['radius_meters'] as num).toDouble();
 
-          final List<String> orFilters = ['employee_id.eq.${user.id}'];
-          if (empData['department_id'] != null) {
-            orFilters.add('department_id.eq.${empData['department_id']}');
-          }
-          if (empData['branch_id'] != null) {
-            orFilters.add('branch_id.eq.${empData['branch_id']}');
-          }
-
-          final schedData = await SupabaseService.client
-              .from('work_schedules')
-              .select()
-              .or(orFilters.join(','))
-              .limit(1)
-              .maybeSingle();
+          final schedData = await ScheduleService.fetchEffectiveSchedule();
 
           _workSchedule = schedData;
 
@@ -279,8 +274,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
           );
         }
 
-        _todayAttendance = attendanceData;
-        AttendanceSyncService.syncOfflinePunches();
+        _todayAttendance = attendanceData as Map<String, dynamic>?;
 
       } catch (networkError) {
         debugPrint('⚠️ وضع الأوفلاين نشط: $networkError');
@@ -288,9 +282,12 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
 
       // 6. دمج البصمات المحلية المعلقة في طابور التزامن
       final offlinePunches = await AttendanceSyncService.getOfflinePunchesQueue();
-      final todayOfflinePunches = offlinePunches.where((p) => p['work_date'] == todayStr).toList();
-      
-      Map<String, dynamic> combinedAttendance = _todayAttendance != null 
+      final todayOfflinePunches = offlinePunches.where((p) {
+        final time = DateTime.tryParse(p['time'] as String? ?? '')?.toLocal();
+        return time != null && time.toIso8601String().startsWith(todayStr);
+      }).toList();
+
+      final Map<String, dynamic> combinedAttendance = _todayAttendance != null 
           ? Map<String, dynamic>.from(_todayAttendance!) 
           : {};
 
@@ -299,17 +296,16 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
           combinedAttendance['check_in_time'] = punch['time'];
           combinedAttendance['check_in_lat'] = punch['latitude'];
           combinedAttendance['check_in_lng'] = punch['longitude'];
-          combinedAttendance['status'] = punch['status'];
         } else if (punch['type'] == 'check_out') {
           combinedAttendance['check_out_time'] = punch['time'];
           combinedAttendance['check_out_lat'] = punch['latitude'];
           combinedAttendance['check_out_lng'] = punch['longitude'];
-          combinedAttendance['status'] = punch['status'];
         }
       }
 
       if (mounted) {
         setState(() {
+          if (syncWarning != null) _errorMessage = syncWarning;
           if (combinedAttendance.isNotEmpty) {
             _todayAttendance = combinedAttendance;
             if (combinedAttendance['check_in_time'] != null && combinedAttendance['check_out_time'] == null) {
@@ -348,7 +344,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
     }
   }
 
-  // إجراء عملية البصمة (حضور أو انصراف) - فوري وفائق السرعة دون أي تأخير شبكة مصطنع
+  // إجراء عملية البصمة (حضور أو انصراف). السيرفر يحسب الوقت والمسافة والحالة؛
+  // الفحوصات المحلية هنا فقط لإظهار رسالة فورية قبل الإرسال.
   Future<void> _handleAttendanceSubmit() async {
     if (_currentPosition == null || _branchId == null || _mockDetected) return;
 
@@ -359,186 +356,55 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
 
     final user = SupabaseService.currentUser;
     if (user == null) return;
+    final punchType = _selectedPunchType;
+    final position = _currentPosition!;
 
     try {
-      // 1. حساب المسافة الجغرافية الفاصلة بين الموظف وحدود الفرع (محلياً)
-      double distanceInMeters = Geolocator.distanceBetween(
-        _currentPosition!.latitude,
-        _currentPosition!.longitude,
+      final double distanceInMeters = Geolocator.distanceBetween(
+        position.latitude,
+        position.longitude,
         _branchLat,
         _branchLng,
       );
-
       if (distanceInMeters > _branchRadius) {
         final double outOfRange = distanceInMeters - _branchRadius;
         throw Exception('أنت خارج نطاق الفرع الجغرافي المسموح به للتبصيم. المتبقي لتصل للفرع: ${outOfRange.toStringAsFixed(1)} متر.');
       }
-
-      // التوقيت المباشر الدقيق
-      final now = DateTime.now();
-      final String todayStr = now.toIso8601String().split('T')[0];
-      final String nowUtcStr = now.toUtc().toIso8601String();
-
-      // تحديد حالة البصمة (حاضر/متأخر/خروج مبكر) محلياً بناءً على الجدول المتاح
-      final status = _selectedPunchType == 'check_in' 
-          ? _determineAttendanceStatus() 
-          : _determineCheckOutStatus(_todayAttendance?['status'] ?? 'present');
-
-      bool isSynced = true;
-
-      try {
-        if (_selectedPunchType == 'check_in') {
-          // فحص ما إذا كان قد سجّل حضور بالفعل
-          if (_todayAttendance != null && _todayAttendance!['check_in_time'] != null) {
-            throw Exception('لقد قمت بتسجيل بصمة الحضور مسبقاً لهذا اليوم!');
-          }
-          
-          if (_todayAttendance != null) {
-            // يوجد سطر (مثلاً تبصم انصراف أولاً بالخطأ)، نقوم بتحديث الحضور فيه
-            await SupabaseService.client.from('attendance').update({
-              'check_in_time': nowUtcStr,
-              'check_in_lat': _currentPosition!.latitude,
-              'check_in_lng': _currentPosition!.longitude,
-              'status': status,
-            }).eq('employee_id', user.id).eq('work_date', todayStr);
-          } else {
-            // سطر جديد بالكامل
-            await SupabaseService.client.from('attendance').insert({
-              'employee_id': user.id,
-              'branch_id': _branchId,
-              'check_in_time': nowUtcStr,
-              'check_in_lat': _currentPosition!.latitude,
-              'check_in_lng': _currentPosition!.longitude,
-              'status': status,
-              'work_date': todayStr,
-            });
-          }
-
-          // تسجيل نقطة انطلاق التتبع في جدول location_tracking
-          try {
-            await SupabaseService.client.from('location_tracking').insert({
-              'employee_id': user.id,
-              'latitude': _currentPosition!.latitude,
-              'longitude': _currentPosition!.longitude,
-              'battery_level': 100,
-              'is_moving': false,
-              'timestamp': nowUtcStr,
-            });
-          } catch (_) {}
-
-          // تسجيل إشعار بنجاح الحضور في السيرفر
-          try {
-            await SupabaseService.client.from('notifications').insert({
-              'employee_id': user.id,
-              'title': 'بصمة حضور ناجحة 🟢',
-              'body': 'تم تسجيل حضورك اليوم بنجاح في فرع ($_branchName). دواماً موفقاً!',
-              'type': 'attendance',
-            });
-          } catch (_) {}
-        } else {
-          // تسجيل انصراف
-          if (_todayAttendance != null && _todayAttendance!['check_out_time'] != null) {
-            throw Exception('لقد قمت بتسجيل بصمة الانصراف مسبقاً لهذا اليوم!');
-          }
-
-          if (_todayAttendance == null) {
-            // لم يبصم حضور اليوم! ننشئ بصمة انصراف مع Missed Check-in ونوع دوام نصف يوم
-            await SupabaseService.client.from('attendance').insert({
-              'employee_id': user.id,
-              'branch_id': _branchId,
-              'check_out_time': nowUtcStr,
-              'check_out_lat': _currentPosition!.latitude,
-              'check_out_lng': _currentPosition!.longitude,
-              'status': 'half_day',
-              'work_date': todayStr,
-            });
-          } else {
-            // تحديث بصمة الانصراف
-            await SupabaseService.client.from('attendance').update({
-              'check_out_time': nowUtcStr,
-              'check_out_lat': _currentPosition!.latitude,
-              'check_out_lng': _currentPosition!.longitude,
-              'status': status,
-            }).eq('employee_id', user.id).eq('work_date', todayStr);
-          }
-
-          // تسجيل نقطة الانصراف في جدول location_tracking
-          try {
-            await SupabaseService.client.from('location_tracking').insert({
-              'employee_id': user.id,
-              'latitude': _currentPosition!.latitude,
-              'longitude': _currentPosition!.longitude,
-              'battery_level': 100,
-              'is_moving': false,
-              'timestamp': nowUtcStr,
-            });
-          } catch (_) {}
-
-          // تسجيل إشعار بنجاح الانصراف في السيرفر
-          try {
-            await SupabaseService.client.from('notifications').insert({
-              'employee_id': user.id,
-              'title': 'بصمة انصراف ناجحة 🔴',
-              'body': 'تم تسجيل انصرافك بنجاح من فرع ($_branchName). يعطيك العافية!',
-              'type': 'attendance',
-            });
-          } catch (_) {}
-        }
-      } catch (networkError) {
-        debugPrint('⚠️ تعذر الاتصال بالسيرفر لتسجيل البصمة. سيتم حفظها محلياً: $networkError');
-        
-        // التحقق الإضافي لمنع تكرار البصمة محلياً
-        if (_selectedPunchType == 'check_in' && _todayAttendance != null && _todayAttendance!['check_in_time'] != null) {
-          throw Exception('لقد قمت بتسجيل بصمة الحضور مسبقاً لهذا اليوم (محلياً)!');
-        }
-        if (_selectedPunchType == 'check_out' && _todayAttendance != null && _todayAttendance!['check_out_time'] != null) {
-          throw Exception('لقد قمت بتسجيل بصمة الانصراف مسبقاً لهذا اليوم (محلياً)!');
-        }
-
-        isSynced = false;
-
-        // حفظ البصمة في طابور الانتظار المحلي
-        final punchData = {
-          'employee_id': user.id,
-          'branch_id': _branchId,
-          'work_date': todayStr,
-          'type': _selectedPunchType,
-          'latitude': _currentPosition!.latitude,
-          'longitude': _currentPosition!.longitude,
-          'time': nowUtcStr,
-          'status': status,
-        };
-        await AttendanceSyncService.queueOfflinePunch(punchData);
+      if (punchType == 'check_in' && _todayAttendance?['check_in_time'] != null) {
+        throw Exception('لقد قمت بتسجيل بصمة الحضور مسبقاً لهذا اليوم!');
+      }
+      if (punchType == 'check_out' && _todayAttendance?['check_out_time'] != null) {
+        throw Exception('لقد قمت بتسجيل بصمة الانصراف مسبقاً لهذا اليوم!');
       }
 
-      // تشغيل التتبع الجغرافي عند الحضور أو إيقافه عند الانصراف فوراً
-      if (_selectedPunchType == 'check_in') {
-        LocationService.recordInstantLocation(
-          employeeId: user.id,
-          latitude: _currentPosition!.latitude,
-          longitude: _currentPosition!.longitude,
-        );
-        LocationService.startTracking(employeeId: user.id);
-        NotificationService.cancelTodayCheckInReminder();
+      final result = await AttendanceSyncService.punch(
+        type: punchType,
+        latitude: position.latitude,
+        longitude: position.longitude,
+        isMocked: position.isMocked,
+      );
+      if (!result.ok) {
+        throw Exception(result.message ?? 'تعذر تسجيل البصمة، حاول مرة أخرى.');
+      }
+
+      // تشغيل التتبع الجغرافي عند الحضور أو إيقافه عند الانصراف
+      if (punchType == 'check_in') {
+        unawaited(LocationService.startTracking(employeeId: user.id));
+        unawaited(NotificationService.cancelTodayCheckInReminder());
       } else {
-        LocationService.recordInstantLocation(
-          employeeId: user.id,
-          latitude: _currentPosition!.latitude,
-          longitude: _currentPosition!.longitude,
-        );
-        LocationService.stopTracking();
-        NotificationService.cancelTodayCheckInReminder();
-        NotificationService.cancelTodayCheckOutReminder();
+        unawaited(LocationService.stopTracking());
+        unawaited(NotificationService.cancelTodayCheckInReminder());
+        unawaited(NotificationService.cancelTodayCheckOutReminder());
       }
 
-      // إظهار حوار النجاح (مع توضيح حالة الحفظ المحلي إن كان أوفلاين)
       if (mounted) {
-        _showSuccessDialog(_selectedPunchType == 'check_in', isSynced);
+        _showSuccessDialog(punchType == 'check_in', !result.queued);
       }
 
-      // تحديث البيانات بعد البصمة
-      _initLocationAndBranch();
-
+      unawaited(_initLocationAndBranch());
+    } on PostgrestException catch (e) {
+      // رفض صريح من السيرفر (جهاز غير معتمد، حساب معطل...)
+      if (mounted) setState(() => _errorMessage = e.message);
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -552,63 +418,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
         });
       }
     }
-  }
-
-  // تحديد حالة الدخول (مثال: متأخر أو حاضر طبقاً لدوام الشركة)
-  String _determineAttendanceStatus() {
-    final now = DateTime.now();
-    if (_workSchedule != null && _workSchedule!['check_in_time'] != null) {
-      try {
-        final timeStr = _workSchedule!['check_in_time'] as String;
-        final parts = timeStr.split(':');
-        final int schedHour = int.parse(parts[0]);
-        final int schedMin = int.parse(parts[1]);
-        final int grace = _workSchedule!['grace_period_minutes'] ?? 15;
-        
-        final deadline = DateTime(now.year, now.month, now.day, schedHour, schedMin).add(Duration(minutes: grace));
-        if (now.isAfter(deadline)) {
-          return 'late';
-        }
-        return 'present';
-      } catch (e) {
-        debugPrint('خطأ في تحليل موعد الحضور: $e');
-      }
-    }
-    // افتراضاً: الدوام يبدأ الساعة 08:30 صباحاً
-    final checkInDeadline = DateTime(now.year, now.month, now.day, 8, 45); // 15 دقيقة فترة سماح
-    if (now.isAfter(checkInDeadline)) {
-      return 'late';
-    }
-    return 'present';
-  }
-
-  // تحديد خروج مبكر (يُعتبر نصف يوم)
-  String _determineCheckOutStatus(String currentStatus) {
-    final now = DateTime.now();
-    if (_workSchedule != null && _workSchedule!['check_out_time'] != null) {
-      try {
-        final timeStr = _workSchedule!['check_out_time'] as String;
-        final parts = timeStr.split(':');
-        final int schedHour = int.parse(parts[0]);
-        final int schedMin = int.parse(parts[1]);
-        
-        final scheduledCheckout = DateTime(now.year, now.month, now.day, schedHour, schedMin);
-        
-        // خروج مبكر بأكثر من 15 دقيقة يعتبر نصف يوم
-        if (now.isBefore(scheduledCheckout.subtract(const Duration(minutes: 15)))) {
-          return 'half_day';
-        }
-        return currentStatus;
-      } catch (e) {
-        debugPrint('خطأ في تحليل موعد الانصراف: $e');
-      }
-    }
-    // افتراضاً: الانصراف الساعة 16:30 مساءً (4:30)
-    final checkOutTime = DateTime(now.year, now.month, now.day, 16, 30);
-    if (now.isBefore(checkOutTime.subtract(const Duration(minutes: 15)))) {
-      return 'half_day';
-    }
-    return currentStatus;
   }
 
   void _showSuccessDialog(bool isCheckIn, bool isSynced) {
