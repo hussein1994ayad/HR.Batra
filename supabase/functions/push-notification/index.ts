@@ -67,22 +67,49 @@ async function getAccessToken(email: string, key: string): Promise<string> {
 // ==========================================
 // Main handler
 // ==========================================
+const jsonResponse = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+
 Deno.serve(async (req: Request) => {
   try {
-    const payload = await req.json();
-    console.log("Received payload:", JSON.stringify(payload));
-
-    // The webhook sends { type, table, record, ... }
-    const record = payload.record;
-    if (!record || !record.employee_id) {
-      console.log("No employee_id in record, skipping.");
-      return new Response(JSON.stringify({ status: "skipped", reason: "no employee_id" }), {
-        headers: { "Content-Type": "application/json" },
-      });
+    // Optional shared secret: set WEBHOOK_SECRET in the function secrets and
+    // send the same value in the `x-webhook-secret` header of the DB webhook.
+    const webhookSecret = Deno.env.get("WEBHOOK_SECRET");
+    if (webhookSecret && req.headers.get("x-webhook-secret") !== webhookSecret) {
+      return jsonResponse({ error: "unauthorized" }, 401);
     }
+
+    const payload = await req.json();
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+
+    // The webhook sends { type, table, record, ... }. Never trust the payload's
+    // title/body: anyone holding the public anon key can call this function.
+    // Re-read the notification by id so only rows that really exist get pushed.
+    const notificationId = payload?.record?.id;
+    if (typeof notificationId !== "string" || !/^[0-9a-f-]{36}$/i.test(notificationId)) {
+      return jsonResponse({ status: "skipped", reason: "no notification id" });
+    }
+
+    const notifRes = await fetch(
+      `${supabaseUrl}/rest/v1/notifications?id=eq.${notificationId}&select=id,employee_id,title,body,type,created_at`,
+      { headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}` } },
+    );
+    const notifRows = notifRes.ok ? await notifRes.json() : [];
+    const record = notifRows[0];
+    if (!record || !record.employee_id) {
+      return jsonResponse({ status: "skipped", reason: "notification not found" });
+    }
+
+    // Replays of old notifications are ignored.
+    if (Date.now() - new Date(record.created_at).getTime() > 10 * 60 * 1000) {
+      return jsonResponse({ status: "skipped", reason: "stale notification" });
+    }
+    console.log(`Pushing notification ${record.id} to employee ${record.employee_id}`);
 
     const tokens: string[] = [];
 

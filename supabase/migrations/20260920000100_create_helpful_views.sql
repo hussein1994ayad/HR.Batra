@@ -11,12 +11,20 @@
 -- Rollback: DROP VIEW ... CASCADE for each view below.
 -- =========================================================================
 
+-- security_invoker = true: الـ View يُنفَّذ بصلاحيات المستخدم الذي يستعلم،
+-- فتنطبق عليه سياسات RLS للجداول الأصلية (بدونها يرى أي موظف بيانات الجميع).
+
+-- أعمدة سبب الرفض (تستخدمها الـ Views وإشعارات القرار في 20260920000300)
+ALTER TABLE loans          ADD COLUMN IF NOT EXISTS rejection_reason TEXT;
+ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS rejection_reason TEXT;
+
 
 -- =====================================================================
 -- v_attendance_with_employee
 -- الحضور + اسم الموظف + قسم + فرع في استعلام واحد
 -- =====================================================================
-CREATE OR REPLACE VIEW v_attendance_with_employee AS
+CREATE OR REPLACE VIEW v_attendance_with_employee
+WITH (security_invoker = true) AS
 SELECT
     a.id,
     a.employee_id,
@@ -49,14 +57,15 @@ COMMENT ON VIEW v_attendance_with_employee IS
 -- v_loans_summary
 -- السلف + عدد الأقساط المدفوعة + المتبقي المحسوب
 -- =====================================================================
-CREATE OR REPLACE VIEW v_loans_summary AS
+CREATE OR REPLACE VIEW v_loans_summary
+WITH (security_invoker = true) AS
 SELECT
     l.id,
     l.employee_id,
     e.full_name        AS employee_name,
     e.employee_code,
     l.amount,
-    l.installments,
+    l.installment_count,
     l.installment_amount,
     l.pledge_url,
     l.status,
@@ -85,7 +94,8 @@ COMMENT ON VIEW v_loans_summary IS
 -- v_leaves_with_employee
 -- طلبات الإجازات + اسم الموظف + رصيد الإجازات الحالي
 -- =====================================================================
-CREATE OR REPLACE VIEW v_leaves_with_employee AS
+CREATE OR REPLACE VIEW v_leaves_with_employee
+WITH (security_invoker = true) AS
 SELECT
     lr.id,
     lr.employee_id,
@@ -122,7 +132,8 @@ COMMENT ON VIEW v_leaves_with_employee IS
 -- v_payroll_with_employee
 -- كشوف رواتب + اسم الموظف والقسم للتقارير
 -- =====================================================================
-CREATE OR REPLACE VIEW v_payroll_with_employee AS
+CREATE OR REPLACE VIEW v_payroll_with_employee
+WITH (security_invoker = true) AS
 SELECT
     s.id,
     s.employee_id,
@@ -152,7 +163,8 @@ COMMENT ON VIEW v_payroll_with_employee IS
 -- v_device_requests
 -- طلبات الأجهزة الجديدة المعلقة (لموافقة الأدمن)
 -- =====================================================================
-CREATE OR REPLACE VIEW v_device_requests AS
+CREATE OR REPLACE VIEW v_device_requests
+WITH (security_invoker = true) AS
 SELECT
     ed.id,
     ed.employee_id,
@@ -177,7 +189,8 @@ COMMENT ON VIEW v_device_requests IS
 -- v_security_incidents
 -- محاولات الاختراق والتزييف الأخيرة للمراقبة
 -- =====================================================================
-CREATE OR REPLACE VIEW v_security_incidents AS
+CREATE OR REPLACE VIEW v_security_incidents
+WITH (security_invoker = true) AS
 SELECT
     'mock_gps'::TEXT   AS incident_type,
     m.id,

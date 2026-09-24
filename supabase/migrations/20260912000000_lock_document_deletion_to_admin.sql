@@ -1,8 +1,10 @@
--- äÙÇã HR Pro v6.0 - ÍÕÑ ÕáÇÍíÉ ÍĞİ ÇáæËÇÆŞ æÇáãÓÊäÏÇÊ ÈÇáÂÏãä æÇáãÏÑÇÁ İŞØ
-DROP POLICY IF EXISTS " \Employees can delete own employee-documents\\ ON storage.objects;
-DROP POLICY IF EXISTS \\Only admins and managers can delete employee-documents\\ ON storage.objects;
+-- =========================================================================
+-- Ù†Ø¸Ø§Ù… HR Pro v6.0 - Ù‚ÙÙ„ Ø­Ø°Ù Ù…Ø³ØªÙ†Ø¯Ø§Øª Ø§Ù„Ù…ÙˆØ¸ÙÙŠÙ† Ø¹Ù„Ù‰ Ø§Ù„Ø£Ø¯Ù…Ù† ÙˆØ§Ù„Ù…Ø¯Ø±Ø§Ø¡ ÙÙ‚Ø·
+-- =========================================================================
+DROP POLICY IF EXISTS "Employees can delete own employee-documents" ON storage.objects;
+DROP POLICY IF EXISTS "Only admins and managers can delete employee-documents" ON storage.objects;
 
-CREATE POLICY \\Only admins and managers can delete employee-documents\\ ON storage.objects
- FOR DELETE TO authenticated USING (
- bucket_id = 'employee-documents' AND (is_admin() OR is_manager())
- );
+CREATE POLICY "Only admins and managers can delete employee-documents" ON storage.objects
+  FOR DELETE TO authenticated USING (
+    bucket_id = 'employee-documents' AND (is_admin() OR is_manager())
+  );

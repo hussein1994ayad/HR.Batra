@@ -14,43 +14,44 @@
 -- SECTION 1 — RPC documentation
 -- =====================================================================
 
-COMMENT ON FUNCTION public.is_admin(uuid) IS
-'يعيد TRUE إذا كان المستخدم المعطى دوره admin. يُستخدم في RLS policies.';
+COMMENT ON FUNCTION public.is_admin() IS
+'يعيد TRUE إذا كان المستخدم الحالي (auth.uid) أدمن فعّال. يُستخدم في RLS policies.';
 
-COMMENT ON FUNCTION public.is_manager(uuid) IS
-'يعيد TRUE إذا كان المستخدم manager أو admin. يستخدم في RLS policies للصلاحيات الوسيطة.';
+COMMENT ON FUNCTION public.is_manager() IS
+'يعيد TRUE إذا كان المستخدم الحالي manager فعّال (لا يشمل admin). يستخدم في RLS policies.';
 
 COMMENT ON FUNCTION public.perform_daily_cleanup() IS
 'التنظيف اليومي المؤتمت: يفرغ سلة المحذوفات بعد 30 يوم ويؤرشف بيانات التتبع القديمة.
 يُستدعى من Edge Function daily-cleanup أو من pg_cron. يعيد قائمة الملفات المطلوب حذفها من التخزين.';
 
-COMMENT ON FUNCTION public.safe_delete_employee(uuid, text) IS
-'حذف آمن لموظف: ينقله لجدول archived_employees مع سبب الأرشفة بدلاً من الحذف النهائي.
-يحافظ على سجلات الحضور والرواتب لأغراض الامتثال والضرائب.';
+COMMENT ON FUNCTION public.safe_delete_employee(uuid) IS
+'حذف آمن لموظف: يخفي هويته (الاسم، الهاتف، البريد، المستندات)، يحذف أجهزته وتوكناته وحساب المصادقة،
+ويُبقي سجلات الحضور والرواتب لأغراض المحاسبة. للأدمن والمدير فقط (لا يحذف المدير أدمن).';
 
 COMMENT ON FUNCTION public.hard_delete_employee(uuid) IS
-'حذف نهائي لموظف من قاعدة البيانات وجميع الجداول المرتبطة. لا يمكن التراجع عنه.
-يستخدم فقط في حال طلب المستخدم حذف بياناته بموجب GDPR.';
+'غلاف متوافق مع الإصدارات القديمة يستدعي safe_delete_employee بنفس الصلاحيات.';
 
-COMMENT ON FUNCTION public.create_employee_secure(text, text, text, uuid, uuid, text) IS
+COMMENT ON FUNCTION public.create_employee_secure(text, text, text, text, text, uuid, numeric, text[], text, uuid, date, uuid) IS
 'إنشاء موظف جديد مع حساب Supabase Auth مربوط. مقفل على الأدمن فقط.
-البارامترات: full_name, employee_code, email, department_id, branch_id, role.
+البارامترات: email, password, full_name, phone, role, branch_id, monthly_salary_iqd,
+document_urls, employee_code, employee_id?, join_date?, department_id?.
 يعيد UUID الموظف الجديد.';
 
-COMMENT ON FUNCTION public.update_employee_credentials(uuid, text, text) IS
+COMMENT ON FUNCTION public.update_employee_credentials(uuid, text, text, text) IS
 'تحديث كلمة المرور و/أو البريد الإلكتروني لموظف. مقفل على الأدمن.
-البارامترات: employee_id, new_email, new_password.';
+البارامترات: employee_id, email, password?, phone?.';
 
-COMMENT ON FUNCTION public.safe_archive_payroll_month(text) IS
-'أرشفة كشوف رواتب شهر معيّن ومنع تعديلها لاحقاً. البارامتر: work_month بصيغة YYYY-MM.';
+COMMENT ON FUNCTION public.safe_archive_payroll_month(text, integer, integer) IS
+'أرشفة شهر مالي معتمد: تحذف الحضور والخصومات التفصيلية للدورة وتقفل الشهر. مقفل على الأدمن.
+البارامترات: work_month بصيغة YYYY-MM، يوم بداية ونهاية الدورة.';
 
-COMMENT ON FUNCTION public.manual_purge_month_data(text) IS
-'حذف يدوي فوري لكل بيانات شهر معين من جدول location_tracking فقط.
-يستخدم في حال الحاجة لتفريغ مساحة قاعدة البيانات. البارامتر: YYYY-MM.';
+COMMENT ON FUNCTION public.manual_purge_month_data(integer, integer, boolean, boolean, boolean) IS
+'حذف يدوي لبيانات شهر معيّن حسب الخيارات: الإشعارات، التتبع (نقاط، وقفات، مخالفات)، سجلات الحضور.
+مقفل على الأدمن. البارامترات: السنة، الشهر، ثلاث قيم منطقية.';
 
-COMMENT ON FUNCTION public.send_idempotent_notification(uuid, text, text, text) IS
+COMMENT ON FUNCTION public.send_idempotent_notification(uuid, text, text, text, integer) IS
 'إرسال إشعار دون تكرار: يفحص إذا كان إشعار بنفس المحتوى موجود لنفس الموظف اليوم قبل الإدراج.
-البارامترات: employee_id, title, body, type. يعيد UUID الإشعار المنشأ أو الموجود.';
+البارامترات: employee_id, title, body, type, نافذة التكرار بالدقائق. يعيد TRUE إذا أُدرج إشعار جديد.';
 
 COMMENT ON FUNCTION public.get_database_size() IS
 'يعيد حجم قاعدة البيانات الحالي بالبايت. يستخدم في شاشة storage_stats.';
@@ -203,7 +204,7 @@ ALTER TABLE audit_log ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "audit_log admin read" ON audit_log;
 CREATE POLICY "audit_log admin read"
     ON audit_log FOR SELECT
-    USING (is_admin(auth.uid()));
+    USING (is_admin());
 
 -- لا نسمح لأحد بالكتابة المباشرة — Trigger فقط
 DROP POLICY IF EXISTS "audit_log no direct writes" ON audit_log;
