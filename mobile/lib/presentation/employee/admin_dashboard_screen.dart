@@ -2,15 +2,18 @@
 // نظام HR Pro v6.0 - لوحة تحكم وإدارة المدراء والأدمن (Admin/Manager Dashboard Screen)
 // =========================================================================
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../core/constants/constants.dart';
+import '../../core/routes/app_router.dart';
 import '../../core/services/supabase_service.dart';
 import '../../core/theme/app_theme.dart';
-import 'package:go_router/go_router.dart';
-import '../../core/routes/app_router.dart';
 import '../shared/widgets/glass_background.dart';
 import '../shared/widgets/glass_container.dart';
-import '../../core/constants/constants.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -107,10 +110,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
       if (initFutures.isNotEmpty) {
         final results = await Future.wait(initFutures);
         if (idxBranches != -1) {
-          _branches = List<Map<String, dynamic>>.from(results[idxBranches]);
+          _branches = List<Map<String, dynamic>>.from(results[idxBranches] as Iterable<dynamic>);
         }
         if (idxEmployees != -1) {
-          _employeesList = List<Map<String, dynamic>>.from(results[idxEmployees]);
+          _employeesList = List<Map<String, dynamic>>.from(results[idxEmployees] as Iterable<dynamic>);
         }
       }
     } catch (e) {
@@ -140,7 +143,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
         : DateTime.now().toIso8601String().split('T')[0];
         
     final startOfDay = _selectedDate != null 
-        ? DateTime(_selectedDate!.year, _selectedDate!.month, _selectedDate!.day, 0, 0, 0).toUtc().toIso8601String()
+        ? DateTime(_selectedDate!.year, _selectedDate!.month, _selectedDate!.day).toUtc().toIso8601String()
         : null;
     final endOfDay = _selectedDate != null 
         ? DateTime(_selectedDate!.year, _selectedDate!.month, _selectedDate!.day, 23, 59, 59).toUtc().toIso8601String()
@@ -177,13 +180,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
           .from('attendance')
           .select('status, employee_id')
           .eq('work_date', targetDateStr);
-    if (applyEmployeeFilter && filterEmployeeIds != null) {
+    if (applyEmployeeFilter) {
       attendanceQuery = attendanceQuery.inFilter('employee_id', filterEmployeeIds);
     }
     futures.add(
-      attendanceQuery.catchError((e) {
+      attendanceQuery.catchError((dynamic e) {
             debugPrint('خطأ في تحميل حضور اليوم: $e');
-            return [];
+            return <dynamic>[];
           })
     );
 
@@ -192,7 +195,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
         .from('leave_requests')
         .select('*, employees!leave_requests_employee_id_fkey!inner(full_name)')
         .eq('status', 'pending');
-    if (applyEmployeeFilter && filterEmployeeIds != null) {
+    if (applyEmployeeFilter) {
       leavesQuery = leavesQuery.inFilter('employee_id', filterEmployeeIds);
     }
     if (startOfDay != null && endOfDay != null) {
@@ -200,9 +203,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
     }
     idxLeaves = futures.length;
     futures.add(
-      leavesQuery.catchError((e) {
+      leavesQuery.catchError((dynamic e) {
         debugPrint('خطأ في تحميل الإجازات: $e');
-        return [];
+        return <dynamic>[];
       })
     );
 
@@ -211,7 +214,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
         .from('loans')
         .select('*, employees!loans_employee_id_fkey!inner(full_name)')
         .eq('status', 'pending');
-    if (applyEmployeeFilter && filterEmployeeIds != null) {
+    if (applyEmployeeFilter) {
       loansQuery = loansQuery.inFilter('employee_id', filterEmployeeIds);
     }
     if (startOfDay != null && endOfDay != null) {
@@ -219,9 +222,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
     }
     idxLoans = futures.length;
     futures.add(
-      loansQuery.catchError((e) {
+      loansQuery.catchError((dynamic e) {
         debugPrint('خطأ في تحميل السلف: $e');
-        return [];
+        return <dynamic>[];
       })
     );
 
@@ -230,7 +233,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
         .from('employee_devices')
         .select('*, employees!inner(full_name)')
         .eq('is_approved', false);
-    if (applyEmployeeFilter && filterEmployeeIds != null) {
+    if (applyEmployeeFilter) {
       devicesQuery = devicesQuery.inFilter('employee_id', filterEmployeeIds);
     }
     if (startOfDay != null && endOfDay != null) {
@@ -238,9 +241,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
     }
     idxDevices = futures.length;
     futures.add(
-      devicesQuery.catchError((e) {
+      devicesQuery.catchError((dynamic e) {
         debugPrint('خطأ في تحميل الأجهزة: $e');
-        return [];
+        return <dynamic>[];
       })
     );
 
@@ -248,7 +251,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
     var mockQuery = SupabaseService.client
         .from('mock_gps_attempts')
         .select('*, employees!inner(full_name)');
-    if (applyEmployeeFilter && filterEmployeeIds != null) {
+    if (applyEmployeeFilter) {
       mockQuery = mockQuery.inFilter('employee_id', filterEmployeeIds);
     }
     if (startOfDay != null && endOfDay != null) {
@@ -256,9 +259,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
     }
     idxMock = futures.length;
     futures.add(
-      mockQuery.order('timestamp', ascending: false).limit(15).catchError((e) {
+      mockQuery.order('timestamp', ascending: false).limit(15).catchError((dynamic e) {
         debugPrint('خطأ في تحميل محاولات التزييف: $e');
-        return [];
+        return <dynamic>[];
       })
     );
 
@@ -266,7 +269,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
     var violationsQuery = SupabaseService.client
         .from('geofence_violations')
         .select('*, employees!inner(full_name)');
-    if (applyEmployeeFilter && filterEmployeeIds != null) {
+    if (applyEmployeeFilter) {
       violationsQuery = violationsQuery.inFilter('employee_id', filterEmployeeIds);
     }
     if (startOfDay != null && endOfDay != null) {
@@ -274,9 +277,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
     }
     idxViolations = futures.length;
     futures.add(
-      violationsQuery.order('timestamp', ascending: false).limit(15).catchError((e) {
+      violationsQuery.order('timestamp', ascending: false).limit(15).catchError((dynamic e) {
         debugPrint('خطأ في تحميل مخالفات الجيوفينس: $e');
-        return [];
+        return <dynamic>[];
       })
     );
 
@@ -288,14 +291,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
           .inFilter('status', ['absent', 'late', 'half_day'])
           .isFilter('deduction_applied', null)
           .eq('work_date', targetDateStr);
-      if (applyEmployeeFilter && filterEmployeeIds != null) {
+      if (applyEmployeeFilter) {
         decisionsQuery = decisionsQuery.inFilter('employee_id', filterEmployeeIds);
       }
       idxDecisions = futures.length;
       futures.add(
-        decisionsQuery.catchError((e) {
+        decisionsQuery.catchError((dynamic e) {
           debugPrint('خطأ في تحميل قرارات الغياب والتأخير: $e');
-          return [];
+          return <dynamic>[];
         })
       );
     }
@@ -304,23 +307,23 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
     final results = await Future.wait(futures);
 
     // استخلاص البيانات
-    attendanceTodayList = List<Map<String, dynamic>>.from(results[idxAttendanceToday]);
-    leavesData = List<Map<String, dynamic>>.from(results[idxLeaves]);
-    loansData = List<Map<String, dynamic>>.from(results[idxLoans]);
-    devicesData = List<Map<String, dynamic>>.from(results[idxDevices]);
-    mockAttempts = List<Map<String, dynamic>>.from(results[idxMock]);
-    violationsList = List<Map<String, dynamic>>.from(results[idxViolations]);
+    attendanceTodayList = List<Map<String, dynamic>>.from(results[idxAttendanceToday] as Iterable<dynamic>);
+    leavesData = List<Map<String, dynamic>>.from(results[idxLeaves] as Iterable<dynamic>);
+    loansData = List<Map<String, dynamic>>.from(results[idxLoans] as Iterable<dynamic>);
+    devicesData = List<Map<String, dynamic>>.from(results[idxDevices] as Iterable<dynamic>);
+    mockAttempts = List<Map<String, dynamic>>.from(results[idxMock] as Iterable<dynamic>);
+    violationsList = List<Map<String, dynamic>>.from(results[idxViolations] as Iterable<dynamic>);
     if (idxDecisions != -1) {
-      decisionsData = List<Map<String, dynamic>>.from(results[idxDecisions]);
+      decisionsData = List<Map<String, dynamic>>.from(results[idxDecisions] as Iterable<dynamic>);
     }
 
     // 1. حساب حضور وغياب اليوم
     final Map<String, Map<String, dynamic>> attendanceMap = {};
-    for (var row in attendanceTodayList) {
-      attendanceMap[row['employee_id']] = Map<String, dynamic>.from(row);
+    for (final row in attendanceTodayList) {
+      attendanceMap[(row['employee_id'] as String)] = Map<String, dynamic>.from(row);
     }
 
-    for (var emp in filteredEmployees) {
+    for (final emp in filteredEmployees) {
       final record = attendanceMap[emp['id']];
       if (record != null) {
         final status = record['status'];
@@ -336,7 +339,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
 
     // 2. إذا تم تحديد تاريخ، أضف الغيابات الافتراضية
     if (_selectedDate != null) {
-      for (var emp in filteredEmployees) {
+      for (final emp in filteredEmployees) {
         final hasRecord = attendanceMap.containsKey(emp['id']);
         if (!hasRecord) {
           decisionsData.add({
@@ -355,7 +358,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
 
     // دمج سجلات الأمان
     final List<Map<String, dynamic>> secLogs = [];
-    for (var att in mockAttempts) {
+    for (final att in mockAttempts) {
       secLogs.add({
         'type': 'mock_gps',
         'employee_name': att['employees']?['full_name'] ?? 'موظف غير معروف',
@@ -364,18 +367,18 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
         'lat_lng': '${att['latitude']}, ${att['longitude']}',
       });
     }
-    for (var vio in violationsList) {
+    for (final vio in violationsList) {
       final vType = vio['violation_type'] == 'entry' ? 'دخول غير مصرح به' : 'خروج غير مصرح به';
       secLogs.add({
         'type': 'geofence',
         'employee_name': vio['employees']?['full_name'] ?? 'موظف غير معروف',
         'timestamp': vio['timestamp'],
-        'details': '$vType',
+        'details': vType,
         'lat_lng': '',
       });
     }
     if (secLogs.isNotEmpty) {
-      secLogs.sort((a, b) => DateTime.parse(b['timestamp']).compareTo(DateTime.parse(a['timestamp'])));
+      secLogs.sort((a, b) => DateTime.parse(b['timestamp'] as String).compareTo(DateTime.parse(a['timestamp'] as String)));
     }
 
     if (!mounted) return;
@@ -468,7 +471,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
           ),
         );
       }
-      _loadDashboardData();
+      unawaited(_loadDashboardData());
 
     } catch (e) {
       debugPrint('خطأ في معالجة القرار: $e');
@@ -503,7 +506,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
           ),
         );
       }
-      _loadDashboardData();
+      unawaited(_loadDashboardData());
 
     } catch (e) {
       debugPrint('خطأ في معالجة طلب الإجازة: $e');
@@ -537,7 +540,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
         final now = DateTime.now();
 
         for (int i = 1; i <= months; i++) {
-          final due = DateTime(now.year, now.month + i, 1);
+          final due = DateTime(now.year, now.month + i);
           installments.add({
             'loan_id': loanId,
             'due_date': due.toIso8601String().split('T')[0],
@@ -557,7 +560,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
           ),
         );
       }
-      _loadDashboardData();
+      unawaited(_loadDashboardData());
 
     } catch (e) {
       debugPrint('خطأ في معالجة طلب السلفة: $e');
@@ -615,7 +618,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
           ),
         );
       }
-      _loadDashboardData();
+      unawaited(_loadDashboardData());
 
     } catch (e) {
       debugPrint('خطأ في اعتماد الجهاز: $e');
@@ -719,7 +722,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                               style: const TextStyle(fontFamily: 'Cairo', color: Colors.white, fontSize: 11),
                               items: [
                                 const DropdownMenuItem(value: 'all', child: Text('جميع الفروع')),
-                                ..._branches.map((b) => DropdownMenuItem<String>(value: b['id'], child: Text(b['name']))),
+                                ..._branches.map((b) => DropdownMenuItem<String>(value: b['id'] as String?, child: Text(b['name'] as String))),
                               ],
                               onChanged: (val) {
                                 setState(() {
@@ -762,7 +765,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                                 ..._employeesList.where((emp) {
                                   if (_selectedBranchId == null || _selectedBranchId == 'all') return true;
                                   return emp['branch_id'] == _selectedBranchId;
-                                }).map((e) => DropdownMenuItem<String>(value: e['id'], child: Text(e['full_name']))),
+                                }).map((e) => DropdownMenuItem<String>(value: e['id'] as String?, child: Text(e['full_name'] as String))),
                               ],
                               onChanged: (val) {
                                 setState(() {
@@ -798,9 +801,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                                   data: Theme.of(context).copyWith(
                                     colorScheme: const ColorScheme.dark(
                                       primary: AppTheme.neonCyan,
-                                      onPrimary: Colors.black,
                                       surface: Color(0xFF1A1F3A),
-                                      onSurface: Colors.white,
                                     ),
                                   ),
                                   child: child!,
@@ -811,7 +812,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                               setState(() {
                                 _selectedDate = picked;
                               });
-                              _loadDashboardData();
+                              unawaited(_loadDashboardData());
                             }
                           },
                           child: Container(
@@ -1065,7 +1066,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
       itemBuilder: (context, index) {
         final item = _pendingDecisions[index];
         final empName = item['employees']?['full_name'] ?? 'موظف غير معروف';
-        String status = item['status'] ?? '';
+        String status = (item['status'] ?? '') as String;
         if (status == 'absent') status = 'غياب';
         if (status == 'late') status = 'تأخير';
         if (status == 'half_day') status = 'نصف يوم';
@@ -1074,7 +1075,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
         int missedMinutes = 0;
         if (status == 'تأخير' && item['check_in_time'] != null) {
           try {
-            final checkInTime = DateTime.parse(item['check_in_time']).toLocal();
+            final checkInTime = DateTime.parse(item['check_in_time'] as String).toLocal();
             final expectedCheckIn = DateTime(checkInTime.year, checkInTime.month, checkInTime.day, 8, 30);
             if (checkInTime.isAfter(expectedCheckIn)) {
               missedMinutes = checkInTime.difference(expectedCheckIn).inMinutes;
@@ -1082,7 +1083,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
           } catch (_) {}
         } else if (status == 'نصف يوم' && item['check_out_time'] != null) {
           try {
-            final checkOutTime = DateTime.parse(item['check_out_time']).toLocal();
+            final checkOutTime = DateTime.parse(item['check_out_time'] as String).toLocal();
             final expectedCheckOut = DateTime(checkOutTime.year, checkOutTime.month, checkOutTime.day, 16, 30);
             if (checkOutTime.isBefore(expectedCheckOut)) {
               missedMinutes = expectedCheckOut.difference(checkOutTime).inMinutes;
@@ -1112,7 +1113,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    empName, 
+                    empName as String, 
                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white, fontFamily: 'Cairo'),
                   ),
                   Container(
@@ -1133,14 +1134,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                 padding: EdgeInsets.symmetric(vertical: 10),
                 child: Divider(color: Colors.white10, height: 1),
               ),
-              _buildInfoRow(Icons.calendar_month_rounded, 'تاريخ الدوام', date),
+              _buildInfoRow(Icons.calendar_month_rounded, 'تاريخ الدوام', date as String),
               if (missedMinutes > 0) ...[
                 const SizedBox(height: 10),
                 _buildInfoRow(Icons.hourglass_bottom_rounded, 'المدة المفقودة (التأخير)', _formatDurationArabic(missedMinutes)),
               ],
               if (item['status'] == 'late' && item['check_in_time'] != null) ...[
                 const SizedBox(height: 10),
-                _buildInfoRow(Icons.watch_later_rounded, 'توقيت البصمة (دخول)', _formatTime12h(item['check_in_time'])),
+                _buildInfoRow(Icons.watch_later_rounded, 'توقيت البصمة (دخول)', _formatTime12h(item['check_in_time'] as String?)),
               ],
               const SizedBox(height: 10),
               Row(
@@ -1188,7 +1189,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                       onPressed: () {
                         final cleanText = amountCtrl.text.replaceAll('.', '').replaceAll(',', '').trim();
                         final amt = double.tryParse(cleanText) ?? 0;
-                        _processDecision(item['id'], item['employee_id'], status, true, reasonCtrl.text.isEmpty ? 'تم الخصم بناءً على تعليمات الإدارة' : reasonCtrl.text, amt);
+                        _processDecision(item['id'] as String, item['employee_id'] as String, status, true, reasonCtrl.text.isEmpty ? 'تم الخصم بناءً على تعليمات الإدارة' : reasonCtrl.text, amt);
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppTheme.dangerRed,
@@ -1202,7 +1203,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                   const SizedBox(width: 12),
                   Expanded(
                     child: ElevatedButton(
-                      onPressed: () => _processDecision(item['id'], item['employee_id'], status, false, reasonCtrl.text.isEmpty ? 'تم الإعفاء بناءً على تعليمات الإدارة' : reasonCtrl.text, 0),
+                      onPressed: () => _processDecision(item['id'] as String, item['employee_id'] as String, status, false, reasonCtrl.text.isEmpty ? 'تم الإعفاء بناءً على تعليمات الإدارة' : reasonCtrl.text, 0),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppTheme.successGreen,
                         foregroundColor: Colors.white,
@@ -1235,11 +1236,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
         final empName = item['employees']?['full_name'] ?? 'موظف غير معروف';
         final leaveType = item['leave_type'];
         final isHourly = item['is_hourly'] ?? false;
-        final start = DateTime.parse(item['start_date']).toLocal();
-        final end = DateTime.parse(item['end_date']).toLocal();
+        final start = DateTime.parse(item['start_date'] as String).toLocal();
+        final end = DateTime.parse(item['end_date'] as String).toLocal();
         final reason = item['reason'] ?? 'بدون سبب مذكور';
 
-        String dateRangeText = isHourly 
+        String dateRangeText = (isHourly as bool) 
             ? '${start.year}/${start.month}/${start.day} (${item['start_hour']} - ${item['end_hour']})'
             : 'من ${start.year}/${start.month}/${start.day} إلى ${end.year}/${end.month}/${end.day}';
 
@@ -1256,7 +1257,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    empName, 
+                    empName as String, 
                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white, fontFamily: 'Cairo'),
                   ),
                   Container(
@@ -1267,7 +1268,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                       border: Border.all(color: AppTheme.neonCyan.withValues(alpha: 0.3)),
                     ),
                     child: Text(
-                      _getLeaveTypeText(leaveType),
+                      _getLeaveTypeText(leaveType as String),
                       style: const TextStyle(color: AppTheme.neonCyan, fontSize: 9, fontWeight: FontWeight.bold, fontFamily: 'Cairo'),
                     ),
                   ),
@@ -1279,17 +1280,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
               ),
               _buildInfoRow(Icons.calendar_month_rounded, 'الفترة الزمنية', dateRangeText),
               const SizedBox(height: 10),
-              _buildInfoRow(Icons.comment_rounded, 'سبب الإجازة', reason),
+              _buildInfoRow(Icons.comment_rounded, 'سبب الإجازة', reason as String),
               if (item['attachment_url'] != null && (item['attachment_url'] as String).isNotEmpty) ...[
                 const SizedBox(height: 10),
-                _buildInfoRow(Icons.attachment_rounded, 'المرفق المرفوع', 'يوجد مستند رسمي مرفق 📄', isLink: true, url: item['attachment_url']),
+                _buildInfoRow(Icons.attachment_rounded, 'المرفق المرفوع', 'يوجد مستند رسمي مرفق 📄', isLink: true, url: item['attachment_url'] as String?),
               ],
               const SizedBox(height: 16),
               Row(
                 children: [
                   Expanded(
                     child: ElevatedButton(
-                      onPressed: () => _processLeave(item['id'], item['employee_id'], true),
+                      onPressed: () => _processLeave(item['id'] as String, item['employee_id'] as String, true),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppTheme.successGreen,
                         foregroundColor: Colors.white,
@@ -1302,7 +1303,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                   const SizedBox(width: 12),
                   Expanded(
                     child: OutlinedButton(
-                      onPressed: () => _processLeave(item['id'], item['employee_id'], false),
+                      onPressed: () => _processLeave(item['id'] as String, item['employee_id'] as String, false),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: AppTheme.dangerRed, 
                         side: const BorderSide(color: AppTheme.dangerRed),
@@ -1416,7 +1417,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    empName, 
+                    empName as String, 
                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white, fontFamily: 'Cairo'),
                   ),
                   Text(
@@ -1434,14 +1435,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
               _buildInfoRow(Icons.price_change_rounded, 'القسط الشهري', '${AppConstants.formatMoney(monthly)} / الشهر'),
               if (item['pledge_url'] != null && (item['pledge_url'] as String).isNotEmpty) ...[
                 const SizedBox(height: 10),
-                _buildInfoRow(Icons.draw_rounded, 'تعهد السلفة الموقّع', 'رابط التعهد الإلزامي المرفق 📝', isLink: true, url: item['pledge_url']),
+                _buildInfoRow(Icons.draw_rounded, 'تعهد السلفة الموقّع', 'رابط التعهد الإلزامي المرفق 📝', isLink: true, url: item['pledge_url'] as String?),
               ],
               const SizedBox(height: 16),
               Row(
                 children: [
                   Expanded(
                     child: ElevatedButton(
-                      onPressed: () => _processLoan(item['id'], item['employee_id'], amount, months, true),
+                      onPressed: () => _processLoan(item['id'] as String, item['employee_id'] as String, amount, months, true),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppTheme.successGreen,
                         foregroundColor: Colors.white,
@@ -1454,7 +1455,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                   const SizedBox(width: 12),
                   Expanded(
                     child: OutlinedButton(
-                      onPressed: () => _processLoan(item['id'], item['employee_id'], amount, months, false),
+                      onPressed: () => _processLoan(item['id'] as String, item['employee_id'] as String, amount, months, false),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: AppTheme.dangerRed, 
                         side: const BorderSide(color: AppTheme.dangerRed),
@@ -1468,7 +1469,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
             ],
           ),
         );
-      }).toList(),
+      }),
     ],
   );
 }
@@ -1499,24 +1500,24 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                empName, 
+                empName as String, 
                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white, fontFamily: 'Cairo'),
               ),
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 10),
                 child: Divider(color: Colors.white10, height: 1),
               ),
-              _buildInfoRow(Icons.phone_android_rounded, 'طراز الهاتف الجديد', model),
+              _buildInfoRow(Icons.phone_android_rounded, 'طراز الهاتف الجديد', model as String),
               const SizedBox(height: 10),
-              _buildInfoRow(Icons.adb_rounded, 'إصدار نظام التشغيل', os),
+              _buildInfoRow(Icons.adb_rounded, 'إصدار نظام التشغيل', os as String),
               const SizedBox(height: 10),
-              _buildInfoRow(Icons.fingerprint_rounded, 'معرف الهاتف الفريد', uuid, isCode: true),
+              _buildInfoRow(Icons.fingerprint_rounded, 'معرف الهاتف الفريد', uuid as String, isCode: true),
               const SizedBox(height: 16),
               Row(
                 children: [
                   Expanded(
                     child: ElevatedButton(
-                      onPressed: () => _approveDevice(item['id'], item['employee_id'], true),
+                      onPressed: () => _approveDevice(item['id'] as String, item['employee_id'] as String, true),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppTheme.successGreen,
                         foregroundColor: Colors.white,
@@ -1529,7 +1530,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                   const SizedBox(width: 12),
                   Expanded(
                     child: OutlinedButton(
-                      onPressed: () => _approveDevice(item['id'], item['employee_id'], false),
+                      onPressed: () => _approveDevice(item['id'] as String, item['employee_id'] as String, false),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: AppTheme.dangerRed, 
                         side: const BorderSide(color: AppTheme.dangerRed),
@@ -1559,7 +1560,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
       itemBuilder: (context, index) {
         final log = _securityLogs[index];
         final name = log['employee_name'];
-        final date = DateTime.parse(log['timestamp']).toLocal();
+        final date = DateTime.parse(log['timestamp'] as String).toLocal();
         final details = log['details'];
         final latLng = log['lat_lng'] as String;
 
@@ -1582,7 +1583,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    name, 
+                    name as String, 
                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white, fontFamily: 'Cairo'),
                   ),
                   Container(
@@ -1603,9 +1604,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                 padding: EdgeInsets.symmetric(vertical: 10),
                 child: Divider(color: Colors.white10, height: 1),
               ),
-              _buildInfoRow(Icons.warning_amber_rounded, 'تفاصيل الخرق المكتشف', details),
+              _buildInfoRow(Icons.warning_amber_rounded, 'تفاصيل الخرق المكتشف', details as String),
               const SizedBox(height: 10),
-              _buildInfoRow(Icons.schedule_rounded, 'توقيت المحاولة', '${_formatTime12h(log['timestamp'])} بتاريخ ${date.year}/${date.month}/${date.day}'),
+              _buildInfoRow(Icons.schedule_rounded, 'توقيت المحاولة', '${_formatTime12h(log['timestamp'] as String?)} بتاريخ ${date.year}/${date.month}/${date.day}'),
               if (latLng.isNotEmpty) ...[
                 const SizedBox(height: 10),
                 _buildInfoRow(Icons.location_on_rounded, 'الإحداثيات المرصودة', latLng, isCode: true),
@@ -1623,7 +1624,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
       child: GlassContainer(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
         margin: const EdgeInsets.all(24),
-        borderRadius: 24,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
@@ -1730,16 +1730,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
     }
   }
 
-  Color _getStatusColor(String status) {
-    switch (status) {
-      case 'approved':
-        return AppTheme.successGreen;
-      case 'rejected':
-        return AppTheme.neonPink;
-      default:
-        return AppTheme.warningOrange;
-    }
-  }
 }
 
 class DotThousandsSeparatorInputFormatter extends TextInputFormatter {

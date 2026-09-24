@@ -2,11 +2,13 @@
 // نظام HR Pro v6.0 - شاشة سلة المحذوفات للملفات (Trash / Recycle Bin Screen)
 // =========================================================================
 
-import 'dart:ui';
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+
 import '../../core/services/supabase_service.dart';
 import '../../core/theme/app_theme.dart';
-import 'package:intl/intl.dart';
 import '../shared/widgets/glass_background.dart';
 import '../shared/widgets/glass_container.dart';
 
@@ -81,7 +83,7 @@ class _TrashScreenState extends State<TrashScreen> {
 
   // استعادة ملف محذوف
   Future<void> _restoreFile(Map<String, dynamic> fileRow) async {
-    final String fileId = fileRow['id'];
+    final String fileId = fileRow['id'] as String;
 
     setState(() => _isLoading = true);
     try {
@@ -101,7 +103,7 @@ class _TrashScreenState extends State<TrashScreen> {
           ),
         );
       }
-      _loadTrashFiles();
+      unawaited(_loadTrashFiles());
     } catch (e) {
       setState(() => _isLoading = false);
       if (mounted) {
@@ -117,9 +119,9 @@ class _TrashScreenState extends State<TrashScreen> {
 
   // إتلاف وحذف ملف نهائياً
   Future<void> _permanentDeleteFile(Map<String, dynamic> fileRow) async {
-    final String fileId = fileRow['id'];
-    final String filePath = fileRow['file_path'];
-    final String fileType = fileRow['file_type'];
+    final String fileId = fileRow['id'] as String;
+    final String filePath = fileRow['file_path'] as String;
+    final String fileType = fileRow['file_type'] as String;
     final String bucket = _getBucketName(fileType);
 
     setState(() => _isLoading = true);
@@ -141,7 +143,7 @@ class _TrashScreenState extends State<TrashScreen> {
           ),
         );
       }
-      _loadTrashFiles();
+      unawaited(_loadTrashFiles());
     } catch (e) {
       setState(() => _isLoading = false);
       if (mounted) {
@@ -191,14 +193,13 @@ class _TrashScreenState extends State<TrashScreen> {
   }
 
   void _showDeleteConfirmationDialog(BuildContext context, Map<String, dynamic> file) {
-    showDialog(
+    showDialog<dynamic>(
       context: context,
       barrierColor: Colors.black.withValues(alpha: 0.6),
       builder: (context) => Dialog(
         backgroundColor: Colors.transparent,
         child: GlassContainer(
           padding: const EdgeInsets.all(24),
-          borderRadius: 24,
           opacity: 0.9,
             borderColor: AppTheme.dangerRed.withValues(alpha: 0.4),
             boxShadow: [
@@ -358,7 +359,6 @@ class _TrashScreenState extends State<TrashScreen> {
                     child: GlassContainer(
                       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
                       margin: const EdgeInsets.all(24),
-                      borderRadius: 24,
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -396,10 +396,10 @@ class _TrashScreenState extends State<TrashScreen> {
                     itemCount: _deletedFiles.length,
                     itemBuilder: (context, index) {
                       final file = _deletedFiles[index];
-                      final String filename = file['file_path'].split('/').last;
-                      final String deletedByName = file['employees']?['full_name'] ?? 'غير معروف';
-                      final DateTime deletedAt = DateTime.parse(file['deleted_at']).toLocal();
-                      final DateTime expiryDate = DateTime.parse(file['scheduled_deletion_date']).toLocal();
+                      final String filename = file['file_path'].split('/').last as String;
+                      final String deletedByName = (file['employees']?['full_name'] ?? 'غير معروف') as String;
+                      final DateTime deletedAt = DateTime.parse(file['deleted_at'] as String).toLocal();
+                      final DateTime expiryDate = DateTime.parse(file['scheduled_deletion_date'] as String).toLocal();
                       final daysLeft = expiryDate.difference(DateTime.now()).inDays;
                       final warningColor = daysLeft <= 5 ? AppTheme.dangerRed : AppTheme.warningOrange;
 
@@ -457,7 +457,7 @@ class _TrashScreenState extends State<TrashScreen> {
                                       ),
                                       const SizedBox(height: 2),
                                       Text(
-                                        'النوع: ${_getFileTypeName(file['file_type'])}',
+                                        'النوع: ${_getFileTypeName(file['file_type'] as String)}',
                                         style: TextStyle(
                                           fontSize: 11,
                                           color: Colors.white.withValues(alpha: 0.5),
@@ -474,7 +474,6 @@ class _TrashScreenState extends State<TrashScreen> {
                                     borderRadius: BorderRadius.circular(10),
                                     border: Border.all(
                                       color: warningColor.withValues(alpha: 0.4),
-                                      width: 1,
                                     ),
                                   ),
                                   child: Text(

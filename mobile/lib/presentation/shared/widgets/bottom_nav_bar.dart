@@ -10,7 +10,7 @@ import '../../../core/theme/app_theme.dart';
 
 class PremiumBottomNavBar extends StatelessWidget {
   final int currentIndex;
-  final Function(int) onTap;
+  final void Function(int) onTap;
 
   const PremiumBottomNavBar({
     super.key,
@@ -46,7 +46,6 @@ class PremiumBottomNavBar extends StatelessWidget {
             color: isDark
                 ? Colors.white.withValues(alpha: 0.08)
                 : AppTheme.lightBorder,
-            width: 1,
           ),
           boxShadow: AppTheme.shadowLg(isDark),
         ),

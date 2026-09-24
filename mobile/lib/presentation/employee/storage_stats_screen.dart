@@ -44,14 +44,14 @@ class _StorageStatsScreenState extends State<StorageStatsScreen> {
           .isFilter('restored_at', null);
 
       double totalTrash = 0;
-      for (var row in trashData) {
+      for (final row in trashData) {
         if (row['file_size_bytes'] != null) {
           totalTrash += (row['file_size_bytes'] as num).toDouble();
         }
       }
 
       // 2. قراءة المساحات الحقيقية من الدالة في Supabase
-      final dynamic statsData = await SupabaseService.client.rpc('get_storage_stats');
+      final dynamic statsData = await SupabaseService.client.rpc<dynamic>('get_storage_stats');
       
       double avatars = 0;
       double documents = 0;
@@ -59,7 +59,7 @@ class _StorageStatsScreenState extends State<StorageStatsScreen> {
       double others = 0;
 
       if (statsData != null && statsData is List) {
-        for (var stat in statsData) {
+        for (final stat in statsData) {
           final bucket = stat['bucket_name']?.toString();
           final size = (stat['total_size'] as num?)?.toDouble() ?? 0.0;
           if (bucket == 'avatars') {
@@ -149,7 +149,6 @@ class _StorageStatsScreenState extends State<StorageStatsScreen> {
                     // بطاقة التخزين الإجمالية الإبداعية
                     GlassContainer(
                       padding: const EdgeInsets.all(24),
-                      borderRadius: 24,
                       opacity: 0.12,
                       borderColor: isWarning 
                           ? AppTheme.dangerRed.withValues(alpha: 0.5) 

@@ -2,16 +2,20 @@
 // نظام HR Pro v6.0 - شاشة القروض والسلف الآلية (Automated Loans & Installments Screen)
 // =========================================================================
 
+import 'dart:async';
+
 import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:uuid/uuid.dart';
-import '../../core/services/supabase_service.dart';
-import '../../core/services/file_upload_service.dart';
-import '../../core/theme/app_theme.dart';
-import '../../core/constants/constants.dart';
-import '../shared/widgets/glass_container.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:uuid/uuid.dart';
+
+import '../../core/constants/constants.dart';
+import '../../core/services/file_upload_service.dart';
+import '../../core/services/supabase_service.dart';
+import '../../core/theme/app_theme.dart';
+import '../shared/widgets/glass_container.dart';
 
 class LoanRequestScreen extends StatefulWidget {
   const LoanRequestScreen({super.key});
@@ -175,7 +179,7 @@ class _LoanRequestScreenState extends State<LoanRequestScreen> with SingleTicker
           _monthlyInstallment = 250000;
         });
         _tabController.animateTo(1); // الانتقال لتبويب السجل
-        _loadLoansHistory();
+        unawaited(_loadLoansHistory());
       }
 
     } catch (e) {
@@ -289,7 +293,6 @@ class _LoanRequestScreenState extends State<LoanRequestScreen> with SingleTicker
 
     return GlassContainer(
       padding: const EdgeInsets.all(20),
-      borderRadius: 24,
       opacity: 0.1,
       borderColor: AppTheme.neonCyan.withValues(alpha: 0.2),
       boxShadow: [
@@ -415,7 +418,6 @@ class _LoanRequestScreenState extends State<LoanRequestScreen> with SingleTicker
   Widget _buildPledgeCard(bool isDark) {
     return GlassContainer(
       padding: const EdgeInsets.all(20),
-      borderRadius: 24,
       opacity: 0.1,
       borderColor: AppTheme.warningOrange.withValues(alpha: 0.2),
       boxShadow: [
@@ -525,7 +527,7 @@ class _LoanRequestScreenState extends State<LoanRequestScreen> with SingleTicker
           final double installmentAmount = (loan['installment_amount'] as num).toDouble();
           final status = loan['status'] ?? 'pending';
 
-          final color = _getStatusColor(status);
+          final color = _getStatusColor(status as String);
 
           return GlassContainer(
             padding: const EdgeInsets.all(18),
@@ -553,7 +555,7 @@ class _LoanRequestScreenState extends State<LoanRequestScreen> with SingleTicker
                       decoration: BoxDecoration(
                         color: color.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: color.withValues(alpha: 0.3), width: 1),
+                        border: Border.all(color: color.withValues(alpha: 0.3)),
                       ),
                       child: Text(
                         statusLabel[status] ?? 'غير معروف',
@@ -615,10 +617,10 @@ class _LoanRequestScreenState extends State<LoanRequestScreen> with SingleTicker
                       ),
                       child: Builder(
                         builder: (context) {
-                          final List installmentsList = List.from(loan['loan_installments'] as List? ?? []);
+                          final List<dynamic> installmentsList = List<dynamic>.from(loan['loan_installments'] as List? ?? []);
                           installmentsList.sort((a, b) {
-                            final String ad = a['due_date'] ?? '';
-                            final String bd = b['due_date'] ?? '';
+                            final String ad = (a['due_date'] ?? '') as String;
+                            final String bd = (b['due_date'] ?? '') as String;
                             return ad.compareTo(bd);
                           });
                           
@@ -629,8 +631,8 @@ class _LoanRequestScreenState extends State<LoanRequestScreen> with SingleTicker
                             itemBuilder: (context, i) {
                               final inst = installmentsList[i];
                               final double instAmount = (inst['amount'] as num).toDouble();
-                              final String dueDate = inst['due_date'] ?? '';
-                              final bool isPaid = inst['is_paid'] ?? false;
+                              final String dueDate = (inst['due_date'] ?? '') as String;
+                              final bool isPaid = (inst['is_paid'] ?? false) as bool;
                               
                               return Padding(
                                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -638,7 +640,7 @@ class _LoanRequestScreenState extends State<LoanRequestScreen> with SingleTicker
                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
                                     Text(
-                                      'القسط ${i + 1}: ${dueDate}',
+                                      'القسط ${i + 1}: $dueDate',
                                       style: const TextStyle(fontSize: 10, color: Colors.white60, fontFamily: 'Cairo'),
                                     ),
                                     Row(
@@ -680,11 +682,11 @@ class _LoanRequestScreenState extends State<LoanRequestScreen> with SingleTicker
                   const SizedBox(height: 14),
                   InkWell(
                     onTap: () async {
-                      final url = Uri.parse(loan['pledge_url'] ?? '');
+                      final url = Uri.parse((loan['pledge_url'] ?? '') as String);
                       if (await canLaunchUrl(url)) {
                         await launchUrl(url, mode: LaunchMode.externalApplication);
                       } else {
-                        if (mounted) {
+                        if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(content: Text('تعذر فتح رابط التعهد المالي')),
                           );

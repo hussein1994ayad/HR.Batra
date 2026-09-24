@@ -25,19 +25,19 @@ class ExcelExportService {
     sheet.enableSheetCalculations();
 
     // استخراج بيانات الموظف والسلفة
-    final String employeeName = loan['employees']?['full_name'] ?? 'موظف غير معروف';
-    final String branchName = loan['employees']?['branches']?['name'] ?? 'الفرع الرئيسي';
-    final String deptName = loan['employees']?['departments']?['name'] ?? 'عام';
+    final String employeeName = (loan['employees']?['full_name'] ?? 'موظف غير معروف') as String;
+    final String branchName = (loan['employees']?['branches']?['name'] ?? 'الفرع الرئيسي') as String;
+    final String deptName = (loan['employees']?['departments']?['name'] ?? 'عام') as String;
     final double totalAmount = (loan['amount'] as num?)?.toDouble() ?? 0.0;
     final int monthsCount = (loan['installment_count'] as num?)?.toInt() ?? 1;
     final double monthlyAmt = (loan['installment_amount'] as num?)?.toDouble() ?? 0.0;
     final double remainingAmt = (loan['remaining_amount'] as num?)?.toDouble() ?? 0.0;
     final double paidAmt = totalAmount - remainingAmt > 0 ? (totalAmount - remainingAmt) : 0.0;
-    final String status = loan['status'] ?? 'pending';
+    final String status = (loan['status'] ?? 'pending') as String;
     final String loanDate = loan['created_at'] != null 
         ? loan['created_at'].toString().split('T')[0] 
         : DateFormat('yyyy-MM-dd').format(DateTime.now());
-    final String notes = loan['reason'] ?? loan['notes'] ?? 'لا توجد ملاحظات إضافية';
+    final String notes = (loan['reason'] ?? loan['notes'] ?? 'لا توجد ملاحظات إضافية') as String;
 
     // الألوان المستوحاة من هوية HR Pro
     const String headerDarkBg = '#0F172A'; // Slate 900
@@ -204,14 +204,14 @@ class ExcelExportService {
     int startRow = 13;
     int seq = 1;
 
-    for (var inst in installments) {
+    for (final inst in installments) {
       final double instAmt = (inst['amount'] as num?)?.toDouble() ?? 0.0;
       final bool isPaid = inst['is_paid'] == true;
-      final String dueDate = inst['due_date'] ?? '-';
+      final String dueDate = (inst['due_date'] ?? '-') as String;
       final String paidDate = inst['paid_at'] != null 
           ? inst['paid_at'].toString().split('T')[0] 
           : isPaid ? 'تم الاستقطاع من الراتب' : '-';
-      final String instNotes = inst['notes'] ?? (isPaid ? 'تم السداد بنجاح' : 'قسط مستحق السداد');
+      final String instNotes = (inst['notes'] ?? (isPaid ? 'تم السداد بنجاح' : 'قسط مستحق السداد')) as String;
 
       // ت: رقم القسط
       final cellSeq = sheet.getRangeByIndex(startRow, 1);
@@ -335,7 +335,7 @@ class ExcelExportService {
     try {
       if (Platform.isAndroid) {
         final downloadDir = Directory('/storage/emulated/0/Download');
-        if (await downloadDir.exists()) {
+        if (downloadDir.existsSync()) {
           final publicFile = File('${downloadDir.path}/$fileName');
           await publicFile.writeAsBytes(bytes, flush: true);
           debugPrint('✅ تم حفظ نسخة في مجلد التنزيلات: ${publicFile.path}');
@@ -363,10 +363,10 @@ class ExcelExportService {
   /// مشاركة ملف Excel عبر واتساب أو تيليغرام أو التطبيقات
   static Future<void> shareExcelFile(String filePath, {String? text}) async {
     try {
-      await Share.shareXFiles(
-        [XFile(filePath)],
+      await SharePlus.instance.share(ShareParams(
+        files: [XFile(filePath)],
         text: text ?? 'كشف حساب سلفة الموظف - HR Pro Batra',
-      );
+      ));
     } catch (e) {
       debugPrint('تعذر مشاركة ملف Excel: $e');
     }

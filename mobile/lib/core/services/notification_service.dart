@@ -2,6 +2,8 @@
 // HR Pro v6.0 - Notification Service (FCM + Local + Attendance Reminders)
 // =========================================================================
 
+import 'dart:async';
+
 import 'dart:io' show Platform;
 
 import 'package:firebase_core/firebase_core.dart';
@@ -56,9 +58,7 @@ class NotificationService {
         const InitializationSettings(
           android: AndroidInitializationSettings('@mipmap/launcher_icon'),
           iOS: DarwinInitializationSettings(
-            requestAlertPermission: true,
-            requestBadgePermission: true,
-            requestSoundPermission: true,
+            
           ),
         ),
       );
@@ -88,11 +88,8 @@ class NotificationService {
             description: 'إشعارات إدارية وتنبيهات مهمة',
             importance: Importance.max,
             sound: RawResourceAndroidNotificationSound('special_chime'),
-            playSound: true,
-            enableVibration: true,
             enableLights: true,
             ledColor: Color(0xFF0F766E),
-            showBadge: true,
           ),
         );
 
@@ -104,11 +101,8 @@ class NotificationService {
             description: 'تنبيهات وتذكيرات مواعيد تسجيل بصمة الحضور والانصراف',
             importance: Importance.max,
             sound: RawResourceAndroidNotificationSound('special_chime'),
-            playSound: true,
-            enableVibration: true,
             enableLights: true,
             ledColor: Color(0xFF0F766E),
-            showBadge: true,
           ),
         );
 
@@ -127,7 +121,8 @@ class NotificationService {
       }
 
       // Foreground: استقبال + إظهار محلي مع صوت
-      if (_firebaseReady) FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      if (_firebaseReady) {
+        FirebaseMessaging.onMessage.listen((RemoteMessage message) {
         if (message.notification == null) return;
         _localNotifications.show(
           message.hashCode,
@@ -142,8 +137,6 @@ class NotificationService {
               priority: Priority.max,
               icon: '@mipmap/launcher_icon',
               sound: const RawResourceAndroidNotificationSound('special_chime'),
-              playSound: true,
-              enableVibration: true,
               enableLights: true,
               ledColor: const Color(0xFF0F766E),
               category: AndroidNotificationCategory.message,
@@ -164,12 +157,13 @@ class NotificationService {
           ),
         );
       });
+      }
 
       _initialized = true;
       lastError = '';
 
       // تحديث التوكن وجدولة التذكيرات في الخلفية لعدم إبطاء إقلاع التطبيق نهائياً
-      Future.microtask(() async {
+      unawaited(Future.microtask(() async {
         try {
           final hasPermission = await isPermissionGranted();
           final user = Supabase.instance.client.auth.currentUser;
@@ -179,12 +173,12 @@ class NotificationService {
             _firebaseMessaging.onTokenRefresh.listen(_saveTokenToSupabase);
           }
           if (user != null) {
-            scheduleAttendanceReminders();
+            unawaited(scheduleAttendanceReminders());
           }
         } catch (e) {
           debugPrint('Non-fatal background notification init error: $e');
         }
-      });
+      }));
 
     } catch (e) {
       lastError = e.toString();
@@ -200,9 +194,7 @@ class NotificationService {
     }
     try {
       final settings = await _firebaseMessaging.requestPermission(
-        alert: true,
-        badge: true,
-        sound: true,
+        
       );
       if (settings.authorizationStatus != AuthorizationStatus.authorized &&
           settings.authorizationStatus != AuthorizationStatus.provisional) {
@@ -243,8 +235,6 @@ class NotificationService {
             priority: Priority.max,
             icon: '@mipmap/launcher_icon',
             sound: const RawResourceAndroidNotificationSound('special_chime'),
-            playSound: true,
-            enableVibration: true,
             enableLights: true,
             ledColor: const Color(0xFF0F766E),
             category: targetChannel == reminderChannelId 
@@ -298,9 +288,9 @@ class NotificationService {
       }
 
       // أوقات الدوام الافتراضية إذا لم يوجد جدول محدد
-      final String checkInStr = activeSchedule?['check_in_time'] ?? '08:30:00';
-      final String checkOutStr = activeSchedule?['check_out_time'] ?? '16:30:00';
-      final List<dynamic> rawWorkDays = activeSchedule?['work_days'] ?? [0, 1, 2, 3, 4, 6]; // الأحد إلى الخميس + السبت
+      final String checkInStr = (activeSchedule?['check_in_time'] ?? '08:30:00') as String;
+      final String checkOutStr = (activeSchedule?['check_out_time'] ?? '16:30:00') as String;
+      final List<dynamic> rawWorkDays = (activeSchedule?['work_days'] ?? [0, 1, 2, 3, 4, 6]) as List<dynamic>; // الأحد إلى الخميس + السبت
 
       final List<int> workDays = rawWorkDays.map((e) => int.tryParse(e.toString()) ?? 0).toList();
 
@@ -350,7 +340,7 @@ class NotificationService {
               ? 'يبدأ دوامك بعد $reminderMinutesBeforeCheckIn دقيقة ($checkInStr). يرجى التواجد في الفرع لتسجيل الحضور.'
               : 'حان موعد بدء الدوام الرسمي ($checkInStr). يرجى تسجيل بصمة الحضور الآن.',
           inScheduledDate,
-          NotificationDetails(
+          const NotificationDetails(
             android: AndroidNotificationDetails(
               reminderChannelId,
               reminderChannelName,
@@ -358,15 +348,13 @@ class NotificationService {
               importance: Importance.max,
               priority: Priority.max,
               icon: '@mipmap/launcher_icon',
-              sound: const RawResourceAndroidNotificationSound('special_chime'),
-              playSound: true,
-              enableVibration: true,
+              sound: RawResourceAndroidNotificationSound('special_chime'),
               enableLights: true,
-              ledColor: const Color(0xFF0F766E),
+              ledColor: Color(0xFF0F766E),
               category: AndroidNotificationCategory.alarm,
               visibility: NotificationVisibility.public,
             ),
-            iOS: const DarwinNotificationDetails(
+            iOS: DarwinNotificationDetails(
               presentAlert: true,
               presentBadge: true,
               presentSound: true,
@@ -388,7 +376,7 @@ class NotificationService {
           'تذكير: موعد بصمة الانصراف 🔴',
           'انتهى وقت الدوام الرسمي المقرّر ($checkOutStr). يرجى تسجيل بصمة الانصراف قبل مغادرة الفرع.',
           outScheduledDate,
-          NotificationDetails(
+          const NotificationDetails(
             android: AndroidNotificationDetails(
               reminderChannelId,
               reminderChannelName,
@@ -396,15 +384,13 @@ class NotificationService {
               importance: Importance.max,
               priority: Priority.max,
               icon: '@mipmap/launcher_icon',
-              sound: const RawResourceAndroidNotificationSound('special_chime'),
-              playSound: true,
-              enableVibration: true,
+              sound: RawResourceAndroidNotificationSound('special_chime'),
               enableLights: true,
-              ledColor: const Color(0xFF0F766E),
+              ledColor: Color(0xFF0F766E),
               category: AndroidNotificationCategory.alarm,
               visibility: NotificationVisibility.public,
             ),
-            iOS: const DarwinNotificationDetails(
+            iOS: DarwinNotificationDetails(
               presentAlert: true,
               presentBadge: true,
               presentSound: true,

@@ -3,17 +3,18 @@
 // =========================================================================
 
 import 'dart:async';
-import 'dart:ui';
+
 import 'package:flutter/material.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
-import '../../core/services/supabase_service.dart';
+
 import '../../core/services/attendance_sync_service.dart';
-import '../../core/services/schedule_service.dart';
 import '../../core/services/location_service.dart';
 import '../../core/services/notification_service.dart';
+import '../../core/services/schedule_service.dart';
+import '../../core/services/supabase_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../shared/widgets/glass_container.dart';
 
@@ -74,7 +75,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
   void _startPositionStream() {
     _positionStreamSubscription?.cancel();
     const locationSettings = LocationSettings(
-      accuracy: LocationAccuracy.best,
       distanceFilter: 1, // تحديث كل متر واحد للحصول على دقة فورية
     );
 
@@ -100,7 +100,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
           );
         });
       },
-      onError: (e) {
+      onError: (dynamic e) {
         debugPrint('GPS Stream Error: $e');
       },
     );
@@ -122,7 +122,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
     try {
       final freshPos = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.best,
+          
         ),
       ).timeout(const Duration(seconds: 3));
 
@@ -174,12 +174,12 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
       final cached = await AttendanceSyncService.getCachedData();
       if (cached != null && cached['branch'] != null) {
         final branch = cached['branch'];
-        _branchId = branch['id'];
-        _branchName = branch['name'] ?? 'فرع الشركة';
+        _branchId = branch['id'] as String?;
+        _branchName = (branch['name'] ?? 'فرع الشركة') as String;
         _branchLat = (branch['latitude'] as num).toDouble();
         _branchLng = (branch['longitude'] as num).toDouble();
         _branchRadius = (branch['radius_meters'] as num).toDouble();
-        _workSchedule = cached['schedule'];
+        _workSchedule = cached['schedule'] as Map<String, dynamic>?;
       }
 
       // 2. فحص صلاحيات الـ GPS
@@ -257,8 +257,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
 
         if (empData != null && empData['branches'] != null) {
           final branch = empData['branches'];
-          _branchId = branch['id'];
-          _branchName = branch['name'] ?? 'فرع الشركة';
+          _branchId = branch['id'] as String?;
+          _branchName = (branch['name'] ?? 'فرع الشركة') as String;
           _branchLat = (branch['latitude'] as num).toDouble();
           _branchLng = (branch['longitude'] as num).toDouble();
           _branchRadius = (branch['radius_meters'] as num).toDouble();
@@ -269,7 +269,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
 
           // تحديث الكاش المحلي
           await AttendanceSyncService.cacheBranchAndSchedule(
-            branchData: Map<String, dynamic>.from(branch),
+            branchData: Map<String, dynamic>.from(branch as Map<dynamic, dynamic>),
             scheduleData: schedData,
           );
         }
@@ -291,7 +291,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
           ? Map<String, dynamic>.from(_todayAttendance!) 
           : {};
 
-      for (var punch in todayOfflinePunches) {
+      for (final punch in todayOfflinePunches) {
         if (punch['type'] == 'check_in') {
           combinedAttendance['check_in_time'] = punch['time'];
           combinedAttendance['check_in_lat'] = punch['latitude'];
@@ -421,7 +421,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
   }
 
   void _showSuccessDialog(bool isCheckIn, bool isSynced) {
-    showDialog(
+    showDialog<dynamic>(
       context: context,
       barrierDismissible: false,
       builder: (BuildContext context) {
@@ -576,7 +576,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                             decoration: BoxDecoration(
                               color: Colors.black.withValues(alpha: 0.65),
                               borderRadius: BorderRadius.circular(6),
-                              border: Border.all(color: AppTheme.neonCyan, width: 1),
+                              border: Border.all(color: AppTheme.neonCyan),
                             ),
                             child: Text(
                               _branchName.length > 10 ? '${_branchName.substring(0, 9)}..' : _branchName,
@@ -797,7 +797,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                                       const Icon(Icons.check_circle, color: AppTheme.successGreen, size: 13),
                                       const SizedBox(width: 4),
                                       Text(
-                                        _formatTime(_todayAttendance?['check_in_time']),
+                                        _formatTime(_todayAttendance?['check_in_time'] as String?),
                                         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: AppTheme.successGreen, fontFamily: 'Cairo'),
                                       ),
                                     ],
@@ -856,7 +856,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                                 style: TextStyle(fontFamily: 'Cairo', fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.neonCyan),
                               ),
                               style: OutlinedButton.styleFrom(
-                                side: BorderSide(color: AppTheme.neonCyan.withValues(alpha: 0.5), width: 1),
+                                side: BorderSide(color: AppTheme.neonCyan.withValues(alpha: 0.5)),
                                 backgroundColor: AppTheme.neonCyan.withValues(alpha: 0.07),
                                 padding: const EdgeInsets.symmetric(vertical: 8),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -972,7 +972,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                     color: _selectedPunchType == 'check_in'
                         ? AppTheme.neonCyan.withValues(alpha: 0.5)
                         : Colors.transparent,
-                    width: 1,
                   ),
                 ),
                 child: Row(
@@ -1022,7 +1021,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                     color: _selectedPunchType == 'check_out'
                         ? AppTheme.neonPink.withValues(alpha: 0.5)
                         : Colors.transparent,
-                    width: 1,
                   ),
                 ),
                 child: Row(

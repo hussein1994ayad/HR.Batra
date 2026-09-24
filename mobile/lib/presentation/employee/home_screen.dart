@@ -5,6 +5,8 @@
 // كل منطق تحميل البيانات والاشتراك الفوري والتتبع محفوظ كما هو.
 // =========================================================================
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -12,14 +14,14 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/routes/app_router.dart';
 import '../../core/services/location_service.dart';
+import '../../core/services/notification_service.dart';
 import '../../core/services/ota_service.dart';
 import '../../core/services/schedule_service.dart';
-import '../../core/services/notification_service.dart';
 import '../../core/services/supabase_service.dart';
 import '../../core/theme/app_theme.dart';
 
 class HomeScreen extends StatefulWidget {
-  final Function(int) onTabChange;
+  final void Function(int) onTabChange;
   final ValueNotifier<int>? refreshNotifier;
 
   const HomeScreen({super.key, required this.onTabChange, this.refreshNotifier});
@@ -84,8 +86,8 @@ class _HomeScreenState extends State<HomeScreen> {
             setState(() => _unreadNotificationsCount++);
 
             try {
-              SystemSound.play(SystemSoundType.alert);
-              HapticFeedback.mediumImpact();
+              unawaited(SystemSound.play(SystemSoundType.alert));
+              unawaited(HapticFeedback.mediumImpact());
             } catch (e) {
               debugPrint('خطأ في تشغيل صوت الإشعار: $e');
             }
@@ -126,7 +128,7 @@ class _HomeScreenState extends State<HomeScreen> {
           .maybeSingle();
       if (mounted) {
         setState(() {
-          _todayAttendance = rec != null ? rec as Map<String, dynamic> : null;
+          _todayAttendance = rec;
         });
       }
     } catch (e) {
@@ -155,7 +157,7 @@ class _HomeScreenState extends State<HomeScreen> {
             if (!mounted) return;
             final rec = payload.newRecord;
             // نتحقق إن السجل ليوم اليوم فقط
-            if (rec != null && rec['work_date'] == todayStr) {
+            if (rec['work_date'] == todayStr) {
               setState(() {
                 _todayAttendance = Map<String, dynamic>.from(rec);
               });
@@ -177,10 +179,10 @@ class _HomeScreenState extends State<HomeScreen> {
   void dispose() {
     widget.refreshNotifier?.removeListener(_onRefreshRequested);
     if (_realtimeSubscription != null) {
-      SupabaseService.client.removeChannel(_realtimeSubscription);
+      SupabaseService.client.removeChannel(_realtimeSubscription as RealtimeChannel);
     }
     if (_attendanceSubscription != null) {
-      SupabaseService.client.removeChannel(_attendanceSubscription);
+      SupabaseService.client.removeChannel(_attendanceSubscription as RealtimeChannel);
     }
     super.dispose();
   }
@@ -200,12 +202,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
       if (empData != null) {
         setState(() {
-          _employeeName = empData['full_name'] ?? _employeeName;
-          final String deptName = empData['department_name'] ?? 'القسم العام';
-          final String branchName = empData['branch_name'] ?? 'الفرع العام';
+          _employeeName = (empData['full_name'] ?? _employeeName) as String;
+          final String deptName = (empData['department_name'] ?? 'القسم العام') as String;
+          final String branchName = (empData['branch_name'] ?? 'الفرع العام') as String;
           _departmentName = '$deptName • $branchName';
-          _avatarUrl = empData['avatar_url'] ?? '';
-          _userRole = empData['role'] ?? 'employee';
+          _avatarUrl = (empData['avatar_url'] ?? '') as String;
+          _userRole = (empData['role'] ?? 'employee') as String;
         });
       }
 
@@ -247,19 +249,19 @@ class _HomeScreenState extends State<HomeScreen> {
       });
 
       // جدولة تذكيرات الحضور والانصراف تلقائياً بناءً على جدول العمل
-      NotificationService.scheduleAttendanceReminders(schedule: _workSchedule);
+      unawaited(NotificationService.scheduleAttendanceReminders(schedule: _workSchedule));
 
       if (_todayAttendance != null &&
           _todayAttendance!['check_in_time'] != null &&
           _todayAttendance!['check_out_time'] == null) {
-        LocationService.startTracking(employeeId: user.id);
-        NotificationService.cancelTodayCheckInReminder();
+        unawaited(LocationService.startTracking(employeeId: user.id));
+        unawaited(NotificationService.cancelTodayCheckInReminder());
       } else if (_todayAttendance != null && _todayAttendance!['check_out_time'] != null) {
-        LocationService.stopTracking();
-        NotificationService.cancelTodayCheckInReminder();
-        NotificationService.cancelTodayCheckOutReminder();
+        unawaited(LocationService.stopTracking());
+        unawaited(NotificationService.cancelTodayCheckInReminder());
+        unawaited(NotificationService.cancelTodayCheckOutReminder());
       } else {
-        LocationService.stopTracking();
+        unawaited(LocationService.stopTracking());
       }
     } catch (e) {
       debugPrint('خطأ في تحميل بيانات لوحة الموظف: $e');
@@ -340,7 +342,6 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildAppBar(bool isDark, ColorScheme cs, TextTheme t) {
     return SliverAppBar(
       expandedHeight: 140,
-      floating: false,
       pinned: true,
       stretch: true,
       backgroundColor: Colors.transparent,
@@ -351,7 +352,7 @@ class _HomeScreenState extends State<HomeScreen> {
           count: _unreadNotificationsCount,
           onTap: () async {
             await context.push(AppRoutes.employeeNotifications);
-            _loadDashboardData();
+            unawaited(_loadDashboardData());
           },
         ),
         const SizedBox(width: AppTheme.space2),
@@ -376,7 +377,7 @@ class _HomeScreenState extends State<HomeScreen> {
               children: [
                 Container(
                   padding: const EdgeInsets.all(2),
-                  decoration: BoxDecoration(
+                  decoration: const BoxDecoration(
                     shape: BoxShape.circle,
                     gradient: AppTheme.primaryGradient,
                   ),
@@ -529,7 +530,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     const SizedBox(height: 2),
                     Text(
                       hasCheckIn
-                          ? 'تسجيل الحضور: ${_formatTime(_todayAttendance!['check_in_time'])}'
+                          ? 'تسجيل الحضور: ${_formatTime(_todayAttendance!['check_in_time'] as String?)}'
                           : 'يرجى تسجيل حضورك عند الوصول للفرع.',
                       style: t.bodySmall?.copyWith(
                         color: isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextSecondary,
@@ -607,7 +608,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ],
                   ),
                 ),
-                Icon(Icons.arrow_forward_ios_rounded, color: AppTheme.cyberPurple, size: 16),
+                const Icon(Icons.arrow_forward_ios_rounded, color: AppTheme.cyberPurple, size: 16),
               ],
             ),
           ),
@@ -638,7 +639,6 @@ class _HomeScreenState extends State<HomeScreen> {
           physics: const NeverScrollableScrollPhysics(),
           crossAxisSpacing: AppTheme.space3,
           mainAxisSpacing: AppTheme.space3,
-          childAspectRatio: 1.0,
           children: actions.map((a) => _QuickActionTile(action: a)).toList(),
         );
       },
@@ -694,7 +694,7 @@ class _HomeScreenState extends State<HomeScreen> {
       children: _announcements.asMap().entries.map((entry) {
         final a = entry.value;
         final isPinned = a['is_pinned'] ?? false;
-        final accent = isPinned ? AppTheme.warningOrange : cs.primary;
+        final accent = (isPinned as bool) ? AppTheme.warningOrange : cs.primary;
 
         return Padding(
           padding: EdgeInsets.only(bottom: entry.key < _announcements.length - 1 ? AppTheme.space3 : 0),
@@ -716,7 +716,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           ],
                           Expanded(
                             child: Text(
-                              a['title'] ?? 'إعلان إداري',
+                              (a['title'] ?? 'إعلان إداري') as String,
                               style: t.titleMedium?.copyWith(fontWeight: FontWeight.w800),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
@@ -726,14 +726,14 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
                     Text(
-                      _formatAnnounceDate(a['created_at']),
+                      _formatAnnounceDate(a['created_at'] as String?),
                       style: t.bodySmall?.copyWith(color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted),
                     ),
                   ],
                 ),
                 const SizedBox(height: AppTheme.space2),
                 Text(
-                  a['content'] ?? '',
+                  (a['content'] ?? '') as String,
                   style: t.bodyMedium?.copyWith(
                     color: isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextSecondary,
                     height: 1.55,
@@ -847,7 +847,6 @@ class _SectionCard extends StatelessWidget {
         border: Border.all(
           color: accent?.withValues(alpha: 0.18) ??
               (isDark ? AppTheme.darkBorder.withValues(alpha: 0.5) : AppTheme.lightBorder),
-          width: 1,
         ),
         boxShadow: AppTheme.shadowSm(isDark),
       ),
@@ -889,7 +888,6 @@ class _QuickActionTile extends StatelessWidget {
             borderRadius: BorderRadius.circular(AppTheme.radiusMd),
             border: Border.all(
               color: isDark ? AppTheme.darkBorder.withValues(alpha: 0.5) : AppTheme.lightBorder,
-              width: 1,
             ),
           ),
           child: Column(

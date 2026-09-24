@@ -2,6 +2,8 @@
 // نظام HR Pro v6.0 - شاشة إدارة الأفرع (Geofences)
 // =========================================================================
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -35,7 +37,7 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
     try {
       final data = await SupabaseService.client
           .from('branches')
-          .select('*')
+          .select()
           .order('name');
           
       setState(() {
@@ -49,17 +51,17 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
   }
 
   void _showAddEditBranchModal([Map<String, dynamic>? branch]) {
-    final nameController = TextEditingController(text: branch?['name'] ?? '');
+    final nameController = TextEditingController(text: (branch?['name'] ?? '') as String?);
     final radiusController = TextEditingController(text: (branch?['radius_meters'] ?? 50).toString());
     
     LatLng selectedLocation = branch != null && branch['latitude'] != null && branch['longitude'] != null
-        ? LatLng(branch['latitude'], branch['longitude'])
+        ? LatLng(branch['latitude'] as double, branch['longitude'] as double)
         : _defaultCenter;
         
     bool isSaving = false;
     final mapController = MapController();
 
-    showModalBottomSheet(
+    showModalBottomSheet<dynamic>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -196,18 +198,19 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
                             if (branch == null) {
                               await SupabaseService.client.from('branches').insert(data);
                             } else {
-                              await SupabaseService.client.from('branches').update(data).eq('id', branch['id']);
+                              await SupabaseService.client.from('branches').update(data).eq('id', branch['id'] as Object);
                             }
 
-                            if (mounted) {
+                            if (context.mounted) {
                               Navigator.pop(context);
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(content: Text('تم حفظ الفرع بنجاح ✅', style: TextStyle(fontFamily: 'Cairo')), backgroundColor: AppTheme.successGreen),
                               );
-                              _loadBranches();
+                              unawaited(_loadBranches());
                             }
                           } catch (e) {
                             setModalState(() => isSaving = false);
+                            if (!context.mounted) return;
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(content: Text('خطأ: $e', style: const TextStyle(fontFamily: 'Cairo')), backgroundColor: AppTheme.dangerRed),
                             );
@@ -274,7 +277,7 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
     try {
       setState(() => _isLoading = true);
       await SupabaseService.client.from('branches').delete().eq('id', id);
-      _loadBranches();
+      unawaited(_loadBranches());
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('تم حذف الفرع بنجاح', style: TextStyle(fontFamily: 'Cairo')), backgroundColor: AppTheme.successGreen),
@@ -303,7 +306,7 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
           actions: [
             IconButton(
               icon: const Icon(Icons.add_business_rounded, color: AppTheme.neonCyan),
-              onPressed: () => _showAddEditBranchModal(),
+              onPressed: _showAddEditBranchModal,
             ),
           ],
         ),
@@ -336,7 +339,7 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(branch['name'] ?? 'بدون اسم', style: const TextStyle(color: Colors.white, fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 14)),
+                                  Text((branch['name'] ?? 'بدون اسم') as String, style: const TextStyle(color: Colors.white, fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 14)),
                                   const SizedBox(height: 4),
                                   Text('النطاق: ${branch['radius_meters'] ?? 50} متر', style: const TextStyle(color: AppTheme.warningOrange, fontSize: 11, fontFamily: 'Cairo')),
                                   if (branch['latitude'] != null)
@@ -350,7 +353,7 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
                             ),
                             IconButton(
                               icon: const Icon(Icons.delete_rounded, color: AppTheme.dangerRed),
-                              onPressed: () => _deleteBranch(branch['id']),
+                              onPressed: () => _deleteBranch(branch['id'] as String),
                             ),
                           ],
                         ),

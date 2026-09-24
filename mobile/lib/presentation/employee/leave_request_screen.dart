@@ -2,13 +2,17 @@
 // نظام HR Pro v6.0 - شاشة طلبات وأرصدة الإجازات (Leave Requests & Balances Screen)
 // =========================================================================
 
+import 'dart:async';
+
 import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:uuid/uuid.dart';
-import '../../core/services/supabase_service.dart';
-import '../../core/services/file_upload_service.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:uuid/uuid.dart';
+
+import '../../core/services/file_upload_service.dart';
+import '../../core/services/supabase_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../shared/widgets/glass_container.dart';
 
@@ -136,7 +140,7 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
         if (policy['active_types'] != null) {
           final typesList = policy['active_types'] as List<dynamic>;
           final List<Map<String, String>> mappedTypes = [];
-          for (var t in typesList) {
+          for (final t in typesList) {
             final typeMap = t as Map<String, dynamic>;
             mappedTypes.add({
               'id': typeMap['id']?.toString() ?? '',
@@ -215,12 +219,12 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
     }
 
     bool isOverlap = false;
-    for (var req in _leaveHistory) {
+    for (final req in _leaveHistory) {
       if (req['status'] == 'rejected' || req['status'] == 'cancelled') continue;
       if (req['start_date'] == null || req['end_date'] == null) continue;
       
-      final reqStart = DateTime.parse(req['start_date']).toLocal();
-      final reqEnd = DateTime.parse(req['end_date']).toLocal();
+      final reqStart = DateTime.parse(req['start_date'] as String).toLocal();
+      final reqEnd = DateTime.parse(req['end_date'] as String).toLocal();
       final rStartDay = DateTime(reqStart.year, reqStart.month, reqStart.day);
       final rEndDay = DateTime(reqEnd.year, reqEnd.month, reqEnd.day);
       final endDay = _isHourly ? startDay : DateTime(_endDate.year, _endDate.month, _endDate.day);
@@ -302,7 +306,7 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
         );
         _resetForm();
         _tabController.animateTo(1); // تحويل الموظف لتبويب السجل
-        _loadHistory();
+        unawaited(_loadHistory());
       }
 
     } catch (e) {
@@ -463,7 +467,6 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
   Widget _buildLeaveForm(bool isDark) {
     return GlassContainer(
       padding: const EdgeInsets.all(20),
-      borderRadius: 24,
       opacity: 0.1,
       borderColor: AppTheme.neonCyan.withValues(alpha: 0.2),
       boxShadow: [
@@ -481,7 +484,7 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
             const Text('تصنيف ونوع الإجازة المرجوة', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white, fontFamily: 'Cairo')),
             const SizedBox(height: 8),
             DropdownButtonFormField<String>(
-              value: _leaveType,
+              initialValue: _leaveType,
               style: const TextStyle(color: Colors.white, fontSize: 13, fontFamily: 'Cairo'),
               decoration: InputDecoration(
                 filled: true,
@@ -524,7 +527,7 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
                 ),
                 Switch.adaptive(
                   value: _isHourly,
-                  activeColor: AppTheme.neonCyan,
+                  activeThumbColor: AppTheme.neonCyan,
                   activeTrackColor: AppTheme.neonCyan.withValues(alpha: 0.3),
                   onChanged: (val) {
                     setState(() => _isHourly = val);
@@ -566,7 +569,7 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
                       const SizedBox(width: 8),
                       Switch.adaptive(
                         value: _isPaid,
-                        activeColor: AppTheme.successGreen,
+                        activeThumbColor: AppTheme.successGreen,
                         activeTrackColor: AppTheme.successGreen.withValues(alpha: 0.3),
                         inactiveThumbColor: AppTheme.dangerRed,
                         inactiveTrackColor: AppTheme.dangerRed.withValues(alpha: 0.3),
@@ -892,17 +895,17 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
           final type = req['leave_type'] ?? 'other';
           final isHourly = req['is_hourly'] ?? false;
           final status = req['status'] ?? 'pending';
-          final cardColor = _getStatusColor(status);
+          final cardColor = _getStatusColor(status as String);
 
           final String typeLabelStr = _leaveTypes.firstWhere(
             (t) => t['id'] == type,
             orElse: () => {
-              'id': type,
-              'name': type == 'annual' ? 'سنوية' :
+              'id': (type as String),
+              'name': (type == 'annual' ? 'سنوية' :
                       type == 'sick' ? 'مرضية' :
                       type == 'emergency' ? 'طارئة' :
                       type == 'maternity' ? 'أمومة' :
-                      type == 'other' ? 'أخرى' : type
+                      type == 'other' ? 'أخرى' : type)
             },
           )['name']!;
 
@@ -924,7 +927,7 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      'إجازة $typeLabelStr (${isHourly ? "ساعية" : "يومية"})',
+                      'إجازة $typeLabelStr (${(isHourly as bool) ? "ساعية" : "يومية"})',
                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white, fontFamily: 'Cairo'),
                     ),
                     Container(
@@ -943,13 +946,13 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  'الفترة: ${_formatDate(req['start_date'])} إلى ${_formatDate(req['end_date'])}',
+                  'الفترة: ${_formatDate(req['start_date'] as String?)} إلى ${_formatDate(req['end_date'] as String?)}',
                   style: const TextStyle(fontSize: 11, color: Colors.white70, fontFamily: 'Cairo'),
                 ),
                 if (isHourly && req['start_hour'] != null) ...[
                   const SizedBox(height: 4),
                   Text(
-                    'التوقيت: ${_formatTimeStr(req['start_hour'])} إلى ${_formatTimeStr(req['end_hour'])}',
+                    'التوقيت: ${_formatTimeStr(req['start_hour'] as String?)} إلى ${_formatTimeStr(req['end_hour'] as String?)}',
                     style: const TextStyle(fontSize: 11, color: Colors.white70, fontFamily: 'Cairo'),
                   ),
                 ],
@@ -1024,7 +1027,6 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
               primary: AppTheme.neonCyan,
               onPrimary: Colors.white,
               surface: Color(0xFF1E293B),
-              onSurface: Colors.white,
             ),
           ),
           child: child!,
@@ -1057,7 +1059,6 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
               primary: AppTheme.neonCyan,
               onPrimary: Colors.white,
               surface: Color(0xFF1E293B),
-              onSurface: Colors.white,
             ),
           ),
           child: child!,

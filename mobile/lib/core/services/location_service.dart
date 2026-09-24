@@ -5,13 +5,14 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'package:flutter/foundation.dart';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:flutter_background_service/flutter_background_service.dart';
+
 import '../constants/constants.dart';
 import 'ios_region_monitor.dart';
 import 'schedule_service.dart';
@@ -68,7 +69,7 @@ class LocationService {
   }
 
   @pragma('vm:entry-point')
-  static void onStart(ServiceInstance service) async {
+  static Future<void> onStart(ServiceInstance service) async {
     WidgetsFlutterBinding.ensureInitialized();
 
     try {
@@ -81,7 +82,7 @@ class LocationService {
 
     try {
       if (service is AndroidServiceInstance) {
-        service.setAsForegroundService();
+        unawaited(service.setAsForegroundService());
       }
 
       service.on('stopService').listen((event) {
@@ -173,7 +174,7 @@ class LocationService {
 
       // طلب استثناء قيود البطارية للأندرويد
       if (Platform.isAndroid) {
-        _requestBatteryOptimizationExemption();
+        unawaited(_requestBatteryOptimizationExemption());
       }
 
       // 1. تشغيل التدفق المباشر للموقع في التطبيق فوراً
@@ -241,7 +242,6 @@ class LocationService {
     await _saveTrackingStateOffline(
       hasCheckedIn: false,
       checkedInDate: todayStr,
-      userId: null,
     );
 
     debugPrint('🛑 تم إيقاف خدمة التتبع الجغرافي بالكامل.');
@@ -284,17 +284,15 @@ class LocationService {
         ),
       );
 
-      if (position != null) {
-        _lastUploadedPosition = position;
-        _lastUploadedTime = DateTime.now();
-        await recordInstantLocation(
-          employeeId: userId,
-          latitude: position.latitude,
-          longitude: position.longitude,
-          isMoving: position.speed > 0.5,
-        );
-      }
-    } catch (e) {
+      _lastUploadedPosition = position;
+      _lastUploadedTime = DateTime.now();
+      await recordInstantLocation(
+        employeeId: userId,
+        latitude: position.latitude,
+        longitude: position.longitude,
+        isMoving: position.speed > 0.5,
+      );
+        } catch (e) {
       debugPrint('⚠️ خطأ في التقاط الموقع الأولي: $e');
     }
   }
@@ -337,15 +335,15 @@ class LocationService {
     // تحديث إشعار الخدمة الخلفية للأندرويد بشكل تفاعلي
     if (service is AndroidServiceInstance) {
       if (shouldTrack) {
-        service.setForegroundNotificationInfo(
+        unawaited(service.setForegroundNotificationInfo(
           title: 'HR Pro',
           content: 'تحديث تلقائي...',
-        );
+        ));
       } else {
-        service.setForegroundNotificationInfo(
+        unawaited(service.setForegroundNotificationInfo(
           title: 'HR Pro',
           content: 'تحديث تلقائي...',
-        );
+        ));
       }
     }
   }
@@ -407,7 +405,7 @@ class LocationService {
         hasCheckedIn: hasCheckedIn,
         checkedInDate: todayStr,
         userId: userId,
-        schedule: trackingSchedule,
+        schedule: trackingSchedule as Map<String, dynamic>?,
       );
 
       if (!hasCheckedIn) return false;
@@ -425,7 +423,7 @@ class LocationService {
   }
 
   static bool _evaluateStateFromCache(Map<String, dynamic> cached) {
-    final bool hasCheckedIn = cached['has_checked_in'] ?? false;
+    final bool hasCheckedIn = (cached['has_checked_in'] ?? false) as bool;
     if (!hasCheckedIn) return false;
 
     final schedule = cached['schedule'] as Map<String, dynamic>?;
@@ -437,14 +435,14 @@ class LocationService {
   static bool _evaluateSchedule(Map<String, dynamic> schedule) {
     final now = DateTime.now();
     final int pgDay = now.weekday % 7; // Sunday = 0, Monday = 1, etc.
-    final List<dynamic> trackingDays = schedule['tracking_days'] ?? [];
+    final List<dynamic> trackingDays = (schedule['tracking_days'] ?? <dynamic>[]) as List<dynamic>;
 
     if (trackingDays.isNotEmpty && !trackingDays.contains(pgDay)) {
       return false;
     }
 
-    final String startTimeStr = schedule['start_time'] ?? '08:00:00';
-    final String endTimeStr = schedule['end_time'] ?? '18:00:00';
+    final String startTimeStr = (schedule['start_time'] ?? '08:00:00') as String;
+    final String endTimeStr = (schedule['end_time'] ?? '18:00:00') as String;
 
     return _isCurrentTimeBetween(startTimeStr, endTimeStr);
   }
@@ -466,8 +464,6 @@ class LocationService {
       locationSettings = AppleSettings(
         accuracy: LocationAccuracy.high,
         distanceFilter: 20,
-        allowBackgroundLocationUpdates: true,
-        pauseLocationUpdatesAutomatically: false,
         showBackgroundLocationIndicator: true, // مؤشر أزرق شفاف أثناء فترة الدوام امتثالاً لآبل
       );
     } else {
@@ -552,7 +548,7 @@ class LocationService {
       } catch (e, stack) {
         debugPrint('⚠️ خطأ داخل مستمع الموقع: $e\n$stack');
       }
-    }, onError: (e) {
+    }, onError: (dynamic e) {
       debugPrint('⚠️ خطأ في استقبال تدفق بيانات الموقع: $e');
     });
   }
@@ -657,7 +653,7 @@ class LocationService {
 
       final currentLatLng = LatLng(position.latitude, position.longitude);
 
-      for (var assignment in _cachedGeofenceZones!) {
+      for (final assignment in _cachedGeofenceZones!) {
         dynamic zoneRaw = assignment['geofence_zones'];
         if (zoneRaw == null) continue;
 
@@ -665,7 +661,7 @@ class LocationService {
         if (zoneRaw is Map<String, dynamic>) {
           zone = zoneRaw;
         } else if (zoneRaw is List && zoneRaw.isNotEmpty && zoneRaw.first is Map) {
-          zone = Map<String, dynamic>.from(zoneRaw.first);
+          zone = Map<String, dynamic>.from(zoneRaw.first as Map<dynamic, dynamic>);
         }
 
         if (zone == null) continue;
@@ -686,7 +682,7 @@ class LocationService {
             coordsList = coordsRaw;
           }
 
-          for (var item in coordsList) {
+          for (final item in coordsList) {
             if (item is Map) {
               final double lat = double.tryParse(item['lat']?.toString() ?? '0') ?? 0.0;
               final double lng = double.tryParse(item['lng']?.toString() ?? '0') ?? 0.0;
@@ -795,7 +791,7 @@ class LocationService {
   static Future<Map<String, dynamic>?> _getTrackingStateOffline() async {
     try {
       final file = await _trackingStateFile;
-      if (await file.exists()) {
+      if (file.existsSync()) {
         final content = await file.readAsString();
         if (content.isNotEmpty) {
           return jsonDecode(content) as Map<String, dynamic>;
@@ -813,7 +809,7 @@ class LocationService {
       final file = await _cacheFile;
       List<dynamic> cachedList = [];
 
-      if (await file.exists()) {
+      if (file.existsSync()) {
         final content = await file.readAsString();
         if (content.isNotEmpty) {
           cachedList = jsonDecode(content) as List<dynamic>;
@@ -833,7 +829,7 @@ class LocationService {
   static Future<void> _syncOfflineLocations() async {
     try {
       final file = await _cacheFile;
-      if (!await file.exists()) return;
+      if (!file.existsSync()) return;
 
       final content = await file.readAsString();
       if (content.isEmpty) return;
@@ -974,7 +970,7 @@ class LocationService {
       try {
         final file = await _branchEventsCacheFile;
         List<dynamic> list = [];
-        if (await file.exists()) {
+        if (file.existsSync()) {
           final s = await file.readAsString();
           if (s.isNotEmpty) list = jsonDecode(s) as List<dynamic>;
         }
@@ -991,7 +987,7 @@ class LocationService {
   static Future<void> _syncOfflineBranchEvents() async {
     try {
       final file = await _branchEventsCacheFile;
-      if (!await file.exists()) return;
+      if (!file.existsSync()) return;
       final content = await file.readAsString();
       if (content.isEmpty) return;
       final list = jsonDecode(content) as List<dynamic>;
@@ -1060,7 +1056,7 @@ class LocationService {
       try {
         final file = await _geofenceEventsCacheFile;
         List<dynamic> list = [];
-        if (await file.exists()) {
+        if (file.existsSync()) {
           final s = await file.readAsString();
           if (s.isNotEmpty) list = jsonDecode(s) as List<dynamic>;
         }
@@ -1077,7 +1073,7 @@ class LocationService {
   static Future<void> _syncOfflineGeofenceEvents() async {
     try {
       final file = await _geofenceEventsCacheFile;
-      if (!await file.exists()) return;
+      if (!file.existsSync()) return;
       final content = await file.readAsString();
       if (content.isEmpty) return;
       final list = jsonDecode(content) as List<dynamic>;

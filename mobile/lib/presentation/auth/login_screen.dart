@@ -77,7 +77,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     FocusScope.of(context).unfocus();
     if (!_formKey.currentState!.validate()) return;
 
-    HapticFeedback.lightImpact();
+    unawaited(HapticFeedback.lightImpact());
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -90,7 +90,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       ).timeout(const Duration(seconds: 15));
 
       if (mounted) {
-        NotificationService.requestPermissionAndSaveToken();
+        unawaited(NotificationService.requestPermissionAndSaveToken());
         context.go(AppRoutes.employeeHome);
       }
     } on TimeoutException {
@@ -143,7 +143,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Spacer(flex: 1),
+                        const Spacer(),
                         _buildLogo(isDark),
                         const SizedBox(height: AppTheme.space6),
                         _buildTitle(t, isDark),
@@ -229,7 +229,6 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
           color: isDark
               ? Colors.white.withValues(alpha: 0.08)
               : AppTheme.lightBorder,
-          width: 1,
         ),
         boxShadow: AppTheme.shadowLg(isDark),
       ),
@@ -341,7 +340,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       decoration: BoxDecoration(
         color: AppTheme.dangerRed.withValues(alpha: 0.10),
         borderRadius: BorderRadius.circular(AppTheme.radiusSm),
-        border: Border.all(color: AppTheme.dangerRed.withValues(alpha: 0.35), width: 1),
+        border: Border.all(color: AppTheme.dangerRed.withValues(alpha: 0.35)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -370,7 +369,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       duration: AppTheme.motionFast,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(AppTheme.radiusSm),
-        boxShadow: _isLoading ? null : AppTheme.glowPrimary(opacity: 0.35),
+        boxShadow: _isLoading ? null : AppTheme.glowPrimary(),
       ),
       child: SizedBox(
         height: 54,

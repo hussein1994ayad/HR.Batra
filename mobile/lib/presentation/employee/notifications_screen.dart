@@ -46,7 +46,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       });
 
       final unreadIds = _notifications
-          .where((n) => !(n['is_read'] ?? false))
+          .where((n) => !((n['is_read'] ?? false) as bool))
           .map((n) => n['id'] as String)
           .toList();
 
@@ -84,8 +84,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   Widget _buildBody(bool isDark, TextTheme t, ColorScheme cs) {
     if (_isLoading) {
-      return Padding(
-        padding: const EdgeInsets.all(AppTheme.space4),
+      return const Padding(
+        padding: EdgeInsets.all(AppTheme.space4),
         child: SkeletonList(itemCount: 6, itemHeight: 84),
       );
     }

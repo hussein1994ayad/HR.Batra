@@ -2,13 +2,16 @@
 // نظام HR Pro v6.0 - إدارة أوقات العمل للأفرع (Branch Work Schedules)
 // =========================================================================
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../core/routes/app_router.dart';
 import '../../core/services/supabase_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../shared/widgets/glass_background.dart';
 import '../shared/widgets/glass_container.dart';
-import 'package:go_router/go_router.dart';
-import '../../core/routes/app_router.dart';
 
 class BranchScheduleScreen extends StatefulWidget {
   const BranchScheduleScreen({super.key});
@@ -60,7 +63,7 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
             .order('name'),
         SupabaseService.client
             .from('work_schedules')
-            .select('*')
+            .select()
             .isFilter('employee_id', null)
             .isFilter('department_id', null)
             .not('branch_id', 'is', null)
@@ -71,7 +74,7 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
 
       // دمج البيانات
       final List<Map<String, dynamic>> merged = [];
-      for (var zone in zones) {
+      for (final zone in zones) {
         final schedule = schedules.firstWhere(
           (s) => s['branch_id'] == zone['id'],
           orElse: () => <String, dynamic>{},
@@ -97,24 +100,24 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
   // إضافة أو تعديل جدول عمل فرع
   Future<void> _editSchedule(Map<String, dynamic> branch) async {
     final schedule = branch['schedule'] as Map<String, dynamic>;
-    final bool hasSchedule = branch['has_schedule'];
+    final bool hasSchedule = branch['has_schedule'] as bool;
 
     // القيم الأولية
     List<int> workDays = hasSchedule
-        ? List<int>.from(schedule['work_days'] ?? [0, 1, 2, 3, 4, 6])
+        ? List<int>.from((schedule['work_days'] ?? [0, 1, 2, 3, 4, 6]) as Iterable<dynamic>)
         : [0, 1, 2, 3, 4, 6]; // كل الأيام ما عدا الجمعة (5)
     TimeOfDay shiftStart = hasSchedule
-        ? _parseTime(schedule['check_in_time'] ?? '08:00:00')
+        ? _parseTime((schedule['check_in_time'] ?? '08:00:00') as String)
         : const TimeOfDay(hour: 8, minute: 0);
     TimeOfDay shiftEnd = hasSchedule
-        ? _parseTime(schedule['check_out_time'] ?? '16:00:00')
+        ? _parseTime((schedule['check_out_time'] ?? '16:00:00') as String)
         : const TimeOfDay(hour: 16, minute: 0);
     int reminderMinutes = 5; // القيمة الافتراضية
-    int graceMinutes = hasSchedule
+    int graceMinutes = (hasSchedule
         ? (schedule['grace_period_minutes'] ?? 15)
-        : 15;
+        : 15) as int;
 
-    await showModalBottomSheet(
+    await showModalBottomSheet<dynamic>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -403,14 +406,14 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
                               await SupabaseService.client
                                   .from('work_schedules')
                                   .update(data)
-                                  .eq('id', schedule['id']);
+                                  .eq('id', schedule['id'] as Object);
                             } else {
                               await SupabaseService.client
                                   .from('work_schedules')
                                   .insert(data);
                             }
 
-                            if (mounted) {
+                            if (context.mounted) {
                               Navigator.pop(context);
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
@@ -418,11 +421,11 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
                                   backgroundColor: AppTheme.successGreen,
                                 ),
                               );
-                              _loadBranches();
+                              unawaited(_loadBranches());
                             }
                           } catch (e) {
                             debugPrint('خطأ في حفظ الجدول: $e');
-                            if (mounted) {
+                            if (context.mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
                                   content: Text('خطأ: $e', style: const TextStyle(fontFamily: 'Cairo')),
@@ -531,23 +534,22 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
         body: _isLoading
             ? const Center(child: CircularProgressIndicator(color: AppTheme.neonCyan))
             : _branches.isEmpty
-                ? Center(
+                ? const Center(
                     child: GlassContainer(
-                      padding: const EdgeInsets.all(32),
-                      margin: const EdgeInsets.all(24),
-                      borderRadius: 24,
+                      padding: EdgeInsets.all(32),
+                      margin: EdgeInsets.all(24),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.location_off_rounded, color: AppTheme.warningOrange, size: 54),
-                          const SizedBox(height: 16),
-                          const Text(
+                          Icon(Icons.location_off_rounded, color: AppTheme.warningOrange, size: 54),
+                          SizedBox(height: 16),
+                          Text(
                             'لا توجد أفرع مسجلة حالياً',
                             textAlign: TextAlign.center,
                             style: TextStyle(fontSize: 14, color: Colors.white70, fontWeight: FontWeight.bold, fontFamily: 'Cairo'),
                           ),
-                          const SizedBox(height: 8),
-                          const Text(
+                          SizedBox(height: 8),
+                          Text(
                             'يرجى إضافة أفرع (مناطق جيوفينس) أولاً من قاعدة البيانات',
                             textAlign: TextAlign.center,
                             style: TextStyle(fontSize: 11, color: Colors.white38, fontFamily: 'Cairo'),
@@ -573,7 +575,7 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
                           padding: const EdgeInsets.all(16),
                           borderRadius: 20,
                           opacity: 0.08,
-                          borderColor: hasSchedule
+                          borderColor: (hasSchedule as bool)
                               ? AppTheme.successGreen.withValues(alpha: 0.25)
                               : AppTheme.warningOrange.withValues(alpha: 0.25),
                           child: Column(
@@ -599,7 +601,7 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          branch['zone_name'] ?? 'فرع غير مسمى',
+                                          (branch['zone_name'] ?? 'فرع غير مسمى') as String,
                                           style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white),
                                         ),
                                         Text(
@@ -631,13 +633,13 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
                                   children: [
                                     _buildTimeChip(
                                       'الدخول',
-                                      _formatTimeStr(schedule['check_in_time'] ?? '08:00:00'),
+                                      _formatTimeStr((schedule['check_in_time'] ?? '08:00:00') as String),
                                       AppTheme.successGreen,
                                     ),
                                     const SizedBox(width: 8),
                                     _buildTimeChip(
                                       'الخروج',
-                                      _formatTimeStr(schedule['check_out_time'] ?? '16:00:00'),
+                                      _formatTimeStr((schedule['check_out_time'] ?? '16:00:00') as String),
                                       AppTheme.dangerRed,
                                     ),
                                     const SizedBox(width: 8),
@@ -653,7 +655,7 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
                                 Wrap(
                                   spacing: 4,
                                   children: List.generate(7, (d) {
-                                    final List<dynamic> days = schedule['work_days'] ?? [];
+                                    final List<dynamic> days = (schedule['work_days'] ?? <dynamic>[]) as List<dynamic>;
                                     final isWork = days.contains(d);
                                     return Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),

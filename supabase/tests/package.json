@@ -1,0 +1,11 @@
+{
+  "name": "hr-pro-db-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node test_security.mjs && node test_attendance.mjs && node test_leave_payroll.mjs && node test_deletion.mjs"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.3.0"
+  }
+}

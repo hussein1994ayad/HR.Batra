@@ -2,12 +2,15 @@
 // نظام HR Pro v6.0 - تقارير الحضور المتقدمة
 // =========================================================================
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
+
 import '../../core/services/supabase_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../shared/widgets/glass_background.dart';
 import '../shared/widgets/glass_container.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 class AttendanceReportScreen extends StatefulWidget {
   const AttendanceReportScreen({super.key});
@@ -64,13 +67,13 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
       ];
       final results = await Future.wait(initFutures);
       if (mounted) {
-        _branches = List<Map<String, dynamic>>.from(results[0]);
-        _employeesList = List<Map<String, dynamic>>.from(results[1]);
+        _branches = List<Map<String, dynamic>>.from(results[0] as Iterable<dynamic>);
+        _employeesList = List<Map<String, dynamic>>.from(results[1] as Iterable<dynamic>);
       }
     } catch (e) {
       debugPrint('Error loading branches/employees: $e');
     }
-    _loadRecords();
+    unawaited(_loadRecords());
   }
 
   Future<void> _loadRecords() async {
@@ -98,9 +101,9 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
           .limit(300);
       final List<Map<String, dynamic>> processed = [];
 
-      for (var record in data) {
+      for (final record in data) {
         if (record['employees'] != null) {
-          String status = record['status'] ?? 'حاضر';
+          String status = (record['status'] ?? 'حاضر') as String;
           if (status == 'present') status = 'حاضر';
           if (status == 'late') status = 'تأخير';
           if (status == 'absent') status = 'غائب';
@@ -128,7 +131,7 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
         return '';
       }).toSet();
 
-      for (var emp in _employeesList) {
+      for (final emp in _employeesList) {
         if (_selectedEmployeeId != null && _selectedEmployeeId != 'all' && emp['id'] != _selectedEmployeeId) continue;
         if (_selectedBranchId != null && _selectedBranchId != 'all' && emp['branch_id'] != _selectedBranchId) continue;
         
@@ -153,7 +156,7 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
       processed.sort((a, b) {
         if (a['status'] == 'غائب' && b['status'] != 'غائب') return 1;
         if (a['status'] != 'غائب' && b['status'] == 'غائب') return -1;
-        return (a['employee_name'] ?? '').compareTo(b['employee_name'] ?? '');
+        return ((a['employee_name'] ?? '').compareTo(b['employee_name'] ?? '')) as int;
       });
 
       if (mounted) {
@@ -190,7 +193,7 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
       setState(() {
         _selectedDateRange = picked;
       });
-      _loadRecords();
+      unawaited(_loadRecords());
     }
   }
 
@@ -220,7 +223,7 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
     // تهيئة الأوقات الحالية إذا وجدت
     if (record['check_in'] != null) {
       try {
-        final dt = DateTime.parse(record['check_in']).toLocal();
+        final dt = DateTime.parse(record['check_in'] as String).toLocal();
         newCheckIn = TimeOfDay(hour: dt.hour, minute: dt.minute);
       } catch (e) {
         try {
@@ -232,7 +235,7 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
     
     if (record['check_out'] != null) {
       try {
-        final dt = DateTime.parse(record['check_out']).toLocal();
+        final dt = DateTime.parse(record['check_out'] as String).toLocal();
         newCheckOut = TimeOfDay(hour: dt.hour, minute: dt.minute);
       } catch (e) {
         try {
@@ -242,7 +245,7 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
       }
     }
 
-    await showDialog(
+    await showDialog<dynamic>(
       context: context,
       builder: (BuildContext context) {
         return StatefulBuilder(
@@ -284,7 +287,7 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
                   style: ElevatedButton.styleFrom(backgroundColor: AppTheme.neonCyan),
                   onPressed: () async {
                     Navigator.pop(context);
-                    _saveEditedTime(record['id'], record['work_date'], newCheckIn, newCheckOut);
+                    unawaited(_saveEditedTime(record['id'] as String, record['work_date'] as String, newCheckIn, newCheckOut));
                   },
                   child: const Text('حفظ التعديلات', style: TextStyle(color: Colors.black, fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
                 ),
@@ -318,7 +321,7 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
         await SupabaseService.client.from('attendance').update(updates).eq('id', recordId);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم تحديث الأوقات بنجاح ✅', style: TextStyle(fontFamily: 'Cairo')), backgroundColor: AppTheme.successGreen));
-          _loadRecords();
+          unawaited(_loadRecords());
         }
       } else {
         if (mounted) setState(() => _isLoading = false);
@@ -376,7 +379,7 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
                           style: const TextStyle(fontFamily: 'Cairo', color: Colors.white, fontSize: 11),
                           items: [
                             const DropdownMenuItem(value: 'all', child: Text('جميع الفروع')),
-                            ..._branches.map((b) => DropdownMenuItem<String>(value: b['id'], child: Text(b['name']))),
+                            ..._branches.map((b) => DropdownMenuItem<String>(value: b['id'] as String?, child: Text(b['name'] as String))),
                           ],
                           onChanged: (val) {
                             setState(() {
@@ -418,7 +421,7 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
                             ..._employeesList.where((emp) {
                               if (_selectedBranchId == null || _selectedBranchId == 'all') return true;
                               return emp['branch_id'] == _selectedBranchId;
-                            }).map((e) => DropdownMenuItem<String>(value: e['id'], child: Text(e['full_name']))),
+                            }).map((e) => DropdownMenuItem<String>(value: e['id'] as String?, child: Text(e['full_name'] as String))),
                           ],
                           onChanged: (val) {
                             setState(() {
@@ -491,14 +494,13 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
                           itemBuilder: (context, index) {
                             final r = _records[index];
                             final isAbsent = r['status'] == 'غائب';
-                            final checkIn = r['check_in'] != null ? _formatTime(r['check_in']) : '--:--';
-                            final checkOut = r['check_out'] != null ? _formatTime(r['check_out']) : '--:--';
+                            final checkIn = r['check_in'] != null ? _formatTime(r['check_in'] as String) : '--:--';
+                            final checkOut = r['check_out'] != null ? _formatTime(r['check_out'] as String) : '--:--';
 
                             return GlassContainer(
                               margin: const EdgeInsets.only(bottom: 12),
                               padding: const EdgeInsets.all(12),
                               borderRadius: 14,
-                              opacity: 0.05,
                               borderColor: isAbsent ? AppTheme.dangerRed.withValues(alpha: 0.2) : AppTheme.successGreen.withValues(alpha: 0.2),
                               child: Row(
                                 children: [
@@ -516,7 +518,7 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        Text(r['employee_name'] ?? 'مجهول', style: const TextStyle(color: Colors.white, fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 13)),
+                                        Text((r['employee_name'] ?? 'مجهول') as String, style: const TextStyle(color: Colors.white, fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 13)),
                                         Text('${r['employee_code']} | ${r['work_date']}', style: const TextStyle(color: Colors.white38, fontSize: 10)),
                                       ],
                                     ),
@@ -535,7 +537,7 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
                                                   children: [
                                                     if (r['check_in_lat'] != null)
                                                       GestureDetector(
-                                                        onTap: () => _openMap(r['check_in_lat'], r['check_in_lng']),
+                                                        onTap: () => _openMap(r['check_in_lat'] as double?, r['check_in_lng'] as double?),
                                                         child: const Icon(Icons.location_on_rounded, color: AppTheme.successGreen, size: 14),
                                                       ),
                                                     const SizedBox(width: 2),
@@ -553,7 +555,7 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
                                                   children: [
                                                     if (r['check_out_lat'] != null)
                                                       GestureDetector(
-                                                        onTap: () => _openMap(r['check_out_lat'], r['check_out_lng']),
+                                                        onTap: () => _openMap(r['check_out_lat'] as double?, r['check_out_lng'] as double?),
                                                         child: const Icon(Icons.location_on_rounded, color: AppTheme.dangerRed, size: 14),
                                                       ),
                                                     const SizedBox(width: 2),

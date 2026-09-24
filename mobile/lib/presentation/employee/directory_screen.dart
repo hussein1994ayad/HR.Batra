@@ -4,14 +4,13 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:open_filex/open_filex.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../../core/services/auth_service.dart';
+
 import '../../core/services/supabase_service.dart';
 import '../../core/theme/app_theme.dart';
-import '../shared/widgets/glass_container.dart';
 import '../shared/widgets/glass_background.dart';
+import '../shared/widgets/glass_container.dart';
 
 class EmployeeDirectoryScreen extends StatefulWidget {
   const EmployeeDirectoryScreen({super.key});
@@ -97,9 +96,9 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
         // إذا كان البحث فارغاً، يظهر جميع الموظفين في الفرع
         if (normalizedQuery.isEmpty) return true;
 
-        final name = _normalizeArabic(emp['full_name'] ?? '');
-        final dept = _normalizeArabic(emp['department_name'] ?? '');
-        final branch = _normalizeArabic(emp['branch_name'] ?? '');
+        final name = _normalizeArabic((emp['full_name'] ?? '') as String);
+        final dept = _normalizeArabic((emp['department_name'] ?? '') as String);
+        final branch = _normalizeArabic((emp['branch_name'] ?? '') as String);
         final code = (emp['employee_code'] ?? '').toLowerCase();
         final phone = (emp['phone'] ?? '').toString();
         final email = (emp['email'] ?? '').toLowerCase();
@@ -107,9 +106,9 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
         return name.contains(normalizedQuery) ||
             dept.contains(normalizedQuery) ||
             branch.contains(normalizedQuery) ||
-            code.contains(normalizedQuery) ||
+            (code.contains(normalizedQuery) as bool) ||
             phone.contains(query) ||
-            email.contains(query.toLowerCase());
+            (email.contains(query.toLowerCase()) as bool);
       }).toList();
     });
   }
@@ -126,7 +125,7 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
     final role = emp['role'] == 'admin' ? 'مدير نظام 👑' : emp['role'] == 'manager' ? 'مدير فرع 👔' : 'موظف 👤';
     final List<dynamic> docUrls = emp['document_urls'] as List<dynamic>? ?? [];
 
-    showModalBottomSheet(
+    showModalBottomSheet<dynamic>(
       context: context,
       isScrollControlled: true,
       backgroundColor: const Color(0xFF0F172A),
@@ -165,8 +164,8 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
                     child: CircleAvatar(
                       radius: 30,
                       backgroundColor: Colors.white.withValues(alpha: 0.08),
-                      backgroundImage: avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null,
-                      child: avatarUrl.isEmpty ? const Icon(Icons.person, color: AppTheme.neonCyan, size: 30) : null,
+                      backgroundImage: (avatarUrl.isNotEmpty as bool) ? NetworkImage(avatarUrl as String) : null,
+                      child: (avatarUrl.isEmpty as bool) ? const Icon(Icons.person, color: AppTheme.neonCyan, size: 30) : null,
                     ),
                   ),
                   const SizedBox(width: 14),
@@ -174,7 +173,7 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(name, style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 15, color: Colors.white)),
+                        Text(name as String, style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 15, color: Colors.white)),
                         const SizedBox(height: 2),
                         Row(
                           children: [
@@ -184,7 +183,7 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
                                 color: AppTheme.neonCyan.withValues(alpha: 0.15),
                                 borderRadius: BorderRadius.circular(6),
                               ),
-                              child: Text(code, style: const TextStyle(fontFamily: 'Cairo', fontSize: 10, color: AppTheme.neonCyan, fontWeight: FontWeight.bold)),
+                              child: Text(code as String, style: const TextStyle(fontFamily: 'Cairo', fontSize: 10, color: AppTheme.neonCyan, fontWeight: FontWeight.bold)),
                             ),
                             const SizedBox(width: 6),
                             Text(role, style: const TextStyle(fontFamily: 'Cairo', fontSize: 11, color: Colors.white70)),
@@ -246,7 +245,7 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
                   const SizedBox(width: 8),
                   IconButton(
                     onPressed: () {
-                      Clipboard.setData(ClipboardData(text: phone));
+                      Clipboard.setData(ClipboardData(text: phone as String));
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
                           content: Text('تم نسخ رقم الهاتف 📋', style: TextStyle(fontFamily: 'Cairo')),
@@ -273,13 +272,13 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
                 ),
                 child: Column(
                   children: [
-                    _buildInfoRow(Icons.domain_rounded, 'الفرع', branch, AppTheme.neonCyan),
+                    _buildInfoRow(Icons.domain_rounded, 'الفرع', branch as String, AppTheme.neonCyan),
                     const Divider(color: Colors.white10, height: 16),
-                    _buildInfoRow(Icons.apartment_rounded, 'القسم', dept, AppTheme.cyberPurple),
+                    _buildInfoRow(Icons.apartment_rounded, 'القسم', dept as String, AppTheme.cyberPurple),
                     const Divider(color: Colors.white10, height: 16),
-                    _buildInfoRow(Icons.phone_iphone_rounded, 'الهاتف', phone, AppTheme.successGreen),
+                    _buildInfoRow(Icons.phone_iphone_rounded, 'الهاتف', phone as String, AppTheme.successGreen),
                     const Divider(color: Colors.white10, height: 16),
-                    _buildInfoRow(Icons.email_rounded, 'البريد', email, Colors.amber),
+                    _buildInfoRow(Icons.email_rounded, 'البريد', email as String, Colors.amber),
                   ],
                 ),
               ),
@@ -304,7 +303,7 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
                     TextButton.icon(
                       onPressed: () async {
                         final text = docUrls.map((u) => u.toString()).join('\n');
-                        await Share.share(text, subject: 'وثائق الموظف: $name');
+                        await SharePlus.instance.share(ShareParams(text: text, subject: 'وثائق الموظف: $name'));
                       },
                       icon: const Icon(Icons.share_rounded, color: AppTheme.neonCyan, size: 14),
                       label: const Text('مشاركة الكل', style: TextStyle(fontFamily: 'Cairo', fontSize: 10, color: AppTheme.neonCyan)),
@@ -375,7 +374,7 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
                           icon: const Icon(Icons.download_rounded, color: AppTheme.successGreen, size: 18),
                           tooltip: 'تنزيل ومشاركة',
                           onPressed: () async {
-                            await Share.shareUri(Uri.parse(url));
+                            await SharePlus.instance.share(ShareParams(uri: Uri.parse(url)));
                           },
                         ),
                       ],
@@ -392,7 +391,7 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
   }
 
   void _previewImageDialog(String url, String title) {
-    showDialog(
+    showDialog<dynamic>(
       context: context,
       builder: (ctx) => Dialog(
         backgroundColor: const Color(0xFF0F172A),
@@ -439,7 +438,7 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
               ElevatedButton.icon(
                 onPressed: () async {
                   Navigator.pop(ctx);
-                  await Share.shareUri(Uri.parse(url));
+                  await SharePlus.instance.share(ShareParams(uri: Uri.parse(url)));
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppTheme.primaryTeal,
@@ -616,10 +615,10 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
                                         child: CircleAvatar(
                                           radius: 24,
                                           backgroundColor: Colors.white.withValues(alpha: 0.04),
-                                          backgroundImage: avatarUrl.isNotEmpty
-                                              ? ResizeImage.resizeIfNeeded(100, 100, NetworkImage(avatarUrl))
+                                          backgroundImage: (avatarUrl.isNotEmpty as bool)
+                                              ? ResizeImage.resizeIfNeeded(100, 100, NetworkImage(avatarUrl as String))
                                               : null,
-                                          child: avatarUrl.isEmpty
+                                          child: (avatarUrl.isEmpty as bool)
                                               ? const Icon(Icons.person, color: AppTheme.neonCyan, size: 22)
                                               : null,
                                         ),
@@ -635,7 +634,7 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
                                               children: [
                                                 Expanded(
                                                   child: Text(
-                                                    name,
+                                                    name as String,
                                                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white, fontFamily: 'Cairo'),
                                                     overflow: TextOverflow.ellipsis,
                                                   ),
@@ -647,7 +646,7 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
                                                     borderRadius: BorderRadius.circular(6),
                                                   ),
                                                   child: Text(
-                                                    code,
+                                                    code as String,
                                                     style: const TextStyle(fontSize: 8.5, color: AppTheme.neonCyan, fontWeight: FontWeight.bold, fontFamily: 'Cairo'),
                                                   ),
                                                 ),
@@ -662,7 +661,7 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
                                             Row(
                                               children: [
                                                 Text(
-                                                  phone,
+                                                  phone as String,
                                                   style: const TextStyle(fontSize: 9.5, color: Colors.white54, fontFamily: 'Cairo'),
                                                 ),
                                                 if (docs.isNotEmpty) ...[

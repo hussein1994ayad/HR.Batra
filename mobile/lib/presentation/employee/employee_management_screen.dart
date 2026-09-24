@@ -2,19 +2,22 @@
 // نظام HR Pro v6.0 - شاشة إدارة الموظفين
 // =========================================================================
 
+import 'dart:async';
+
 import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:flutter_image_compress/flutter_image_compress.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:uuid/uuid.dart';
-import 'package:url_launcher/url_launcher.dart';
-import 'package:open_filex/open_filex.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:http/http.dart' as http;
-import '../../core/services/supabase_service.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:open_filex/open_filex.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:uuid/uuid.dart';
+
 import '../../core/services/image_compression_service.dart';
+import '../../core/services/supabase_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../shared/widgets/glass_background.dart';
 import '../shared/widgets/glass_container.dart';
@@ -84,7 +87,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
           .update({'is_active': !currentStatus})
           .eq('id', id);
       
-      _loadEmployees();
+      unawaited(_loadEmployees());
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -116,7 +119,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
           .update({'device_id_lock': 'force_lock_active'})
           .eq('id', employeeId);
           
-      _loadEmployees();
+      unawaited(_loadEmployees());
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -135,7 +138,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
   Future<List<String>> _uploadDocuments(List<File> files, String employeeId) async {
     List<String> uploadedUrls = [];
     
-    for (var file in files) {
+    for (final file in files) {
       try {
         // ضغط الصورة تلقائياً وإرجاعها، أو إرجاع الملف كما هو إذا كان مستنداً غير صوري (مثل PDF)
         final processedFile = await ImageCompressionService.compressImage(file);
@@ -164,10 +167,10 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
     final codeController = TextEditingController();
     String role = 'employee';
     bool isSaving = false;
-    List<File> _selectedDocuments = [];
-    final ImagePicker _picker = ImagePicker();
+    List<File> selectedDocuments = [];
+    final ImagePicker picker = ImagePicker();
 
-    showModalBottomSheet(
+    showModalBottomSheet<dynamic>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -247,7 +250,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                           spacing: 8,
                           runSpacing: 8,
                           children: [
-                            ..._selectedDocuments.asMap().entries.map((entry) {
+                            ...selectedDocuments.asMap().entries.map((entry) {
                               int idx = entry.key;
                               File file = entry.value;
                               return Stack(
@@ -260,7 +263,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                                     top: -4,
                                     right: -4,
                                     child: GestureDetector(
-                                      onTap: () => setModalState(() => _selectedDocuments.removeAt(idx)),
+                                      onTap: () => setModalState(() => selectedDocuments.removeAt(idx)),
                                       child: const CircleAvatar(radius: 10, backgroundColor: Colors.red, child: Icon(Icons.close, size: 12, color: Colors.white)),
                                     ),
                                   )
@@ -269,10 +272,10 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                             }),
                             GestureDetector(
                               onTap: () async {
-                                final pickedFiles = await _picker.pickMultiImage();
+                                final pickedFiles = await picker.pickMultiImage();
                                 if (pickedFiles.isNotEmpty) {
                                   setModalState(() {
-                                    _selectedDocuments.addAll(pickedFiles.map((x) => File(x.path)));
+                                    selectedDocuments.addAll(pickedFiles.map((x) => File(x.path)));
                                   });
                                 }
                               },
@@ -280,7 +283,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                                 width: 60,
                                 height: 60,
                                 decoration: BoxDecoration(
-                                  border: Border.all(color: AppTheme.neonCyan.withValues(alpha: 0.5), style: BorderStyle.solid),
+                                  border: Border.all(color: AppTheme.neonCyan.withValues(alpha: 0.5)),
                                   borderRadius: BorderRadius.circular(12),
                                   color: AppTheme.neonCyan.withValues(alpha: 0.1),
                                 ),
@@ -312,15 +315,15 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                           try {
                             final newEmpId = const Uuid().v4();
                             List<String> uploadedDocs = [];
-                            if (_selectedDocuments.isNotEmpty) {
-                              uploadedDocs = await _uploadDocuments(_selectedDocuments, newEmpId);
+                            if (selectedDocuments.isNotEmpty) {
+                              uploadedDocs = await _uploadDocuments(selectedDocuments, newEmpId);
                             }
 
                             final empCode = codeController.text.trim().isNotEmpty
                                 ? codeController.text.trim()
                                 : 'EMP-${DateTime.now().millisecondsSinceEpoch % 10000}';
 
-                            await SupabaseService.client.rpc('create_employee_secure', params: {
+                            await SupabaseService.client.rpc<dynamic>('create_employee_secure', params: {
                               'p_email': emailController.text.trim(),
                               'p_password': passwordController.text,
                               'p_full_name': nameController.text.trim(),
@@ -334,15 +337,16 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                               'p_join_date': DateTime.now().toIso8601String().split('T')[0],
                             });
 
-                            if (mounted) {
+                            if (context.mounted) {
                               Navigator.pop(context);
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(content: Text('تم إنشاء الموظف بنجاح ✅', style: TextStyle(fontFamily: 'Cairo')), backgroundColor: AppTheme.successGreen),
                               );
-                              _loadEmployees();
+                              unawaited(_loadEmployees());
                             }
                           } catch (e) {
                             setModalState(() => isSaving = false);
+                            if (!context.mounted) return;
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(content: Text('خطأ: $e', style: const TextStyle(fontFamily: 'Cairo')), backgroundColor: AppTheme.dangerRed),
                             );
@@ -368,11 +372,11 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
 
   void _showEditEmployeeModal(Map<String, dynamic> emp) {
     bool isSaving = false;
-    List<File> _selectedDocuments = [];
-    List<String> _existingDocuments = List<String>.from(emp['document_urls'] ?? []);
-    final ImagePicker _picker = ImagePicker();
+    List<File> selectedDocuments = [];
+    List<String> existingDocuments = List<String>.from((emp['document_urls'] ?? <dynamic>[]) as Iterable<dynamic>);
+    final ImagePicker picker = ImagePicker();
 
-    showModalBottomSheet(
+    showModalBottomSheet<dynamic>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -431,7 +435,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                           spacing: 8,
                           runSpacing: 8,
                           children: [
-                            ..._existingDocuments.asMap().entries.map((entry) {
+                            ...existingDocuments.asMap().entries.map((entry) {
                               int idx = entry.key;
                               String url = entry.value;
                               return Stack(
@@ -444,14 +448,14 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                                     top: -4,
                                     right: -4,
                                     child: GestureDetector(
-                                      onTap: () => setModalState(() => _existingDocuments.removeAt(idx)),
+                                      onTap: () => setModalState(() => existingDocuments.removeAt(idx)),
                                       child: const CircleAvatar(radius: 10, backgroundColor: Colors.red, child: Icon(Icons.close, size: 12, color: Colors.white)),
                                     ),
                                   )
                                 ],
                               );
                             }),
-                            ..._selectedDocuments.asMap().entries.map((entry) {
+                            ...selectedDocuments.asMap().entries.map((entry) {
                               int idx = entry.key;
                               File file = entry.value;
                               return Stack(
@@ -464,7 +468,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                                     top: -4,
                                     right: -4,
                                     child: GestureDetector(
-                                      onTap: () => setModalState(() => _selectedDocuments.removeAt(idx)),
+                                      onTap: () => setModalState(() => selectedDocuments.removeAt(idx)),
                                       child: const CircleAvatar(radius: 10, backgroundColor: Colors.red, child: Icon(Icons.close, size: 12, color: Colors.white)),
                                     ),
                                   )
@@ -473,10 +477,10 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                             }),
                             GestureDetector(
                               onTap: () async {
-                                final pickedFiles = await _picker.pickMultiImage();
+                                final pickedFiles = await picker.pickMultiImage();
                                 if (pickedFiles.isNotEmpty) {
                                   setModalState(() {
-                                    _selectedDocuments.addAll(pickedFiles.map((x) => File(x.path)));
+                                    selectedDocuments.addAll(pickedFiles.map((x) => File(x.path)));
                                   });
                                 }
                               },
@@ -484,7 +488,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                                 width: 60,
                                 height: 60,
                                 decoration: BoxDecoration(
-                                  border: Border.all(color: AppTheme.neonCyan.withValues(alpha: 0.5), style: BorderStyle.solid),
+                                  border: Border.all(color: AppTheme.neonCyan.withValues(alpha: 0.5)),
                                   borderRadius: BorderRadius.circular(12),
                                   color: AppTheme.neonCyan.withValues(alpha: 0.1),
                                 ),
@@ -508,35 +512,38 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                           setModalState(() => isSaving = true);
                           try {
                             // Find deleted
-                            final originalDocs = List<String>.from(emp['document_urls'] ?? []);
-                            final deletedDocs = originalDocs.where((url) => !_existingDocuments.contains(url)).toList();
-                            for (var url in deletedDocs) {
+                            final originalDocs = List<String>.from((emp['document_urls'] ?? <dynamic>[]) as Iterable<dynamic>);
+                            final deletedDocs = originalDocs.where((url) => !existingDocuments.contains(url)).toList();
+                            for (final url in deletedDocs) {
                               try {
                                 final match = RegExp(r'/employee-documents/(.+)').firstMatch(url);
                                 if (match != null) {
                                   await SupabaseService.client.storage.from('employee-documents').remove([match.group(1)!]);
                                 }
-                              } catch(e) {}
+                              } catch (e) {
+                                debugPrint('تعذر حذف المستند القديم من التخزين: $e');
+                              }
                             }
 
                             // Upload new
                             List<String> newUrls = [];
-                            if (_selectedDocuments.isNotEmpty) {
-                              newUrls = await _uploadDocuments(_selectedDocuments, emp['id']);
+                            if (selectedDocuments.isNotEmpty) {
+                              newUrls = await _uploadDocuments(selectedDocuments, emp['id'] as String);
                             }
-                            final finalUrls = [..._existingDocuments, ...newUrls];
+                            final finalUrls = [...existingDocuments, ...newUrls];
 
-                            await SupabaseService.client.from('employees').update({'document_urls': finalUrls}).eq('id', emp['id']);
+                            await SupabaseService.client.from('employees').update({'document_urls': finalUrls}).eq('id', emp['id'] as Object);
 
-                            if (mounted) {
+                            if (context.mounted) {
                               Navigator.pop(context);
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(content: Text('تم تحديث المستمسكات بنجاح ✅', style: TextStyle(fontFamily: 'Cairo')), backgroundColor: AppTheme.successGreen),
                               );
-                              _loadEmployees();
+                              unawaited(_loadEmployees());
                             }
                           } catch (e) {
                             setModalState(() => isSaving = false);
+                            if (!context.mounted) return;
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(content: Text('خطأ: $e', style: const TextStyle(fontFamily: 'Cairo')), backgroundColor: AppTheme.dangerRed),
                             );
@@ -560,7 +567,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
     );
   }
 
-  Widget _buildRoleChoice(String label, String value, String groupValue, Function(String) onChanged) {
+  Widget _buildRoleChoice(String label, String value, String groupValue, void Function(String) onChanged) {
     final isSelected = value == groupValue;
     return GestureDetector(
       onTap: () => onChanged(value),
@@ -619,7 +626,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
   void _previewImageDialog(String url, String title) {
     final isPdf = url.toLowerCase().contains('.pdf');
 
-    showDialog(
+    showDialog<dynamic>(
       context: context,
       builder: (ctx) => Dialog(
         backgroundColor: Colors.transparent,
@@ -713,7 +720,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                     const SizedBox(width: 8),
                     TextButton.icon(
                       onPressed: () async {
-                        await Share.shareUri(Uri.parse(url));
+                        await SharePlus.instance.share(ShareParams(uri: Uri.parse(url)));
                       },
                       icon: const Icon(Icons.share_rounded, size: 16, color: Colors.white70),
                       label: const Text('مشاركة', style: TextStyle(fontFamily: 'Cairo', fontSize: 11, color: Colors.white70)),
@@ -758,11 +765,11 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
     final branch = emp['branch'] ?? emp['branches']?['name'] ?? 'غير محدد';
     final isActive = emp['is_active'] ?? true;
     final salary = emp['monthly_salary_iqd'] ?? emp['salary'] ?? 0;
-    final docUrls = List<dynamic>.from(emp['document_urls'] ?? []);
+    final docUrls = List<dynamic>.from((emp['document_urls'] ?? <dynamic>[]) as Iterable<dynamic>);
     final devices = emp['employee_devices'] as List<dynamic>? ?? [];
     final hasDevice = devices.isNotEmpty;
 
-    showModalBottomSheet(
+    showModalBottomSheet<dynamic>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -793,7 +800,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                         radius: 28,
                         backgroundColor: AppTheme.neonCyan.withValues(alpha: 0.2),
                         child: Text(
-                          name.isNotEmpty ? name.substring(0, 1) : '?',
+                          ((name.isNotEmpty as bool) ? name.substring(0, 1) : '?') as String,
                           style: const TextStyle(color: AppTheme.neonCyan, fontSize: 22, fontWeight: FontWeight.bold),
                         ),
                       ),
@@ -802,13 +809,13 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(name, style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white)),
+                            Text(name as String, style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white)),
                             const SizedBox(height: 2),
                             Row(
                               children: [
                                 _buildBadge(role, AppTheme.cyberPurple),
                                 const SizedBox(width: 6),
-                                _buildBadge(isActive ? 'نشط' : 'معطل', isActive ? AppTheme.successGreen : AppTheme.dangerRed),
+                                _buildBadge((isActive as bool) ? 'نشط' : 'معطل', isActive ? AppTheme.successGreen : AppTheme.dangerRed),
                                 const SizedBox(width: 6),
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -873,7 +880,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                       const SizedBox(width: 8),
                       IconButton(
                         onPressed: () {
-                          Clipboard.setData(ClipboardData(text: phone));
+                          Clipboard.setData(ClipboardData(text: phone as String));
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                               content: Text('تم نسخ رقم الهاتف 📋', style: TextStyle(fontFamily: 'Cairo')),
@@ -903,10 +910,10 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                       children: [
                         const Text('المعلومات الوظيفية والشخصية', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 13, color: AppTheme.neonCyan)),
                         const SizedBox(height: 12),
-                        _buildProfileInfoRow(Icons.email_outlined, 'البريد الإلكتروني', email),
-                        _buildProfileInfoRow(Icons.phone_android_rounded, 'رقم الهاتف', phone),
-                        _buildProfileInfoRow(Icons.account_tree_outlined, 'القسم / الإدارة', department),
-                        _buildProfileInfoRow(Icons.location_on_outlined, 'الفرع المعتمد', branch),
+                        _buildProfileInfoRow(Icons.email_outlined, 'البريد الإلكتروني', email as String),
+                        _buildProfileInfoRow(Icons.phone_android_rounded, 'رقم الهاتف', phone as String),
+                        _buildProfileInfoRow(Icons.account_tree_outlined, 'القسم / الإدارة', department as String),
+                        _buildProfileInfoRow(Icons.location_on_outlined, 'الفرع المعتمد', branch as String),
                         _buildProfileInfoRow(Icons.monetization_on_outlined, 'الراتب الشهري', '$salary د.ع'),
                         _buildProfileInfoRow(Icons.smartphone_rounded, 'حالة قفل الجهاز', hasDevice ? 'مربوط بجهاز (${devices.first['model'] ?? 'هاتف'})' : 'غير مقيد بجهاز حالياً'),
                       ],
@@ -935,7 +942,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                             TextButton.icon(
                               onPressed: () async {
                                 final text = docUrls.map((u) => u.toString()).join('\n');
-                                await Share.share(text, subject: 'وثائق الموظف: $name');
+                                await SharePlus.instance.share(ShareParams(text: text, subject: 'وثائق الموظف: $name'));
                               },
                               icon: const Icon(Icons.share_rounded, color: AppTheme.neonCyan, size: 14),
                               label: const Text('مشاركة الكل', style: TextStyle(fontFamily: 'Cairo', fontSize: 10, color: AppTheme.neonCyan)),
@@ -1099,7 +1106,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                   filled: true,
                   fillColor: Colors.white.withValues(alpha: 0.05),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-                  contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                  contentPadding: const EdgeInsets.symmetric(),
                 ),
               ),
             ),
@@ -1125,7 +1132,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                                 padding: const EdgeInsets.all(16),
                                 borderRadius: 16,
                                 opacity: 0.08,
-                                borderColor: isActive ? AppTheme.neonCyan.withValues(alpha: 0.2) : AppTheme.dangerRed.withValues(alpha: 0.3),
+                                borderColor: (isActive as bool) ? AppTheme.neonCyan.withValues(alpha: 0.2) : AppTheme.dangerRed.withValues(alpha: 0.3),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
@@ -1133,15 +1140,15 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                                       children: [
                                         CircleAvatar(
                                           backgroundColor: AppTheme.neonCyan.withValues(alpha: 0.2),
-                                          child: Text(emp['full_name']?.isNotEmpty == true ? emp['full_name']!.substring(0, 1) : '?', style: const TextStyle(color: AppTheme.neonCyan, fontWeight: FontWeight.bold)),
+                                          child: Text((emp['full_name']?.isNotEmpty == true ? emp['full_name']!.substring(0, 1) : '?') as String, style: const TextStyle(color: AppTheme.neonCyan, fontWeight: FontWeight.bold)),
                                         ),
                                         const SizedBox(width: 12),
                                         Expanded(
                                           child: Column(
                                             crossAxisAlignment: CrossAxisAlignment.start,
                                             children: [
-                                              Text(emp['full_name'] ?? 'بدون اسم', style: const TextStyle(color: Colors.white, fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 14)),
-                                              Text(emp['email'] ?? '', style: const TextStyle(color: Colors.white54, fontSize: 10)),
+                                              Text((emp['full_name'] ?? 'بدون اسم') as String, style: const TextStyle(color: Colors.white, fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 14)),
+                                              Text((emp['email'] ?? '') as String, style: const TextStyle(color: Colors.white54, fontSize: 10)),
                                               const SizedBox(height: 4),
                                               Row(
                                                 children: [
@@ -1168,8 +1175,8 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                                           onSelected: (value) {
                                             if (value == 'profile') _showEmployeeProfileModal(emp);
                                             if (value == 'edit') _showEditEmployeeModal(emp);
-                                            if (value == 'toggle') _toggleEmployeeStatus(emp['id'], isActive);
-                                            if (value == 'unbind') _unbindDevice(emp['id']);
+                                            if (value == 'toggle') _toggleEmployeeStatus(emp['id'] as String, isActive);
+                                            if (value == 'unbind') _unbindDevice(emp['id'] as String);
                                           },
                                           itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
                                             const PopupMenuItem<String>(

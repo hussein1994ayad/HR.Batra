@@ -140,7 +140,7 @@ class AttendanceSyncService {
   static Future<Map<String, dynamic>?> getCachedData() async {
     try {
       final file = await _cacheFile;
-      if (await file.exists()) {
+      if (file.existsSync()) {
         final content = await file.readAsString();
         if (content.isNotEmpty) {
           return jsonDecode(content) as Map<String, dynamic>;
@@ -162,7 +162,7 @@ class AttendanceSyncService {
   static Future<List<Map<String, dynamic>>> getOfflinePunchesQueue() async {
     try {
       final file = await _queueFile;
-      if (await file.exists()) {
+      if (file.existsSync()) {
         final content = await file.readAsString();
         if (content.isNotEmpty) {
           return (jsonDecode(content) as List<dynamic>)
@@ -179,7 +179,7 @@ class AttendanceSyncService {
   static Future<void> _writeQueue(List<Map<String, dynamic>> queue) async {
     final file = await _queueFile;
     if (queue.isEmpty) {
-      if (await file.exists()) await file.delete();
+      if (file.existsSync()) await file.delete();
     } else {
       await file.writeAsString(jsonEncode(queue));
     }

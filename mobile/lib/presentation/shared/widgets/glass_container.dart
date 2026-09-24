@@ -51,7 +51,6 @@ class GlassContainer extends StatelessWidget {
             ? Colors.black.withValues(alpha: 0.2) 
             : Colors.black.withValues(alpha: 0.04),
         blurRadius: 16,
-        spreadRadius: 0,
         offset: const Offset(0, 4),
       ),
     ];
@@ -67,7 +66,6 @@ class GlassContainer extends StatelessWidget {
         borderRadius: BorderRadius.circular(borderRadius),
         border: border ?? Border.all(
           color: finalBorderColor,
-          width: 1.0,
         ),
         boxShadow: effectiveShadow,
       ),

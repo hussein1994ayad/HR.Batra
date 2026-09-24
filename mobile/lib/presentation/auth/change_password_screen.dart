@@ -56,7 +56,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen>
   Future<void> _handleChangePassword() async {
     FocusScope.of(context).unfocus();
     if (!_formKey.currentState!.validate()) return;
-    HapticFeedback.lightImpact();
+    unawaited(HapticFeedback.lightImpact());
 
     setState(() {
       _isLoading = true;

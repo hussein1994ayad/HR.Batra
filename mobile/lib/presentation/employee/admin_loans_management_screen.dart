@@ -2,17 +2,17 @@
 // نظام HR Pro v6.0 - شاشة إدارة ومتابعة سلف الموظفين وكشوف Excel للمدراء
 // =========================================================================
 
+import 'dart:async';
+
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
 import '../../core/constants/constants.dart';
 import '../../core/routes/app_router.dart';
-import '../../core/services/auth_service.dart';
 import '../../core/services/excel_export_service.dart';
 import '../../core/services/file_upload_service.dart';
 import '../../core/services/supabase_service.dart';
@@ -143,7 +143,7 @@ class _AdminLoansManagementScreenState extends State<AdminLoansManagementScreen>
     double remainingAmt = 0.0;
     int activeCount = 0;
 
-    for (var loan in _loansList) {
+    for (final loan in _loansList) {
       final branchId = loan['employees']?['branch_id']?.toString();
       if (_selectedBranchFilter != null && _selectedBranchFilter != 'all' && branchId != _selectedBranchFilter) {
         continue;
@@ -208,8 +208,8 @@ class _AdminLoansManagementScreenState extends State<AdminLoansManagementScreen>
       // استخراج الأقساط وترتيبها
       List<Map<String, dynamic>> installments = [];
       if (loan['loan_installments'] != null) {
-        installments = List<Map<String, dynamic>>.from(loan['loan_installments']);
-        installments.sort((a, b) => (a['due_date'] ?? '').compareTo(b['due_date'] ?? ''));
+        installments = List<Map<String, dynamic>>.from(loan['loan_installments'] as Iterable<dynamic>);
+        installments.sort((a, b) => ((a['due_date'] ?? '').compareTo(b['due_date'] ?? '')) as int);
       }
 
       // توليد ملف Excel الاحترافي
@@ -221,7 +221,7 @@ class _AdminLoansManagementScreenState extends State<AdminLoansManagementScreen>
       if (!mounted) return;
 
       // إظهار نافذة تأكيد ومشاركة الملف
-      _showExcelSuccessDialog(empName, filePath);
+      _showExcelSuccessDialog(empName as String, filePath);
 
     } catch (e) {
       debugPrint('خطأ في تصدير ملف Excel: $e');
@@ -240,7 +240,7 @@ class _AdminLoansManagementScreenState extends State<AdminLoansManagementScreen>
 
   // نافذة نجاح تصدير ملف Excel
   void _showExcelSuccessDialog(String empName, String filePath) {
-    showDialog(
+    showDialog<dynamic>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF0F172A),
@@ -344,34 +344,33 @@ class _AdminLoansManagementScreenState extends State<AdminLoansManagementScreen>
 
   // عرض التفاصيل الكاملة لسلفة موظف في نافذة منبثقة تفاعلية
   void _showLoanDetailsSheet(Map<String, dynamic> loan) {
-    final emp = loan['employees'] ?? {};
-    final String empName = emp['full_name'] ?? 'موظف غير معروف';
-    final String avatarUrl = emp['avatar_url'] ?? '';
-    final String branchName = emp['branches']?['name'] ?? 'الفرع الرئيسي';
-    final String deptName = emp['departments']?['name'] ?? 'عام';
+    final emp = loan['employees'] ?? <String, dynamic>{};
+    final String empName = (emp['full_name'] ?? 'موظف غير معروف') as String;
+    final String avatarUrl = (emp['avatar_url'] ?? '') as String;
+    final String branchName = (emp['branches']?['name'] ?? 'الفرع الرئيسي') as String;
+    final String deptName = (emp['departments']?['name'] ?? 'عام') as String;
     final double salary = (emp['monthly_salary_iqd'] as num?)?.toDouble() ?? 0.0;
     final double totalAmount = (loan['amount'] as num?)?.toDouble() ?? 0.0;
     final int months = (loan['installment_count'] as num?)?.toInt() ?? 1;
     final double monthly = (loan['installment_amount'] as num?)?.toDouble() ?? 0.0;
     final double remaining = (loan['remaining_amount'] as num?)?.toDouble() ?? 0.0;
     final double paid = totalAmount - remaining > 0 ? (totalAmount - remaining) : 0.0;
-    final String status = loan['status'] ?? 'pending';
-    final String pledgeUrl = loan['pledge_url'] ?? '';
-    final String reason = loan['reason'] ?? loan['notes'] ?? 'لا توجد ملاحظات مسجلة';
+    final String pledgeUrl = (loan['pledge_url'] ?? '') as String;
+    final String reason = (loan['reason'] ?? loan['notes'] ?? 'لا توجد ملاحظات مسجلة') as String;
     final String loanDate = loan['created_at'] != null 
         ? loan['created_at'].toString().split('T')[0] 
         : '-';
 
     List<Map<String, dynamic>> installments = [];
     if (loan['loan_installments'] != null) {
-      installments = List<Map<String, dynamic>>.from(loan['loan_installments']);
-      installments.sort((a, b) => (a['due_date'] ?? '').compareTo(b['due_date'] ?? ''));
+      installments = List<Map<String, dynamic>>.from(loan['loan_installments'] as Iterable<dynamic>);
+      installments.sort((a, b) => ((a['due_date'] ?? '').compareTo(b['due_date'] ?? '')) as int);
     }
 
     final int paidInstallmentsCount = installments.where((i) => i['is_paid'] == true).length;
     final double progressPercent = totalAmount > 0 ? (paid / totalAmount).clamp(0.0, 1.0) : 0.0;
 
-    showModalBottomSheet(
+    showModalBottomSheet<dynamic>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -694,8 +693,8 @@ class _AdminLoansManagementScreenState extends State<AdminLoansManagementScreen>
                       final inst = installments[idx];
                       final bool isPaid = inst['is_paid'] == true;
                       final double instAmt = (inst['amount'] as num?)?.toDouble() ?? 0.0;
-                      final String dueDate = inst['due_date'] ?? '-';
-                      final String? paidAt = inst['paid_at'];
+                      final String dueDate = (inst['due_date'] ?? '-') as String;
+                      final String? paidAt = inst['paid_at'] as String?;
 
                       return Container(
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -797,7 +796,7 @@ class _AdminLoansManagementScreenState extends State<AdminLoansManagementScreen>
 
   // عرض الصورة بحجم الشاشة الكامل مع إمكانية التكبير والتصغير
   void _openFullScreenImage(String imageUrl, String title) {
-    showDialog(
+    showDialog<dynamic>(
       context: context,
       builder: (_) => Dialog(
         backgroundColor: Colors.black,
@@ -805,7 +804,6 @@ class _AdminLoansManagementScreenState extends State<AdminLoansManagementScreen>
         child: Stack(
           children: [
             InteractiveViewer(
-              panEnabled: true,
               boundaryMargin: const EdgeInsets.all(20),
               minScale: 0.5,
               maxScale: 4.0,
@@ -913,7 +911,7 @@ class _AdminLoansManagementScreenState extends State<AdminLoansManagementScreen>
     File? pledgeFile;
     bool isSubmittingDialog = false;
 
-    showModalBottomSheet(
+    showModalBottomSheet<dynamic>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -1125,13 +1123,13 @@ class _AdminLoansManagementScreenState extends State<AdminLoansManagementScreen>
                                 'approved_at': DateTime.now().toUtc().toIso8601String(),
                               }).select().single();
 
-                              final String loanId = insertedLoan['id'];
+                              final String loanId = insertedLoan['id'] as String;
 
                               // 2. توليد الأقساط الشهرية مع توزيع الباقي على القسط الأخير
                               final List<Map<String, dynamic>> installments = [];
                               final now = DateTime.now();
                               for (int i = 1; i <= months; i++) {
-                                final due = DateTime(now.year, now.month + i, 1);
+                                final due = DateTime(now.year, now.month + i);
                                 final double instAmt = (i == months) ? (baseInstallment + remainder).toDouble() : baseInstallment.toDouble();
                                 installments.add({
                                   'loan_id': loanId,
@@ -1163,7 +1161,7 @@ class _AdminLoansManagementScreenState extends State<AdminLoansManagementScreen>
                                     backgroundColor: AppTheme.successGreen,
                                   ),
                                 );
-                                _loadLoansData();
+                                unawaited(_loadLoansData());
                               }
                             } catch (err) {
                               debugPrint('Error creating direct loan: $err');
@@ -1533,20 +1531,20 @@ class _AdminLoansManagementScreenState extends State<AdminLoansManagementScreen>
   }
 
   Widget _buildLoanCard(Map<String, dynamic> loan) {
-    final emp = loan['employees'] ?? {};
-    final String empName = emp['full_name'] ?? 'موظف غير معروف';
-    final String avatarUrl = emp['avatar_url'] ?? '';
-    final String branchName = emp['branches']?['name'] ?? 'الفرع الرئيسي';
+    final emp = loan['employees'] ?? <String, dynamic>{};
+    final String empName = (emp['full_name'] ?? 'موظف غير معروف') as String;
+    final String avatarUrl = (emp['avatar_url'] ?? '') as String;
+    final String branchName = (emp['branches']?['name'] ?? 'الفرع الرئيسي') as String;
     final double totalAmount = (loan['amount'] as num?)?.toDouble() ?? 0.0;
     final int months = (loan['installment_count'] as num?)?.toInt() ?? 1;
     final double remaining = (loan['remaining_amount'] as num?)?.toDouble() ?? 0.0;
     final double paid = totalAmount - remaining > 0 ? (totalAmount - remaining) : 0.0;
-    final String status = loan['status'] ?? 'pending';
+    final String status = (loan['status'] ?? 'pending') as String;
     final double progressPercent = totalAmount > 0 ? (paid / totalAmount).clamp(0.0, 1.0) : 0.0;
 
     List<Map<String, dynamic>> installments = [];
     if (loan['loan_installments'] != null) {
-      installments = List<Map<String, dynamic>>.from(loan['loan_installments']);
+      installments = List<Map<String, dynamic>>.from(loan['loan_installments'] as Iterable<dynamic>);
     }
     final int paidCount = installments.where((i) => i['is_paid'] == true).length;
 
@@ -1645,7 +1643,6 @@ class _AdminLoansManagementScreenState extends State<AdminLoansManagementScreen>
                   ],
                 ),
                 Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     const Text('المسدد', style: TextStyle(fontFamily: 'Cairo', fontSize: 10, color: Colors.white60)),
                     Text(

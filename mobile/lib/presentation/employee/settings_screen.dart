@@ -2,22 +2,24 @@
 // نظام HR Pro v6.0 - شاشة الإعدادات والملف الشخصي (Profile & Settings Screen)
 // =========================================================================
 
+import 'dart:async';
+
 import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:open_filex/open_filex.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:share_plus/share_plus.dart';
+
+import '../../core/constants/constants.dart';
 import '../../core/routes/app_router.dart';
 import '../../core/services/auth_service.dart';
-import '../../core/services/supabase_service.dart';
-import '../../core/services/file_upload_service.dart';
 import '../../core/services/device_service.dart';
+import '../../core/services/file_upload_service.dart';
 import '../../core/services/notification_service.dart';
+import '../../core/services/supabase_service.dart';
 import '../../core/theme/app_theme.dart';
-import '../../core/constants/constants.dart';
 import '../shared/widgets/glass_container.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -71,13 +73,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
       if (data != null && mounted) {
         setState(() {
-          _employeeName = data['full_name'] ?? 'موظف';
-          _email = data['email'] ?? 'name@company.com';
-          _phone = data['phone'] ?? 'لا يوجد هاتف مسجل';
-          _employeeCode = data['employee_code'] ?? 'EMP-000';
-          _avatarUrl = data['avatar_url'] ?? '';
+          _employeeName = (data['full_name'] ?? 'موظف') as String;
+          _email = (data['email'] ?? 'name@company.com') as String;
+          _phone = (data['phone'] ?? 'لا يوجد هاتف مسجل') as String;
+          _employeeCode = (data['employee_code'] ?? 'EMP-000') as String;
+          _avatarUrl = (data['avatar_url'] ?? '') as String;
           if (data['document_urls'] != null) {
-            _documentUrls = List<String>.from(data['document_urls']);
+            _documentUrls = List<String>.from(data['document_urls'] as Iterable<dynamic>);
           }
         });
       }
@@ -243,7 +245,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   // معاينة وفتح وتنزيل الوثيقة
   Future<void> _previewDocument(String url) async {
-    showDialog(
+    unawaited(showDialog<dynamic>(
       context: context,
       builder: (ctx) => Dialog(
         backgroundColor: const Color(0xFF0F172A),
@@ -299,7 +301,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     child: ElevatedButton.icon(
                       onPressed: () async {
                         Navigator.pop(ctx);
-                        await Share.shareUri(Uri.parse(url));
+                        await SharePlus.instance.share(ShareParams(uri: Uri.parse(url)));
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppTheme.primaryTeal,
@@ -316,7 +318,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ),
       ),
-    );
+    ));
   }
 
   // Delete Document (مخصص للآدمن والمدراء فقط)
@@ -386,7 +388,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   // تسجيل الخروج
   Future<void> _handleLogout() async {
-    showDialog(
+    unawaited(showDialog<dynamic>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('تسجيل الخروج', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
@@ -408,7 +410,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ],
       ),
-    );
+    ));
   }
 
   // طلب حذف الحساب
@@ -417,13 +419,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (user == null) return;
 
     // إظهار مؤشر انتظار
-    showDialog(
+    unawaited(showDialog<dynamic>(
       context: context,
       barrierDismissible: false,
       builder: (context) => const Center(
         child: CircularProgressIndicator(color: AppTheme.neonCyan),
       ),
-    );
+    ));
 
     try {
       // 1. تحقق من القروض النشطة بذمة الموظف
@@ -437,8 +439,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (mounted) Navigator.pop(context);
 
       double totalRemaining = 0.0;
-      if (loans != null && loans.isNotEmpty) {
-        for (var loan in loans) {
+      if (loans.isNotEmpty) {
+        for (final loan in loans) {
           totalRemaining += (loan['remaining_amount'] as num?)?.toDouble() ?? 0.0;
         }
       }
@@ -446,7 +448,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (totalRemaining > 0) {
         // حظر الطلب لوجود سلفة غير مسددة بالكامل
         if (mounted) {
-          showDialog(
+          unawaited(showDialog<dynamic>(
             context: context,
             builder: (context) => AlertDialog(
               title: const Text('⚠️ عذراً، لا يمكن حذف الحساب', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
@@ -461,14 +463,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ],
             ),
-          );
+          ));
         }
         return;
       }
 
       // 2. تأكيد إرسال الطلب للآدمن
       if (mounted) {
-        showDialog(
+        unawaited(showDialog<dynamic>(
           context: context,
           builder: (context) => AlertDialog(
             title: const Text('طلب حذف الحساب ⚠️', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
@@ -486,21 +488,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   Navigator.pop(context); // إغلاق الديالوج
                   
                   // إظهار مؤشر إرسال الطلب
-                  showDialog(
+                  unawaited(showDialog<dynamic>(
                     context: context,
                     barrierDismissible: false,
                     builder: (context) => const Center(
                       child: CircularProgressIndicator(color: AppTheme.neonCyan),
                     ),
-                  );
+                  ));
 
                   try {
                     // الدالة ترسل الطلب لكل الأدمنية (الموظف لا يرى حساباتهم بسبب RLS)
                     await SupabaseService.client.rpc<dynamic>('request_account_deletion');
 
-                    if (mounted) {
+                    if (context.mounted) {
                       Navigator.pop(context); // إغلاق مؤشر الانتظار
-                      showDialog(
+                      unawaited(showDialog<dynamic>(
                         context: context,
                         builder: (context) => AlertDialog(
                           title: const Text('تم تقديم الطلب ✅', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: Colors.green)),
@@ -515,12 +517,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ),
                           ],
                         ),
-                      );
+                      ));
                     }
                   } catch (e) {
-                    if (mounted) Navigator.pop(context); // إغلاق مؤشر الانتظار
+                    if (context.mounted) Navigator.pop(context); // إغلاق مؤشر الانتظار
                     debugPrint('Failed to submit deletion request: $e');
-                    if (mounted) {
+                    if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text('فشل تقديم طلب حذف الحساب، يرجى المحاولة لاحقاً', style: TextStyle(fontFamily: 'Cairo'))),
                       );
@@ -532,7 +534,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ],
           ),
-        );
+        ));
       }
 
     } catch (e) {
@@ -580,7 +582,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             GlassContainer(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
-              borderRadius: 24,
               opacity: 0.1,
               borderColor: AppTheme.neonCyan.withValues(alpha: 0.2),
               boxShadow: [
@@ -651,7 +652,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     decoration: BoxDecoration(
                       color: AppTheme.neonCyan.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: AppTheme.neonCyan.withValues(alpha: 0.3), width: 1),
+                      border: Border.all(color: AppTheme.neonCyan.withValues(alpha: 0.3)),
                     ),
                     child: Text(
                       _employeeCode,
@@ -674,7 +675,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             GlassContainer(
               width: double.infinity,
               padding: const EdgeInsets.all(20),
-              borderRadius: 24,
               opacity: 0.1,
               borderColor: AppTheme.warningOrange.withValues(alpha: 0.2),
               boxShadow: [
@@ -722,7 +722,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             GlassContainer(
               width: double.infinity,
               padding: const EdgeInsets.all(20),
-              borderRadius: 24,
               opacity: 0.1,
               borderColor: AppTheme.neonCyan.withValues(alpha: 0.2),
               child: Column(
@@ -819,7 +818,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             GlassContainer(
               width: double.infinity,
               padding: const EdgeInsets.all(20),
-              borderRadius: 24,
               opacity: 0.1,
               borderColor: Colors.blueAccent.withValues(alpha: 0.2),
               child: Column(
@@ -933,7 +931,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             GlassContainer(
               width: double.infinity,
               padding: const EdgeInsets.all(20),
-              borderRadius: 24,
               opacity: 0.1,
               borderColor: AppTheme.neonCyan.withValues(alpha: 0.2),
               child: Column(

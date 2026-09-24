@@ -15,9 +15,9 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'device_service.dart';
 import '../providers/app_container.dart';
 import '../providers/auth_provider.dart';
+import 'device_service.dart';
 import 'supabase_service.dart';
 
 // -------------------------------------------------------------------------
@@ -227,7 +227,7 @@ class AuthService {
       final last = prefs.getInt(_kLastActivityKey);
       if (last == null) return false; // لم نبدأ تتبع بعد
       final elapsed = DateTime.now().millisecondsSinceEpoch - last;
-      final maxMs = _sessionMaxIdleDays * 24 * 60 * 60 * 1000;
+      const maxMs = _sessionMaxIdleDays * 24 * 60 * 60 * 1000;
       return elapsed > maxMs;
     } catch (_) {
       return false; // في حال فشل القراءة، لا نُخرج المستخدم

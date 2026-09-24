@@ -136,7 +136,7 @@ class SkeletonCard extends StatelessWidget {
             children: [
               SkeletonBox(width: 40, height: 40, radius: AppTheme.radiusFull),
               SizedBox(width: AppTheme.space3),
-              Expanded(child: SkeletonBox(height: 16)),
+              Expanded(child: SkeletonBox()),
             ],
           ),
           SizedBox(height: AppTheme.space4),

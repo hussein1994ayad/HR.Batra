@@ -58,8 +58,8 @@ class OtaService {
       }
 
       final int latestVersionCode = latestRelease['version_code'] as int;
-      final String latestVersionName = latestRelease['version_name'] ?? '1.0.0';
-      final bool isMandatory = latestRelease['is_mandatory'] ?? false;
+      final String latestVersionName = (latestRelease['version_name'] ?? '1.0.0') as String;
+      final bool isMandatory = (latestRelease['is_mandatory'] ?? false) as bool;
       // iOS: رابط App Store/TestFlight فقط (Apple ترفض تنزيل تطبيقات من خارج المتجر)
       final String downloadUrl = (Platform.isIOS
               ? latestRelease['ipa_url']
@@ -69,7 +69,7 @@ class OtaService {
         debugPrint('OTA: تم تجاهل رابط تحديث غير موثوق: $downloadUrl');
         return {'status': OtaStatus.upToDate};
       }
-      final String releaseNotes = latestRelease['release_notes'] ?? 'تحديث أمان وإصلاحات عامة';
+      final String releaseNotes = (latestRelease['release_notes'] ?? 'تحديث أمان وإصلاحات عامة') as String;
 
       // 3. مقارنة الإصدار الحالي بالإصدار الأخير
       if (latestVersionCode > currentVersionCode) {
@@ -92,12 +92,12 @@ class OtaService {
 
   /// إظهار نافذة التنبيه للتحديث (حوار غير قابل للإلغاء في حال التحديث الإجباري)
   static void showUpdatePrompt(BuildContext context, Map<String, dynamic> updateInfo) {
-    final bool isMandatory = updateInfo['is_mandatory'] ?? false;
-    final String latestVersion = updateInfo['latest_version'] ?? '1.0.0';
-    final String releaseNotes = updateInfo['release_notes'] ?? '';
-    final String downloadUrl = updateInfo['download_url'] ?? '';
+    final bool isMandatory = (updateInfo['is_mandatory'] ?? false) as bool;
+    final String latestVersion = (updateInfo['latest_version'] ?? '1.0.0') as String;
+    final String releaseNotes = (updateInfo['release_notes'] ?? '') as String;
+    final String downloadUrl = (updateInfo['download_url'] ?? '') as String;
 
-    showDialog(
+    showDialog<dynamic>(
       context: context,
       barrierDismissible: !isMandatory, // منع الإغلاق بالنقر في الخارج للمجبر
       builder: (BuildContext context) {

@@ -4,25 +4,26 @@
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../services/supabase_service.dart';
-import '../services/auth_service.dart';
-import '../theme/app_theme.dart';
-import '../../presentation/auth/login_screen.dart';
+
 import '../../presentation/auth/change_password_screen.dart';
-import '../../presentation/employee/main_layout.dart';
-import '../../presentation/employee/directory_screen.dart';
-import '../../presentation/employee/notifications_screen.dart';
+import '../../presentation/auth/login_screen.dart';
 import '../../presentation/employee/admin_dashboard_screen.dart';
-import '../../presentation/employee/trash_screen.dart';
-import '../../presentation/employee/storage_stats_screen.dart';
-import '../../presentation/employee/branch_schedule_screen.dart';
-import '../../presentation/employee/employee_management_screen.dart';
-import '../../presentation/employee/branch_management_screen.dart';
+import '../../presentation/employee/admin_live_tracking_screen.dart';
+import '../../presentation/employee/admin_loans_management_screen.dart';
 import '../../presentation/employee/announcement_screen.dart';
 import '../../presentation/employee/attendance_report_screen.dart';
+import '../../presentation/employee/branch_management_screen.dart';
+import '../../presentation/employee/branch_schedule_screen.dart';
+import '../../presentation/employee/directory_screen.dart';
+import '../../presentation/employee/employee_management_screen.dart';
+import '../../presentation/employee/main_layout.dart';
+import '../../presentation/employee/notifications_screen.dart';
 import '../../presentation/employee/payslips_screen.dart';
-import '../../presentation/employee/admin_loans_management_screen.dart';
-import '../../presentation/employee/admin_live_tracking_screen.dart';
+import '../../presentation/employee/storage_stats_screen.dart';
+import '../../presentation/employee/trash_screen.dart';
+import '../services/auth_service.dart';
+import '../services/supabase_service.dart';
+import '../theme/app_theme.dart';
 
 // تعريف المسارات كمسميات
 class AppRoutes {
@@ -107,7 +108,7 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: AppRoutes.employeeHome,
       builder: (BuildContext context, GoRouterState state) {
-        return const MainLayout(initialTab: 0);
+        return const MainLayout();
       },
     ),
     

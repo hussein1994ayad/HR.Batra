@@ -24,7 +24,7 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
   String? _selectedBranchId;
   List<Map<String, dynamic>> _branches = [];
   List<Map<String, dynamic>> _employees = [];
-  List<String> _selectedEmployeeIds = [];
+  final List<String> _selectedEmployeeIds = [];
 
   @override
   void initState() {
@@ -227,8 +227,8 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
                             style: const TextStyle(fontFamily: 'Cairo', color: Colors.white, fontSize: 14),
                             items: _branches.map((b) {
                               return DropdownMenuItem<String>(
-                                value: b['id'],
-                                child: Text(b['name']),
+                                value: b['id'] as String?,
+                                child: Text(b['name'] as String),
                               );
                             }).toList(),
                             onChanged: (val) => setState(() => _selectedBranchId = val),
@@ -317,7 +317,7 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
   }
 
   void _showEmployeeSelectionDialog() {
-    showDialog(
+    showDialog<dynamic>(
       context: context,
       builder: (context) {
         return StatefulBuilder(
@@ -335,14 +335,14 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
                     final emp = _employees[index];
                     final isSelected = _selectedEmployeeIds.contains(emp['id']);
                     return CheckboxListTile(
-                      title: Text(emp['full_name'], style: const TextStyle(fontFamily: 'Cairo', color: Colors.white, fontSize: 14)),
+                      title: Text(emp['full_name'] as String, style: const TextStyle(fontFamily: 'Cairo', color: Colors.white, fontSize: 14)),
                       value: isSelected,
                       activeColor: AppTheme.neonCyan,
                       checkColor: Colors.black,
                       onChanged: (val) {
                         setDialogState(() {
                           if (val == true) {
-                            _selectedEmployeeIds.add(emp['id']);
+                            _selectedEmployeeIds.add(emp['id'] as String);
                           } else {
                             _selectedEmployeeIds.remove(emp['id']);
                           }

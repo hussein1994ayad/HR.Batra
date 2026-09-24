@@ -261,7 +261,6 @@ class AppTheme {
   static ThemeData _buildLightTheme() {
     const scheme = ColorScheme.light(
       primary: primaryTeal,
-      onPrimary: Colors.white,
       primaryContainer: Color(0xFFCCFBF1),
       onPrimaryContainer: primaryTealDark,
       secondary: accentIndigo,
@@ -269,7 +268,6 @@ class AppTheme {
       secondaryContainer: Color(0xFFE0E7FF),
       onSecondaryContainer: Color(0xFF312E81),
       tertiary: cyberPurple,
-      surface: lightSurface,
       onSurface: lightTextPrimary,
       surfaceContainerLowest: Colors.white,
       surfaceContainerLow: Color(0xFFFAFBFC),
@@ -279,7 +277,6 @@ class AppTheme {
       outline: lightBorder,
       outlineVariant: Color(0xFFE2E8F0),
       error: dangerRed,
-      onError: Colors.white,
       errorContainer: Color(0xFFFEE2E2),
       onErrorContainer: Color(0xFF7F1D1D),
     );
@@ -313,7 +310,7 @@ class AppTheme {
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(radiusMd),
-          side: const BorderSide(color: lightBorder, width: 1),
+          side: const BorderSide(color: lightBorder),
         ),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
@@ -367,7 +364,7 @@ class AppTheme {
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(radiusSm),
-          borderSide: const BorderSide(color: lightBorder, width: 1),
+          borderSide: const BorderSide(color: lightBorder),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(radiusSm),
@@ -375,7 +372,7 @@ class AppTheme {
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(radiusSm),
-          borderSide: const BorderSide(color: dangerRed, width: 1),
+          borderSide: const BorderSide(color: dangerRed),
         ),
         focusedErrorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(radiusSm),
@@ -402,7 +399,7 @@ class AppTheme {
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(radiusSm)),
       ),
-      bottomSheetTheme: BottomSheetThemeData(
+      bottomSheetTheme: const BottomSheetThemeData(
         backgroundColor: lightSurface,
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
@@ -499,7 +496,7 @@ class AppTheme {
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(radiusMd),
-          side: BorderSide(color: darkBorder.withValues(alpha: 0.5), width: 1),
+          side: BorderSide(color: darkBorder.withValues(alpha: 0.5)),
         ),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
@@ -553,7 +550,7 @@ class AppTheme {
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(radiusSm),
-          borderSide: const BorderSide(color: darkBorder, width: 1),
+          borderSide: const BorderSide(color: darkBorder),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(radiusSm),
@@ -561,7 +558,7 @@ class AppTheme {
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(radiusSm),
-          borderSide: const BorderSide(color: dangerRed, width: 1),
+          borderSide: const BorderSide(color: dangerRed),
         ),
         focusedErrorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(radiusSm),
@@ -591,7 +588,7 @@ class AppTheme {
           side: BorderSide(color: darkBorder.withValues(alpha: 0.5)),
         ),
       ),
-      bottomSheetTheme: BottomSheetThemeData(
+      bottomSheetTheme: const BottomSheetThemeData(
         backgroundColor: darkSurface,
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(

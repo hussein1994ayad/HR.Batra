@@ -3,15 +3,16 @@
 // =========================================================================
 
 import 'dart:async';
-import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
-import '../../core/routes/app_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../../core/routes/app_router.dart';
 import '../../core/services/supabase_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../shared/widgets/glass_background.dart';
@@ -102,7 +103,7 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
     _autoRefreshTimer?.cancel();
     try {
       if (_trackingChannel != null) {
-        SupabaseService.client.removeChannel(_trackingChannel);
+        SupabaseService.client.removeChannel(_trackingChannel as RealtimeChannel);
       }
     } catch (_) {}
     super.dispose();
@@ -141,12 +142,12 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
       }
 
       final dateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
-      final startOfDayUtc = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day, 0, 0, 0).toUtc().toIso8601String();
+      final startOfDayUtc = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day).toUtc().toIso8601String();
       final endOfDayUtc = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day, 23, 59, 59, 999).toUtc().toIso8601String();
 
       // 2. جلب الفروع، الموظفين، سجلات الحضور، ونقاط التتبع لليوم المختار بالتوازي
       final results = await Future.wait([
-        SupabaseService.client.from('branches').select('*').order('name'),
+        SupabaseService.client.from('branches').select().order('name'),
         SupabaseService.client
             .from('employees')
             .select('id, full_name, avatar_url, role, branch_id, branches(id, name, latitude, longitude, radius_meters)')
@@ -154,11 +155,11 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
             .order('full_name'),
         SupabaseService.client
             .from('attendance')
-            .select('*')
+            .select()
             .eq('work_date', dateStr),
         SupabaseService.client
             .from('location_tracking')
-            .select('*')
+            .select()
             .gte('timestamp', startOfDayUtc)
             .lte('timestamp', endOfDayUtc)
             .order('timestamp', ascending: true),
@@ -198,15 +199,15 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
   /// تحديث صامت لإحداثيات المواقع الحية بدون وميض الشاشة
   Future<void> _refreshLocationsSilently() async {
     final dateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
-    final startOfDayUtc = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day, 0, 0, 0).toUtc().toIso8601String();
+    final startOfDayUtc = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day).toUtc().toIso8601String();
     final endOfDayUtc = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day, 23, 59, 59, 999).toUtc().toIso8601String();
 
     try {
       final results = await Future.wait([
-        SupabaseService.client.from('attendance').select('*').eq('work_date', dateStr),
+        SupabaseService.client.from('attendance').select().eq('work_date', dateStr),
         SupabaseService.client
             .from('location_tracking')
-            .select('*')
+            .select()
             .gte('timestamp', startOfDayUtc)
             .lte('timestamp', endOfDayUtc)
             .order('timestamp', ascending: true),
@@ -240,7 +241,7 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
     int checkedOut = 0;
     int absent = 0;
 
-    for (var emp in _employeesList) {
+    for (final emp in _employeesList) {
       final String empId = emp['id'] as String;
       final branch = emp['branches'];
       final double? branchLat = (branch?['latitude'] as num?)?.toDouble();
@@ -271,7 +272,7 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
       if (checkInLat != null && checkInLng != null) {
         trailCoords.add(LatLng(checkInLat, checkInLng));
       }
-      for (var p in empTrackingPoints) {
+      for (final p in empTrackingPoints) {
         final double? lat = (p['latitude'] as num?)?.toDouble();
         final double? lng = (p['longitude'] as num?)?.toDouble();
         if (lat != null && lng != null) {
@@ -302,16 +303,16 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
         batteryLevel = (latest['battery_level'] as num?)?.toInt();
         isMoving = latest['is_moving'] == true;
         if (latest['timestamp'] != null) {
-          lastSeen = DateTime.tryParse(latest['timestamp'])?.toLocal();
+          lastSeen = DateTime.tryParse(latest['timestamp'] as String)?.toLocal();
         }
       } else if (hasCheckedOut && checkOutLat != null && checkOutLng != null) {
         currentLat = checkOutLat;
         currentLng = checkOutLng;
-        lastSeen = DateTime.tryParse(checkOutTime!)?.toLocal();
+        lastSeen = DateTime.tryParse(checkOutTime)?.toLocal();
       } else if (hasPunchedIn && checkInLat != null && checkInLng != null) {
         currentLat = checkInLat;
         currentLng = checkInLng;
-        lastSeen = DateTime.tryParse(checkInTime!)?.toLocal();
+        lastSeen = DateTime.tryParse(checkInTime)?.toLocal();
       }
 
       // 4. حساب المسافة عن الفرع
@@ -455,9 +456,7 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
           data: ThemeData.dark().copyWith(
             colorScheme: const ColorScheme.dark(
               primary: AppTheme.neonCyan,
-              onPrimary: Colors.black,
               surface: Color(0xFF0F172A),
-              onSurface: Colors.white,
             ),
           ),
           child: child!,
@@ -469,7 +468,7 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
         _selectedDate = picked;
         _selectedEmployeeForFocus = null;
       });
-      _loadAllTrackingData();
+      unawaited(_loadAllTrackingData());
     }
   }
 
@@ -731,7 +730,7 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
   // دوائر السياج الجغرافي للفروع المعتمدة
   List<CircleMarker> _buildBranchGeofenceCircles() {
     final List<CircleMarker> circles = [];
-    for (var branch in _branchesList) {
+    for (final branch in _branchesList) {
       if (_selectedBranchId != 'all' && branch['id'] != _selectedBranchId) continue;
 
       final lat = (branch['latitude'] as num?)?.toDouble();
@@ -757,7 +756,7 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
   // إنشاء خط مسار التتبع (Trail Polyline) للموظف المحدد
   List<Polyline> _buildEmployeeTrailPolylines() {
     if (_selectedEmployeeForFocus == null) return [];
-    final List<LatLng> coords = List<LatLng>.from(_selectedEmployeeForFocus!['trailCoords'] ?? []);
+    final List<LatLng> coords = List<LatLng>.from((_selectedEmployeeForFocus!['trailCoords'] ?? <dynamic>[]) as Iterable<dynamic>);
     if (coords.length < 2) return [];
 
     return [
@@ -775,13 +774,13 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
   List<Marker> _buildMapMarkers() {
     final List<Marker> markers = [];
 
-    for (var item in _filteredList) {
-      final double? lat = item['currentLat'];
-      final double? lng = item['currentLng'];
+    for (final item in _filteredList) {
+      final double? lat = item['currentLat'] as double?;
+      final double? lng = item['currentLng'] as double?;
       if (lat == null || lng == null) continue;
 
       final emp = item['employee'] as Map<String, dynamic>;
-      final String name = emp['full_name'] ?? '';
+      final String name = (emp['full_name'] ?? '') as String;
       final String status = item['status'] as String;
       final bool isFocused = _selectedEmployeeForFocus != null && _selectedEmployeeForFocus!['employee']['id'] == emp['id'];
 
@@ -839,8 +838,8 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
 
     // إذا كان هناك موظف محدد وله مسار، نضع علامة البداية (مكان البصمة)
     if (_selectedEmployeeForFocus != null) {
-      final double? startLat = _selectedEmployeeForFocus!['checkInLat'];
-      final double? startLng = _selectedEmployeeForFocus!['checkInLng'];
+      final double? startLat = _selectedEmployeeForFocus!['checkInLat'] as double?;
+      final double? startLng = _selectedEmployeeForFocus!['checkInLng'] as double?;
       if (startLat != null && startLng != null) {
         markers.add(
           Marker(
@@ -875,9 +874,8 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
     final checkOut = item['checkOutTimeFormatted'];
     final distance = item['distanceToBranch'];
     final totalKm = item['totalDistanceKm'] as double? ?? 0.0;
-    final int? battery = item['batteryLevel'];
-    final bool isMoving = item['isMoving'] == true;
-    final List<LatLng> trail = item['trailCoords'] ?? [];
+    final int? battery = item['batteryLevel'] as int?;
+    final List<LatLng> trail = (item['trailCoords'] ?? <LatLng>[]) as List<LatLng>;
 
     Color statusColor = Colors.grey;
     String statusText = 'لم يبصم حضور اليوم';
@@ -911,13 +909,13 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
                 children: [
                   CircleAvatar(
                     backgroundColor: statusColor.withValues(alpha: 0.2),
-                    child: Text(name.isNotEmpty ? name.substring(0, 1) : '؟', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: statusColor)),
+                    child: Text(((name.isNotEmpty as bool) ? name.substring(0, 1) : '؟') as String, style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: statusColor)),
                   ),
                   const SizedBox(width: 10),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(name, style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: Colors.white, fontSize: 13)),
+                      Text(name as String, style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: Colors.white, fontSize: 13)),
                       Text('فرع: $branch', style: const TextStyle(fontFamily: 'Cairo', color: Colors.white60, fontSize: 10)),
                     ],
                   ),
@@ -938,7 +936,7 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
               Text('الموقف: $statusText', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: statusColor, fontSize: 11)),
               if (distance != null)
                 Text(
-                  'المسافة عن الفرع: ${distance < 1000 ? "${distance.round()} م" : "${(distance / 1000).toStringAsFixed(1)} كم"}',
+                  'المسافة عن الفرع: ${((distance < 1000) as bool) ? "${distance.round()} م" : "${(distance / 1000).toStringAsFixed(1)} كم"}',
                   style: const TextStyle(fontFamily: 'Cairo', color: AppTheme.neonCyan, fontSize: 11, fontWeight: FontWeight.bold),
                 ),
             ],
@@ -1047,10 +1045,10 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
                       final branch = item['branchName'];
                       final status = item['status'];
                       final checkIn = item['checkInTimeFormatted'];
-                      final double? lat = item['currentLat'];
-                      final double? lng = item['currentLng'];
+                      final double? lat = item['currentLat'] as double?;
+                      final double? lng = item['currentLng'] as double?;
                       final distance = item['distanceToBranch'];
-                      final List<LatLng> trail = item['trailCoords'] ?? [];
+                      final List<LatLng> trail = (item['trailCoords'] ?? <LatLng>[]) as List<LatLng>;
 
                       Color statusColor = Colors.grey;
                       String statusLabel = 'لم يبصم ⏳';
@@ -1074,15 +1072,15 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
                         ),
                         child: ListTile(
                           dense: true,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 10),
                           leading: CircleAvatar(
                             backgroundColor: statusColor.withValues(alpha: 0.2),
                             radius: 16,
-                            child: Text(name.isNotEmpty ? name.substring(0, 1) : '؟', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: statusColor, fontSize: 11)),
+                            child: Text(((name.isNotEmpty as bool) ? name.substring(0, 1) : '؟') as String, style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: statusColor, fontSize: 11)),
                           ),
-                          title: Text(name, style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: Colors.white, fontSize: 12)),
+                          title: Text(name as String, style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: Colors.white, fontSize: 12)),
                           subtitle: Text(
-                            '$branch ${checkIn != null ? "• حضور: $checkIn" : ""} ${distance != null ? "• (${distance < 1000 ? "${distance.round()}م" : "${(distance / 1000).toStringAsFixed(1)}كم"})" : ""}',
+                            '$branch ${checkIn != null ? "• حضور: $checkIn" : ""} ${distance != null ? "• (${((distance < 1000) as bool) ? "${distance.round()}م" : "${(distance / 1000).toStringAsFixed(1)}كم"})" : ""}',
                             style: const TextStyle(fontFamily: 'Cairo', color: Colors.white54, fontSize: 9.5),
                           ),
                           trailing: Row(

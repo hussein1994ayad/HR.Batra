@@ -178,13 +178,13 @@ class PdfExportService {
     // إضافة صفوف الملخص
     _addSummaryGridRow(summaryGrid, 'الراتب الأساسي الاسمي', AppConstants.formatMoney(basicSalary), 'استحقاق ثابت (+)', boldBodyFont, rtlRightFormat, rtlCenterFormat);
     if (allowances > 0) {
-      _addSummaryGridRow(summaryGrid, 'إجمالي المكافآت والبدلات', "+ ${AppConstants.formatMoney(allowances)}", 'إضافة تشجيعية (+)', boldBodyFont, rtlRightFormat, rtlCenterFormat, textColor: successGreen);
+      _addSummaryGridRow(summaryGrid, 'إجمالي المكافآت والبدلات', '+ ${AppConstants.formatMoney(allowances)}', 'إضافة تشجيعية (+)', boldBodyFont, rtlRightFormat, rtlCenterFormat, textColor: successGreen);
     }
     if (deductions > 0) {
-      _addSummaryGridRow(summaryGrid, 'إجمالي خصومات الغياب والدوام والجزاءات', "- ${AppConstants.formatMoney(deductions)}", 'استقطاع (-)', boldBodyFont, rtlRightFormat, rtlCenterFormat, textColor: dangerRed);
+      _addSummaryGridRow(summaryGrid, 'إجمالي خصومات الغياب والدوام والجزاءات', '- ${AppConstants.formatMoney(deductions)}', 'استقطاع (-)', boldBodyFont, rtlRightFormat, rtlCenterFormat, textColor: dangerRed);
     }
     if (loansDeduction > 0) {
-      _addSummaryGridRow(summaryGrid, 'استقطاع قسط السلفة المالية', "- ${AppConstants.formatMoney(loansDeduction)}", 'سداد سلفة (-)', boldBodyFont, rtlRightFormat, rtlCenterFormat, textColor: dangerRed);
+      _addSummaryGridRow(summaryGrid, 'استقطاع قسط السلفة المالية', '- ${AppConstants.formatMoney(loansDeduction)}', 'سداد سلفة (-)', boldBodyFont, rtlRightFormat, rtlCenterFormat, textColor: dangerRed);
     }
 
     // صف الصافي الإجمالي
@@ -252,20 +252,20 @@ class PdfExportService {
       }
 
       if (hasBonuses) {
-        for (var b in bonusesList) {
+        for (final b in bonusesList) {
           final amt = (b['amount'] as num?)?.toDouble() ?? 0.0;
           final reason = b['reason']?.toString() ?? 'مكافأة تشجيعية';
           final date = b['issue_date']?.toString() ?? '-';
-          _addDetailGridRow(detailsGrid, 'مكافأة (+)', "+ ${AppConstants.formatMoney(amt)}", reason, date, bodyFont, rtlCenterFormat, rtlRightFormat, textColor: successGreen);
+          _addDetailGridRow(detailsGrid, 'مكافأة (+)', '+ ${AppConstants.formatMoney(amt)}', reason, date, bodyFont, rtlCenterFormat, rtlRightFormat, textColor: successGreen);
         }
       }
 
       if (hasDeductions) {
-        for (var d in deductionsList) {
+        for (final d in deductionsList) {
           final amt = (d['amount'] as num?)?.toDouble() ?? 0.0;
           final reason = d['reason']?.toString() ?? 'خصم إداري';
           final date = d['issue_date']?.toString() ?? '-';
-          _addDetailGridRow(detailsGrid, 'خصم (-)', "- ${AppConstants.formatMoney(amt)}", reason, date, bodyFont, rtlCenterFormat, rtlRightFormat, textColor: dangerRed);
+          _addDetailGridRow(detailsGrid, 'خصم (-)', '- ${AppConstants.formatMoney(amt)}', reason, date, bodyFont, rtlCenterFormat, rtlRightFormat, textColor: dangerRed);
         }
       }
 
@@ -291,9 +291,9 @@ class PdfExportService {
     }
 
     final PdfGridRow signRow = signGrid.rows.add();
-    signRow.cells[0].value = "توقيع الموظف المستلم:\n\n___________________";
-    signRow.cells[1].value = "توقيع المحاسب المالي:\n\n___________________";
-    signRow.cells[2].value = "اعتماد الموارد البشرية:\n\n___________________";
+    signRow.cells[0].value = 'توقيع الموظف المستلم:\n\n___________________';
+    signRow.cells[1].value = 'توقيع المحاسب المالي:\n\n___________________';
+    signRow.cells[2].value = 'اعتماد الموارد البشرية:\n\n___________________';
 
     for (int i = 0; i < 3; i++) {
       signRow.cells[i].style.font = boldBodyFont;
@@ -323,7 +323,7 @@ class PdfExportService {
     try {
       if (Platform.isAndroid) {
         final downloadDir = Directory('/storage/emulated/0/Download');
-        if (await downloadDir.exists()) {
+        if (downloadDir.existsSync()) {
           final publicFile = File('${downloadDir.path}/$fileName');
           await publicFile.writeAsBytes(bytes, flush: true);
         }
@@ -412,10 +412,10 @@ class PdfExportService {
   /// مشاركة ملف الـ PDF عبر واتساب أو البريد أو التطبيقات
   static Future<void> sharePdfFile(String filePath) async {
     try {
-      await Share.shareXFiles(
-        [XFile(filePath)],
+      await SharePlus.instance.share(ShareParams(
+        files: [XFile(filePath)],
         text: 'كشف الراتب الشهري الرسمي - HR Pro Batra',
-      );
+      ));
     } catch (e) {
       debugPrint('تعذر مشاركة ملف PDF: $e');
     }

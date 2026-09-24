@@ -2,11 +2,14 @@
 // نظام HR Pro v6.0 - شاشة كشوف الرواتب الشهرية للموظف (Monthly Payslips Screen)
 // =========================================================================
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+
+import '../../core/constants/constants.dart';
 import '../../core/services/pdf_export_service.dart';
 import '../../core/services/supabase_service.dart';
 import '../../core/theme/app_theme.dart';
-import '../../core/constants/constants.dart';
 import '../shared/widgets/glass_background.dart';
 
 class PayslipsScreen extends StatefulWidget {
@@ -21,7 +24,7 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
   String? _exportingSlipId;
   Map<String, dynamic>? _employeeProfile;
   List<Map<String, dynamic>> _slips = [];
-  Map<String, List<Map<String, dynamic>>> _slipsDetails = {}; // Record of slip_id -> list of details
+  final Map<String, List<Map<String, dynamic>>> _slipsDetails = {}; // Record of slip_id -> list of details
   int _cycleStartDay = 25;
   int _cycleEndDay = 24;
 
@@ -73,7 +76,7 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
       } else {
         // Cross-month cycle (starts in previous month, ends in selected month)
         final lastDayPrev = DateTime(year, month, 0).day;
-        final prevMonthDate = DateTime(year, month - 1, 1);
+        final prevMonthDate = DateTime(year, month - 1);
         final int prevYear = prevMonthDate.year;
         final int prevMonthNum = prevMonthDate.month;
 
@@ -98,7 +101,7 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
       final results = await Future.wait([
         SupabaseService.client
             .from('salary_slips')
-            .select('*')
+            .select()
             .eq('employee_id', user.id)
             .eq('status', 'published')
             .order('work_month', ascending: false),
@@ -136,7 +139,7 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
     try {
       final detailsData = await SupabaseService.client
           .from('bonuses_deductions')
-          .select('*')
+          .select()
           .eq('employee_id', user.id)
           .gte('issue_date', cycle['start']!)
           .lte('issue_date', cycle['end']!)
@@ -153,8 +156,8 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
 
   // تصدير كشف الراتب الشهري بصيغة PDF
   Future<void> _exportPayslipToPdf(Map<String, dynamic> slip) async {
-    final String slipId = slip['id'] ?? '';
-    final String workMonth = slip['work_month'] ?? '0000-00';
+    final String slipId = (slip['id'] ?? '') as String;
+    final String workMonth = (slip['work_month'] ?? '0000-00') as String;
     setState(() => _exportingSlipId = slipId);
 
     try {
@@ -167,8 +170,8 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
       final bonuses = details.where((d) => d['type'] == 'bonus').toList();
       final deductions = details.where((d) => d['type'] == 'deduction').toList();
 
-      final String empName = _employeeProfile?['full_name'] ?? 'الموظف';
-      final String branchName = _employeeProfile?['branches']?['name'] ?? '';
+      final String empName = (_employeeProfile?['full_name'] ?? 'الموظف') as String;
+      final String branchName = (_employeeProfile?['branches']?['name'] ?? '') as String;
 
       final String filePath = await PdfExportService.generatePayslipPdf(
         employeeName: empName,
@@ -188,7 +191,7 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
         await PdfExportService.openPdfFile(filePath);
 
         if (!mounted) return;
-        showModalBottomSheet(
+        unawaited(showModalBottomSheet<dynamic>(
           context: context,
           backgroundColor: const Color(0xFF0F172A),
           shape: const RoundedRectangleBorder(
@@ -269,7 +272,7 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
               ],
             ),
           ),
-        );
+        ));
       }
     } catch (e) {
       debugPrint('خطأ في تصدير PDF للراتب: $e');
@@ -348,8 +351,8 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
   }
 
   Widget _buildSlipCard(Map<String, dynamic> slip, bool isDark) {
-    final String slipId = slip['id'] ?? '';
-    final String workMonth = slip['work_month'] ?? '0000-00';
+    final String slipId = (slip['id'] ?? '') as String;
+    final String workMonth = (slip['work_month'] ?? '0000-00') as String;
     final double basic = (slip['basic_salary'] as num?)?.toDouble() ?? 0.0;
     final double allowances = (slip['allowances'] as num?)?.toDouble() ?? 0.0;
     final double deductions = (slip['deductions'] as num?)?.toDouble() ?? 0.0;
@@ -467,10 +470,10 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
                         )
                       : Column(
                           children: _slipsDetails[slipId]!.map((item) {
-                            final String type = item['type'] ?? 'bonus';
+                            final String type = (item['type'] ?? 'bonus') as String;
                             final double amount = (item['amount'] as num?)?.toDouble() ?? 0.0;
-                            final String reason = item['reason'] ?? '';
-                            final String date = item['issue_date'] ?? '';
+                            final String reason = (item['reason'] ?? '') as String;
+                            final String date = (item['issue_date'] ?? '') as String;
 
                             final bool isBonus = type == 'bonus';
 
