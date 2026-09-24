@@ -312,6 +312,10 @@ class LocationService {
       return;
     }
 
+    // عند عودة الإنترنت (تُنفَّذ كل دقيقتين)، نُفرّغ كل ما خُزّن أوفلاين:
+    // النقاط + أحداث الفروع + أحداث السياج الجغرافي. رخيصة لو ما فيه شيء مخزّن.
+    unawaited(_syncOfflineLocations());
+
     final bool shouldTrack = await _shouldTrackLocation(userId);
     if (shouldTrack) {
       if (_positionStreamSubscription == null) {
@@ -531,7 +535,10 @@ class LocationService {
           };
 
           try {
-            await SupabaseService.client.from('location_tracking').insert(locationData);
+            await SupabaseService.client
+                .from('location_tracking')
+                .insert(locationData)
+                .timeout(const Duration(seconds: 8));
             debugPrint('📍 تم رفع نقطة تتبع حية للسيرفر: (${position.latitude}, ${position.longitude})');
             unawaited(_syncOfflineLocations());
           } catch (e) {
@@ -540,8 +547,11 @@ class LocationService {
           }
         }
 
-        // 4. مطابقة إحداثيات الموقع مع السياج الجغرافي
+        // 4. مطابقة إحداثيات الموقع مع السياج الجغرافي (يعمل أوفلاين ويزامن لاحقاً)
         await _verifyGeofences(userId, position);
+
+        // 5. رصد دخول/خروج الفروع (يعمل أوفلاين ويزامن لاحقاً)
+        await _checkBranchEntryExit(userId, position);
       } catch (e, stack) {
         debugPrint('⚠️ خطأ داخل مستمع الموقع: $e\n$stack');
       }
@@ -636,7 +646,8 @@ class LocationService {
           final assignments = await SupabaseService.client
               .from('employee_geofence_assignments')
               .select('zone_id, geofence_zones(*)')
-              .eq('employee_id', employeeId);
+              .eq('employee_id', employeeId)
+              .timeout(const Duration(seconds: 8));
 
           _cachedGeofenceZones = assignments;
           _lastGeofencesFetchTime = now;
@@ -699,29 +710,24 @@ class LocationService {
 
         if (lastState != null && lastState != isCurrentlyInside) {
           final String violationType = isCurrentlyInside ? 'entry' : 'exit';
-          final String violationName = isCurrentlyInside ? 'دخول' : 'خروج';
 
-          try {
-            await SupabaseService.client.from('geofence_violations').insert({
-              'employee_id': employeeId,
-              'zone_id': zoneId,
-              'violation_type': violationType,
-              'timestamp': DateTime.now().toUtc().toIso8601String(),
-            });
+          // نبني الحدث بطابع زمني دقيق لحظة الرصد حتى يظهر المسار الحقيقي
+          // حتى لو كان الموظف أوفلاين وقت الخروج/الدخول
+          final geoEvent = {
+            'employee_id': employeeId,
+            'zone_id': zoneId,
+            'zone_name': zoneName,
+            'violation_type': violationType,
+            'latitude': position.latitude,
+            'longitude': position.longitude,
+            'timestamp': DateTime.now().toUtc().toIso8601String(),
+          };
 
-            await SupabaseService.client.from('notifications').insert({
-              'employee_id': employeeId,
-              'title': 'تنبيه سياج جغرافي 📍',
-              'body': 'تم رصد حالة ($violationName) من حدود منطقة السياج الجغرافي المعينة لك: ($zoneName).',
-              'type': 'system',
-            });
-
-            debugPrint('📍 مخالفة جيوفينس: تم رصد $violationName للموظف من منطقة $zoneName');
-          } catch (e) {
-            debugPrint('⚠️ فشل تسجيل خرق السياج الجغرافي (أوفلاين): $e');
-          }
+          // يسجّل مباشرة إن توفّر الإنترنت، وإلا يخزّنه محلياً للمزامنة لاحقاً.
+          await _recordOrCacheGeofenceEvent(geoEvent);
         }
 
+        // لا نُحدّث الحالة إلا بعد ضمان تسجيل/تخزين الانتقال (لا يضيع أي خروج)
         _lastGeofenceStates[zoneId] = isCurrentlyInside;
       }
     } catch (e) {
@@ -875,6 +881,9 @@ class LocationService {
 
       // مزامنة أحداث الدخول/الخروج للفروع (إن وجدت)
       await _syncOfflineBranchEvents();
+
+      // مزامنة أحداث دخول/خروج السياج الجغرافي (إن وجدت)
+      await _syncOfflineGeofenceEvents();
     } catch (e) {
       debugPrint('⚠️ لم تكتمل مزامنة النقاط المحلية (الشبكة غير متاحة): $e');
     }
@@ -905,7 +914,8 @@ class LocationService {
         try {
           final data = await SupabaseService.client
               .from('branches')
-              .select('id, name, latitude, longitude, radius_meters');
+              .select('id, name, latitude, longitude, radius_meters')
+              .timeout(const Duration(seconds: 8));
           _cachedBranches = List<Map<String, dynamic>>.from(data);
           _lastBranchesFetchTime = now;
         } catch (_) {
@@ -960,7 +970,7 @@ class LocationService {
         'body': 'تم رصد ${event['event_type'] == 'enter' ? 'دخولك إلى' : 'خروجك من'} فرع '
             '${event['branch_name']} في ${event['timestamp']}',
         'type': 'attendance',
-      });
+      }).timeout(const Duration(seconds: 8));
       debugPrint('📍 branch event uploaded: ${event['event_type']} ${event['branch_name']}');
     } catch (_) {
       // فشل الرفع → نضيفه للـ cache للمزامنة لاحقاً
@@ -1016,6 +1026,94 @@ class LocationService {
       debugPrint('✅ branch-events sync: ${list.length - remaining.length} uploaded, ${remaining.length} pending.');
     } catch (e) {
       debugPrint('⚠️ branch-events sync failed: $e');
+    }
+  }
+
+  // ==========================================================================
+  // Geofence entry/exit events — أحداث دخول/خروج السياج الجغرافي (أوفلاين)
+  // ==========================================================================
+  static Future<File> get _geofenceEventsCacheFile async {
+    final directory = await getApplicationDocumentsDirectory();
+    return File('${directory.path}/geofence_events_offline.json');
+  }
+
+  /// يحاول تسجيل حدث السياج مباشرة، ولو تعذّر (أوفلاين) يخزّنه للمزامنة لاحقاً.
+  /// يحافظ على الطابع الزمني الأصلي للحدث ليظهر المسار الحقيقي بعد رجوع الإنترنت.
+  static Future<void> _recordOrCacheGeofenceEvent(
+      Map<String, dynamic> event) async {
+    final String violationName =
+        event['violation_type'] == 'entry' ? 'دخول' : 'خروج';
+    final String zoneName = event['zone_name']?.toString() ?? 'منطقة';
+    try {
+      // نسجّل الحدث في جدول المخالفات فقط (للوحة الإدارة) — بدون أي إشعار للموظف
+      // حتى يبقى التتبع غير ظاهر له تماماً.
+      await SupabaseService.client
+          .from('geofence_violations')
+          .insert({
+            'employee_id': event['employee_id'],
+            'zone_id': event['zone_id'],
+            'violation_type': event['violation_type'],
+            'timestamp': event['timestamp'],
+          })
+          .timeout(const Duration(seconds: 8));
+
+      debugPrint('📍 حدث سياج جغرافي مرفوع: $violationName - $zoneName');
+    } catch (_) {
+      // فشل الرفع → نخزّنه محلياً للمزامنة لاحقاً بنفس طابعه الزمني
+      try {
+        final file = await _geofenceEventsCacheFile;
+        List<dynamic> list = [];
+        if (await file.exists()) {
+          final s = await file.readAsString();
+          if (s.isNotEmpty) list = jsonDecode(s) as List<dynamic>;
+        }
+        list.add(event);
+        await file.writeAsString(jsonEncode(list));
+        debugPrint('💾 حدث سياج جغرافي مخزّن أوفلاين (${list.length} بالانتظار).');
+      } catch (e) {
+        debugPrint('⚠️ فشل حفظ حدث السياج محلياً: $e');
+      }
+    }
+  }
+
+  /// مزامنة أحداث السياج الجغرافي المخزنة أوفلاين — بالطابع الزمني الأصلي للحدث
+  static Future<void> _syncOfflineGeofenceEvents() async {
+    try {
+      final file = await _geofenceEventsCacheFile;
+      if (!await file.exists()) return;
+      final content = await file.readAsString();
+      if (content.isEmpty) return;
+      final list = jsonDecode(content) as List<dynamic>;
+      if (list.isEmpty) return;
+
+      final remaining = <Map<String, dynamic>>[];
+      for (final raw in list) {
+        if (raw is! Map) continue;
+        final ev = Map<String, dynamic>.from(raw);
+        try {
+          // مزامنة السجل في جدول المخالفات فقط (للوحة الإدارة) — بدون إشعار للموظف
+          await SupabaseService.client
+              .from('geofence_violations')
+              .insert({
+                'employee_id': ev['employee_id'],
+                'zone_id': ev['zone_id'],
+                'violation_type': ev['violation_type'],
+                'timestamp': ev['timestamp'],
+              })
+              .timeout(const Duration(seconds: 8));
+        } catch (_) {
+          remaining.add(ev);
+        }
+      }
+      if (remaining.isEmpty) {
+        await file.delete();
+      } else {
+        await file.writeAsString(jsonEncode(remaining));
+      }
+      debugPrint(
+          '✅ مزامنة أحداث السياج: ${list.length - remaining.length} رُفعت، ${remaining.length} بالانتظار.');
+    } catch (e) {
+      debugPrint('⚠️ فشل مزامنة أحداث السياج الجغرافي: $e');
     }
   }
 

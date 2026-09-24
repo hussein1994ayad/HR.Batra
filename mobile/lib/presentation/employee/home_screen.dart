@@ -19,8 +19,9 @@ import '../../core/theme/app_theme.dart';
 
 class HomeScreen extends StatefulWidget {
   final Function(int) onTabChange;
+  final ValueNotifier<int>? refreshNotifier;
 
-  const HomeScreen({super.key, required this.onTabChange});
+  const HomeScreen({super.key, required this.onTabChange, this.refreshNotifier});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -36,6 +37,7 @@ class _HomeScreenState extends State<HomeScreen> {
   String _userRole = 'employee';
   int _unreadNotificationsCount = 0;
   dynamic _realtimeSubscription;
+  dynamic _attendanceSubscription;
   Map<String, dynamic>? _workSchedule;
 
   @override
@@ -43,6 +45,9 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _loadDashboardData();
     _subscribeToNotifications();
+    _subscribeToAttendance();
+    // تحديث الدوام لما يرجع المستخدم للشاشة الرئيسية من تاب آخر
+    widget.refreshNotifier?.addListener(_onRefreshRequested);
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       try {
@@ -100,10 +105,81 @@ class _HomeScreenState extends State<HomeScreen> {
         });
   }
 
+  /// تنفَّذ لما يعود المستخدم للشاشة الرئيسية
+  void _onRefreshRequested() {
+    if (!mounted) return;
+    // نحدث بيانات الدوام فقط (خفيف وسريع)
+    _refreshAttendanceOnly();
+  }
+
+  Future<void> _refreshAttendanceOnly() async {
+    final user = SupabaseService.currentUser;
+    if (user == null) return;
+    try {
+      final todayStr = DateTime.now().toIso8601String().split('T')[0];
+      final rec = await SupabaseService.client
+          .from('attendance')
+          .select()
+          .eq('employee_id', user.id)
+          .eq('work_date', todayStr)
+          .maybeSingle();
+      if (mounted) {
+        setState(() {
+          _todayAttendance = rec != null ? rec as Map<String, dynamic> : null;
+        });
+      }
+    } catch (e) {
+      debugPrint('تعذر تحديث سجل الدوام: \$e');
+    }
+  }
+
+  /// يستمع لأي تغيير في جدول attendance لليوم الحالي ويحدث الكارد فوراً
+  void _subscribeToAttendance() {
+    final user = SupabaseService.currentUser;
+    if (user == null) return;
+    final todayStr = DateTime.now().toIso8601String().split('T')[0];
+
+    _attendanceSubscription = SupabaseService.client
+        .channel('home:attendance:${user.id}')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'attendance',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'employee_id',
+            value: user.id,
+          ),
+          callback: (payload) {
+            if (!mounted) return;
+            final rec = payload.newRecord;
+            // نتحقق إن السجل ليوم اليوم فقط
+            if (rec != null && rec['work_date'] == todayStr) {
+              setState(() {
+                _todayAttendance = Map<String, dynamic>.from(rec);
+              });
+              // تحديث التتبع بناءً على حالة الحضور الجديدة
+              if (rec['check_in_time'] != null && rec['check_out_time'] == null) {
+                LocationService.startTracking(employeeId: user.id);
+              } else if (rec['check_out_time'] != null) {
+                LocationService.stopTracking();
+              }
+            }
+          },
+        )
+        .subscribe((status, [error]) {
+          debugPrint('=== attendance channel: \$status ===');
+        });
+  }
+
   @override
   void dispose() {
+    widget.refreshNotifier?.removeListener(_onRefreshRequested);
     if (_realtimeSubscription != null) {
       SupabaseService.client.removeChannel(_realtimeSubscription);
+    }
+    if (_attendanceSubscription != null) {
+      SupabaseService.client.removeChannel(_attendanceSubscription);
     }
     super.dispose();
   }
@@ -183,10 +259,18 @@ class _HomeScreenState extends State<HomeScreen> {
         _unreadNotificationsCount = unreadRes.length;
       });
 
+      // جدولة تذكيرات الحضور والانصراف تلقائياً بناءً على جدول العمل
+      NotificationService.scheduleAttendanceReminders(schedule: _workSchedule);
+
       if (_todayAttendance != null &&
           _todayAttendance!['check_in_time'] != null &&
           _todayAttendance!['check_out_time'] == null) {
         LocationService.startTracking(employeeId: user.id);
+        NotificationService.cancelTodayCheckInReminder();
+      } else if (_todayAttendance != null && _todayAttendance!['check_out_time'] != null) {
+        LocationService.stopTracking();
+        NotificationService.cancelTodayCheckInReminder();
+        NotificationService.cancelTodayCheckOutReminder();
       } else {
         LocationService.stopTracking();
       }

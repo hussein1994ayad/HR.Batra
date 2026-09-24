@@ -1,3 +1,8 @@
+// =========================================================================
+// HR Pro v6.0 — إحصاءات التخزين (Storage Stats)
+// عرض حجم ملفات Supabase Storage المستخدمة
+// =========================================================================
+
 import 'package:flutter/material.dart';
 import '../../core/services/supabase_service.dart';
 import '../../core/theme/app_theme.dart';

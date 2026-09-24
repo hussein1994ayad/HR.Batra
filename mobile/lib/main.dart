@@ -2,6 +2,7 @@
 // نظام HR Pro v6.0 - نقطة الدخول الرئيسية
 // =========================================================================
 
+import 'dart:async';
 import 'dart:ui';
 
 import 'package:firebase_core/firebase_core.dart';
@@ -32,39 +33,51 @@ void main() async {
     return true;
   };
 
-  // 2. تهيئة Supabase بأمان
-  try {
-    await SupabaseService.init();
-  } catch (e, stack) {
-    debugPrint('⚠️ فشل تهيئة Supabase: $e\n$stack');
-  }
+  // 2. تهيئة Supabase + Firebase بشكل متوازٍ (كلاهما مستقل عن بعض)
+  //    هذا يوفر ~300-500ms مقارنة بالتسلسل
+  await Future.wait([
+    // Supabase — ضرورية قبل فحص الجلسة
+    Future(() async {
+      try {
+        await SupabaseService.init();
+      } catch (e, stack) {
+        debugPrint('⚠️ فشل تهيئة Supabase: $e\n$stack');
+      }
+    }),
+    // Firebase + Notifications — مستقلة عن Supabase
+    Future(() async {
+      try {
+        await Firebase.initializeApp(
+          options: DefaultFirebaseOptions.currentPlatform,
+        );
+        await NotificationService.init();
+      } catch (e, stack) {
+        debugPrint('⚠️ فشل تهيئة Firebase/Notifications: $e\n$stack');
+      }
+    }),
+  ]);
 
-  // 3. تهيئة Firebase والإشعارات (FCM) وقنوات الإشعار
-  try {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
-    await NotificationService.init();
-  } catch (e, stack) {
-    debugPrint('⚠️ فشل تهيئة Firebase: $e\n$stack');
-  }
-
-  // 4. تهيئة خدمة الموقع بالخلفية بأمان تام
-  try {
-    await LocationService.initializeBackgroundService();
-  } catch (e, stack) {
-    debugPrint('⚠️ فشل تهيئة خدمة الموقع بالخلفية: $e\n$stack');
-  }
-
-  // 5. بدء مراقبة حالة الاتصال (كل 30 ثانية)
-  ConnectivityStatus.startPolling();
-
+  // 3. تشغيل التطبيق فوراً — بدون انتظار خدمة الموقع
   runApp(
     UncontrolledProviderScope(
       container: appContainer,
       child: const HRProApp(),
     ),
   );
+
+  // 4. تهيئة الخدمات غير الحرجة بعد رسم الإطار الأول
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    ConnectivityStatus.startPolling();
+
+    // خدمة الموقع ثقيلة — نؤجلها بالكامل لما بعد ظهور الشاشة
+    Future(() async {
+      try {
+        await LocationService.initializeBackgroundService();
+      } catch (e, stack) {
+        debugPrint('⚠️ فشل تهيئة خدمة الموقع بالخلفية: $e\n$stack');
+      }
+    });
+  });
 }
 
 class HRProApp extends StatelessWidget {

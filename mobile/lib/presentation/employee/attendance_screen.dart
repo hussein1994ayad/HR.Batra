@@ -13,6 +13,7 @@ import 'package:dio/dio.dart';
 import '../../core/services/supabase_service.dart';
 import '../../core/services/attendance_sync_service.dart';
 import '../../core/services/location_service.dart';
+import '../../core/services/notification_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../shared/widgets/glass_container.dart';
 
@@ -518,6 +519,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
           longitude: _currentPosition!.longitude,
         );
         LocationService.startTracking(employeeId: user.id);
+        NotificationService.cancelTodayCheckInReminder();
       } else {
         LocationService.recordInstantLocation(
           employeeId: user.id,
@@ -525,6 +527,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
           longitude: _currentPosition!.longitude,
         );
         LocationService.stopTracking();
+        NotificationService.cancelTodayCheckInReminder();
+        NotificationService.cancelTodayCheckOutReminder();
       }
 
       // إظهار حوار النجاح (مع توضيح حالة الحفظ المحلي إن كان أوفلاين)
@@ -828,44 +832,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
             ),
           ),
 
-          // زر إعادة تمركز وتحديث الـ GPS الفوري عالي الدقة
-          Positioned(
-            bottom: 275,
-            left: 16,
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: () => _refreshGpsLocation(userInitiated: true),
-                borderRadius: BorderRadius.circular(16),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF0F172A).withValues(alpha: 0.85),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppTheme.neonCyan.withValues(alpha: 0.5), width: 1.5),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppTheme.neonCyan.withValues(alpha: 0.2),
-                        blurRadius: 10,
-                      )
-                    ],
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.my_location_rounded, color: AppTheme.neonCyan, size: 18),
-                      SizedBox(width: 6),
-                      Text(
-                        'تحديث الموقع 📍',
-                        style: TextStyle(fontFamily: 'Cairo', fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-
+          // (تم دمج زر تحديث الموقع داخل اللوحة السفلية)
           // 2. لوحة التحكم السفلية المتميزة بتقنية الزجاج
           Positioned(
             bottom: 16,
@@ -883,8 +850,14 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                   spreadRadius: 2,
                 )
               ],
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.60,
+                ),
+                child: SingleChildScrollView(
+                  physics: const ClampingScrollPhysics(),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
                 children: [
                   if (_isLocating) ...[
                     const CircularProgressIndicator(color: AppTheme.neonCyan),
@@ -981,80 +954,110 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                       ),
                     ],
 
-                    // حالة دوام الموظف التفصيلية لليوم
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                    // ── بطاقة الحالة + تحديث الموقع ──────────────────────────
+                    Container(
+                      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.05),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.white.withValues(alpha: 0.09)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // سطر: الحالة + شارة وقت الدخول
+                          Row(
                             children: [
-                              Text(
-                                'الحالة: ${hasCheckOut ? "مكتمل 🟢" : (hasCheckIn ? "دوام نشط 🟡" : "لم تبصم بعد 🔴")}',
-                                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white, fontFamily: 'Cairo'),
+                              Expanded(
+                                child: Text(
+                                  hasCheckOut ? 'الحالة: مكتمل 🟢' : (hasCheckIn ? 'الحالة: دوام نشط 🟡' : 'الحالة: لم تبصم بعد 🔴'),
+                                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white, fontFamily: 'Cairo'),
+                                ),
                               ),
-                              const SizedBox(height: 4),
-                              Text(
-                                'الموقع المعتمد: $_branchName',
-                                style: const TextStyle(fontSize: 11, color: Colors.white70, fontFamily: 'Cairo'),
-                              ),
-                              if (_currentPosition != null) ...[
-                                const SizedBox(height: 4),
-                                Row(
-                                  children: [
-                                    Icon(
-                                      Icons.my_location_rounded,
-                                      size: 12,
+                              if (hasCheckIn)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.successGreen.withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(color: AppTheme.successGreen.withValues(alpha: 0.4)),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.check_circle, color: AppTheme.successGreen, size: 13),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        _formatTime(_todayAttendance?['check_in_time']),
+                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: AppTheme.successGreen, fontFamily: 'Cairo'),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 5),
+                          // اسم الفرع
+                          Text(
+                            'الموقع المعتمد: $_branchName',
+                            style: const TextStyle(fontSize: 11, color: Colors.white70, fontFamily: 'Cairo'),
+                          ),
+                          // المسافة عن الفرع
+                          if (_currentPosition != null) ...[
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.my_location_rounded,
+                                  size: 12,
+                                  color: _distanceToBranch != null && _distanceToBranch! <= _branchRadius
+                                      ? AppTheme.successGreen
+                                      : AppTheme.neonPink,
+                                ),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: Text(
+                                    _distanceToBranch != null
+                                        ? 'تبعد عن الفرع: ${_distanceToBranch!.toStringAsFixed(1)} م  •  دقة: ${_currentPosition!.accuracy.toStringAsFixed(1)} م'
+                                        : 'دقة الموقع: ${_currentPosition!.accuracy.toStringAsFixed(1)} م',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                      fontFamily: 'Cairo',
                                       color: _distanceToBranch != null && _distanceToBranch! <= _branchRadius
                                           ? AppTheme.successGreen
                                           : AppTheme.neonPink,
                                     ),
-                                    const SizedBox(width: 4),
-                                    Expanded(
-                                      child: Text(
-                                        _distanceToBranch != null
-                                            ? 'تبعد عن الفرع: ${_distanceToBranch!.toStringAsFixed(1)} م (دقة الموقع: ${_currentPosition!.accuracy.toStringAsFixed(1)} م)'
-                                            : 'دقة الموقع الحالية: ${_currentPosition!.accuracy.toStringAsFixed(1)} م',
-                                        style: TextStyle(
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.bold,
-                                          fontFamily: 'Cairo',
-                                          color: _distanceToBranch != null && _distanceToBranch! <= _branchRadius
-                                              ? AppTheme.successGreen
-                                              : AppTheme.neonPink,
-                                        ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                        if (hasCheckIn)
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                            decoration: BoxDecoration(
-                              color: AppTheme.successGreen.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: AppTheme.successGreen.withValues(alpha: 0.3)),
-                            ),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.check_circle, color: AppTheme.successGreen, size: 16),
-                                const SizedBox(width: 4),
-                                Text(
-                                  _formatTime(_todayAttendance?['check_in_time']),
-                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppTheme.successGreen, fontFamily: 'Cairo'),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                                 ),
                               ],
                             ),
+                          ],
+                          const SizedBox(height: 10),
+                          // زر تحديث الموقع مدمج
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton.icon(
+                              onPressed: () => _refreshGpsLocation(userInitiated: true),
+                              icon: const Icon(Icons.my_location_rounded, size: 15, color: AppTheme.neonCyan),
+                              label: const Text(
+                                'تحديث الموقع الآن',
+                                style: TextStyle(fontFamily: 'Cairo', fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.neonCyan),
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                side: BorderSide(color: AppTheme.neonCyan.withValues(alpha: 0.5), width: 1),
+                                backgroundColor: AppTheme.neonCyan.withValues(alpha: 0.07),
+                                padding: const EdgeInsets.symmetric(vertical: 8),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              ),
+                            ),
                           ),
-                      ],
+                        ],
+                      ),
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 16),
 
                     if (!hasCheckOut)
                       _buildPunchTypeSwitch(),
@@ -1119,6 +1122,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                       ),
                   ],
                 ],
+                  ),
+                ),
               ),
             ),
           ),

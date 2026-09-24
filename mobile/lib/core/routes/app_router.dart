@@ -250,7 +250,7 @@ class _SplashScreenState extends State<SplashScreen> {
 
   Future<void> _checkAuth() async {
     // تشغيل فحص الجلسة بسرعة فائقة وسلاسة دون تأخير مصطنع
-    await Future.delayed(const Duration(milliseconds: 400));
+    
     if (!mounted) return;
 
     if (SupabaseService.isAuthenticated) {
