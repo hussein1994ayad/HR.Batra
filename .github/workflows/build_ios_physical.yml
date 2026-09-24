@@ -8,6 +8,17 @@ on:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
+# Signed IPA (Settings → Secrets and variables → Actions):
+#   IOS_CERTIFICATE_P12_BASE64      Apple Distribution certificate (.p12) in base64
+#   IOS_CERTIFICATE_PASSWORD        password of the .p12
+#   IOS_PROVISIONING_PROFILE_BASE64 .mobileprovision for com.batra.hrpro.hrPro (with Push)
+#   IOS_TEAM_ID                     10-character Apple Developer Team ID
+#   IOS_EXPORT_METHOD               app-store (TestFlight) | ad-hoc   (optional, default app-store)
+#   IOS_GOOGLE_SERVICE_INFO_PLIST_BASE64  GoogleService-Info.plist from Firebase (for push)
+#   FIREBASE_IOS_APP_ID / FIREBASE_IOS_API_KEY  values from that plist
+# Without the certificate secrets an unsigned Runner.app is packaged (cannot be
+# installed on real devices without re-signing).
+
 jobs:
   build:
     runs-on: macos-latest
@@ -27,19 +38,102 @@ jobs:
         working-directory: ./mobile
         run: flutter pub get
 
-      - name: Build unsigned iOS App for Physical Devices
-        working-directory: ./mobile
-        run: flutter build ios --release --no-codesign
-
-      - name: Package into IPA
-        working-directory: ./mobile/build/ios/iphoneos
+      - name: Add Firebase config
+        env:
+          PLIST_BASE64: ${{ secrets.IOS_GOOGLE_SERVICE_INFO_PLIST_BASE64 }}
         run: |
+          if [ -n "$PLIST_BASE64" ]; then
+            echo "$PLIST_BASE64" | base64 --decode > mobile/ios/Runner/GoogleService-Info.plist
+          else
+            echo "::warning::IOS_GOOGLE_SERVICE_INFO_PLIST_BASE64 not set — push notifications disabled on iOS."
+          fi
+
+      - name: Import signing certificate and profile
+        id: signing
+        env:
+          P12_BASE64: ${{ secrets.IOS_CERTIFICATE_P12_BASE64 }}
+          P12_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+          PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
+          TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
+          EXPORT_METHOD: ${{ secrets.IOS_EXPORT_METHOD }}
+        run: |
+          if [ -z "$P12_BASE64" ] || [ -z "$PROFILE_BASE64" ] || [ -z "$TEAM_ID" ]; then
+            echo "::warning::iOS signing secrets not set — building an unsigned app."
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -hex 16)"
+          echo "$P12_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$RUNNER_TEMP/cert.p12" -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+
+          PROFILE="$RUNNER_TEMP/profile.mobileprovision"
+          echo "$PROFILE_BASE64" | base64 --decode > "$PROFILE"
+          PROFILE_UUID=$(security cms -D -i "$PROFILE" | plutil -extract UUID raw -)
+          PROFILE_NAME=$(security cms -D -i "$PROFILE" | plutil -extract Name raw -)
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          cp "$PROFILE" "$HOME/Library/MobileDevice/Provisioning Profiles/$PROFILE_UUID.mobileprovision"
+
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyLists-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key><string>${EXPORT_METHOD:-app-store}</string>
+            <key>teamID</key><string>$TEAM_ID</string>
+            <key>signingStyle</key><string>manual</string>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>com.batra.hrpro.hrPro</key><string>$PROFILE_NAME</string>
+            </dict>
+          </dict>
+          </plist>
+          EOF
+          # Manual signing for the Runner target only (its configs are the ones
+          # that carry CODE_SIGN_ENTITLEMENTS); applied in CI, not committed.
+          PROFILE_NAME="$PROFILE_NAME" TEAM_ID="$TEAM_ID" perl -0pi -e '
+            s{(CODE_SIGN_ENTITLEMENTS = Runner/Runner\.entitlements;)}
+             {$1\n\t\t\t\tCODE_SIGN_STYLE = Manual;\n\t\t\t\tDEVELOPMENT_TEAM = $ENV{TEAM_ID};\n\t\t\t\tPROVISIONING_PROFILE_SPECIFIER = "$ENV{PROFILE_NAME}";\n\t\t\t\t"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Distribution";}g
+          ' mobile/ios/Runner.xcodeproj/project.pbxproj
+          echo "signed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Build signed IPA
+        if: steps.signing.outputs.signed == 'true'
+        working-directory: ./mobile
+        env:
+          FIREBASE_IOS_APP_ID: ${{ secrets.FIREBASE_IOS_APP_ID }}
+          FIREBASE_IOS_API_KEY: ${{ secrets.FIREBASE_IOS_API_KEY }}
+        run: |
+          DEFINES=""
+          if [ -n "$FIREBASE_IOS_APP_ID" ]; then DEFINES="$DEFINES --dart-define=FIREBASE_IOS_APP_ID=$FIREBASE_IOS_APP_ID"; fi
+          if [ -n "$FIREBASE_IOS_API_KEY" ]; then DEFINES="$DEFINES --dart-define=FIREBASE_IOS_API_KEY=$FIREBASE_IOS_API_KEY"; fi
+          flutter build ipa --release --export-options-plist="$RUNNER_TEMP/ExportOptions.plist" $DEFINES
+          mkdir -p ../dist && cp build/ios/ipa/*.ipa ../dist/HRBatra_PhysicalDevice.ipa
+
+      - name: Build unsigned app
+        if: steps.signing.outputs.signed != 'true'
+        working-directory: ./mobile
+        run: |
+          flutter build ios --release --no-codesign
+          cd build/ios/iphoneos
           mkdir Payload
           mv Runner.app Payload/
-          zip -r HRBatra_PhysicalDevice.ipa Payload
+          zip -r HRBatra_PhysicalDevice_unsigned.ipa Payload
+          mkdir -p ../../../../dist && cp HRBatra_PhysicalDevice_unsigned.ipa ../../../../dist/
 
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
         with:
           name: HRBatra-iOS-Physical-IPA
-          path: mobile/build/ios/iphoneos/HRBatra_PhysicalDevice.ipa
+          path: dist/*.ipa
+          if-no-files-found: error
+
+      - name: Clean up keychain
+        if: always()
+        run: security delete-keychain "$RUNNER_TEMP/signing.keychain-db" 2>/dev/null || true

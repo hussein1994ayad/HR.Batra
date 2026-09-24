@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import type { Branch, Department, Employee, LeaveRequest, WorkSchedule } from '@/lib/db-types';
+import { resolveWorkSchedule } from '@/lib/schedules';
+import type { Branch, Department, Employee, LeaveRequest } from '@/lib/db-types';
 import { errorMessage } from '@/lib/error-utils';
 import imageCompression from 'browser-image-compression';
 import { 
@@ -146,9 +147,7 @@ export default function DashboardPage() {
             presentEmpIds.add(r.employee_id);
           } else if (r.status === 'absent') {
             const emp = empList?.find((e: EmployeeSummary) => e.id === r.employee_id);
-            const empSched = workSchedulesData?.find((s: WorkSchedule) => s.employee_id === r.employee_id) || 
-                             workSchedulesData?.find((s: WorkSchedule) => s.department_id === emp?.department_id && !s.employee_id) ||
-                             workSchedulesData?.find((s: WorkSchedule) => s.branch_id === emp?.branch_id && !s.employee_id && !s.department_id);
+            const empSched = resolveWorkSchedule(emp ?? { id: r.employee_id }, workSchedulesData);
             const workDays = empSched ? empSched.work_days : [6, 0, 1, 2, 3, 4];
             const isWorkingDay = workDays.includes(weekday);
 
@@ -177,9 +176,7 @@ export default function DashboardPage() {
           // Check if on leave
           const isOnLeave = leavesData?.some((l: LeaveRequest) => l.employee_id === emp.id && isDateWithinRange(todayStr, l.start_date, l.end_date));
           if (!isOnLeave) {
-            const empSched = workSchedulesData?.find((s: WorkSchedule) => s.employee_id === emp.id) || 
-                             workSchedulesData?.find((s: WorkSchedule) => s.department_id === emp.department_id && !s.employee_id) ||
-                             workSchedulesData?.find((s: WorkSchedule) => s.branch_id === emp.branch_id && !s.employee_id && !s.department_id);
+            const empSched = resolveWorkSchedule(emp, workSchedulesData);
             const workDays = empSched ? empSched.work_days : [6, 0, 1, 2, 3, 4];
             const isWorkingDay = workDays.includes(weekday);
 

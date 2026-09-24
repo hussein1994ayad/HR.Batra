@@ -67,9 +67,19 @@ class DefaultFirebaseOptions {
   //
   // حتى يُصحّح، أي محاولة تهيئة Firebase على iOS ستفشل صامتاً (لا FCM على iOS).
   // ==========================================================================
+  // القيم تُمرَّر وقت البناء (CI أو محلياً) حتى لا تُحفظ في المستودع:
+  //   flutter build ipa --dart-define=FIREBASE_IOS_APP_ID=1:667500759230:ios:xxxx   //                     --dart-define=FIREBASE_IOS_API_KEY=AIza...
+  // بدونها يبقى appId بقيمة PLACEHOLDER فيتخطى main.dart تهيئة Firebase على iOS
+  // (التذكيرات المحلية تعمل، إشعارات Push لا تعمل).
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyBwvQ0QtWRhLT4paKLo1ZFfW4t9lJgqr88', // TODO(ios-firebase): استبدله بمفتاح iOS الحقيقي
-    appId: 'PLACEHOLDER_IOS_APP_ID_REPLACE_BEFORE_BUILDING_IOS', // TODO(ios-firebase): استبدله بمعرّف تطبيق iOS الحقيقي من Firebase Console
+    apiKey: String.fromEnvironment(
+      'FIREBASE_IOS_API_KEY',
+      defaultValue: 'AIzaSyBwvQ0QtWRhLT4paKLo1ZFfW4t9lJgqr88',
+    ),
+    appId: String.fromEnvironment(
+      'FIREBASE_IOS_APP_ID',
+      defaultValue: 'PLACEHOLDER_IOS_APP_ID_REPLACE_BEFORE_BUILDING_IOS',
+    ),
     messagingSenderId: '667500759230',
     projectId: 'hr-pro-batra',
     storageBucket: 'hr-pro-batra.firebasestorage.app',

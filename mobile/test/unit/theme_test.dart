@@ -2,11 +2,23 @@
 // HR Pro v6.0 - Widget tests for AppTheme
 // =========================================================================
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hr_pro/core/theme/app_theme.dart';
 
 void main() {
+  // الثيم يطلب خط Cairo من google_fonts عبر الشبكة، وبيئة الاختبار تمنع الشبكة.
+  // نبني الثيمين مرة داخل zone يلتقط أخطاء تحميل الخط (google_fonts يخزّن
+  // المحاولة فلا تتكرر)؛ هذه الاختبارات تفحص بنية الثيم لا تحميل الخطوط.
+  setUpAll(() {
+    runZonedGuarded(() {
+      expect(AppTheme.lightTheme, isNotNull);
+      expect(AppTheme.darkTheme, isNotNull);
+    }, (_, __) {});
+  });
+
   group('AppTheme — Design Tokens', () {
     test('spacing scale follows 4pt grid', () {
       expect(AppTheme.space1, 4);

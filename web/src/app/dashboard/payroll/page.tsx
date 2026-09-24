@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import { resolveWorkSchedule } from '@/lib/schedules';
 import { errorMessage } from '@/lib/error-utils';
 import type {
   AttendanceRecord, BonusDeduction, Branch, Employee, LeaveRequest, LoanInstallment, SalarySlip, WorkSchedule,
@@ -733,9 +734,7 @@ export default function PayrollPage() {
 
     // Get work schedules for the employee (employee-specific -> department -> default)
     // Default working schedule in Iraq is Saturday(6) to Thursday(4)
-    const empSched = workSchedules.find(s => s.employee_id === emp.id) || 
-                     workSchedules.find(s => s.department_id === emp.department_id && !s.employee_id) ||
-                     workSchedules.find(s => s.branch_id === emp.branch_id && !s.employee_id && !s.department_id);
+    const empSched = resolveWorkSchedule(emp, workSchedules);
     const workDays = empSched ? empSched.work_days : [6, 0, 1, 2, 3, 4];
 
     let presentsCount = 0;

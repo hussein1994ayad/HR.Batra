@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import { resolveWorkSchedule } from '@/lib/schedules';
 import { errorMessage } from '@/lib/error-utils';
 import type {
   AttendanceRecord, Branch, Employee, EmployeeRef, LeaveRequest, LocationPoint, WorkSchedule,
@@ -856,9 +857,7 @@ export default function TrackingPage() {
         if (selectedBranch !== 'all' && emp.branch_id !== selectedBranch) return;
         if (selectedEmployee !== 'all' && emp.id !== selectedEmployee) return;
 
-        const empSched = workSchedules.find(s => s.employee_id === emp.id) || 
-                         workSchedules.find(s => s.department_id === emp.department_id && !s.employee_id) ||
-                         workSchedules.find(s => s.branch_id === emp.branch_id && !s.employee_id && !s.department_id);
+        const empSched = resolveWorkSchedule(emp, workSchedules);
         const workDays = empSched ? empSched.work_days : [6, 0, 1, 2, 3, 4];
         
         const [year, month, day] = dateStr.split('-');

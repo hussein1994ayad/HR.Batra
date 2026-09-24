@@ -8,6 +8,14 @@ on:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
+# Release signing (Settings → Secrets and variables → Actions):
+#   ANDROID_KEYSTORE_BASE64   base64 of the .jks file
+#   ANDROID_KEYSTORE_PASSWORD
+#   ANDROID_KEY_ALIAS
+#   ANDROID_KEY_PASSWORD
+# Without them the APK is signed with the public debug key — fine for testing,
+# never for distribution to employees (see DEVELOPER_GUIDE.md).
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -33,13 +41,37 @@ jobs:
         working-directory: ./mobile
         run: flutter pub get
 
-      - name: Build Release APK
-        working-directory: ./mobile
-        run: flutter build apk --release
+      - name: Configure release signing
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        working-directory: ./mobile/android
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::warning::ANDROID_KEYSTORE_BASE64 not set — APK will be signed with the debug key."
+            exit 0
+          fi
+          echo "$KEYSTORE_BASE64" | base64 --decode > app/release.jks
+          cat > key.properties <<EOF
+          storeFile=release.jks
+          storePassword=$KEYSTORE_PASSWORD
+          keyAlias=$KEY_ALIAS
+          keyPassword=$KEY_PASSWORD
+          EOF
 
-      - name: Build Split-per-ABI APKs
+      - name: Build Release APKs (universal + split-per-ABI)
         working-directory: ./mobile
-        run: flutter build apk --release --split-per-abi
+        env:
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+        run: |
+          DEFINES=""
+          if [ -n "$SUPABASE_URL" ]; then DEFINES="$DEFINES --dart-define=SUPABASE_URL=$SUPABASE_URL"; fi
+          if [ -n "$SUPABASE_ANON_KEY" ]; then DEFINES="$DEFINES --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY"; fi
+          flutter build apk --release $DEFINES
+          flutter build apk --release --split-per-abi $DEFINES
 
       - name: Upload Universal APK
         uses: actions/upload-artifact@v4
