@@ -1,7 +1,8 @@
 # HR Pro — Web Dashboard
 
 Admin dashboard for HR Pro (Next.js 16, static export, Supabase). It is deployed as static files to
-[hrpro-batra.surge.sh](https://hrpro-batra.surge.sh/dashboard).
+[batra-hr-pro.surge.sh](https://batra-hr-pro.surge.sh/dashboard) and
+[hr-batra.surge.sh](https://hr-batra.surge.sh/dashboard).
 
 ## Development
 
@@ -37,12 +38,13 @@ End-to-end tests need a build first (`npm run build`) and a Chromium browser
 
 The `Web Dashboard` GitHub Actions workflow (`.github/workflows/web.yml`) runs lint, type check,
 unit tests, the build and the e2e tests on every pull request. On pushes to `main` it also
-publishes `out/` to `hrpro-batra.surge.sh` when the repository secret `SURGE_TOKEN` is set
+publishes `out/` to every domain in `SURGE_DOMAINS` (`batra-hr-pro.surge.sh`, `hr-batra.surge.sh`) when the repository secret `SURGE_TOKEN` is set
 (generate one locally with `npx surge token`).
 
 Manual deploy:
 
 ```bash
 npm run build
-npx surge ./out hrpro-batra.surge.sh
+npx surge ./out batra-hr-pro.surge.sh
+npx surge ./out hr-batra.surge.sh
 ```

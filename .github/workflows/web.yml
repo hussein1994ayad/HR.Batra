@@ -77,8 +77,9 @@ jobs:
     runs-on: ubuntu-latest
     env:
       # Add a repository secret named SURGE_TOKEN (from `npx surge token`) to enable deploys.
+      # The token's Surge account must own every domain listed here.
       SURGE_TOKEN: ${{ secrets.SURGE_TOKEN }}
-      SURGE_DOMAIN: hrpro-batra.surge.sh
+      SURGE_DOMAINS: batra-hr-pro.surge.sh hr-batra.surge.sh
     steps:
       - name: Download static build
         uses: actions/download-artifact@v4
@@ -89,9 +90,13 @@ jobs:
       - name: Check SURGE_TOKEN
         if: env.SURGE_TOKEN == ''
         run: |
-          echo "::error::SURGE_TOKEN secret is not set, so the site was not deployed to $SURGE_DOMAIN. Add it under Settings > Secrets and variables > Actions."
+          echo "::error::SURGE_TOKEN secret is not set, so the site was not deployed to $SURGE_DOMAINS. Add it under Settings > Secrets and variables > Actions."
           exit 1
 
       - name: Publish to Surge
         if: env.SURGE_TOKEN != ''
-        run: npx --yes surge@0.44 ./out "$SURGE_DOMAIN" --token "$SURGE_TOKEN"
+        run: |
+          for domain in $SURGE_DOMAINS; do
+            echo "Publishing to https://$domain"
+            npx --yes surge@0.44 ./out "$domain" --token "$SURGE_TOKEN"
+          done
