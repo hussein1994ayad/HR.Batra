@@ -629,7 +629,10 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           Text(
             _mockDetected
                 ? 'البصمة موقوفة لأن الجهاز يستعمل موقعاً مزيّفاً.'
-X                    ? 'أنت داخل نطاق الفرع، تقدر تبصم الآن.'
+                : _currentPosition == null
+                    ? 'ننتظر تحديد موقعك حتى تقدر تبصم.'
+                    : _inRange
+                    ? 'أنت داخل نطاق الفرع، تقدر تبصم الآن.'
                     : 'اقترب من الفرع حتى تدخل ضمن النطاق المسموح.',
             style: AppText.caption.copyWith(color: _mockDetected ? AppColors.danger : null),
             textAlign: TextAlign.center,
