@@ -5,6 +5,7 @@ import confetti from 'canvas-confetti';
 import toast from 'react-hot-toast';
 import type { ArchivedEmployee, Employee, EmployeeDevice } from '@/lib/db-types';
 import { errorMessage } from '@/lib/error-utils';
+import { readLocalCache, writeLocalCache } from '@/lib/local-cache';
 import {
   approveDeviceRequest, archiveOrDeleteEmployee, createEmployee, destroyArchivedEmployee, fetchArchivedEmployees,
   fetchEmployeesDataset, rejectDeviceRequest, resetDeviceBinding, restoreArchivedEmployee, setDeviceLock,
@@ -14,23 +15,8 @@ import type { DeleteType, EmployeeFormValues } from './types';
 
 const CACHE_KEY = 'batra_cache_employees';
 type EmployeesCache = Partial<EmployeesDataset> & { archivedEmployees?: ArchivedEmployee[] };
-
-// الكاش يعرض الصفحة فوراً ثم تُحدّث البيانات بالخلفية. قد يكون localStorage محجوباً، فالأخطاء تُتجاهل.
-function readCache(): EmployeesCache | null {
-  try {
-    const raw = localStorage.getItem(CACHE_KEY);
-    return raw ? (JSON.parse(raw) as EmployeesCache) : null;
-  } catch {
-    return null;
-  }
-}
-function writeCache(patch: EmployeesCache) {
-  try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify({ ...readCache(), ...patch }));
-  } catch {
-    // تجاهل
-  }
-}
+const readCache = () => readLocalCache<EmployeesCache>(CACHE_KEY);
+const writeCache = (patch: EmployeesCache) => writeLocalCache(CACHE_KEY, patch);
 
 const EMPTY: EmployeesDataset = { employees: [], deviceRequests: [], branches: [], departments: [] };
 

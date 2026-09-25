@@ -142,9 +142,10 @@ export async function createEmployee(values: EmployeeFormValues, documents: File
     p_branch_id: values.branchId || null,
     p_monthly_salary_iqd: values.monthlySalary || 0,
     p_document_urls: urls,
-    p_employee_code: `EMP-${Math.floor(100 + Math.random() * 900)}`,
+    p_employee_code: `EMP-${Math.floor(1000 + Math.random() * 9000)}`,
     p_employee_id: employeeId,
     p_join_date: values.joinDate,
+    p_department_id: values.departmentId || null,
   });
   if (error) throw error;
   return { failedUploads: failed };

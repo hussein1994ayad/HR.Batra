@@ -19,4 +19,6 @@ export interface EmployeeFormValues {
   futureSalary: number;
   futureSalaryMonth: string;
   joinDate: string;
+  /** يُحدد من نموذج الإضافة السريعة في الرئيسية فقط. */
+  departmentId?: string;
 }
