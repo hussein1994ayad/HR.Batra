@@ -572,7 +572,7 @@ class _AdminEntry extends StatelessWidget {
               ],
             ),
           ),
-          Icon(Icons.chevron_left_rounded, color: AppColors.accent),
+          Icon(Icons.chevron_right_rounded, color: AppColors.accent),
         ],
       ),
     );

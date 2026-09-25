@@ -186,7 +186,7 @@ class AppListTile extends StatelessWidget {
                 ),
               ),
               if (trailing != null) ...[const SizedBox(width: AppSpace.sm), trailing!],
-              if (chevron) const Icon(Icons.chevron_left_rounded, color: AppColors.textMuted),
+              if (chevron) const Icon(Icons.chevron_right_rounded, color: AppColors.textMuted),
             ],
           ),
         ),

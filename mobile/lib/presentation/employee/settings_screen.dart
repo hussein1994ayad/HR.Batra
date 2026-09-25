@@ -1,5 +1,5 @@
 // =========================================================================
-// نظام HR Pro v6.0 - شاشة الإعدادات والملف الشخصي (Profile & Settings Screen)
+// HR Pro — الإعدادات: الملف الشخصي، الإشعارات، الوثائق، أمان الجهاز، الخروج
 // =========================================================================
 
 import 'dart:async';
@@ -7,20 +7,20 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../core/constants/constants.dart';
-import '../../core/design/design.dart';
 import '../../core/routes/app_router.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/device_service.dart';
 import '../../core/services/file_upload_service.dart';
 import '../../core/services/notification_service.dart';
 import '../../core/services/supabase_service.dart';
-import '../shared/widgets/glass_container.dart';
+import '../shared/ui/ui.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -44,6 +44,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _isLoading = true;
   bool _isUploadingAvatar = false;
   bool _isUploadingDoc = false;
+  bool _deletionBusy = false;
 
   @override
   void initState() {
@@ -167,25 +168,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
       });
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('تم تحديث صورتك الشخصية بنجاح وضغطها أوتوماتيكياً! 📸', style: TextStyle(fontFamily: 'Cairo')),
-            backgroundColor: AppColors.success,
-          ),
-        );
+        AppSnack.success(context, 'تم تحديث صورتك الشخصية');
       }
 
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('فشل رفع الصورة: $e', style: const TextStyle(fontFamily: 'Cairo')),
-            backgroundColor: AppColors.danger,
-          ),
-        );
+        AppSnack.error(context, 'تعذّر رفع الصورة: $e');
       }
     } finally {
-      setState(() => _isUploadingAvatar = false);
+      if (mounted) setState(() => _isUploadingAvatar = false);
     }
   }
 
@@ -222,144 +213,91 @@ class _SettingsScreenState extends State<SettingsScreen> {
       });
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('تم رفع الوثيقة بنجاح وضغطها أوتوماتيكياً! 📄', style: TextStyle(fontFamily: 'Cairo')),
-            backgroundColor: AppColors.success,
-          ),
-        );
+        AppSnack.success(context, 'تم رفع الوثيقة');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('فشل رفع الوثيقة: $e', style: const TextStyle(fontFamily: 'Cairo')),
-            backgroundColor: AppColors.danger,
-          ),
-        );
+        AppSnack.error(context, 'تعذّر رفع الوثيقة: $e');
       }
     } finally {
-      setState(() => _isUploadingDoc = false);
+      if (mounted) setState(() => _isUploadingDoc = false);
     }
   }
 
-  // معاينة وفتح وتنزيل الوثيقة
+
+  bool get _isAdminOrManager => AuthService.currentUserRole == 'admin' || AuthService.currentUserRole == 'manager';
+
+  // معاينة الوثيقة ومشاركتها
   Future<void> _previewDocument(String url) async {
-    unawaited(showDialog<dynamic>(
-      context: context,
-      builder: (ctx) => Dialog(
-        backgroundColor: AppColors.surface1,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Row(
-                    children: [
-                      Icon(Icons.description_rounded, color: AppColors.brand, size: 20),
-                      SizedBox(width: 8),
-                      Text('معاينة الوثيقة المعتمدة 📄', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: AppColors.textPrimary, fontSize: 13)),
-                    ],
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close_rounded, color: AppColors.textMuted, size: 18),
-                    onPressed: () => Navigator.pop(ctx),
-                  ),
-                ],
+    await showAppSheet<void>(
+      context,
+      title: 'الوثيقة',
+      builder: (ctx) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ClipRRect(
+            borderRadius: AppRadius.card,
+            child: Container(
+              constraints: const BoxConstraints(maxHeight: 360),
+              color: AppColors.surface2,
+              child: Image.network(
+                url,
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) => const EmptyView(title: 'ملف PDF أو مستند', icon: Icons.picture_as_pdf_rounded, tone: AppTone.accent, compact: true),
               ),
-              const SizedBox(height: 12),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: Container(
-                  constraints: const BoxConstraints(maxHeight: 300),
-                  color: AppColors.shadow,
-                  child: Image.network(
-                    url,
-                    fit: BoxFit.contain,
-                    errorBuilder: (_, __, ___) => const Padding(
-                      padding: EdgeInsets.all(30),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.picture_as_pdf_rounded, color: AppColors.accent, size: 48),
-                          SizedBox(height: 8),
-                          Text('مستند PDF أو ملف رقمي', style: TextStyle(fontFamily: 'Cairo', color: AppColors.textSecondary, fontSize: 12)),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: () async {
-                        Navigator.pop(ctx);
-                        await SharePlus.instance.share(ShareParams(uri: Uri.parse(url)));
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.brandStrong,
-                        foregroundColor: AppColors.textPrimary,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      icon: const Icon(Icons.share_rounded, size: 16),
-                      label: const Text('مشاركة / تحميل 📤', style: TextStyle(fontFamily: 'Cairo', fontSize: 11, fontWeight: FontWeight.bold)),
-                    ),
-                  ),
-                ],
-              ),
-            ],
+            ),
           ),
-        ),
+          const SizedBox(height: AppSpace.lg),
+          AppButton(
+            label: 'مشاركة أو تنزيل',
+            icon: Icons.ios_share_rounded,
+            expand: true,
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await SharePlus.instance.share(ShareParams(uri: Uri.parse(url)));
+            },
+          ),
+          if (_isAdminOrManager) ...[
+            const SizedBox(height: AppSpace.sm),
+            AppButton(
+              label: 'حذف الوثيقة',
+              icon: Icons.delete_outline_rounded,
+              variant: AppButtonVariant.ghost,
+              expand: true,
+              onPressed: () {
+                Navigator.pop(ctx);
+                _deleteDocument(url);
+              },
+            ),
+          ],
+        ],
       ),
-    ));
+    );
   }
 
-  // Delete Document (مخصص للآدمن والمدراء فقط)
+  // حذف وثيقة (للآدمن والمدراء فقط)
   Future<void> _deleteDocument(String url) async {
-    final bool isAdminOrManager = AuthService.currentUserRole == 'admin' || AuthService.currentUserRole == 'manager';
-    if (!isAdminOrManager) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('عذراً، حذف الوثائق المعتمدة مخصص للآدمن ومسؤول الـ HR فقط 🔒', style: TextStyle(fontFamily: 'Cairo')),
-          backgroundColor: AppColors.danger,
-        ),
-      );
+    if (!_isAdminOrManager) {
+      AppSnack.error(context, 'حذف الوثائق مخصص للإدارة فقط');
       return;
     }
 
     final user = SupabaseService.currentUser;
     if (user == null) return;
-    
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppColors.surface1,
-        title: const Text('حذف وثيقة', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
-        content: const Text('هل أنت متأكد أنك تريد حذف هذه الوثيقة من السيرفر بشكل نهائي؟', style: TextStyle(fontFamily: 'Cairo', color: AppColors.textSecondary)),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('إلغاء', style: TextStyle(fontFamily: 'Cairo', color: AppColors.textMuted))),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
-            onPressed: () => Navigator.pop(context, true), 
-            child: const Text('حذف نهائي', style: TextStyle(fontFamily: 'Cairo'))
-          ),
-        ],
-      )
+
+    final confirm = await showAppConfirm(
+      context,
+      title: 'حذف الوثيقة؟',
+      message: 'راح تنحذف من السيرفر نهائياً.',
+      confirmLabel: 'حذف',
+      destructive: true,
     );
-    if (confirm != true) return;
+    if (!confirm) return;
 
     try {
       String? pathToDelete;
       try {
-        final uri = Uri.parse(url);
-        final segments = uri.pathSegments;
+        final segments = Uri.parse(url).pathSegments;
         int index = segments.indexOf('employee-documents');
         if (index == -1) index = segments.indexOf('documents');
         if (index != -1 && index + 1 < segments.length) {
@@ -372,728 +310,314 @@ class _SettingsScreenState extends State<SettingsScreen> {
       }
 
       final updatedList = _documentUrls.where((u) => u != url).toList();
-      await SupabaseService.client
-          .from('employees')
-          .update({'document_urls': updatedList})
-          .eq('id', user.id);
+      await SupabaseService.client.from('employees').update({'document_urls': updatedList}).eq('id', user.id);
 
-      setState(() {
-        _documentUrls = updatedList;
-      });
-      
+      if (mounted) {
+        setState(() => _documentUrls = updatedList);
+        AppSnack.success(context, 'حُذفت الوثيقة');
+      }
     } catch (e) {
       debugPrint('Failed to delete document: $e');
+      if (mounted) AppSnack.error(context, 'تعذّر حذف الوثيقة');
     }
   }
 
   // تسجيل الخروج
   Future<void> _handleLogout() async {
-    unawaited(showDialog<dynamic>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('تسجيل الخروج', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
-        content: const Text('هل أنت متأكد من رغبتك في تسجيل الخروج من تطبيق HR Pro؟', style: TextStyle(fontFamily: 'Cairo', fontSize: 13)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('إلغاء', style: TextStyle(fontFamily: 'Cairo', color: AppColors.textMuted)),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              final router = GoRouter.of(context);
-              Navigator.pop(context);
-              await SupabaseService.signOut();
-              router.go(AppRoutes.login);
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
-            child: const Text('تسجيل خروج', style: TextStyle(fontFamily: 'Cairo')),
-          ),
-        ],
-      ),
-    ));
+    final router = GoRouter.of(context);
+    final ok = await showAppConfirm(context, title: 'تسجيل الخروج؟', message: 'تقدر ترجع تدخل بنفس حسابك من هذا الجهاز.', confirmLabel: 'خروج', destructive: true);
+    if (!ok) return;
+    await SupabaseService.signOut();
+    router.go(AppRoutes.login);
   }
 
-  // طلب حذف الحساب
+  // طلب حذف الحساب — ممنوع إذا عليه سلفة غير مسددة
   Future<void> _handleDeleteAccountRequest() async {
     final user = SupabaseService.currentUser;
     if (user == null) return;
-
-    // إظهار مؤشر انتظار
-    unawaited(showDialog<dynamic>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Center(
-        child: CircularProgressIndicator(color: AppColors.brand),
-      ),
-    ));
+    setState(() => _deletionBusy = true);
 
     try {
-      // 1. تحقق من القروض النشطة بذمة الموظف
-      final loans = await SupabaseService.client
-          .from('loans')
-          .select('remaining_amount')
-          .eq('employee_id', user.id)
-          .eq('status', 'approved');
-
-      // إغلاق مؤشر الانتظار
-      if (mounted) Navigator.pop(context);
+      final loans = await SupabaseService.client.from('loans').select('remaining_amount').eq('employee_id', user.id).eq('status', 'approved');
 
       double totalRemaining = 0.0;
-      if (loans.isNotEmpty) {
-        for (final loan in loans) {
-          totalRemaining += (loan['remaining_amount'] as num?)?.toDouble() ?? 0.0;
-        }
+      for (final loan in loans) {
+        totalRemaining += (loan['remaining_amount'] as num?)?.toDouble() ?? 0.0;
       }
+      if (!mounted) return;
 
       if (totalRemaining > 0) {
-        // حظر الطلب لوجود سلفة غير مسددة بالكامل
-        if (mounted) {
-          unawaited(showDialog<dynamic>(
-            context: context,
-            builder: (context) => AlertDialog(
-              title: const Text('⚠️ عذراً، لا يمكن حذف الحساب', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
-              content: Text(
-                'لا يمكنك تقديم طلب حذف الحساب لوجود سلف غير مكتملة السداد بذمتك بقيمة إجمالية قدرها (${AppConstants.formatMoney(totalRemaining)}). يرجى سداد الأقساط المتبقية ومراجعة الإدارة.',
-                style: const TextStyle(fontFamily: 'Cairo', fontSize: 13),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('حسناً', style: TextStyle(fontFamily: 'Cairo', color: AppColors.brand)),
-                ),
-              ],
-            ),
-          ));
-        }
+        await showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('لا يمكن حذف الحساب الآن'),
+            content: Text('عليك سلفة غير مسددة بقيمة ${AppConstants.formatMoney(totalRemaining)}. سدّد الأقساط أو راجع الإدارة أولاً.'),
+            actions: [AppButton(label: 'حسناً', onPressed: () => Navigator.pop(ctx))],
+          ),
+        );
         return;
       }
 
-      // 2. تأكيد إرسال الطلب للآدمن
-      if (mounted) {
-        unawaited(showDialog<dynamic>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('طلب حذف الحساب ⚠️', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
-            content: const Text(
-              'هل أنت متأكد من رغبتك في تقديم طلب حذف حسابك نهائياً؟ سيتم إرسال الطلب للمسؤول (الأدمن) للمراجعة والموافقة عليه.',
-              style: TextStyle(fontFamily: 'Cairo', fontSize: 13),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('إلغاء', style: TextStyle(fontFamily: 'Cairo', color: AppColors.textMuted)),
-              ),
-              ElevatedButton(
-                onPressed: () async {
-                  Navigator.pop(context); // إغلاق الديالوج
-                  
-                  // إظهار مؤشر إرسال الطلب
-                  unawaited(showDialog<dynamic>(
-                    context: context,
-                    barrierDismissible: false,
-                    builder: (context) => const Center(
-                      child: CircularProgressIndicator(color: AppColors.brand),
-                    ),
-                  ));
+      final ok = await showAppConfirm(
+        context,
+        title: 'طلب حذف الحساب؟',
+        message: 'راح يوصل طلبك للمدير العام لمراجعته والموافقة عليه.',
+        confirmLabel: 'إرسال الطلب',
+        destructive: true,
+      );
+      if (!ok) return;
 
-                  try {
-                    // الدالة ترسل الطلب لكل الأدمنية (الموظف لا يرى حساباتهم بسبب RLS)
-                    await SupabaseService.client.rpc<dynamic>('request_account_deletion');
-
-                    if (context.mounted) {
-                      Navigator.pop(context); // إغلاق مؤشر الانتظار
-                      unawaited(showDialog<dynamic>(
-                        context: context,
-                        builder: (context) => AlertDialog(
-                          title: const Text('تم تقديم الطلب ✅', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: AppColors.success)),
-                          content: const Text(
-                            'تم إرسال طلب حذف حسابك بنجاح للمدير العام. سيتم مراجعة المديونيات والأقساط والموافقة على الحذف قريباً.',
-                            style: TextStyle(fontFamily: 'Cairo', fontSize: 13),
-                          ),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(context),
-                              child: const Text('حسناً', style: TextStyle(fontFamily: 'Cairo', color: AppColors.brand)),
-                            ),
-                          ],
-                        ),
-                      ));
-                    }
-                  } catch (e) {
-                    if (context.mounted) Navigator.pop(context); // إغلاق مؤشر الانتظار
-                    debugPrint('Failed to submit deletion request: $e');
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('فشل تقديم طلب حذف الحساب، يرجى المحاولة لاحقاً', style: TextStyle(fontFamily: 'Cairo'))),
-                      );
-                    }
-                  }
-                },
-                style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
-                child: const Text('تأكيد الطلب', style: TextStyle(fontFamily: 'Cairo')),
-              ),
-            ],
-          ),
-        ));
-      }
-
+      // الدالة ترسل الطلب لكل الأدمنية (الموظف لا يرى حساباتهم بسبب RLS)
+      await SupabaseService.client.rpc<dynamic>('request_account_deletion');
+      if (mounted) AppSnack.success(context, 'وصل طلب حذف الحساب للإدارة');
     } catch (e) {
-      if (mounted) Navigator.pop(context); // إغلاق مؤشر الانتظار
-      debugPrint('Failed to check loans for deletion: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('حدث خطأ أثناء فحص البيانات، يرجى المحاولة لاحقاً', style: TextStyle(fontFamily: 'Cairo'))),
-        );
-      }
+      debugPrint('Failed to submit deletion request: $e');
+      if (mounted) AppSnack.error(context, 'تعذّر إرسال الطلب، حاول لاحقاً');
+    } finally {
+      if (mounted) setState(() => _deletionBusy = false);
     }
+  }
+
+  Future<void> _enableNotifications() async {
+    final granted = await NotificationService.requestPermissionAndSaveToken();
+    if (!mounted) return;
+    setState(() => _notificationPermissionGranted = granted);
+    if (!granted) await openAppSettings();
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     if (_isLoading) {
-      return const Scaffold(
-        backgroundColor: Colors.transparent,
-        body: Center(child: CircularProgressIndicator(color: AppColors.brand)),
+      return const AppPage(
+        title: 'الإعدادات',
+        showBack: false,
+        body: Column(children: [Skeleton(height: 180, radius: AppRadius.md), SizedBox(height: AppSpace.lg), SkeletonList(count: 3)]),
       );
     }
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        centerTitle: true,
-        title: const Text(
-          'إعدادات الملف والأمان',
-          style: TextStyle(
-            fontFamily: 'Cairo',
-            fontWeight: FontWeight.bold,
-            color: AppColors.textPrimary,
-          ),
-        ),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
+    return AppPage(
+      title: 'الإعدادات',
+      showBack: false,
+      onRefresh: () async {
+        await _loadProfileAndDevice();
+        await _checkNotificationPermission();
+      },
+      slivers: [
+        SliverList.list(
           children: [
-            // 1. قسم الصورة والملف الشخصي الخلاب
-            GlassContainer(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
-              borderColor: AppColors.brand.withValues(alpha: 0.2),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.brand.withValues(alpha: 0.04),
-                  blurRadius: 20,
-                )
-              ],
+            _buildProfileCard(),
+            const SectionHeader('الإشعارات'),
+            _buildNotificationsCard(),
+            SectionHeader(
+              'وثائقي',
+              trailing: _isUploadingDoc
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                  : null,
+            ),
+            _buildDocuments(),
+            const SectionHeader('الخدمات'),
+            AppCard(
+              padding: const EdgeInsets.symmetric(vertical: AppSpace.xs),
               child: Column(
                 children: [
-                  // الأفاتار التفاعلي مع إمكانية التغيير المباشر والضغط التلقائي
-                  Stack(
-                    children: [
-                      Container(
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(color: AppColors.brand, width: 3),
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppColors.brand.withValues(alpha: 0.3),
-                              blurRadius: 16,
-                              spreadRadius: 1,
-                            )
-                          ],
-                        ),
-                        child: CircleAvatar(
-                          radius: 50,
-                          backgroundColor: AppColors.textPrimary.withValues(alpha: 0.04),
-                          backgroundImage: _avatarUrl.isNotEmpty ? NetworkImage(_avatarUrl) : null,
-                          child: _avatarUrl.isEmpty
-                              ? const Icon(Icons.person, size: 50, color: AppColors.brand)
-                              : null,
-                        ),
-                      ),
-                      Positioned(
-                        bottom: 0,
-                        right: 0,
-                        child: GestureDetector(
-                          onTap: _isUploadingAvatar ? null : _updateAvatar,
-                          child: Container(
-                            padding: const EdgeInsets.all(6),
-                            decoration: const BoxDecoration(
-                              color: AppColors.brand,
-                              shape: BoxShape.circle,
-                            ),
-                            child: _isUploadingAvatar
-                                ? const SizedBox(
-                                    width: 16,
-                                    height: 16,
-                                    child: CircularProgressIndicator(color: AppColors.textPrimary, strokeWidth: 2),
-                                  )
-                                : const Icon(Icons.camera_alt_rounded, color: AppColors.textPrimary, size: 16),
-                          ),
-                        ),
-                      ),
-                    ],
+                  AppListTile(
+                    leading: const ToneIcon(Icons.receipt_long_rounded, tone: AppTone.success),
+                    title: 'كشوف الرواتب',
+                    subtitle: 'تفاصيل راتبك الشهري',
+                    onTap: () => context.push(AppRoutes.employeePayslips),
                   ),
-                  const SizedBox(height: 16),
-                  
-                  // بيانات الموظف
-                  Text(
-                    _employeeName,
-                    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: AppColors.textPrimary, fontFamily: 'Cairo'),
+                  AppListTile(
+                    leading: const ToneIcon(Icons.groups_rounded, tone: AppTone.info),
+                    title: 'دليل الموظفين',
+                    onTap: () => context.push(AppRoutes.employeeDirectory),
                   ),
-                  const SizedBox(height: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: AppColors.brand.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: AppColors.brand.withValues(alpha: 0.3)),
+                  if (_isAdminOrManager) ...[
+                    const Divider(indent: AppSpace.lg, endIndent: AppSpace.lg),
+                    AppListTile(
+                      leading: const ToneIcon(Icons.admin_panel_settings_rounded, tone: AppTone.accent),
+                      title: 'لوحة الإدارة',
+                      onTap: () => context.push(AppRoutes.adminDashboard),
                     ),
-                    child: Text(
-                      _employeeCode,
-                      style: const TextStyle(color: AppColors.brand, fontSize: 11, fontWeight: FontWeight.bold, fontFamily: 'Cairo'),
+                    AppListTile(
+                      leading: const ToneIcon(Icons.location_searching_rounded, tone: AppTone.accent),
+                      title: 'التتبع الحي للموظفين',
+                      onTap: () => context.push(AppRoutes.adminTracking),
                     ),
-                  ),
-                  const SizedBox(height: 18),
-                  const Divider(color: AppColors.border),
-                  const SizedBox(height: 8),
-
-                  _buildProfileRow(Icons.email_outlined, 'البريد الإلكتروني للعمل', _email, isDark),
-                  const SizedBox(height: 12),
-                  _buildProfileRow(Icons.phone_outlined, 'رقم الهاتف المسجل', _phone, isDark),
+                    AppListTile(
+                      leading: const ToneIcon(Icons.table_chart_rounded, tone: AppTone.accent),
+                      title: 'سلف الموظفين وكشوف Excel',
+                      onTap: () => context.push(AppRoutes.adminLoans),
+                    ),
+                  ],
                 ],
               ),
             ),
-            const SizedBox(height: 20),
-
-            // 2. قسم أمان الحساب وقفل الأجهزة المعتمد (Device Security Info)
-            GlassContainer(
-              width: double.infinity,
-              padding: const EdgeInsets.all(20),
-              borderColor: AppColors.warning.withValues(alpha: 0.2),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.warning.withValues(alpha: 0.04),
-                  blurRadius: 20,
-                )
-              ],
+            const SectionHeader('الجهاز والأمان'),
+            AppCard(
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Row(
-                    children: [
-                      Icon(Icons.verified_user_rounded, color: AppColors.warning),
-                      SizedBox(width: 8),
-                      Text(
-                        'حماية الحساب وقفل الأجهزة 🛡️',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                          color: AppColors.textPrimary,
-                          fontFamily: 'Cairo',
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
                   const Text(
-                    'تطبيقاً لأعلى معايير الحماية ومكافحة التزوير، تم قفل حسابك وربطه تلقائياً بجهازك الحالي المعتمد أدناه. لا يمكن تسجيل الدخول من أي هاتف آخر إلا بموافقة الإدارة.',
-                    style: TextStyle(fontSize: 11, color: AppColors.textSecondary, height: 1.5, fontFamily: 'Cairo'),
+                    'حسابك مربوط بهذا الجهاز. الدخول من هاتف ثاني يحتاج موافقة الإدارة.',
+                    style: AppText.bodySm,
                   ),
-                  const Divider(height: 24, color: AppColors.border),
-                  _buildProfileRow(Icons.phone_android_rounded, 'طراز وهاتف الدخول المقفل', _deviceModel, isDark),
-                  const SizedBox(height: 12),
-                  _buildProfileRow(Icons.adb_rounded, 'نسخة نظام الدوران الفوري', _osVersion, isDark),
-                  const SizedBox(height: 12),
-                  _buildProfileRow(Icons.fingerprint_rounded, 'رمز معرف الهاتف الفريد', _deviceUUID, isDark, isCode: true),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // 2.5 قسم إعدادات الإشعارات
-            const SizedBox(height: 20),
-            GlassContainer(
-              width: double.infinity,
-              padding: const EdgeInsets.all(20),
-              borderColor: AppColors.brand.withValues(alpha: 0.2),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Row(
-                    children: [
-                      Icon(Icons.notifications_active_rounded, color: AppColors.brand),
-                      SizedBox(width: 8),
-                      Text(
-                        'إعدادات الإشعارات 🔔',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                          color: AppColors.textPrimary,
-                          fontFamily: 'Cairo',
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-
-                  // حالة الصلاحية
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: _notificationPermissionGranted
-                          ? AppColors.success.withValues(alpha: 0.1)
-                          : AppColors.danger.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: _notificationPermissionGranted
-                            ? AppColors.success.withValues(alpha: 0.3)
-                            : AppColors.danger.withValues(alpha: 0.3),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          _notificationPermissionGranted
-                              ? Icons.check_circle_rounded
-                              : Icons.cancel_rounded,
-                          color: _notificationPermissionGranted
-                              ? AppColors.success
-                              : AppColors.danger,
-                          size: 20,
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            _notificationPermissionGranted
-                                ? 'صلاحية الإشعارات ممنوحة ✅'
-                                : 'صلاحية الإشعارات غير ممنوحة ❌ - اضغط "تفعيل" أدناه',
-                            style: TextStyle(
-                              fontFamily: 'Cairo',
-                              fontSize: 12,
-                              color: _notificationPermissionGranted
-                                  ? AppColors.success
-                                  : AppColors.danger,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-
-                  // زر طلب الصلاحية
-                  if (!_notificationPermissionGranted) ...[
-                    ElevatedButton.icon(
-                      onPressed: () async {
-                        final granted = await NotificationService.requestPermissionAndSaveToken();
-                        if (mounted) {
-                          setState(() => _notificationPermissionGranted = granted);
-                          if (!granted) await openAppSettings();
-                        }
-                      },
-                      icon: const Icon(Icons.notifications_active_rounded, size: 18),
-                      label: const Text('تفعيل الإشعارات', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 13)),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.danger,
-                        foregroundColor: AppColors.textPrimary,
-                        minimumSize: const Size(double.infinity, 48),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                  ],
-                ],
-              ),
-            ),
-            // 2.8 قسم وثائق وملفات الموظف
-            GlassContainer(
-              width: double.infinity,
-              padding: const EdgeInsets.all(20),
-              borderColor: AppColors.info.withValues(alpha: 0.2),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+                  const SizedBox(height: AppSpace.sm),
+                  KeyValueRow('الجهاز', _deviceModel, icon: Icons.phone_android_rounded),
+                  KeyValueRow('النظام', _osVersion, icon: Icons.memory_rounded),
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Row(
-                        children: [
-                          Icon(Icons.folder_shared_rounded, color: AppColors.info),
-                          SizedBox(width: 8),
-                          Text(
-                            'وثائقي وملفاتي 📄',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
-                              color: AppColors.textPrimary,
-                              fontFamily: 'Cairo',
-                            ),
-                          ),
-                        ],
-                      ),
-                      if (_isUploadingDoc)
-                        const SizedBox(
-                          width: 16, height: 16,
-                          child: CircularProgressIndicator(color: AppColors.info, strokeWidth: 2),
-                        )
-                      else
-                        IconButton(
-                          onPressed: _uploadDocument,
-                          icon: const Icon(Icons.add_circle_outline, color: AppColors.info),
-                          tooltip: 'رفع وثيقة جديدة',
-                          constraints: const BoxConstraints(),
-                          padding: EdgeInsets.zero,
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  if (_documentUrls.isEmpty)
-                    const Text('لا توجد وثائق مرفوعة حالياً.', style: TextStyle(color: AppColors.textMuted, fontSize: 12, fontFamily: 'Cairo'))
-                  else
-                    Wrap(
-                      spacing: 12,
-                      runSpacing: 12,
-                      children: _documentUrls.map((url) {
-                        final bool isAdminOrManager = AuthService.currentUserRole == 'admin' || AuthService.currentUserRole == 'manager';
-
-                        return GestureDetector(
-                          onTap: () => _previewDocument(url),
-                          child: Stack(
-                            clipBehavior: Clip.none,
-                            children: [
-                              Container(
-                                width: 68,
-                                height: 68,
-                                decoration: BoxDecoration(
-                                  color: AppColors.textPrimary.withValues(alpha: 0.05),
-                                  borderRadius: BorderRadius.circular(14),
-                                  border: Border.all(color: AppColors.brand.withValues(alpha: 0.4)),
-                                ),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(14),
-                                  child: Image.network(
-                                    url,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (_, __, ___) => const Center(
-                                      child: Icon(Icons.picture_as_pdf_rounded, color: AppColors.accent, size: 28),
-                                    ),
-                                  ),
-                                ),
-                              ),
-
-                              // شارة القفل للموظف العادي، أو زر الحذف للآدمن فقط
-                              Positioned(
-                                top: -6,
-                                right: -6,
-                                child: isAdminOrManager
-                                    ? GestureDetector(
-                                        onTap: () => _deleteDocument(url),
-                                        child: Container(
-                                          padding: const EdgeInsets.all(4),
-                                          decoration: const BoxDecoration(
-                                            color: AppColors.danger,
-                                            shape: BoxShape.circle,
-                                            boxShadow: [BoxShadow(color: AppColors.shadow, blurRadius: 4)],
-                                          ),
-                                          child: const Icon(Icons.close, color: AppColors.textPrimary, size: 12),
-                                        ),
-                                      )
-                                    : Container(
-                                        padding: const EdgeInsets.all(4),
-                                        decoration: const BoxDecoration(
-                                          color: AppColors.success,
-                                          shape: BoxShape.circle,
-                                          boxShadow: [BoxShadow(color: AppColors.shadow, blurRadius: 4)],
-                                        ),
-                                        child: const Icon(Icons.lock_rounded, color: AppColors.textPrimary, size: 10),
-                                      ),
-                              ),
-                            ],
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                ],
-              ),
-            ),
-            // 2.9 بوابة الخدمات المالية (كشوف الرواتب)
-            const SizedBox(height: 20),
-            GlassContainer(
-              width: double.infinity,
-              padding: const EdgeInsets.all(20),
-              borderColor: AppColors.brand.withValues(alpha: 0.2),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Row(
-                    children: [
-                      Icon(Icons.account_balance_wallet_rounded, color: AppColors.brand),
-                      SizedBox(width: 8),
-                      Text(
-                        'الخدمات المالية وكشف الراتب 💸',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                          color: AppColors.textPrimary,
-                          fontFamily: 'Cairo',
-                        ),
+                      Expanded(child: KeyValueRow('معرّف الجهاز', _deviceUUID, icon: Icons.fingerprint_rounded)),
+                      IconButton(
+                        tooltip: 'نسخ المعرّف',
+                        icon: const Icon(Icons.copy_rounded, size: 18),
+                        onPressed: () {
+                          Clipboard.setData(ClipboardData(text: _deviceUUID));
+                          AppSnack.info(context, 'نُسخ معرّف الجهاز');
+                        },
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
-                  ElevatedButton.icon(
-                    onPressed: () => context.push(AppRoutes.employeePayslips),
-                    icon: const Icon(Icons.receipt_long_rounded, size: 18),
-                    label: const Text(
-                      'عرض كشوف الرواتب الشهرية',
-                      style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 13),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.brand.withValues(alpha: 0.2),
-                      foregroundColor: AppColors.brand,
-                      side: BorderSide(color: AppColors.brand.withValues(alpha: 0.4)),
-                      minimumSize: const Size(double.infinity, 48),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                  ),
-                  if (AuthService.currentUserRole == 'admin' || AuthService.currentUserRole == 'manager') ...[
-                    const SizedBox(height: 10),
-                    ElevatedButton.icon(
-                      onPressed: () => context.push(AppRoutes.adminTracking),
-                      icon: const Icon(Icons.location_searching_rounded, size: 18),
-                      label: const Text(
-                        'خريطة التتبع الحي للموظفين 📍',
-                        style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 13),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.accent.withValues(alpha: 0.2),
-                        foregroundColor: AppColors.brand,
-                        side: BorderSide(color: AppColors.brand.withValues(alpha: 0.4)),
-                        minimumSize: const Size(double.infinity, 48),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    ElevatedButton.icon(
-                      onPressed: () => context.push(AppRoutes.adminLoans),
-                      icon: const Icon(Icons.table_chart_rounded, size: 18),
-                      label: const Text(
-                        'متابعة سلف الموظفين وكشوف Excel 📊',
-                        style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 13),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.success.withValues(alpha: 0.2),
-                        foregroundColor: AppColors.success,
-                        side: BorderSide(color: AppColors.success.withValues(alpha: 0.4)),
-                        minimumSize: const Size(double.infinity, 48),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                    ),
-                  ],
                 ],
               ),
             ),
-            const SizedBox(height: 24),
-
-            // 3. أزرار التحكم
-
-
-            Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.accent.withValues(alpha: 0.3),
-                    blurRadius: 16,
-                    spreadRadius: 1,
-                  )
-                ],
-              ),
-              child: ElevatedButton(
-                onPressed: _handleLogout,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.accent,
-                  foregroundColor: AppColors.textPrimary,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  minimumSize: const Size(double.infinity, 50),
-                  elevation: 0,
-                ),
-                child: const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.logout_rounded),
-                    SizedBox(width: 8),
-                    Text(
-                      'تسجيل الخروج من الحساب',
-                      style: TextStyle(
-                        fontFamily: 'Cairo',
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextButton.icon(
+            const SizedBox(height: AppSpace.xxl),
+            AppButton.secondary(label: 'تسجيل الخروج', icon: Icons.logout_rounded, expand: true, onPressed: _handleLogout),
+            const SizedBox(height: AppSpace.sm),
+            AppButton(
+              label: 'طلب حذف الحساب',
+              icon: Icons.person_remove_outlined,
+              variant: AppButtonVariant.ghost,
+              expand: true,
+              loading: _deletionBusy,
               onPressed: _handleDeleteAccountRequest,
-              icon: const Icon(Icons.delete_forever_rounded, color: AppColors.danger),
-              label: const Text(
-                'طلب حذف الحساب',
-                style: TextStyle(
-                  fontFamily: 'Cairo',
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                  color: AppColors.danger,
-                ),
-              ),
-              style: TextButton.styleFrom(
-                minimumSize: const Size(double.infinity, 50),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  side: const BorderSide(color: AppColors.danger, width: 1.5),
-                ),
-              ),
             ),
-            const SizedBox(height: 20),
           ],
         ),
+      ],
+    );
+  }
+
+  Widget _buildProfileCard() {
+    return AppCard(
+      padding: const EdgeInsets.all(AppSpace.xl),
+      child: Column(
+        children: [
+          Semantics(
+            button: true,
+            label: 'تغيير الصورة الشخصية',
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: _isUploadingAvatar ? null : _updateAvatar,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  AppAvatar(name: _employeeName, url: _avatarUrl, size: 88),
+                  PositionedDirectional(
+                    bottom: -2,
+                    end: -2,
+                    child: Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(color: AppColors.brand, shape: BoxShape.circle, border: Border.all(color: AppColors.surface1, width: 3)),
+                      child: _isUploadingAvatar
+                          ? const Padding(padding: EdgeInsets.all(6), child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.onBrand))
+                          : const Icon(Icons.photo_camera_rounded, size: 16, color: AppColors.onBrand),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpace.md),
+          Text(_employeeName, style: AppText.title, textAlign: TextAlign.center),
+          const SizedBox(height: AppSpace.xs),
+          StatusBadge(_employeeCode, tone: AppTone.brand, icon: Icons.badge_outlined),
+          const SizedBox(height: AppSpace.lg),
+          const Divider(),
+          KeyValueRow('البريد', _email, icon: Icons.alternate_email_rounded),
+          KeyValueRow('الهاتف', _phone, icon: Icons.phone_outlined),
+        ],
       ),
     );
   }
 
-  Widget _buildProfileRow(IconData icon, String title, String val, bool isDark, {bool isCode = false}) {
-    return Row(
-      children: [
-        Icon(icon, size: 20, color: AppColors.textMuted),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: const TextStyle(fontSize: 10, color: AppColors.textMuted, fontFamily: 'Cairo')),
-              const SizedBox(height: 2),
-              Text(
-                val,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: isCode ? FontWeight.w500 : FontWeight.bold,
-                  fontFamily: isCode ? 'monospace' : 'Cairo',
-                  color: AppColors.textPrimary,
+  Widget _buildNotificationsCard() {
+    final granted = _notificationPermissionGranted;
+    return AppCard(
+      tone: granted ? null : AppTone.warning,
+      child: Row(
+        children: [
+          ToneIcon(granted ? Icons.notifications_active_rounded : Icons.notifications_off_rounded, tone: granted ? AppTone.success : AppTone.warning),
+          const SizedBox(width: AppSpace.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(granted ? 'الإشعارات مفعّلة' : 'الإشعارات متوقفة', style: AppText.subtitle),
+                Text(granted ? 'توصلك القرارات وتذكيرات البصمة.' : 'فعّلها حتى توصلك القرارات والتذكيرات.', style: AppText.caption),
+              ],
+            ),
+          ),
+          if (!granted) AppButton(label: 'تفعيل', size: AppButtonSize.small, onPressed: _enableNotifications),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDocuments() {
+    return AppCard(
+      child: Wrap(
+        spacing: AppSpace.md,
+        runSpacing: AppSpace.md,
+        children: [
+          for (final url in _documentUrls)
+            Semantics(
+              button: true,
+              label: 'فتح وثيقة',
+              child: InkWell(
+                onTap: () => _previewDocument(url),
+                borderRadius: AppRadius.control,
+                child: ClipRRect(
+                  borderRadius: AppRadius.control,
+                  child: Container(
+                    width: 72,
+                    height: 72,
+                    color: AppColors.surface2,
+                    child: Image.network(
+                      url,
+                      fit: BoxFit.cover,
+                      cacheWidth: 216,
+                      errorBuilder: (_, __, ___) => const Icon(Icons.picture_as_pdf_rounded, color: AppColors.accent),
+                    ),
+                  ),
                 ),
               ),
-            ],
+            ),
+          Semantics(
+            button: true,
+            label: 'رفع وثيقة جديدة',
+            child: InkWell(
+              onTap: _isUploadingDoc ? null : _uploadDocument,
+              borderRadius: AppRadius.control,
+              child: Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  borderRadius: AppRadius.control,
+                  border: Border.all(color: AppColors.borderStrong),
+                ),
+                child: const Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.add_rounded, color: AppColors.brand),
+                    Text('إضافة', style: AppText.caption),
+                  ],
+                ),
+              ),
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
