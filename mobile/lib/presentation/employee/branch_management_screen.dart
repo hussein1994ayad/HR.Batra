@@ -168,7 +168,7 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
                           ),
                         ),
                         const SizedBox(height: 8),
-                        const Text('💡 اضغط على أي نقطة في الخريطة لتغيير الموقع', style: TextStyle(fontFamily: 'Cairo', color: AppColors.warning, fontSize: 10)),
+                        const Text(' اضغط على أي نقطة في الخريطة لتغيير الموقع', style: TextStyle(fontFamily: 'Cairo', color: AppColors.warning, fontSize: 10)),
                       ],
                     ),
                   ),
@@ -204,7 +204,7 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
                             if (context.mounted) {
                               Navigator.pop(context);
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('تم حفظ الفرع بنجاح ✅', style: TextStyle(fontFamily: 'Cairo')), backgroundColor: AppColors.success),
+                                const SnackBar(content: Text('تم حفظ الفرع بنجاح', style: TextStyle(fontFamily: 'Cairo')), backgroundColor: AppColors.success),
                               );
                               unawaited(_loadBranches());
                             }
@@ -302,7 +302,7 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
             icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textPrimary),
             onPressed: () => Navigator.pop(context),
           ),
-          title: const Text('إدارة الأفرع 🏢', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.textPrimary)),
+          title: const Text('إدارة الأفرع', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.textPrimary)),
           actions: [
             IconButton(
               icon: const Icon(Icons.add_business_rounded, color: AppColors.brand),

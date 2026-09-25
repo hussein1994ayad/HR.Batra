@@ -138,7 +138,7 @@ class OtaService {
                   
                   // عنوان التحديث
                   Text(
-                    isMandatory ? 'تحديث إجباري مطلوب ⚠️' : 'يتوفر إصدار جديد للتطبيق 🎉',
+                    isMandatory ? 'تحديث إجباري مطلوب' : 'يتوفر إصدار جديد للتطبيق',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 20,
@@ -218,7 +218,7 @@ class OtaService {
                             ),
                           ),
                           child: const Text(
-                            'تحديث الآن ⚡',
+                            'تحديث الآن',
                             style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.bold,

@@ -9,9 +9,9 @@ import '../../../shared/widgets/glass_container.dart';
 /// شارة حالة السلفة (معلقة، مسددة، مرفوضة، نشطة).
 ({String label, Color color}) loanBadge(LoanModel loan) {
   if (loan.isPending) return (label: 'طلب معلق ⏳', color: AppColors.warning);
-  if (loan.isRejected) return (label: 'مرفوضة ❌', color: AppColors.danger);
-  if (loan.remainingAmount <= 0) return (label: 'مسددة بالكامل 🏁', color: AppColors.success);
-  return (label: 'سلفة نشطة 💸', color: AppColors.brand);
+  if (loan.isRejected) return (label: 'مرفوضة', color: AppColors.danger);
+  if (loan.remainingAmount <= 0) return (label: 'مسددة بالكامل', color: AppColors.success);
+  return (label: 'سلفة نشطة', color: AppColors.brand);
 }
 
 /// صورة الموظف أو أيقونة بديلة.

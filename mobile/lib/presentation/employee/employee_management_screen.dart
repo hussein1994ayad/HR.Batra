@@ -91,7 +91,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(!currentStatus ? 'تم تفعيل حساب الموظف ✅' : 'تم تعطيل حساب الموظف ❌', style: const TextStyle(fontFamily: 'Cairo')),
+            content: Text(!currentStatus ? 'تم تفعيل حساب الموظف' : 'تم تعطيل حساب الموظف', style: const TextStyle(fontFamily: 'Cairo')),
             backgroundColor: !currentStatus ? AppColors.success : AppColors.warning,
           ),
         );
@@ -123,7 +123,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('تم فك ربط جهاز الموظف بنجاح ✅', style: TextStyle(fontFamily: 'Cairo')),
+            content: Text('تم فك ربط جهاز الموظف بنجاح', style: TextStyle(fontFamily: 'Cairo')),
             backgroundColor: AppColors.success,
           ),
         );
@@ -340,7 +340,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                             if (context.mounted) {
                               Navigator.pop(context);
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('تم إنشاء الموظف بنجاح ✅', style: TextStyle(fontFamily: 'Cairo')), backgroundColor: AppColors.success),
+                                const SnackBar(content: Text('تم إنشاء الموظف بنجاح', style: TextStyle(fontFamily: 'Cairo')), backgroundColor: AppColors.success),
                               );
                               unawaited(_loadEmployees());
                             }
@@ -537,7 +537,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                             if (context.mounted) {
                               Navigator.pop(context);
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('تم تحديث المستمسكات بنجاح ✅', style: TextStyle(fontFamily: 'Cairo')), backgroundColor: AppColors.success),
+                                const SnackBar(content: Text('تم تحديث المستمسكات بنجاح', style: TextStyle(fontFamily: 'Cairo')), backgroundColor: AppColors.success),
                               );
                               unawaited(_loadEmployees());
                             }
@@ -854,7 +854,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                             padding: const EdgeInsets.symmetric(vertical: 8),
                           ),
                           icon: const Icon(Icons.phone_rounded, size: 16),
-                          label: const Text('اتصال 📞', style: TextStyle(fontFamily: 'Cairo', fontSize: 11, fontWeight: FontWeight.bold)),
+                          label: const Text('اتصال', style: TextStyle(fontFamily: 'Cairo', fontSize: 11, fontWeight: FontWeight.bold)),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -874,7 +874,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                             padding: const EdgeInsets.symmetric(vertical: 8),
                           ),
                           icon: const Icon(Icons.chat_bubble_rounded, size: 16),
-                          label: const Text('واتساب 💬', style: TextStyle(fontFamily: 'Cairo', fontSize: 11, fontWeight: FontWeight.bold)),
+                          label: const Text('واتساب', style: TextStyle(fontFamily: 'Cairo', fontSize: 11, fontWeight: FontWeight.bold)),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -883,7 +883,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                           Clipboard.setData(ClipboardData(text: phone as String));
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
-                              content: Text('تم نسخ رقم الهاتف 📋', style: TextStyle(fontFamily: 'Cairo')),
+                              content: Text('تم نسخ رقم الهاتف', style: TextStyle(fontFamily: 'Cairo')),
                               backgroundColor: AppColors.brandStrong,
                               duration: Duration(seconds: 2),
                             ),
@@ -1084,7 +1084,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
             icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textPrimary),
             onPressed: () => Navigator.pop(context),
           ),
-          title: const Text('إدارة الموظفين 👥', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.textPrimary)),
+          title: const Text('إدارة الموظفين', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.textPrimary)),
           actions: [
             IconButton(
               icon: const Icon(Icons.person_add_rounded, color: AppColors.brand),
@@ -1180,11 +1180,11 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                                           itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
                                             const PopupMenuItem<String>(
                                               value: 'profile',
-                                              child: Text('عرض الملف والوثائق 📁', style: TextStyle(color: AppColors.brand, fontFamily: 'Cairo')),
+                                              child: Text('عرض الملف والوثائق', style: TextStyle(color: AppColors.brand, fontFamily: 'Cairo')),
                                             ),
                                             const PopupMenuItem<String>(
                                               value: 'edit',
-                                              child: Text('تعديل المستمسكات 📝', style: TextStyle(color: AppColors.textPrimary, fontFamily: 'Cairo')),
+                                              child: Text('تعديل المستمسكات', style: TextStyle(color: AppColors.textPrimary, fontFamily: 'Cairo')),
                                             ),
                                             PopupMenuItem<String>(
                                               value: 'toggle',

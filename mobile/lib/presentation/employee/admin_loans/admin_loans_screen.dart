@@ -64,7 +64,7 @@ class _AdminLoansManagementScreenState extends State<AdminLoansManagementScreen>
     final allowed = await RoleRepository().isAdminOrManager().catchError((Object _) => false);
     if (!mounted) return;
     if (!allowed) {
-      _toast('عذراً، هذه الشاشة مخصصة لحسابات الإدارة والموارد البشرية فقط ⚠️', AppColors.danger);
+      _toast('عذراً، هذه الشاشة مخصصة لحسابات الإدارة والموارد البشرية فقط', AppColors.danger);
       context.go(AppRoutes.employeeHome);
       return;
     }
@@ -103,7 +103,7 @@ class _AdminLoansManagementScreenState extends State<AdminLoansManagementScreen>
   Future<void> _createLoan() async {
     final created = await showCreateLoanSheet(context, employees: _data.employees, repo: _repo);
     if (created ?? false) {
-      _toast('تمت إضافة واعتماد السلفة وتوليد الأقساط بنجاح ✅', AppColors.success);
+      _toast('تمت إضافة واعتماد السلفة وتوليد الأقساط بنجاح', AppColors.success);
       await _load();
     }
   }
@@ -121,7 +121,7 @@ class _AdminLoansManagementScreenState extends State<AdminLoansManagementScreen>
           foregroundColor: AppColors.textPrimary,
           elevation: 4,
           icon: const Icon(Icons.add_circle_outline_rounded),
-          label: const Text('إضافة سلفة لموظف ➕', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 13)),
+          label: const Text('إضافة سلفة لموظف', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 13)),
           onPressed: _createLoan,
         ),
         appBar: AppBar(
@@ -132,7 +132,7 @@ class _AdminLoansManagementScreenState extends State<AdminLoansManagementScreen>
             onPressed: () => Navigator.pop(context),
           ),
           title: const Text(
-            'متابعة سلف وأقساط الموظفين 💼',
+            'متابعة سلف وأقساط الموظفين',
             style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.textPrimary),
           ),
           actions: [

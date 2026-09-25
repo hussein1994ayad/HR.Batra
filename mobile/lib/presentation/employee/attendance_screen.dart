@@ -256,7 +256,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         _todayAttendance = attendanceData as Map<String, dynamic>?;
 
       } catch (networkError) {
-        debugPrint('⚠️ وضع الأوفلاين نشط: $networkError');
+        debugPrint(' وضع الأوفلاين نشط: $networkError');
       }
 
       // 6. دمج البصمات المحلية المعلقة في طابور التزامن

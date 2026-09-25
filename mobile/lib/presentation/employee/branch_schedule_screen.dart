@@ -416,7 +416,7 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
                               Navigator.pop(context);
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
-                                  content: Text('تم حفظ جدول العمل بنجاح ✅', style: TextStyle(fontFamily: 'Cairo')),
+                                  content: Text('تم حفظ جدول العمل بنجاح', style: TextStyle(fontFamily: 'Cairo')),
                                   backgroundColor: AppColors.success,
                                 ),
                               );
@@ -602,7 +602,7 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
                                           style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.textPrimary),
                                         ),
                                         Text(
-                                          hasSchedule ? 'الجدول مُعَد ✅' : 'بدون جدول عمل ⚠️',
+                                          hasSchedule ? 'الجدول مُعَد' : 'بدون جدول عمل',
                                           style: TextStyle(
                                             fontFamily: 'Cairo',
                                             fontSize: 10,

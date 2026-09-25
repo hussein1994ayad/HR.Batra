@@ -125,7 +125,7 @@ class _CreateLoanSheetState extends State<_CreateLoanSheet> {
                   children: [
                     Icon(Icons.add_circle_rounded, color: AppColors.brand, size: 24),
                     SizedBox(width: 10),
-                    Text('إضافة سلفة جديدة لموظف ➕',
+                    Text('إضافة سلفة جديدة لموظف',
                         style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.textPrimary)),
                   ],
                 ),
@@ -201,7 +201,7 @@ class _CreateLoanSheetState extends State<_CreateLoanSheet> {
                 icon: Icon(hasPledge ? Icons.check_circle_rounded : Icons.camera_alt_rounded,
                     color: hasPledge ? AppColors.success : AppColors.brand, size: 18),
                 label: Text(
-                  hasPledge ? 'تم التقاط صورة التعهد ✅' : 'تصوير التعهد الخطي (إلزامي) 📷',
+                  hasPledge ? 'تم التقاط صورة التعهد' : 'تصوير التعهد الخطي (إلزامي)',
                   style: TextStyle(
                     fontFamily: 'Cairo',
                     fontSize: 11,
@@ -225,7 +225,7 @@ class _CreateLoanSheetState extends State<_CreateLoanSheet> {
                 ),
                 child: _saving
                     ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: AppColors.textPrimary, strokeWidth: 2))
-                    : const Text('حفظ واعتماد السلفة مباشرة 💸',
+                    : const Text('حفظ واعتماد السلفة مباشرة',
                         style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 14)),
               ),
             ),

@@ -320,7 +320,7 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
       if (updates.isNotEmpty) {
         await SupabaseService.client.from('attendance').update(updates).eq('id', recordId);
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم تحديث الأوقات بنجاح ✅', style: TextStyle(fontFamily: 'Cairo')), backgroundColor: AppColors.success));
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم تحديث الأوقات بنجاح', style: TextStyle(fontFamily: 'Cairo')), backgroundColor: AppColors.success));
           unawaited(_loadRecords());
         }
       } else {
@@ -329,7 +329,7 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
     } catch (e) {
       debugPrint('Error updating time: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('حدث خطأ أثناء التحديث ❌', style: TextStyle(fontFamily: 'Cairo')), backgroundColor: AppColors.danger));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('حدث خطأ أثناء التحديث', style: TextStyle(fontFamily: 'Cairo')), backgroundColor: AppColors.danger));
         setState(() => _isLoading = false);
       }
     }
@@ -350,7 +350,7 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
             icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textPrimary),
             onPressed: () => Navigator.pop(context),
           ),
-          title: const Text('تقارير الحضور المتقدمة 📊', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.textPrimary)),
+          title: const Text('تقارير الحضور المتقدمة', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.textPrimary)),
         ),
         body: Column(
           children: [

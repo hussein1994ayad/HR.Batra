@@ -101,7 +101,7 @@ class _LoanDetails extends StatelessWidget {
                   elevation: 0,
                 ),
                 icon: const Icon(Icons.file_download_rounded, size: 18),
-                label: const Text('Excel 📊', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 12)),
+                label: const Text('Excel', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 12)),
               ),
             ],
           ),
@@ -165,7 +165,7 @@ class _LoanDetails extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 20),
-          const Text('📝 صورة التعهد الخطي المرفقة بالسلفة', style: _title),
+          const Text(' صورة التعهد الخطي المرفقة بالسلفة', style: _title),
           const SizedBox(height: 10),
           if (pledge.isNotEmpty)
             _PledgePreview(url: pledge, employeeName: loan.employeeName ?? '')
@@ -184,7 +184,7 @@ class _LoanDetails extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('🗓️ جدول الأقساط والتسديدات الشهرية', style: _title),
+              const Text(' جدول الأقساط والتسديدات الشهرية', style: _title),
               Text(
                 '${loan.installments.length} أقساط',
                 style: const TextStyle(fontFamily: 'Cairo', fontSize: 12, color: AppColors.brand, fontWeight: FontWeight.bold),
@@ -318,7 +318,7 @@ class _PledgePreview extends StatelessWidget {
       child: Column(
         children: [
           GestureDetector(
-            onTap: () => showFullScreenImage(context, url, 'تعهد سلفة: $employeeName 📝'),
+            onTap: () => showFullScreenImage(context, url, 'تعهد سلفة: $employeeName'),
             child: Container(
               height: 180,
               width: double.infinity,
@@ -344,7 +344,7 @@ class _PledgePreview extends StatelessWidget {
                       children: [
                         Icon(Icons.zoom_in_rounded, color: AppColors.textPrimary, size: 16),
                         SizedBox(width: 6),
-                        Text('انقر لتكبير صورة التعهد 🔍', style: TextStyle(fontFamily: 'Cairo', fontSize: 11, color: AppColors.textPrimary)),
+                        Text('انقر لتكبير صورة التعهد', style: TextStyle(fontFamily: 'Cairo', fontSize: 11, color: AppColors.textPrimary)),
                       ],
                     ),
                   ),
@@ -365,7 +365,7 @@ class _PledgePreview extends StatelessWidget {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 icon: const Icon(Icons.download_rounded, size: 18),
-                label: const Text('تحميل وفتح التعهد الخطي 📥',
+                label: const Text('تحميل وفتح التعهد الخطي',
                     style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 12)),
               ),
             ),
@@ -439,7 +439,7 @@ class _InstallmentTile extends StatelessWidget {
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
-                  paid ? 'مسدد ✅' : 'متبقي ⏳',
+                  paid ? 'مسدد' : 'متبقي ⏳',
                   style: TextStyle(
                     fontFamily: 'Cairo',
                     fontSize: 10,

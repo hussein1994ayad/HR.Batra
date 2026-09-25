@@ -98,7 +98,7 @@ class _HomeScreenState extends State<HomeScreen> {
             // the user is on another tab. FCM push handles this when the
             // app is in the background; this covers the in-app case.
             await NotificationService.showLocalNotification(
-              title: (data['title'] ?? 'تنبيه جديد 🔔').toString(),
+              title: (data['title'] ?? 'تنبيه جديد').toString(),
               body: (data['body'] ?? '').toString(),
             );
           },

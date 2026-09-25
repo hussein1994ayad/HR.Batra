@@ -100,7 +100,7 @@ class LoansFilterBar extends StatelessWidget {
                       children: [
                         Icon(Icons.domain_rounded, color: AppColors.brand, size: 16),
                         SizedBox(width: 8),
-                        Text('🏢 جميع الفروع (كافة الموظفين)',
+                        Text(' جميع الفروع (كافة الموظفين)',
                             style: TextStyle(fontFamily: 'Cairo', color: AppColors.textPrimary, fontSize: 12, fontWeight: FontWeight.bold)),
                       ],
                     ),
@@ -268,7 +268,7 @@ Future<void> showExcelExportedDialog(BuildContext context, {required String empl
           ),
           const SizedBox(width: 12),
           const Flexible(
-            child: Text('تم تصدير كشف Excel بنجاح! 📊',
+            child: Text('تم تصدير كشف Excel بنجاح!',
                 style: TextStyle(fontFamily: 'Cairo', fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
           ),
         ],
@@ -312,7 +312,7 @@ Future<void> showExcelExportedDialog(BuildContext context, {required String empl
             if (!ctx.mounted) return;
             ScaffoldMessenger.of(ctx).showSnackBar(
               const SnackBar(
-                content: Text('تم نسخ مسار الملف إلى الحافظة 📋', style: TextStyle(fontFamily: 'Cairo')),
+                content: Text('تم نسخ مسار الملف إلى الحافظة', style: TextStyle(fontFamily: 'Cairo')),
                 backgroundColor: AppColors.brandStrong,
               ),
             );
@@ -331,7 +331,7 @@ Future<void> showExcelExportedDialog(BuildContext context, {required String empl
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
           icon: const Icon(Icons.share_rounded, size: 18),
-          label: const Text('مشاركة / واتساب 📤', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 11)),
+          label: const Text('مشاركة / واتساب', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 11)),
         ),
         ElevatedButton.icon(
           onPressed: () {
@@ -344,7 +344,7 @@ Future<void> showExcelExportedDialog(BuildContext context, {required String empl
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
           icon: const Icon(Icons.open_in_new_rounded, size: 18),
-          label: const Text('فتح الملف 📊', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 11)),
+          label: const Text('فتح الملف', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 11)),
         ),
       ],
     ),

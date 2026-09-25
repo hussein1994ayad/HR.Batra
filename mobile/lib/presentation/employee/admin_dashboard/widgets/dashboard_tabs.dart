@@ -35,12 +35,12 @@ class DecisionsTab extends StatelessWidget {
   Widget build(BuildContext context) {
     if (!hasDate) {
       return const EmptyState(
-        'يرجى تحديد تاريخ أولاً لعرض القرارات المعلقة 📅',
+        'يرجى تحديد تاريخ أولاً لعرض القرارات المعلقة',
         icon: Icons.calendar_today_rounded,
         tone: AppTone.warning,
       );
     }
-    if (decisions.isEmpty) return const EmptyState('لا توجد قرارات غياب أو تأخير معلقة لليوم المختار 👏');
+    if (decisions.isEmpty) return const EmptyState('لا توجد قرارات غياب أو تأخير معلقة لليوم المختار');
 
     return ListView.builder(
       padding: _listPadding,
@@ -73,7 +73,7 @@ class LeavesTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (leaves.isEmpty) return const EmptyState('لا توجد طلبات إجازة معلقة حالياً 🎉');
+    if (leaves.isEmpty) return const EmptyState('لا توجد طلبات إجازة معلقة حالياً');
 
     return ListView.builder(
       padding: _listPadding,
@@ -98,7 +98,7 @@ class LeavesTab extends StatelessWidget {
               InfoRow(
                 icon: Icons.attachment_rounded,
                 label: 'المرفق المرفوع',
-                value: 'يوجد مستند رسمي مرفق 📄',
+                value: 'يوجد مستند رسمي مرفق',
                 url: leave.attachmentUrl,
               ),
             ],
@@ -123,7 +123,7 @@ class LoansTab extends StatelessWidget {
       children: [
         const _LoansLedgerShortcut(),
         if (loans.isEmpty)
-          const EmptyState('لا توجد طلبات سلف جديدة معلقة حالياً 💸')
+          const EmptyState('لا توجد طلبات سلف جديدة معلقة حالياً')
         else
           for (final loan in loans)
             RequestCard(
@@ -151,7 +151,7 @@ class LoansTab extends StatelessWidget {
                   InfoRow(
                     icon: Icons.draw_rounded,
                     label: 'تعهد السلفة الموقّع',
-                    value: 'رابط التعهد الإلزامي المرفق 📝',
+                    value: 'رابط التعهد الإلزامي المرفق',
                     url: loan.pledgeUrl,
                   ),
                 ],
@@ -196,7 +196,7 @@ class _LoansLedgerShortcut extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'سجل ومتابعة المستلفين وكشوف Excel 📊',
+                    'سجل ومتابعة المستلفين وكشوف Excel',
                     style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textPrimary),
                   ),
                   SizedBox(height: 2),
@@ -225,7 +225,7 @@ class DevicesTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (devices.isEmpty) return const EmptyState('لا توجد طلبات اعتماد أجهزة معلقة حالياً 📱');
+    if (devices.isEmpty) return const EmptyState('لا توجد طلبات اعتماد أجهزة معلقة حالياً');
 
     return ListView.builder(
       padding: _listPadding,
@@ -262,7 +262,7 @@ class SecurityTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (logs.isEmpty) return const EmptyState('سجل الأمان خالٍ من الخروقات اليوم ✨');
+    if (logs.isEmpty) return const EmptyState('سجل الأمان خالٍ من الخروقات اليوم');
 
     return ListView.builder(
       padding: _listPadding,
@@ -274,7 +274,7 @@ class SecurityTab extends StatelessWidget {
           accent: AppColors.danger,
           opacity: 0.12,
           glow: true,
-          trailing: const StatusBadge('خطر أمني ⚠️', color: AppColors.danger),
+          trailing: const StatusBadge('خطر أمني', color: AppColors.danger),
           children: [
             InfoRow(icon: Icons.warning_amber_rounded, label: 'تفاصيل الخرق المكتشف', value: log.details),
             const SizedBox(height: 10),

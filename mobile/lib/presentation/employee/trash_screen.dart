@@ -98,7 +98,7 @@ class _TrashScreenState extends State<TrashScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('تم استعادة الملف بنجاح ✅', style: TextStyle(fontFamily: 'Cairo')),
+            content: Text('تم استعادة الملف بنجاح', style: TextStyle(fontFamily: 'Cairo')),
             backgroundColor: AppColors.success,
           ),
         );
@@ -138,7 +138,7 @@ class _TrashScreenState extends State<TrashScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('تم إتلاف الملف وحذفه نهائياً 🗑️', style: TextStyle(fontFamily: 'Cairo')),
+            content: Text('تم إتلاف الملف وحذفه نهائياً', style: TextStyle(fontFamily: 'Cairo')),
             backgroundColor: AppColors.onStatus,
           ),
         );
@@ -234,7 +234,7 @@ class _TrashScreenState extends State<TrashScreen> {
                 ),
                 const SizedBox(height: 18),
                 const Text(
-                  'إتلاف وحذف نهائي؟ ⚠️',
+                  'إتلاف وحذف نهائي؟',
                   style: TextStyle(
                     fontFamily: 'Cairo',
                     fontWeight: FontWeight.bold,
@@ -332,7 +332,7 @@ class _TrashScreenState extends State<TrashScreen> {
             onPressed: () => Navigator.pop(context),
           ),
           title: const Text(
-            'سلة المحذوفات للملفات 🗑️',
+            'سلة المحذوفات للملفات',
             style: TextStyle(
               fontFamily: 'Cairo',
               fontWeight: FontWeight.bold,

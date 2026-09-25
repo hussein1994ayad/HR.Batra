@@ -94,7 +94,7 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
         )
         ..subscribe();
     } catch (e) {
-      debugPrint('⚠️ تعذر بدء اشتراك Realtime للتتبع: $e');
+      debugPrint(' تعذر بدء اشتراك Realtime للتتبع: $e');
     }
   }
 
@@ -132,7 +132,7 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('عذراً، هذه الشاشة مخصصة لحسابات الإدارة والمدراء فقط ⚠️', style: TextStyle(fontFamily: 'Cairo')),
+              content: Text('عذراً، هذه الشاشة مخصصة لحسابات الإدارة والمدراء فقط', style: TextStyle(fontFamily: 'Cairo')),
               backgroundColor: AppColors.danger,
             ),
           );
@@ -485,7 +485,7 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
             onPressed: () => Navigator.pop(context),
           ),
           title: const Text(
-            'خريطة التتبع الحي للموظفين 📍',
+            'خريطة التتبع الحي للموظفين',
             style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.textPrimary),
           ),
           actions: [
@@ -502,7 +502,7 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(
-                      _autoRefreshEnabled ? 'تم تفعيل التحديث الحي التلقائي (كل 15 ثانية) 🟢' : 'تم إيقاف التحديث التلقائي ⏸️',
+                      _autoRefreshEnabled ? 'تم تفعيل التحديث الحي التلقائي (كل 15 ثانية)' : 'تم إيقاف التحديث التلقائي ⏸',
                       style: const TextStyle(fontFamily: 'Cairo'),
                     ),
                     duration: const Duration(seconds: 2),
@@ -578,7 +578,7 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
                                     children: [
                                       Icon(Icons.domain_rounded, color: AppColors.brand, size: 15),
                                       SizedBox(width: 6),
-                                      Text('🏢 جميع الفروع والمواقع', style: TextStyle(fontFamily: 'Cairo', color: AppColors.textPrimary, fontSize: 11, fontWeight: FontWeight.bold)),
+                                      Text(' جميع الفروع والمواقع', style: TextStyle(fontFamily: 'Cairo', color: AppColors.textPrimary, fontSize: 11, fontWeight: FontWeight.bold)),
                                     ],
                                   ),
                                 ),
@@ -654,11 +654,11 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
                     children: [
                       _buildFilterChip('الكل ($_totalCount)', 'all'),
                       const SizedBox(width: 6),
-                      _buildFilterChip('داخل الفرع ($_insideCount) 🟢', 'inside', color: AppColors.success),
+                      _buildFilterChip('داخل الفرع ($_insideCount)', 'inside', color: AppColors.success),
                       const SizedBox(width: 6),
-                      _buildFilterChip('خارج النطاق ($_outsideCount) 🔴', 'outside', color: AppColors.danger),
+                      _buildFilterChip('خارج النطاق ($_outsideCount)', 'outside', color: AppColors.danger),
                       const SizedBox(width: 6),
-                      _buildFilterChip('انصراف ($_checkedOutCount) 🏁', 'checked_out', color: AppColors.warning),
+                      _buildFilterChip('انصراف ($_checkedOutCount)', 'checked_out', color: AppColors.warning),
                       const SizedBox(width: 6),
                       _buildFilterChip('لم يبصم ($_absentCount) ⏳', 'absent', color: AppColors.textMuted),
                     ],
@@ -853,7 +853,7 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
                 boxShadow: [BoxShadow(color: AppColors.shadow, blurRadius: 4)],
               ),
               child: const Center(
-                child: Text('🏁', style: TextStyle(fontSize: 14)),
+                child: Text('', style: TextStyle(fontSize: 14)),
               ),
             ),
           ),
@@ -881,13 +881,13 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
     String statusText = 'لم يبصم حضور اليوم';
     if (status == 'inside') {
       statusColor = AppColors.success;
-      statusText = 'داخل نطاق الفرع (باصم حضور) 🟢';
+      statusText = 'داخل نطاق الفرع (باصم حضور)';
     } else if (status == 'outside') {
       statusColor = AppColors.danger;
-      statusText = 'خارج نطاق الفرع (باصم حضور) 🔴';
+      statusText = 'خارج نطاق الفرع (باصم حضور)';
     } else if (status == 'checked_out') {
       statusColor = AppColors.warning;
-      statusText = 'سجل انصراف من الدوام 🏁';
+      statusText = 'سجل انصراف من الدوام';
     }
 
     return Container(
@@ -949,7 +949,7 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
               children: [
                 Text('بصمة الحضور: $checkIn ${checkOut != null ? " • الانصراف: $checkOut" : ""}', style: const TextStyle(fontFamily: 'Cairo', color: AppColors.textSecondary, fontSize: 10)),
                 if (battery != null)
-                  Text('البطارية: $battery% 🔋', style: const TextStyle(fontFamily: 'Cairo', color: AppColors.textMuted, fontSize: 10)),
+                  Text('البطارية: $battery%', style: const TextStyle(fontFamily: 'Cairo', color: AppColors.textMuted, fontSize: 10)),
               ],
             ),
           ],
@@ -979,7 +979,7 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
                   InkWell(
                     onTap: () => setState(() => _showTrail = !_showTrail),
                     child: Text(
-                      _showTrail ? 'إخفاء المسار ✕' : 'إظهار المسار 🛣️',
+                      _showTrail ? 'إخفاء المسار' : 'إظهار المسار',
                       style: const TextStyle(fontFamily: 'Cairo', color: AppColors.brand, fontSize: 10, fontWeight: FontWeight.bold),
                     ),
                   ),
@@ -1022,7 +1022,7 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
                   style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 12, color: AppColors.textPrimary),
                 ),
                 Text(
-                  'اضغط على أي موظف لتحديده وتتبع مساره 📍',
+                  'اضغط على أي موظف لتحديده وتتبع مساره',
                   style: TextStyle(fontFamily: 'Cairo', fontSize: 10, color: AppColors.brand.withValues(alpha: 0.8)),
                 ),
               ],
@@ -1054,13 +1054,13 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
                       String statusLabel = 'لم يبصم ⏳';
                       if (status == 'inside') {
                         statusColor = AppColors.success;
-                        statusLabel = 'داخل الفرع 🟢';
+                        statusLabel = 'داخل الفرع';
                       } else if (status == 'outside') {
                         statusColor = AppColors.danger;
-                        statusLabel = 'خارج النطاق 🔴';
+                        statusLabel = 'خارج النطاق';
                       } else if (status == 'checked_out') {
                         statusColor = AppColors.warning;
-                        statusLabel = 'انصراف 🏁';
+                        statusLabel = 'انصراف';
                       }
 
                       return Container(

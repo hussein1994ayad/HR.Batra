@@ -113,7 +113,7 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
         _titleController.clear();
         _bodyController.clear();
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('تم إرسال التعميم بنجاح إلى ${targetEmployeeIds.length} موظف ✅', style: const TextStyle(fontFamily: 'Cairo')), backgroundColor: AppColors.success),
+          SnackBar(content: Text('تم إرسال التعميم بنجاح إلى ${targetEmployeeIds.length} موظف', style: const TextStyle(fontFamily: 'Cairo')), backgroundColor: AppColors.success),
         );
       }
     } catch (e) {
@@ -140,7 +140,7 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
             icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textPrimary),
             onPressed: () => Navigator.pop(context),
           ),
-          title: const Text('إرسال تعميم 📢', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.textPrimary)),
+          title: const Text('إرسال تعميم', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.textPrimary)),
         ),
         body: SingleChildScrollView(
           padding: const EdgeInsets.all(20),

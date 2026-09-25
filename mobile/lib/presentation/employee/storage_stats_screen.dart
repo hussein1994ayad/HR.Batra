@@ -120,7 +120,7 @@ class _StorageStatsScreenState extends State<StorageStatsScreen> {
           ),
           centerTitle: true,
           title: const Text(
-            'تحليلات التخزين السحابي 📊',
+            'تحليلات التخزين السحابي',
             style: TextStyle(
               fontFamily: 'Cairo', 
               fontWeight: FontWeight.bold,
@@ -252,7 +252,7 @@ class _StorageStatsScreenState extends State<StorageStatsScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   const Text(
-                                    'تحذير: التخزين يوشك على الامتلاء! ⚠️',
+                                    'تحذير: التخزين يوشك على الامتلاء!',
                                     style: TextStyle(
                                       fontFamily: 'Cairo',
                                       fontWeight: FontWeight.bold,
@@ -307,7 +307,7 @@ class _StorageStatsScreenState extends State<StorageStatsScreen> {
                       onPressed: _loadStorageData,
                       icon: const Icon(Icons.refresh, color: AppColors.textPrimary),
                       label: const Text(
-                        'تحديث التحليلات المباشرة ⚡',
+                        'تحديث التحليلات المباشرة',
                         style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: AppColors.textPrimary),
                       ),
                       style: ElevatedButton.styleFrom(

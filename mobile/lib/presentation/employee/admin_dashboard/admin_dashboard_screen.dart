@@ -10,13 +10,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/design/design.dart';
+
 import '../../../core/models/models.dart';
 import '../../../core/routes/app_router.dart';
 import '../../../data/repositories/admin_actions_repository.dart';
 import '../../../data/repositories/admin_dashboard_repository.dart';
 import '../../../data/repositories/role_repository.dart';
-import '../../shared/widgets/glass_background.dart';
+import '../../shared/ui/ui.dart';
 import 'widgets/dashboard_header.dart';
 import 'widgets/dashboard_tabs.dart';
 
@@ -89,9 +89,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
 
   void _toast(String message, Color color) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message, style: const TextStyle(fontFamily: 'Cairo')), backgroundColor: color),
-    );
+    final tone = color == AppColors.danger
+        ? AppTone.danger
+        : color == AppColors.success
+            ? AppTone.success
+            : AppTone.warning;
+    AppSnack.show(context, message.replaceAll(RegExp(r'\s*[]+'), ''), tone: tone);
   }
 
   /// ينفّذ إجراءً على بطاقة، يعرض النتيجة، ثم يعيد التحميل.
@@ -119,141 +122,203 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
     return scheduleForDecision(item, _snapshot.schedules, departmentId);
   }
 
+
+  static const _tools = <(IconData, String, String, AppTone)>[
+    (Icons.location_searching_rounded, 'التتبع الحي', AppRoutes.adminTracking, AppTone.brand),
+    (Icons.bar_chart_rounded, 'تقارير الحضور', AppRoutes.adminAttendanceReport, AppTone.info),
+    (Icons.account_balance_wallet_rounded, 'السلف و Excel', AppRoutes.adminLoans, AppTone.warning),
+    (Icons.people_alt_rounded, 'الموظفون', AppRoutes.adminEmployeeManagement, AppTone.success),
+    (Icons.store_rounded, 'الفروع', AppRoutes.adminBranchManagement, AppTone.accent),
+    (Icons.schedule_rounded, 'أوقات الدوام', AppRoutes.adminBranchSchedule, AppTone.accent),
+    (Icons.campaign_rounded, 'التعاميم', AppRoutes.adminAnnouncement, AppTone.info),
+    (Icons.delete_sweep_rounded, 'المحذوفات', AppRoutes.adminTrash, AppTone.neutral),
+    (Icons.cloud_queue_rounded, 'التخزين', AppRoutes.adminStorage, AppTone.neutral),
+  ];
+
+  void _openTools() {
+    showAppSheet<void>(
+      context,
+      title: 'أدوات الإدارة',
+      builder: (ctx) => ResponsiveGrid(
+        minItemWidth: 96,
+        spacing: AppSpace.sm,
+        children: [
+          for (final (icon, label, route, tone) in _tools)
+            AppCard(
+              padding: const EdgeInsets.symmetric(vertical: AppSpace.md, horizontal: AppSpace.xs),
+              semanticLabel: label,
+              onTap: () {
+                Navigator.pop(ctx);
+                context.push(route);
+              },
+              child: ExcludeSemantics(
+                child: Column(
+                  children: [
+                    ToneIcon(icon, tone: tone),
+                    const SizedBox(height: AppSpace.sm),
+                    Text(label, textAlign: TextAlign.center, maxLines: 2, style: AppText.caption.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = _snapshot;
-    return GlassBackground(
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textPrimary),
-            onPressed: () => Navigator.pop(context),
+    final pending = s.leaves.length + s.loans.length + s.devices.length;
+    final tabs = [
+      ('القرارات', s.decisions.length),
+      ('الإجازات', s.leaves.length),
+      ('السلف', s.loans.length),
+      ('الأجهزة', s.devices.length),
+      ('الأمان', s.securityLogs.length),
+    ];
+
+    return Scaffold(
+      backgroundColor: AppColors.bg,
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => context.push(AppRoutes.adminAnnouncement),
+        icon: const Icon(Icons.campaign_rounded),
+        label: const Text('تعميم جديد'),
+      ),
+      body: NestedScrollView(
+        headerSliverBuilder: (context, _) => [
+          SliverAppBar(
+            pinned: true,
+            title: const Text('لوحة الإدارة'),
+            actions: [
+              IconButton(tooltip: 'تحديث', icon: const Icon(Icons.refresh_rounded), onPressed: _load),
+              IconButton(tooltip: 'أدوات الإدارة', icon: const Icon(Icons.apps_rounded), onPressed: _openTools),
+              const SizedBox(width: AppSpace.xs),
+            ],
           ),
-          title: const Text(
-            'لوحة إدارة الموارد البشرية 👑',
-            style: TextStyle(
-              fontFamily: 'Cairo',
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
-              color: AppColors.textPrimary,
-              shadows: [Shadow(color: AppColors.brand, blurRadius: 10)],
-            ),
-          ),
-          actions: [
-            _nav(Icons.location_searching_rounded, AppColors.brand, 'خريطة التتبع الحي للموظفين', AppRoutes.adminTracking),
-            _nav(Icons.account_balance_wallet_rounded, AppColors.brand, 'متابعة السلف وكشوف Excel', AppRoutes.adminLoans),
-            _nav(Icons.bar_chart_rounded, AppColors.brand, 'تقارير الحضور', AppRoutes.adminAttendanceReport),
-            _nav(Icons.people_alt_rounded, AppColors.success, 'إدارة الموظفين', AppRoutes.adminEmployeeManagement),
-            _nav(Icons.schedule_rounded, AppColors.warning, 'أوقات عمل الأفرع', AppRoutes.adminBranchSchedule),
-            _nav(Icons.delete_sweep_rounded, AppColors.accent, 'سلة المحذوفات', AppRoutes.adminTrash),
-            _nav(Icons.cloud_queue_rounded, AppColors.brand, 'إحصائيات التخزين', AppRoutes.adminStorage),
-          ],
-          bottom: PreferredSize(
-            preferredSize: const Size.fromHeight(150),
-            child: Column(
-              children: [
-                DashboardFiltersBar(
-                  filter: _filter,
-                  branches: _lookups.branches,
-                  employees: _lookups.employees.where((e) => e.isActive).toList(),
-                  onChanged: _setFilter,
-                ),
-                TabBar(
-                  controller: _tabController,
-                  isScrollable: true,
-                  labelStyle: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 11),
-                  unselectedLabelStyle: const TextStyle(fontFamily: 'Cairo', fontSize: 11),
-                  indicatorColor: AppColors.brand,
-                  labelColor: AppColors.brand,
-                  unselectedLabelColor: AppColors.textSecondary,
-                  indicatorSize: TabBarIndicatorSize.tab,
-                  tabs: [
-                    Tab(text: 'القرارات (${s.decisions.length})'),
-                    Tab(text: 'الإجازات (${s.leaves.length})'),
-                    Tab(text: 'السلف (${s.loans.length})'),
-                    Tab(text: 'الأجهزة (${s.devices.length})'),
-                    Tab(text: 'الأمان (${s.securityLogs.length})'),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-        floatingActionButton: FloatingActionButton.extended(
-          onPressed: () => context.push(AppRoutes.adminAnnouncement),
-          backgroundColor: AppColors.accent,
-          icon: const Icon(Icons.campaign_rounded, color: AppColors.textPrimary),
-          label: const Text('تعميم جديد', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
-        ),
-        body: _isLoading
-            ? const Center(child: CircularProgressIndicator(color: AppColors.brand))
-            : RefreshIndicator(
-                onRefresh: _load,
-                color: AppColors.brand,
-                backgroundColor: AppColors.surface1,
-                child: Column(
-                  children: [
-                    DashboardStatsRow(present: s.present, absent: s.absent, violations: s.securityLogs.length),
-                    Expanded(
-                      child: TabBarView(
-                        controller: _tabController,
+          SliverToBoxAdapter(
+            child: ContentWidth(
+              maxWidth: 1000,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(AppSpace.page, AppSpace.xs, AppSpace.page, AppSpace.md),
+                child: _isLoading && s.present == 0 && s.absent == 0
+                    ? const Row(
                         children: [
-                          DecisionsTab(
-                            hasDate: _filter.date != null,
-                            decisions: s.decisions,
-                            scheduleFor: _scheduleFor,
-                            busyKey: _busyKey,
-                            onDecide: (item, {required deduct, required reason, required amount}) => _run(
-                              item.key,
-                              () => _actions.applyDecision(item, deduct: deduct, reason: reason, amount: amount),
-                              deduct ? 'تم تطبيق الخصم ⚠️' : 'تم الإعفاء من الخصم ✅',
-                              deduct ? AppColors.warning : AppColors.success,
-                            ),
-                          ),
-                          LeavesTab(
-                            leaves: s.leaves,
-                            busyKey: _busyKey,
-                            onDecide: (leave, approve) => _run(
-                              leave.id,
-                              () => _actions.decideLeave(leave.id, approve: approve),
-                              approve ? 'تم قبول طلب الإجازة بنجاح ✅' : 'تم رفض طلب الإجازة ❌',
-                              approve ? AppColors.success : AppColors.danger,
-                            ),
-                          ),
-                          LoansTab(
-                            loans: s.loans,
-                            busyKey: _busyKey,
-                            onDecide: (loan, approve) => _run(
-                              loan.id,
-                              () => approve ? _actions.approveLoan(loan) : _actions.rejectLoan(loan.id),
-                              approve ? 'تم اعتماد السلفة وتوليد الأقساط ✅' : 'تم رفض طلب السلفة ❌',
-                              approve ? AppColors.success : AppColors.danger,
-                            ),
-                          ),
-                          DevicesTab(
-                            devices: s.devices,
-                            busyKey: _busyKey,
-                            onDecide: (device, approve) => _run(
-                              device.id,
-                              () => approve ? _actions.approveDevice(device) : _actions.rejectDevice(device.id),
-                              approve ? 'تم اعتماد الجهاز بنجاح ✅' : 'تم رفض وإزالة الهاتف المذكور ❌',
-                              approve ? AppColors.success : AppColors.danger,
-                            ),
-                          ),
-                          SecurityTab(logs: s.securityLogs),
+                          Expanded(child: Skeleton(height: 96, radius: AppRadius.md)),
+                          SizedBox(width: AppSpace.md),
+                          Expanded(child: Skeleton(height: 96, radius: AppRadius.md)),
+                        ],
+                      )
+                    : DashboardStatsRow(present: s.present, absent: s.absent, violations: s.securityLogs.length, pending: pending),
+              ),
+            ),
+          ),
+          SliverToBoxAdapter(
+            child: DashboardFiltersBar(
+              filter: _filter,
+              branches: _lookups.branches,
+              employees: _lookups.employees.where((e) => e.isActive).toList(),
+              onChanged: _setFilter,
+            ),
+          ),
+          SliverPersistentHeader(
+            pinned: true,
+            delegate: _TabBarHeader(
+              TabBar(
+                controller: _tabController,
+                isScrollable: true,
+                tabAlignment: TabAlignment.start,
+                tabs: [
+                  for (final (label, count) in tabs)
+                    Tab(
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(label),
+                          if (count > 0) ...[
+                            const SizedBox(width: AppSpace.xs),
+                            Badge(label: Text('$count'), backgroundColor: AppColors.surface3, textColor: AppColors.textPrimary),
+                          ],
                         ],
                       ),
                     ),
+                ],
+              ),
+            ),
+          ),
+        ],
+        body: _isLoading
+            ? const Padding(padding: EdgeInsets.all(AppSpace.page), child: SkeletonList(count: 4, itemHeight: 110))
+            : RefreshIndicator.adaptive(
+                onRefresh: _load,
+                notificationPredicate: (n) => n.depth <= 1,
+                child: TabBarView(
+                  controller: _tabController,
+                  children: [
+                    DecisionsTab(
+                      hasDate: _filter.date != null,
+                      decisions: s.decisions,
+                      scheduleFor: _scheduleFor,
+                      busyKey: _busyKey,
+                      onDecide: (item, {required deduct, required reason, required amount}) => _run(
+                        item.key,
+                        () => _actions.applyDecision(item, deduct: deduct, reason: reason, amount: amount),
+                        deduct ? 'تم تطبيق الخصم' : 'تم الإعفاء من الخصم',
+                        deduct ? AppColors.warning : AppColors.success,
+                      ),
+                    ),
+                    LeavesTab(
+                      leaves: s.leaves,
+                      busyKey: _busyKey,
+                      onDecide: (leave, approve) => _run(
+                        leave.id,
+                        () => _actions.decideLeave(leave.id, approve: approve),
+                        approve ? 'قُبل طلب الإجازة' : 'رُفض طلب الإجازة',
+                        approve ? AppColors.success : AppColors.danger,
+                      ),
+                    ),
+                    LoansTab(
+                      loans: s.loans,
+                      busyKey: _busyKey,
+                      onDecide: (loan, approve) => _run(
+                        loan.id,
+                        () => approve ? _actions.approveLoan(loan) : _actions.rejectLoan(loan.id),
+                        approve ? 'اعتُمدت السلفة وتولّدت الأقساط' : 'رُفض طلب السلفة',
+                        approve ? AppColors.success : AppColors.danger,
+                      ),
+                    ),
+                    DevicesTab(
+                      devices: s.devices,
+                      busyKey: _busyKey,
+                      onDecide: (device, approve) => _run(
+                        device.id,
+                        () => approve ? _actions.approveDevice(device) : _actions.rejectDevice(device.id),
+                        approve ? 'اعتُمد الجهاز' : 'رُفض الجهاز وأُزيل',
+                        approve ? AppColors.success : AppColors.danger,
+                      ),
+                    ),
+                    SecurityTab(logs: s.securityLogs),
                   ],
                 ),
               ),
       ),
     );
   }
+}
 
-  Widget _nav(IconData icon, Color color, String tooltip, String route) =>
-      IconButton(icon: Icon(icon, color: color), tooltip: tooltip, onPressed: () => context.push(route));
+class _TabBarHeader extends SliverPersistentHeaderDelegate {
+  _TabBarHeader(this.tabBar);
+  final TabBar tabBar;
+
+  @override
+  double get minExtent => tabBar.preferredSize.height;
+  @override
+  double get maxExtent => tabBar.preferredSize.height;
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) =>
+      ColoredBox(color: AppColors.bg, child: tabBar);
+
+  @override
+  bool shouldRebuild(covariant _TabBarHeader oldDelegate) => oldDelegate.tabBar != tabBar;
 }
