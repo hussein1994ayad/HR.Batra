@@ -83,6 +83,9 @@ Map<String, List<Map<String, dynamic>>> buildFixtures({String role = 'admin'}) {
   return {
     'employees': employees,
     'v_employee_directory': employees,
+    'rpc:get_employee_directory': [
+      for (final e in employees) {...e, 'branch_name': 'فرع المنصور', 'department_name': 'المبيعات', 'document_urls': <String>[]},
+    ],
     'branches': [_branch],
     'attendance': attendance,
     'work_schedules': [

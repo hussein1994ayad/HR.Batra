@@ -41,7 +41,8 @@ class FakeBackend {
       return http.Response(jsonEncode({'message': 'offline'}), 500, headers: _json);
     }
     if (path.startsWith('/rest/v1/rpc/')) {
-      return http.Response('null', 200, headers: _json);
+      final rows = tables['rpc:${path.substring('/rest/v1/rpc/'.length)}'];
+      return http.Response(rows == null ? 'null' : jsonEncode(rows), 200, headers: _json);
     }
     if (path.startsWith('/rest/v1/')) {
       return _rest(req, path.substring('/rest/v1/'.length));

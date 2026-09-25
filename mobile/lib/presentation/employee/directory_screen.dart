@@ -1,5 +1,5 @@
 // =========================================================================
-// نظام HR Pro v6.0 - دليل الموظفين الذكي والملف الشخصي والوثائق
+// HR Pro — دليل الموظفين: بحث فوري بالعربي، فلتر الفرع، وبطاقة تواصل ووثائق
 // =========================================================================
 
 import 'package:flutter/material.dart';
@@ -7,10 +7,9 @@ import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../core/design/design.dart';
+
 import '../../core/services/supabase_service.dart';
-import '../shared/widgets/glass_background.dart';
-import '../shared/widgets/glass_container.dart';
+import '../shared/ui/ui.dart';
 
 class EmployeeDirectoryScreen extends StatefulWidget {
   const EmployeeDirectoryScreen({super.key});
@@ -23,6 +22,7 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
   List<Map<String, dynamic>> _allEmployees = [];
   List<Map<String, dynamic>> _filteredEmployees = [];
   bool _isLoading = true;
+  bool _hasError = false;
   final _searchController = TextEditingController();
 
   // فلاتر سريعة
@@ -71,11 +71,13 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
 
       setState(() {
         _allEmployees = list;
+        _hasError = false;
         _branchOptions = branches.toList();
         _applyFilters();
       });
     } catch (e) {
       debugPrint('خطأ في تحميل دليل الموظفين: $e');
+      if (mounted) setState(() => _hasError = true);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -99,603 +101,271 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
         final name = _normalizeArabic((emp['full_name'] ?? '') as String);
         final dept = _normalizeArabic((emp['department_name'] ?? '') as String);
         final branch = _normalizeArabic((emp['branch_name'] ?? '') as String);
-        final code = (emp['employee_code'] ?? '').toLowerCase();
+        final code = (emp['employee_code'] ?? '').toString().toLowerCase();
         final phone = (emp['phone'] ?? '').toString();
-        final email = (emp['email'] ?? '').toLowerCase();
+        final email = (emp['email'] ?? '').toString().toLowerCase();
 
         return name.contains(normalizedQuery) ||
             dept.contains(normalizedQuery) ||
             branch.contains(normalizedQuery) ||
-            (code.contains(normalizedQuery) as bool) ||
+            code.contains(normalizedQuery) ||
             phone.contains(query) ||
-            (email.contains(query.toLowerCase()) as bool);
+            email.contains(query.toLowerCase());
       }).toList();
     });
   }
 
-  /// فتح الملف الشخصي الشامل للموظف مع استعراض وتنزيل كافة وثائقه
+  // بطاقة الموظف: تواصل سريع، معلومات العمل، والوثائق
   void _showEmployeeProfileModal(Map<String, dynamic> emp) {
-    final name = emp['full_name'] ?? 'موظف';
-    final avatarUrl = emp['avatar_url'] ?? '';
-    final dept = emp['department_name'] ?? 'القسم العام';
-    final branch = emp['branch_name'] ?? 'الفرع العام';
-    final phone = emp['phone'] ?? 'غير مسجل';
-    final email = emp['email'] ?? 'غير مسجل';
-    final code = emp['employee_code'] ?? 'EMP-000';
-    final role = emp['role'] == 'admin' ? 'مدير نظام 👑' : emp['role'] == 'manager' ? 'مدير فرع 👔' : 'موظف 👤';
-    final List<dynamic> docUrls = emp['document_urls'] as List<dynamic>? ?? [];
+    final name = (emp['full_name'] ?? 'موظف').toString();
+    final phone = (emp['phone'] ?? '').toString();
+    final hasPhone = phone.trim().isNotEmpty;
+    final role = switch (emp['role']) {
+      'admin' => 'مدير نظام',
+      'manager' => 'مدير فرع',
+      _ => 'موظف',
+    };
+    final docUrls = [for (final u in (emp['document_urls'] as List<dynamic>? ?? const [])) u.toString()];
 
-    showModalBottomSheet<dynamic>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: AppColors.surface1,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      builder: (ctx) => DraggableScrollableSheet(
-        initialChildSize: 0.75,
-        minChildSize: 0.5,
-        maxChildSize: 0.92,
-        expand: false,
-        builder: (_, scrollController) => Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-          child: ListView(
-            controller: scrollController,
+    showAppSheet<void>(
+      context,
+      builder: (ctx) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
             children: [
-              // مقبض السحب
-              Center(
-                child: Container(
-                  width: 44,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(color: AppColors.borderStrong, borderRadius: BorderRadius.circular(2)),
-                ),
-              ),
-
-              // ترويسة بطاقة الموظف
-              Row(
-                children: [
-                  Container(
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(color: AppColors.brand, width: 2),
-                      boxShadow: [BoxShadow(color: AppColors.brand.withValues(alpha: 0.3), blurRadius: 10)],
-                    ),
-                    child: CircleAvatar(
-                      radius: 30,
-                      backgroundColor: AppColors.textPrimary.withValues(alpha: 0.08),
-                      backgroundImage: (avatarUrl.isNotEmpty as bool) ? NetworkImage(avatarUrl as String) : null,
-                      child: (avatarUrl.isEmpty as bool) ? const Icon(Icons.person, color: AppColors.brand, size: 30) : null,
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+              AppAvatar(name: name, url: emp['avatar_url']?.toString(), size: 60),
+              const SizedBox(width: AppSpace.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(name, style: AppText.title),
+                    const SizedBox(height: AppSpace.xs),
+                    Wrap(
+                      spacing: AppSpace.xs,
+                      runSpacing: AppSpace.xs,
                       children: [
-                        Text(name as String, style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 15, color: AppColors.textPrimary)),
-                        const SizedBox(height: 2),
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: AppColors.brand.withValues(alpha: 0.15),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Text(code as String, style: const TextStyle(fontFamily: 'Cairo', fontSize: 10, color: AppColors.brand, fontWeight: FontWeight.bold)),
-                            ),
-                            const SizedBox(width: 6),
-                            Text(role, style: const TextStyle(fontFamily: 'Cairo', fontSize: 11, color: AppColors.textSecondary)),
-                          ],
-                        ),
+                        StatusBadge((emp['employee_code'] ?? '—').toString(), tone: AppTone.brand),
+                        StatusBadge(role),
                       ],
                     ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close_rounded, color: AppColors.textMuted),
-                    onPressed: () => Navigator.pop(ctx),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 16),
-
-              // أزرار التواصل السريع (اتصال، واتساب، نسخ)
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: phone != 'غير مسجل'
-                          ? () async {
-                              final uri = Uri.parse('tel:$phone');
-                              if (await canLaunchUrl(uri)) await launchUrl(uri);
-                            }
-                          : null,
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.success,
-                        side: const BorderSide(color: AppColors.success),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                      ),
-                      icon: const Icon(Icons.phone_rounded, size: 16),
-                      label: const Text('اتصال 📞', style: TextStyle(fontFamily: 'Cairo', fontSize: 11, fontWeight: FontWeight.bold)),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: phone != 'غير مسجل'
-                          ? () async {
-                              final cleanPhone = phone.replaceAll(RegExp(r'\D'), '');
-                              final uri = Uri.parse('https://wa.me/$cleanPhone');
-                              if (await canLaunchUrl(uri)) await launchUrl(uri, mode: LaunchMode.externalApplication);
-                            }
-                          : null,
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.brand,
-                        side: const BorderSide(color: AppColors.brand),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                      ),
-                      icon: const Icon(Icons.chat_bubble_rounded, size: 16),
-                      label: const Text('واتساب 💬', style: TextStyle(fontFamily: 'Cairo', fontSize: 11, fontWeight: FontWeight.bold)),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  IconButton(
-                    onPressed: () {
-                      Clipboard.setData(ClipboardData(text: phone as String));
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('تم نسخ رقم الهاتف 📋', style: TextStyle(fontFamily: 'Cairo')),
-                          backgroundColor: AppColors.brandStrong,
-                          duration: Duration(seconds: 2),
-                        ),
-                      );
-                    },
-                    icon: const Icon(Icons.copy_rounded, color: AppColors.textSecondary, size: 18),
-                    tooltip: 'نسخ الرقم',
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 16),
-
-              // بطاقة المعلومات الوظيفية
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: AppColors.textPrimary.withValues(alpha: 0.04),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: Column(
-                  children: [
-                    _buildInfoRow(Icons.domain_rounded, 'الفرع', branch as String, AppColors.brand),
-                    const Divider(color: AppColors.border, height: 16),
-                    _buildInfoRow(Icons.apartment_rounded, 'القسم', dept as String, AppColors.accent),
-                    const Divider(color: AppColors.border, height: 16),
-                    _buildInfoRow(Icons.phone_iphone_rounded, 'الهاتف', phone as String, AppColors.success),
-                    const Divider(color: AppColors.border, height: 16),
-                    _buildInfoRow(Icons.email_rounded, 'البريد', email as String, AppColors.warning),
                   ],
                 ),
               ),
-
-              const SizedBox(height: 20),
-
-              // قسم وثائق ومستندات الموظف
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.folder_shared_rounded, color: AppColors.brand, size: 20),
-                      const SizedBox(width: 8),
-                      Text(
-                        'وثائق ومستندات الموظف (${docUrls.length}) 📁',
-                        style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textPrimary),
-                      ),
-                    ],
-                  ),
-                  if (docUrls.length > 1)
-                    TextButton.icon(
-                      onPressed: () async {
-                        final text = docUrls.map((u) => u.toString()).join('\n');
-                        await SharePlus.instance.share(ShareParams(text: text, subject: 'وثائق الموظف: $name'));
-                      },
-                      icon: const Icon(Icons.share_rounded, color: AppColors.brand, size: 14),
-                      label: const Text('مشاركة الكل', style: TextStyle(fontFamily: 'Cairo', fontSize: 10, color: AppColors.brand)),
-                    ),
-                ],
-              ),
-
-              const SizedBox(height: 10),
-
-              if (docUrls.isEmpty)
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: AppColors.textPrimary.withValues(alpha: 0.02),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: AppColors.textPrimary.withValues(alpha: 0.06)),
-                  ),
-                  child: const Center(
-                    child: Text('لا توجد وثائق أو مستمسكات مرفوعة لهذا الموظف حتى الآن.', style: TextStyle(fontFamily: 'Cairo', color: AppColors.textDisabled, fontSize: 11)),
-                  ),
-                )
-              else
-                ...docUrls.asMap().entries.map((entry) {
-                  final idx = entry.key + 1;
-                  final url = entry.value.toString();
-                  final isPdf = url.toLowerCase().contains('.pdf');
-
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: AppColors.textPrimary.withValues(alpha: 0.04),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: AppColors.brand.withValues(alpha: 0.2)),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: (isPdf ? AppColors.accent : AppColors.brand).withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Icon(
-                            isPdf ? Icons.picture_as_pdf_rounded : Icons.image_rounded,
-                            color: isPdf ? AppColors.accent : AppColors.brand,
-                            size: 20,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('وثيقة رسمية رقم #$idx', style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 12, color: AppColors.textPrimary)),
-                              Text(isPdf ? 'مستند PDF رقمي' : 'صورة / مستمسك معتمد', style: const TextStyle(fontFamily: 'Cairo', fontSize: 10, color: AppColors.textMuted)),
-                            ],
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.visibility_rounded, color: AppColors.brand, size: 18),
-                          tooltip: 'معاينة',
-                          onPressed: () {
-                            _previewImageDialog(url, 'وثيقة الموظف #$idx');
-                          },
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.download_rounded, color: AppColors.success, size: 18),
-                          tooltip: 'تنزيل ومشاركة',
-                          onPressed: () async {
-                            await SharePlus.instance.share(ShareParams(uri: Uri.parse(url)));
-                          },
-                        ),
-                      ],
-                    ),
-                  );
-                }),
-
-              const SizedBox(height: 20),
             ],
           ),
-        ),
+          const SizedBox(height: AppSpace.lg),
+          Row(
+            children: [
+              Expanded(
+                child: AppButton.secondary(
+                  label: 'اتصال',
+                  icon: Icons.phone_rounded,
+                  onPressed: hasPhone
+                      ? () async {
+                          final uri = Uri.parse('tel:$phone');
+                          if (await canLaunchUrl(uri)) await launchUrl(uri);
+                        }
+                      : null,
+                ),
+              ),
+              const SizedBox(width: AppSpace.sm),
+              Expanded(
+                child: AppButton.secondary(
+                  label: 'واتساب',
+                  icon: Icons.chat_rounded,
+                  onPressed: hasPhone
+                      ? () async {
+                          final cleanPhone = phone.replaceAll(RegExp(r'\D'), '');
+                          final uri = Uri.parse('https://wa.me/$cleanPhone');
+                          if (await canLaunchUrl(uri)) await launchUrl(uri, mode: LaunchMode.externalApplication);
+                        }
+                      : null,
+                ),
+              ),
+              const SizedBox(width: AppSpace.sm),
+              AppIconButton(
+                icon: Icons.copy_rounded,
+                tooltip: 'نسخ الرقم',
+                onPressed: hasPhone
+                    ? () {
+                        Clipboard.setData(ClipboardData(text: phone));
+                        AppSnack.info(context, 'نُسخ رقم الهاتف');
+                      }
+                    : null,
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpace.lg),
+          AppCard(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg, vertical: AppSpace.sm),
+            child: Column(
+              children: [
+                KeyValueRow('الفرع', (emp['branch_name'] ?? '—').toString(), icon: Icons.store_rounded),
+                KeyValueRow('القسم', (emp['department_name'] ?? '—').toString(), icon: Icons.apartment_rounded),
+                KeyValueRow('الهاتف', hasPhone ? phone : 'غير مسجل', icon: Icons.phone_iphone_rounded),
+                KeyValueRow('البريد', (emp['email'] ?? 'غير مسجل').toString(), icon: Icons.alternate_email_rounded),
+              ],
+            ),
+          ),
+          SectionHeader(
+            'الوثائق (${docUrls.length})',
+            actionLabel: docUrls.length > 1 ? 'مشاركة الكل' : null,
+            onAction: () => SharePlus.instance.share(ShareParams(text: docUrls.join('\n'), subject: 'وثائق الموظف: $name')),
+          ),
+          if (docUrls.isEmpty)
+            const Text('لا توجد وثائق مرفوعة لهذا الموظف.', style: AppText.caption)
+          else
+            for (var i = 0; i < docUrls.length; i++)
+              AppListTile(
+                dense: true,
+                leading: ToneIcon(
+                  docUrls[i].toLowerCase().contains('.pdf') ? Icons.picture_as_pdf_rounded : Icons.image_rounded,
+                  tone: docUrls[i].toLowerCase().contains('.pdf') ? AppTone.accent : AppTone.brand,
+                  size: 36,
+                ),
+                title: 'وثيقة ${i + 1}',
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(tooltip: 'معاينة', icon: const Icon(Icons.visibility_rounded), onPressed: () => _previewImageDialog(docUrls[i], 'وثيقة ${i + 1}')),
+                    IconButton(
+                      tooltip: 'مشاركة',
+                      icon: const Icon(Icons.ios_share_rounded),
+                      onPressed: () => SharePlus.instance.share(ShareParams(uri: Uri.parse(docUrls[i]))),
+                    ),
+                  ],
+                ),
+              ),
+        ],
       ),
     );
   }
 
   void _previewImageDialog(String url, String title) {
-    showDialog<dynamic>(
+    showDialog<void>(
       context: context,
-      builder: (ctx) => Dialog(
-        backgroundColor: AppColors.surface1,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(title, style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: AppColors.textPrimary, fontSize: 13)),
-                  IconButton(
-                    icon: const Icon(Icons.close_rounded, color: AppColors.textMuted, size: 18),
-                    onPressed: () => Navigator.pop(ctx),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: Container(
-                  constraints: const BoxConstraints(maxHeight: 340),
-                  color: AppColors.shadow,
-                  child: Image.network(
-                    url,
-                    fit: BoxFit.contain,
-                    errorBuilder: (_, __, ___) => const Padding(
-                      padding: EdgeInsets.all(30),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.picture_as_pdf_rounded, color: AppColors.accent, size: 48),
-                          SizedBox(height: 8),
-                          Text('مستند PDF رقمي', style: TextStyle(fontFamily: 'Cairo', color: AppColors.textSecondary, fontSize: 12)),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 14),
-              ElevatedButton.icon(
-                onPressed: () async {
-                  Navigator.pop(ctx);
-                  await SharePlus.instance.share(ShareParams(uri: Uri.parse(url)));
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.brandStrong,
-                  foregroundColor: AppColors.textPrimary,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                icon: const Icon(Icons.share_rounded, size: 16),
-                label: const Text('تنزيل / مشاركة الوثيقة 📤', style: TextStyle(fontFamily: 'Cairo', fontSize: 11, fontWeight: FontWeight.bold)),
-              ),
-            ],
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        contentPadding: const EdgeInsets.all(AppSpace.lg),
+        content: ClipRRect(
+          borderRadius: AppRadius.control,
+          child: Container(
+            constraints: const BoxConstraints(maxHeight: 360),
+            color: AppColors.surface1,
+            child: Image.network(
+              url,
+              fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) => const EmptyView(title: 'مستند PDF', icon: Icons.picture_as_pdf_rounded, tone: AppTone.accent, compact: true),
+            ),
           ),
         ),
+        actions: [
+          AppButton.ghost(label: 'إغلاق', onPressed: () => Navigator.pop(ctx)),
+          AppButton(
+            label: 'مشاركة',
+            icon: Icons.ios_share_rounded,
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await SharePlus.instance.share(ShareParams(uri: Uri.parse(url)));
+            },
+          ),
+        ],
       ),
-    );
-  }
-
-  Widget _buildInfoRow(IconData icon, String label, String value, Color color) {
-    return Row(
-      children: [
-        Icon(icon, color: color, size: 16),
-        const SizedBox(width: 8),
-        Text('$label: ', style: const TextStyle(fontFamily: 'Cairo', color: AppColors.textMuted, fontSize: 11)),
-        Expanded(
-          child: Text(
-            value,
-            style: const TextStyle(fontFamily: 'Cairo', color: AppColors.textPrimary, fontSize: 11, fontWeight: FontWeight.bold),
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-      ],
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return GlassBackground(
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          centerTitle: true,
-          iconTheme: const IconThemeData(color: AppColors.textPrimary),
-          title: const Text(
-            'دليل الموظفين المعتمد 👥',
-            style: TextStyle(
-              fontFamily: 'Cairo',
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
-              color: AppColors.textPrimary,
+    Widget list;
+    if (_isLoading && _allEmployees.isEmpty) {
+      list = const Padding(padding: EdgeInsets.all(AppSpace.page), child: SkeletonList(count: 6));
+    } else if (_hasError && _allEmployees.isEmpty) {
+      list = ErrorView(onRetry: _loadDirectory);
+    } else if (_filteredEmployees.isEmpty) {
+      list = EmptyView(
+        title: _allEmployees.isEmpty ? 'الدليل فارغ' : 'ما لقينا نتيجة',
+        message: _allEmployees.isEmpty ? null : 'جرّب اسماً أو قسماً أو رقماً ثانياً.',
+        icon: Icons.person_search_rounded,
+      );
+    } else {
+      list = ListView.builder(
+        padding: const EdgeInsets.fromLTRB(AppSpace.page, AppSpace.sm, AppSpace.page, AppSpace.x4),
+        itemCount: _filteredEmployees.length,
+        itemBuilder: (context, index) {
+          final emp = _filteredEmployees[index];
+          final docs = (emp['document_urls'] as List<dynamic>? ?? const []).length;
+          return Padding(
+            padding: const EdgeInsets.only(bottom: AppSpace.sm),
+            child: ContentWidth(
+              child: AppCard(
+                padding: EdgeInsets.zero,
+                onTap: () => _showEmployeeProfileModal(emp),
+                child: AppListTile(
+                  leading: AppAvatar(name: (emp['full_name'] ?? '').toString(), url: emp['avatar_url']?.toString()),
+                  title: (emp['full_name'] ?? 'موظف').toString(),
+                  subtitle: '${emp['department_name'] ?? 'القسم العام'} · ${emp['branch_name'] ?? 'الفرع العام'}',
+                  trailing: docs > 0 ? StatusBadge('$docs وثائق', tone: AppTone.success, icon: Icons.folder_rounded) : null,
+                  onTap: () => _showEmployeeProfileModal(emp),
+                ),
+              ),
+            ),
+          );
+        },
+      );
+    }
+
+    return Scaffold(
+      backgroundColor: AppColors.bg,
+      appBar: AppBar(
+        title: Text('دليل الموظفين${_allEmployees.isEmpty ? '' : ' (${_allEmployees.length})'}'),
+        bottom: PreferredSize(
+          preferredSize: Size.fromHeight(_branchOptions.length > 2 ? 124 : 72),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(AppSpace.page, 0, AppSpace.page, AppSpace.sm),
+            child: Column(
+              children: [
+                ContentWidth(
+                  child: TextField(
+                    controller: _searchController,
+                    onChanged: (_) => _applyFilters(),
+                    textInputAction: TextInputAction.search,
+                    style: AppText.body,
+                    decoration: InputDecoration(
+                      hintText: 'ابحث بالاسم، القسم، الكود أو الهاتف',
+                      prefixIcon: const Icon(Icons.search_rounded),
+                      suffixIcon: _searchController.text.isEmpty
+                          ? null
+                          : IconButton(
+                              tooltip: 'مسح البحث',
+                              icon: const Icon(Icons.close_rounded),
+                              onPressed: () {
+                                _searchController.clear();
+                                _applyFilters();
+                              },
+                            ),
+                    ),
+                  ),
+                ),
+                if (_branchOptions.length > 2) ...[
+                  const SizedBox(height: AppSpace.sm),
+                  AppChoiceChips<String>(
+                    scrollable: true,
+                    value: _selectedBranch,
+                    options: [for (final b in _branchOptions) (b, b == 'all' ? 'كل الفروع' : b, null)],
+                    onChanged: (b) {
+                      setState(() => _selectedBranch = b);
+                      _applyFilters();
+                    },
+                  ),
+                ],
+              ],
             ),
           ),
         ),
-        body: Column(
-          children: [
-            // شريط البحث الذكي الفوري
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
-              child: TextField(
-                controller: _searchController,
-                onChanged: (val) => _applyFilters(),
-                style: const TextStyle(color: AppColors.textPrimary, fontSize: 12, fontFamily: 'Cairo'),
-                decoration: InputDecoration(
-                  hintText: 'ابحث بالاسم، القسم، الفرع، كود الموظف، أو الهاتف...',
-                  hintStyle: const TextStyle(color: AppColors.textMuted, fontSize: 11, fontFamily: 'Cairo'),
-                  prefixIcon: const Icon(Icons.search_rounded, color: AppColors.brand, size: 20),
-                  suffixIcon: _searchController.text.isNotEmpty
-                      ? IconButton(
-                          icon: const Icon(Icons.clear_rounded, color: AppColors.textSecondary, size: 18),
-                          onPressed: () {
-                            _searchController.clear();
-                            _applyFilters();
-                          },
-                        )
-                      : null,
-                  filled: true,
-                  fillColor: AppColors.textPrimary.withValues(alpha: 0.05),
-                  isDense: true,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide(color: AppColors.textPrimary.withValues(alpha: 0.1)),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: const BorderSide(color: AppColors.brand),
-                  ),
-                ),
-              ),
-            ),
-
-            // فلاتر الفروع السريعة
-            if (_branchOptions.length > 2)
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                child: Row(
-                  children: _branchOptions.map((br) {
-                    final isSelected = _selectedBranch == br;
-                    final label = br == 'all' ? 'جميع الفروع (${_allEmployees.length})' : br;
-
-                    return GestureDetector(
-                      onTap: () {
-                        setState(() => _selectedBranch = br);
-                        _applyFilters();
-                      },
-                      child: Container(
-                        margin: const EdgeInsets.only(left: 6),
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: isSelected ? AppColors.brand.withValues(alpha: 0.25) : AppColors.textPrimary.withValues(alpha: 0.04),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: isSelected ? AppColors.brand : AppColors.border),
-                        ),
-                        child: Text(
-                          label,
-                          style: TextStyle(
-                            fontFamily: 'Cairo',
-                            fontSize: 10.5,
-                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                            color: isSelected ? AppColors.textPrimary : AppColors.textMuted,
-                          ),
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ),
-
-            // قائمة دليل الموظفين
-            Expanded(
-              child: _isLoading
-                  ? const Center(child: CircularProgressIndicator(color: AppColors.brand))
-                  : _filteredEmployees.isEmpty
-                      ? const Center(
-                          child: Text(
-                            'لم يتم العثور على أي موظف مطابق للبحث 🔍',
-                            style: TextStyle(fontSize: 12, color: AppColors.textSecondary, fontFamily: 'Cairo'),
-                          ),
-                        )
-                      : RefreshIndicator(
-                          onRefresh: _loadDirectory,
-                          color: AppColors.brand,
-                          child: ListView.separated(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                            itemCount: _filteredEmployees.length,
-                            separatorBuilder: (_, __) => const SizedBox(height: 8),
-                            itemBuilder: (context, index) {
-                              final emp = _filteredEmployees[index];
-                              final avatarUrl = emp['avatar_url'] ?? '';
-                              final name = emp['full_name'] ?? 'موظف';
-                              final dept = emp['department_name'] ?? 'القسم العام';
-                              final branch = emp['branch_name'] ?? 'الفرع العام';
-                              final phone = emp['phone'] ?? 'غير متوفر';
-                              final code = emp['employee_code'] ?? 'EMP-000';
-                              final List<dynamic> docs = emp['document_urls'] as List<dynamic>? ?? [];
-
-                              return InkWell(
-                                onTap: () => _showEmployeeProfileModal(emp),
-                                borderRadius: BorderRadius.circular(16),
-                                child: GlassContainer(
-                                  padding: const EdgeInsets.all(12),
-                                  borderRadius: 16,
-                                  borderColor: AppColors.brand.withValues(alpha: 0.18),
-                                  child: Row(
-                                    children: [
-                                      // الصورة الشخصية
-                                      Container(
-                                        decoration: BoxDecoration(
-                                          shape: BoxShape.circle,
-                                          border: Border.all(color: AppColors.brand, width: 1.5),
-                                        ),
-                                        child: CircleAvatar(
-                                          radius: 24,
-                                          backgroundColor: AppColors.textPrimary.withValues(alpha: 0.04),
-                                          backgroundImage: (avatarUrl.isNotEmpty as bool)
-                                              ? ResizeImage.resizeIfNeeded(100, 100, NetworkImage(avatarUrl as String))
-                                              : null,
-                                          child: (avatarUrl.isEmpty as bool)
-                                              ? const Icon(Icons.person, color: AppColors.brand, size: 22)
-                                              : null,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 12),
-
-                                      // تفاصيل الموظف
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Row(
-                                              children: [
-                                                Expanded(
-                                                  child: Text(
-                                                    name as String,
-                                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textPrimary, fontFamily: 'Cairo'),
-                                                    overflow: TextOverflow.ellipsis,
-                                                  ),
-                                                ),
-                                                Container(
-                                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                                                  decoration: BoxDecoration(
-                                                    color: AppColors.brand.withValues(alpha: 0.15),
-                                                    borderRadius: BorderRadius.circular(6),
-                                                  ),
-                                                  child: Text(
-                                                    code as String,
-                                                    style: const TextStyle(fontSize: 8.5, color: AppColors.brand, fontWeight: FontWeight.bold, fontFamily: 'Cairo'),
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                            const SizedBox(height: 3),
-                                            Text(
-                                              '$dept • $branch',
-                                              style: const TextStyle(fontSize: 10.5, color: AppColors.textSecondary, fontFamily: 'Cairo'),
-                                            ),
-                                            const SizedBox(height: 2),
-                                            Row(
-                                              children: [
-                                                Text(
-                                                  phone as String,
-                                                  style: const TextStyle(fontSize: 9.5, color: AppColors.textMuted, fontFamily: 'Cairo'),
-                                                ),
-                                                if (docs.isNotEmpty) ...[
-                                                  const SizedBox(width: 8),
-                                                  Container(
-                                                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                                                    decoration: BoxDecoration(
-                                                      color: AppColors.success.withValues(alpha: 0.15),
-                                                      borderRadius: BorderRadius.circular(4),
-                                                    ),
-                                                    child: Text(
-                                                      '${docs.length} وثائق 📁',
-                                                      style: const TextStyle(fontSize: 8, color: AppColors.success, fontFamily: 'Cairo', fontWeight: FontWeight.bold),
-                                                    ),
-                                                  ),
-                                                ],
-                                              ],
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-
-                                      const Icon(Icons.arrow_forward_ios_rounded, color: AppColors.textDisabled, size: 14),
-                                    ],
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-            ),
-          ],
-        ),
       ),
+      body: RefreshIndicator.adaptive(onRefresh: _loadDirectory, child: list is ListView ? list : ListView(children: [list])),
     );
   }
 }
-

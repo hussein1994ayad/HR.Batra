@@ -151,7 +151,7 @@ Future<void> disposeScreen(WidgetTester tester) async {
   await tester.pumpWidget(const SizedBox.shrink());
   final client = Supabase.instance.client;
   await client.removeAllChannels();
-  client.realtime.disconnect();
+  await client.realtime.disconnect();
   // مؤقتات إعادة المحاولة الداخلية (الريل تايم، طابور البصمات) تنتهي خلال دقائق وهمية
   await tester.pump(const Duration(minutes: 5));
 }
