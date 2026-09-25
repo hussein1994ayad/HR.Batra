@@ -67,6 +67,9 @@ abstract final class Fmt {
     return date(t);
   }
 
+  /// "شهر واحد" / "شهرين" / "3 أشهر" / "12 شهر"
+  static String monthCount(int n) => n == 1 ? 'شهر واحد' : _count(n, 'شهر', 'شهرين', 'أشهر');
+
   /// "يوم واحد" / "يومين" / "3 أيام" / "11 يوم"
   static String days(int n) => n == 1 ? 'يوم واحد' : _count(n, 'يوم', 'يومين', 'أيام');
 

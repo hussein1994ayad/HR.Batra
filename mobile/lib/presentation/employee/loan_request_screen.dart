@@ -1,9 +1,13 @@
 // =========================================================================
-// نظام HR Pro v6.0 - شاشة القروض والسلف الآلية (Automated Loans & Installments Screen)
+// HR Pro — السلف: حاسبة وطلب + سجل وأقساط
+// =========================================================================
+// • مبلغ وقسط بفواصل آلاف، اختيار سريع للمبلغ وعدد الأشهر، حساب فوري
+// • صورة التعهد الموقّع إلزامية، ومراجعة قبل الإرسال
+// • السجل: تقدم السداد وجدول الأقساط
+// منطق الرفع والإدراج والتحقق لم يتغير.
 // =========================================================================
 
 import 'dart:async';
-
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -12,10 +16,11 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../core/constants/constants.dart';
-import '../../core/design/design.dart';
 import '../../core/services/file_upload_service.dart';
 import '../../core/services/supabase_service.dart';
-import '../shared/widgets/glass_container.dart';
+import '../../core/utils/arabic_format.dart';
+import '../../core/utils/input_formatters.dart';
+import '../shared/ui/ui.dart';
 
 class LoanRequestScreen extends StatefulWidget {
   const LoanRequestScreen({super.key});
@@ -27,25 +32,28 @@ class LoanRequestScreen extends StatefulWidget {
 class _LoanRequestScreenState extends State<LoanRequestScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
 
-  // حقول حاسبة القروض
-  double _requestedAmount = 500000; // 500,000 دينار عراقي كحد أدنى افتراضي
-  double _monthlyInstallment = 250000; // قسط افتراضي
-  
+  double _requestedAmount = 500000;
+  double _monthlyInstallment = 250000;
+
   File? _pledgeFile;
   bool _isSubmitting = false;
   bool _isLoadingHistory = true;
+  bool _historyError = false;
 
   List<Map<String, dynamic>> _loansHistory = [];
 
   late TextEditingController _amountController;
   late TextEditingController _installmentController;
 
+  static const _quickAmounts = [250000, 500000, 1000000, 2000000];
+  static const _quickMonths = [2, 3, 6, 10, 12];
+
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-    _amountController = TextEditingController(text: _requestedAmount.toStringAsFixed(0));
-    _installmentController = TextEditingController(text: _monthlyInstallment.toStringAsFixed(0));
+    _amountController = TextEditingController(text: formatThousands(_requestedAmount));
+    _installmentController = TextEditingController(text: formatThousands(_monthlyInstallment));
     _loadLoansHistory();
   }
 
@@ -57,82 +65,92 @@ class _LoanRequestScreenState extends State<LoanRequestScreen> with SingleTicker
     super.dispose();
   }
 
-  // تحميل تاريخ القروض والأقساط الخاصة بالموظف
+  // سلف الموظف مع أقساطها
   Future<void> _loadLoansHistory() async {
     final user = SupabaseService.currentUser;
     if (user == null) return;
 
     try {
-      // جلب السلف مصحوبة ببيانات الأقساط إن وجدت
       final data = await SupabaseService.client
           .from('loans')
           .select('*, loan_installments(*)')
           .eq('employee_id', user.id)
           .order('created_at', ascending: false);
 
+      if (!mounted) return;
       setState(() {
         _loansHistory = List<Map<String, dynamic>>.from(data);
+        _historyError = false;
       });
     } catch (e) {
       debugPrint('خطأ في تحميل تاريخ السلف: $e');
+      if (mounted) setState(() => _historyError = true);
     } finally {
-      setState(() => _isLoadingHistory = false);
+      if (mounted) setState(() => _isLoadingHistory = false);
     }
   }
 
-  // التقاط صورة التعهد الخطي الموقّع والملزم قانونياً
+  // تصوير التعهد الخطي الموقّع (بالكاميرا مباشرة لزيادة الموثوقية)
   Future<void> _pickPledge() async {
     final picker = ImagePicker();
-    final pickedFile = await picker.pickImage(
-      source: ImageSource.camera, // التقاط فوري عبر الكاميرا لزيادة الموثوقية
-      imageQuality: 80,
-    );
-
+    final pickedFile = await picker.pickImage(source: ImageSource.camera, imageQuality: 80);
     if (pickedFile != null) {
-      setState(() {
-        _pledgeFile = File(pickedFile.path);
-      });
+      setState(() => _pledgeFile = File(pickedFile.path));
     }
   }
 
-  // تقديم طلب السلفة
+  int get _months => _monthlyInstallment > 0 ? (_requestedAmount / _monthlyInstallment).ceil() : 0;
+
+  /// آخر قسط قد يكون أقل من القسط الشهري.
+  double get _lastInstallment {
+    if (_months <= 0) return 0;
+    final rest = _requestedAmount - _monthlyInstallment * (_months - 1);
+    return rest <= 0 ? _monthlyInstallment : rest;
+  }
+
+  void _setAmount(double v) {
+    setState(() => _requestedAmount = v);
+    _amountController.text = formatThousands(v);
+  }
+
+  void _setMonths(int m) {
+    final inst = (_requestedAmount / m).ceilToDouble();
+    setState(() => _monthlyInstallment = inst);
+    _installmentController.text = formatThousands(inst);
+  }
+
+  String? get _validationError {
+    if (_requestedAmount <= 0) return 'اكتب مبلغ السلفة';
+    if (_monthlyInstallment <= 0) return 'اكتب القسط الشهري';
+    if (_monthlyInstallment > _requestedAmount) return 'القسط أكبر من مبلغ السلفة';
+    return null;
+  }
+
   Future<void> _submitLoanRequest() async {
     if (_pledgeFile == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('يجب عليك تصوير وإرفاق التعهد الخطي الموقّع لاستكمال الطلب ⚠️', style: TextStyle(fontFamily: 'Cairo')),
-          backgroundColor: AppColors.danger,
-        ),
-      );
+      AppSnack.error(context, 'صوّر التعهد الموقّع أولاً حتى نكمل الطلب');
+      return;
+    }
+    final err = _validationError;
+    if (err != null) {
+      AppSnack.error(context, err);
       return;
     }
 
-    if (_requestedAmount <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('مبلغ السلفة يجب أن يكون أكبر من الصفر ⚠️', style: TextStyle(fontFamily: 'Cairo')),
-          backgroundColor: AppColors.danger,
-        ),
-      );
-      return;
-    }
-
-    if (_monthlyInstallment <= 0 || _monthlyInstallment > _requestedAmount) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('القسط الشهري غير صحيح، يجب أن يكون أكبر من الصفر ولا يتجاوز مبلغ السلفة ⚠️', style: TextStyle(fontFamily: 'Cairo')),
-          backgroundColor: AppColors.danger,
-        ),
-      );
-      return;
-    }
+    final confirmed = await showAppConfirm(
+      context,
+      title: 'إرسال طلب السلفة؟',
+      message: 'المبلغ: ${Fmt.iqd(_requestedAmount)}\nالقسط: ${Fmt.iqd(_monthlyInstallment)} شهرياً لمدة ${Fmt.monthCount(_months)}',
+      confirmLabel: 'إرسال',
+    );
+    if (!confirmed || !mounted) return;
 
     setState(() => _isSubmitting = true);
     final user = SupabaseService.currentUser;
     if (user == null) return;
 
     try {
-      // 1. رفع صورة التعهد إلى bucket مخصصة 'loan-pledges' مع تفعيل الضغط التلقائي الفوري للحماية
+      // 1. رفع صورة التعهد إلى bucket 'loan-pledges' (مع الضغط التلقائي)
       final uniqueId = const Uuid().v4();
       final fileExtension = _pledgeFile!.path.split('.').last;
       final remotePath = 'pledges/${user.id}/$uniqueId.$fileExtension';
@@ -156,7 +174,7 @@ class _LoanRequestScreenState extends State<LoanRequestScreen> with SingleTicker
         'status': 'pending',
       });
 
-      // 3. تسجيل الإشعار بالطلب الجديد للموظف نفسه
+      // 3. إشعار للموظف نفسه
       await SupabaseService.client.from('notifications').insert({
         'employee_id': user.id,
         'title': 'طلب سلفة جديدة 💰',
@@ -164,555 +182,319 @@ class _LoanRequestScreenState extends State<LoanRequestScreen> with SingleTicker
         'type': 'loan',
       });
 
-      // إشعار المدراء بالطلب الجديد يُرسل من قاعدة البيانات (trg_notify_admins_new_loan_request)
+      // إشعار المدراء يُرسل من قاعدة البيانات (trg_notify_admins_new_loan_request)
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('تم إرسال طلب السلفة والتعهد بنجاح للإدارة المالية! 🎉', style: TextStyle(fontFamily: 'Cairo')),
-            backgroundColor: AppColors.success,
-          ),
-        );
-        setState(() {
-          _pledgeFile = null;
-          _requestedAmount = 500000;
-          _monthlyInstallment = 250000;
-        });
-        _tabController.animateTo(1); // الانتقال لتبويب السجل
+        AppSnack.success(context, 'وصل طلب السلفة للإدارة، وراح يوصلك إشعار بالقرار.');
+        setState(() => _pledgeFile = null);
+        _setAmount(500000);
+        _monthlyInstallment = 250000;
+        _installmentController.text = formatThousands(250000);
+        _tabController.animateTo(1);
         unawaited(_loadLoansHistory());
       }
-
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('حدث خطأ في تقديم السلفة: $e', style: const TextStyle(fontFamily: 'Cairo')),
-            backgroundColor: AppColors.danger,
-          ),
-        );
-      }
+      if (mounted) AppSnack.error(context, 'تعذّر إرسال الطلب: $e');
     } finally {
-      setState(() => _isSubmitting = false);
+      if (mounted) setState(() => _isSubmitting = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
+    final active = _loansHistory.where((l) => l['status'] == 'pending').length;
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: AppColors.bg,
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        centerTitle: true,
-        title: const Text(
-          'بوابة القروض والسلف الماليّة',
-          style: TextStyle(
-            fontFamily: 'Cairo',
-            fontWeight: FontWeight.bold,
-            color: AppColors.textPrimary,
-          ),
-        ),
+        title: const Text('السلف'),
         bottom: TabBar(
           controller: _tabController,
-          indicatorColor: AppColors.brand,
-          labelColor: AppColors.brand,
-          unselectedLabelColor: AppColors.textSecondary,
-          labelStyle: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 13),
-          tabs: const [
-            Tab(text: 'حاسبة وطلب سلفة', icon: Icon(Icons.calculate_rounded)),
-            Tab(text: 'سجل وأقساط السلف', icon: Icon(Icons.receipt_long_rounded)),
+          tabs: [
+            const Tab(text: 'طلب سلفة'),
+            Tab(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('سلفي وأقساطي'),
+                  if (active > 0) ...[const SizedBox(width: AppSpace.xs), Badge(label: Text('$active'), backgroundColor: AppColors.warning, textColor: AppColors.onStatus)],
+                ],
+              ),
+            ),
           ],
         ),
       ),
       body: TabBarView(
         controller: _tabController,
         children: [
-          // تبويب 1: حاسبة وتقديم الطلب
           SingleChildScrollView(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // لوحة حاسبة القروض التفاعلية الخلابة
-                _buildCalculatorCard(isDark),
-                const SizedBox(height: 24),
-                
-                // لوحة التعهد الخطي الموقّع الإلزامي
-                _buildPledgeCard(isDark),
-                const SizedBox(height: 32),
-
-                // زر الإرسال النهائي
-                Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.brand.withValues(alpha: _isSubmitting ? 0.1 : 0.3),
-                        blurRadius: 16,
-                        spreadRadius: 1,
-                      )
-                    ],
-                  ),
-                  child: ElevatedButton(
-                    onPressed: _isSubmitting ? null : _submitLoanRequest,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.brand,
-                      foregroundColor: AppColors.textPrimary,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      elevation: 0,
-                    ),
-                    child: _isSubmitting
-                        ? const CircularProgressIndicator(color: AppColors.textPrimary)
-                        : const Text(
-                            'تقديم طلب السلفة رسمياً',
-                            style: TextStyle(
-                              fontFamily: 'Cairo',
-                              fontWeight: FontWeight.bold,
-                              fontSize: 15,
-                            ),
-                          ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          
-          // تبويب 2: تاريخ السلف والأقساط
-          _buildLoansHistoryTab(isDark),
-        ],
-      ),
-    );
-  }
-
-  // بطاقة حاسبة السلف التفاعلية
-  Widget _buildCalculatorCard(bool isDark) {
-    final int months = _monthlyInstallment > 0 ? (_requestedAmount / _monthlyInstallment).ceil() : 0;
-
-    return GlassContainer(
-      padding: const EdgeInsets.all(20),
-      borderColor: AppColors.brand.withValues(alpha: 0.2),
-      boxShadow: [
-        BoxShadow(
-          color: AppColors.brand.withValues(alpha: 0.04),
-          blurRadius: 20,
-        )
-      ],
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Row(
-            children: [
-              Icon(Icons.monetization_on, color: AppColors.brand),
-              SizedBox(width: 8),
-              Text(
-                'طلب السلفة المالية والأقساط الشهرية',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, fontFamily: 'Cairo', color: AppColors.textPrimary),
-              ),
-            ],
-          ),
-          const Divider(height: 24, color: AppColors.border),
-
-          // حقل إدخال قيمة السلفة المطلوبة يدوياً
-          const Text(
-            'المبلغ المطلوب سلفته (د.ع)',
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textSecondary, fontFamily: 'Cairo'),
-          ),
-          const SizedBox(height: 8),
-          TextFormField(
-            controller: _amountController,
-            keyboardType: TextInputType.number,
-            style: const TextStyle(color: AppColors.textPrimary, fontSize: 14, fontFamily: 'Cairo', fontWeight: FontWeight.bold),
-            decoration: InputDecoration(
-              filled: true,
-              fillColor: AppColors.textPrimary.withValues(alpha: 0.04),
-              prefixIcon: const Icon(Icons.edit_note_rounded, color: AppColors.brand),
-              suffixText: 'د.ع',
-              suffixStyle: const TextStyle(color: AppColors.brand, fontFamily: 'Cairo', fontSize: 12, fontWeight: FontWeight.bold),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: BorderSide(color: AppColors.textPrimary.withValues(alpha: 0.1)),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: const BorderSide(color: AppColors.brand),
-              ),
-            ),
-            onChanged: (val) {
-              final double? parsed = double.tryParse(val.replaceAll(RegExp(r'[^0-9]'), ''));
-              if (parsed != null) {
-                setState(() {
-                  _requestedAmount = parsed;
-                });
-              }
-            },
-          ),
-          
-          const SizedBox(height: 16),
-          
-          // حقل إدخال القسط الشهري
-          const Text(
-            'القسط الشهري المرجو سداده (د.ع)',
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textSecondary, fontFamily: 'Cairo'),
-          ),
-          const SizedBox(height: 8),
-          TextFormField(
-            controller: _installmentController,
-            keyboardType: TextInputType.number,
-            style: const TextStyle(color: AppColors.textPrimary, fontSize: 14, fontFamily: 'Cairo', fontWeight: FontWeight.bold),
-            decoration: InputDecoration(
-              filled: true,
-              fillColor: AppColors.textPrimary.withValues(alpha: 0.04),
-              prefixIcon: const Icon(Icons.edit_calendar_rounded, color: AppColors.brand),
-              suffixText: 'د.ع / شهر',
-              suffixStyle: const TextStyle(color: AppColors.brand, fontFamily: 'Cairo', fontSize: 12, fontWeight: FontWeight.bold),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: BorderSide(color: AppColors.textPrimary.withValues(alpha: 0.1)),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: const BorderSide(color: AppColors.brand),
-              ),
-            ),
-            onChanged: (val) {
-              final double? parsed = double.tryParse(val.replaceAll(RegExp(r'[^0-9]'), ''));
-              if (parsed != null && parsed > 0) {
-                setState(() {
-                  _monthlyInstallment = parsed;
-                });
-              }
-            },
-          ),
-          const Divider(height: 24, color: AppColors.border),
-
-          // النتيجة النهائية للأقساط
-          GlassContainer(
-            padding: const EdgeInsets.all(16),
-            borderRadius: 16,
-            borderColor: AppColors.brand.withValues(alpha: 0.3),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'عدد الأشهر المقدرة للسداد:',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppColors.textSecondary, fontFamily: 'Cairo'),
-                ),
-                Text(
-                  '$months أشهر',
-                  style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15, color: AppColors.brand, fontFamily: 'Cairo'),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // بطاقة رفع التعهد الخطي الموقّع
-  Widget _buildPledgeCard(bool isDark) {
-    return GlassContainer(
-      padding: const EdgeInsets.all(20),
-      borderColor: AppColors.warning.withValues(alpha: 0.2),
-      boxShadow: [
-        BoxShadow(
-          color: AppColors.warning.withValues(alpha: 0.04),
-          blurRadius: 20,
-        )
-      ],
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Row(
-            children: [
-              Icon(Icons.assignment_turned_in_rounded, color: AppColors.warning),
-              SizedBox(width: 8),
-              Text(
-                'التعهد الخطي الملزم قانونياً',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, fontFamily: 'Cairo', color: AppColors.textPrimary),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'قوانين الرقابة تفرض توقيع تعهد سحب سلفة خطياً من الإدارة. يرجى توقيع التعهد، ثم التقاط صورة واضحة للتعهد المكتوب والموقع ورفعها هنا لمراجعة طلبك.',
-            style: TextStyle(fontSize: 11, color: AppColors.textSecondary, height: 1.6, fontFamily: 'Cairo'),
-          ),
-          const SizedBox(height: 20),
-
-          InkWell(
-            onTap: _pickPledge,
-            child: GlassContainer(
-              padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
-              borderRadius: 16,
-              borderColor: _pledgeFile != null ? AppColors.success.withValues(alpha: 0.4) : AppColors.border,
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            padding: const EdgeInsets.fromLTRB(AppSpace.page, AppSpace.lg, AppSpace.page, AppSpace.x4),
+            child: ContentWidth(
+              maxWidth: AppBreakpoints.maxForm,
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Icon(
-                    _pledgeFile != null ? Icons.check_circle : Icons.camera_alt_outlined,
-                    color: _pledgeFile != null ? AppColors.success : AppColors.brand,
-                    size: 32,
+                  _buildCalculator(),
+                  const SizedBox(height: AppSpace.lg),
+                  _buildPledgeCard(),
+                  const SizedBox(height: AppSpace.xxl),
+                  AppButton(
+                    label: 'مراجعة وإرسال',
+                    icon: Icons.send_rounded,
+                    size: AppButtonSize.large,
+                    expand: true,
+                    loading: _isSubmitting,
+                    onPressed: _submitLoanRequest,
                   ),
-                  const SizedBox(height: 10),
-                  Text(
-                    _pledgeFile != null 
-                        ? 'تم تصوير وإرفاق التعهد بنجاح! 📸' 
-                        : 'انقر لفتح الكاميرا وتصوير التعهد الموقّع',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: _pledgeFile != null ? AppColors.success : AppColors.brand,
-                      fontFamily: 'Cairo',
-                    ),
-                  ),
-                  if (_pledgeFile != null) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      'الملف: ${_pledgeFile!.path.split("/").last}',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 10, color: AppColors.textMuted, fontFamily: 'Cairo'),
-                    ),
-                  ],
                 ],
               ),
             ),
           ),
+          _buildLoansHistoryTab(),
         ],
       ),
     );
   }
 
-  // تبويب السجل وعرض الأقساط
-  Widget _buildLoansHistoryTab(bool isDark) {
-    if (_isLoadingHistory) {
-      return const Center(child: CircularProgressIndicator(color: AppColors.brand));
-    }
-
-    if (_loansHistory.isEmpty) {
-      return const Center(
-        child: Text(
-          'لا توجد سجلات سلف سابقة لك حالياً ✨',
-          style: TextStyle(fontSize: 12, color: AppColors.textSecondary, fontFamily: 'Cairo'),
-        ),
-      );
-    }
-
-    final statusLabel = {
-      'pending': 'قيد الدراسة 🟡',
-      'approved': 'معتمدة ومصروفة 🟢',
-      'rejected': 'مرفوضة من الإدارة 🔴',
-    };
-
-    return RefreshIndicator(
-      onRefresh: _loadLoansHistory,
-      color: AppColors.brand,
-      child: ListView.separated(
-        padding: const EdgeInsets.all(16),
-        itemCount: _loansHistory.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 16),
-        itemBuilder: (context, index) {
-          final loan = _loansHistory[index];
-          final double amount = (loan['amount'] as num).toDouble();
-          final double remaining = (loan['remaining_amount'] as num).toDouble();
-          final double installmentAmount = (loan['installment_amount'] as num).toDouble();
-          final status = loan['status'] ?? 'pending';
-
-          final color = _getStatusColor(status as String);
-
-          return GlassContainer(
-            padding: const EdgeInsets.all(18),
-            borderRadius: 20,
-            borderColor: color.withValues(alpha: 0.2),
-            boxShadow: [
-              BoxShadow(
-                color: color.withValues(alpha: 0.04),
-                blurRadius: 16,
-              )
-            ],
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'سلفة مالية بقيمة ${amount.toStringAsFixed(0)} ${AppConstants.currency}',
-                       style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: AppColors.textPrimary, fontFamily: 'Cairo'),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: color.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: color.withValues(alpha: 0.3)),
-                      ),
-                      child: Text(
-                        statusLabel[status] ?? 'غير معروف',
-                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: color, fontFamily: 'Cairo'),
-                      ),
-                    ),
-                  ],
-                ),
-                const Divider(height: 24, color: AppColors.border),
-                
-                Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('القسط الشهري', style: TextStyle(fontSize: 10, color: AppColors.textMuted, fontFamily: 'Cairo')),
-                          const SizedBox(height: 4),
-                          Text('${installmentAmount.toStringAsFixed(0)} ${AppConstants.currency}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppColors.textPrimary, fontFamily: 'Cairo')),
-                        ],
-                      ),
-                    ),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('المتبقي للسداد', style: TextStyle(fontSize: 10, color: AppColors.textMuted, fontFamily: 'Cairo')),
-                          const SizedBox(height: 4),
-                          Text('${remaining.toStringAsFixed(0)} ${AppConstants.currency}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppColors.brand, fontFamily: 'Cairo')),
-                        ],
-                      ),
-                    ),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('الأقساط (الأشهر)', style: TextStyle(fontSize: 10, color: AppColors.textMuted, fontFamily: 'Cairo')),
-                          const SizedBox(height: 4),
-                          Text('${loan["installment_count"]} أشهر', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppColors.textPrimary, fontFamily: 'Cairo')),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                if (status == 'approved' && (loan['loan_installments'] != null && (loan['loan_installments'] as List).isNotEmpty)) ...[
-                  const Divider(height: 24, color: AppColors.border),
-                  const Text(
-                    'جدول سداد الأقساط الشهرية:',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: AppColors.textSecondary, fontFamily: 'Cairo'),
-                  ),
-                  const SizedBox(height: 8),
-                  SizedBox(
-                    height: 120,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: AppColors.textPrimary.withValues(alpha: 0.02),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppColors.border),
-                      ),
-                      child: Builder(
-                        builder: (context) {
-                          final List<dynamic> installmentsList = List<dynamic>.from(loan['loan_installments'] as List? ?? []);
-                          installmentsList.sort((a, b) {
-                            final String ad = (a['due_date'] ?? '') as String;
-                            final String bd = (b['due_date'] ?? '') as String;
-                            return ad.compareTo(bd);
-                          });
-                          
-                          return ListView.builder(
-                            shrinkWrap: true,
-                            physics: const ClampingScrollPhysics(),
-                            itemCount: installmentsList.length,
-                            itemBuilder: (context, i) {
-                              final inst = installmentsList[i];
-                              final double instAmount = (inst['amount'] as num).toDouble();
-                              final String dueDate = (inst['due_date'] ?? '') as String;
-                              final bool isPaid = (inst['is_paid'] ?? false) as bool;
-                              
-                              return Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Text(
-                                      'القسط ${i + 1}: $dueDate',
-                                      style: const TextStyle(fontSize: 10, color: AppColors.textMuted, fontFamily: 'Cairo'),
-                                    ),
-                                    Row(
-                                      children: [
-                                        Text(
-                                          AppConstants.formatMoney(instAmount),
-                                          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.textPrimary, fontFamily: 'Cairo'),
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                          decoration: BoxDecoration(
-                                            color: isPaid ? AppColors.success.withValues(alpha: 0.15) : AppColors.warning.withValues(alpha: 0.15),
-                                            borderRadius: BorderRadius.circular(6),
-                                          ),
-                                          child: Text(
-                                            isPaid ? 'مدفوع' : 'غير مدفوع',
-                                            style: TextStyle(
-                                              fontSize: 8,
-                                              fontWeight: FontWeight.bold,
-                                              color: isPaid ? AppColors.success : AppColors.warning,
-                                              fontFamily: 'Cairo',
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              );
-                            },
-                          );
-                        }
-                      ),
-                    ),
-                  ),
-                ],
-                if (loan['pledge_url'] != null) ...[
-                  const SizedBox(height: 14),
-                  InkWell(
-                    onTap: () async {
-                      final url = Uri.parse((loan['pledge_url'] ?? '') as String);
-                      if (await canLaunchUrl(url)) {
-                        await launchUrl(url, mode: LaunchMode.externalApplication);
-                      } else {
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('تعذر فتح رابط التعهد المالي')),
-                          );
-                        }
-                      }
-                    },
-                    child: Row(
+  Widget _buildCalculator() {
+    final err = _validationError;
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AppTextField(
+            controller: _amountController,
+            label: 'مبلغ السلفة',
+            icon: Icons.payments_outlined,
+            suffix: const Padding(padding: EdgeInsets.all(AppSpace.md), child: Text('د.ع', style: AppText.label)),
+            keyboardType: TextInputType.number,
+            inputFormatters: [DotThousandsSeparatorInputFormatter()],
+            onChanged: (val) => setState(() => _requestedAmount = parseThousands(val)),
+          ),
+          const SizedBox(height: AppSpace.sm),
+          AppChoiceChips<int>(
+            scrollable: true,
+            value: _quickAmounts.contains(_requestedAmount.round()) ? _requestedAmount.round() : null,
+            options: [for (final a in _quickAmounts) (a, formatThousands(a), null)],
+            onChanged: (v) => _setAmount(v.toDouble()),
+          ),
+          const SizedBox(height: AppSpace.lg),
+          AppTextField(
+            controller: _installmentController,
+            label: 'القسط الشهري',
+            icon: Icons.calendar_month_outlined,
+            suffix: const Padding(padding: EdgeInsets.all(AppSpace.md), child: Text('د.ع', style: AppText.label)),
+            keyboardType: TextInputType.number,
+            inputFormatters: [DotThousandsSeparatorInputFormatter()],
+            onChanged: (val) => setState(() => _monthlyInstallment = parseThousands(val)),
+          ),
+          const SizedBox(height: AppSpace.sm),
+          AppChoiceChips<int>(
+            scrollable: true,
+            value: _quickMonths.contains(_months) && _requestedAmount > 0 ? _months : null,
+            options: [for (final m in _quickMonths) (m, Fmt.monthCount(m), null)],
+            onChanged: _requestedAmount > 0 ? _setMonths : (_) {},
+          ),
+          const SizedBox(height: AppSpace.lg),
+          AnimatedSwitcher(
+            duration: AppMotion.of(context, AppMotion.fast),
+            child: err != null
+                ? AppCard(key: const ValueKey('err'), tone: AppTone.warning, child: Text(err, style: AppText.bodySm.copyWith(color: AppColors.textPrimary)))
+                : AppCard(
+                    key: const ValueKey('ok'),
+                    color: AppColors.brandContainer.withValues(alpha: 0.35),
+                    borderColor: AppColors.brand.withValues(alpha: 0.25),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Icon(Icons.attachment, size: 16, color: color),
-                        const SizedBox(width: 4),
-                        Text('عرض التعهد الخطي المرفق 📸', style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
+                        Row(
+                          children: [
+                            const Expanded(child: Text('مدة السداد', style: AppText.bodySm)),
+                            Text(Fmt.monthCount(_months), style: AppText.titleSm.copyWith(color: AppColors.brand)),
+                          ],
+                        ),
+                        if (_lastInstallment != _monthlyInstallment)
+                          Text('آخر قسط ${Fmt.iqd(_lastInstallment)}', style: AppText.caption),
+                        const SizedBox(height: AppSpace.xs),
+                        const Text('يُستقطع القسط من راتبك تلقائياً بعد موافقة الإدارة.', style: AppText.caption),
                       ],
                     ),
                   ),
-                ],
-              ],
-            ),
-          );
-        },
+          ),
+        ],
       ),
     );
   }
 
-  Color _getStatusColor(String status) {
-    switch (status) {
-      case 'approved':
-        return AppColors.success;
-      case 'rejected':
-        return AppColors.accent;
-      default:
-        return AppColors.warning;
+  Widget _buildPledgeCard() {
+    final done = _pledgeFile != null;
+    return AppCard(
+      tone: done ? AppTone.success : null,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              ToneIcon(done ? Icons.task_alt_rounded : Icons.draw_rounded, tone: done ? AppTone.success : AppTone.warning),
+              const SizedBox(width: AppSpace.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('التعهد الخطي الموقّع', style: AppText.subtitle),
+                    Text(done ? 'تم إرفاق الصورة' : 'مطلوب — وقّع التعهد وصوّره بوضوح', style: AppText.caption),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpace.md),
+          if (done)
+            Row(
+              children: [
+                ClipRRect(
+                  borderRadius: AppRadius.control,
+                  child: Image.file(_pledgeFile!, width: 64, height: 64, fit: BoxFit.cover, cacheWidth: 192),
+                ),
+                const SizedBox(width: AppSpace.md),
+                Expanded(child: AppButton.secondary(label: 'إعادة التصوير', icon: Icons.camera_alt_rounded, size: AppButtonSize.small, onPressed: _pickPledge)),
+              ],
+            )
+          else
+            AppButton.secondary(label: 'تصوير التعهد', icon: Icons.camera_alt_rounded, expand: true, onPressed: _pickPledge),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLoansHistoryTab() {
+    if (_isLoadingHistory) {
+      return const Padding(padding: EdgeInsets.all(AppSpace.page), child: SkeletonList(count: 3, itemHeight: 120));
     }
+    if (_historyError && _loansHistory.isEmpty) {
+      return ErrorView(onRetry: () {
+        setState(() => _isLoadingHistory = true);
+        _loadLoansHistory();
+      });
+    }
+    if (_loansHistory.isEmpty) {
+      return EmptyView(
+        title: 'ما عندك سلف',
+        message: 'طلباتك وأقساطها تظهر هنا.',
+        icon: Icons.account_balance_wallet_rounded,
+        actionLabel: 'اطلب سلفة',
+        onAction: () => _tabController.animateTo(0),
+      );
+    }
+    return RefreshIndicator.adaptive(
+      onRefresh: _loadLoansHistory,
+      child: ListView.separated(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(AppSpace.page, AppSpace.lg, AppSpace.page, AppSpace.x4),
+        itemCount: _loansHistory.length,
+        separatorBuilder: (_, __) => const SizedBox(height: AppSpace.md),
+        itemBuilder: (context, index) => FadeSlideIn(index: index, child: ContentWidth(child: _LoanCard(loan: _loansHistory[index]))),
+      ),
+    );
+  }
+}
+
+class _LoanCard extends StatelessWidget {
+  const _LoanCard({required this.loan});
+  final Map<String, dynamic> loan;
+
+  @override
+  Widget build(BuildContext context) {
+    final amount = (loan['amount'] as num? ?? 0).toDouble();
+    final remaining = (loan['remaining_amount'] as num? ?? 0).toDouble();
+    final installmentAmount = (loan['installment_amount'] as num? ?? 0).toDouble();
+    final status = (loan['status'] ?? 'pending').toString();
+    final installments = [
+      for (final i in (loan['loan_installments'] as List? ?? const [])) Map<String, dynamic>.from(i as Map),
+    ]..sort((a, b) => (a['due_date'] ?? '').toString().compareTo((b['due_date'] ?? '').toString()));
+    final paid = amount - remaining;
+    final pledge = loan['pledge_url']?.toString();
+    final rejection = loan['rejection_reason']?.toString();
+
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const ToneIcon(Icons.account_balance_wallet_rounded, tone: AppTone.warning),
+              const SizedBox(width: AppSpace.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(Fmt.iqd(amount), style: AppText.titleSm),
+                    Text('طُلبت ${Fmt.relative(DateTime.tryParse(loan['created_at']?.toString() ?? ''))}', style: AppText.caption),
+                  ],
+                ),
+              ),
+              StatusBadge.request(status),
+            ],
+          ),
+          const SizedBox(height: AppSpace.md),
+          KeyValueRow('القسط الشهري', Fmt.iqd(installmentAmount)),
+          KeyValueRow('عدد الأقساط', '${loan['installment_count'] ?? '—'}'),
+          if (status == 'approved') ...[
+            KeyValueRow('المتبقي', Fmt.iqd(remaining), valueColor: AppColors.brand, bold: true),
+            const SizedBox(height: AppSpace.xs),
+            AppProgressBar(value: amount > 0 ? paid / amount : 0, tone: AppTone.success),
+            const SizedBox(height: AppSpace.xs),
+            Text('سُدّد ${Fmt.iqd(paid)} من ${Fmt.iqd(amount)}', style: AppText.caption),
+          ],
+          if (rejection != null && rejection.isNotEmpty) ...[
+            const SizedBox(height: AppSpace.sm),
+            Text('سبب الرفض: $rejection', style: AppText.bodySm.copyWith(color: AppColors.danger)),
+          ],
+          if (status == 'approved' && installments.isNotEmpty)
+            Theme(
+              data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+              child: ExpansionTile(
+                tilePadding: EdgeInsets.zero,
+                childrenPadding: EdgeInsets.zero,
+                title: Text('جدول الأقساط (${installments.where((i) => i['is_paid'] == true).length}/${installments.length} مدفوع)', style: AppText.label),
+                children: [
+                  for (var i = 0; i < installments.length; i++)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: AppSpace.xs),
+                      child: Row(
+                        children: [
+                          SizedBox(width: 28, child: Text('${i + 1}', style: AppText.caption)),
+                          Expanded(child: Text(Fmt.date(DateTime.tryParse(installments[i]['due_date']?.toString() ?? ''), withYear: true), style: AppText.bodySm)),
+                          Text(Fmt.iqd(installments[i]['amount'] as num?), style: AppText.bodySm.copyWith(color: AppColors.textPrimary)),
+                          const SizedBox(width: AppSpace.sm),
+                          installments[i]['is_paid'] == true
+                              ? const StatusBadge('مدفوع', tone: AppTone.success)
+                              : const StatusBadge('قادم'),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          if (pledge != null && pledge.isNotEmpty)
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: AppButton.ghost(
+                label: 'عرض التعهد',
+                icon: Icons.attach_file_rounded,
+                size: AppButtonSize.small,
+                onPressed: () async {
+                  final url = Uri.tryParse(pledge);
+                  if (url != null && await canLaunchUrl(url)) {
+                    await launchUrl(url, mode: LaunchMode.externalApplication);
+                  } else if (context.mounted) {
+                    AppSnack.error(context, 'تعذّر فتح التعهد');
+                  }
+                },
+              ),
+            ),
+        ],
+      ),
+    );
   }
 }
