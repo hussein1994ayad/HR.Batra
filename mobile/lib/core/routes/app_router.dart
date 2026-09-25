@@ -5,6 +5,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/design/design.dart';
 import '../../presentation/auth/change_password_screen.dart';
 import '../../presentation/auth/login_screen.dart';
 import '../../presentation/employee/admin_dashboard/admin_dashboard_screen.dart';
@@ -23,7 +24,6 @@ import '../../presentation/employee/storage_stats_screen.dart';
 import '../../presentation/employee/trash_screen.dart';
 import '../services/auth_service.dart';
 import '../services/supabase_service.dart';
-import '../theme/app_theme.dart';
 
 // تعريف المسارات كمسميات
 class AppRoutes {
@@ -279,7 +279,7 @@ class _SplashScreenState extends State<SplashScreen> {
         decoration: BoxDecoration(
           gradient: LinearGradient(
             colors: isDark
-                ? [const Color(0xFF0F172A), const Color(0xFF1E293B)]
+                ? [AppColors.surface1, AppColors.surface2]
                 : [const Color(0xFFF8FAFC), const Color(0xFFE2E8F0)],
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
@@ -293,16 +293,16 @@ class _SplashScreenState extends State<SplashScreen> {
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                  color: isDark ? AppColors.surface2 : AppColors.textPrimary,
                   boxShadow: [
                     BoxShadow(
-                      color: AppTheme.primaryTeal.withAlpha(50),
+                      color: AppColors.brandStrong.withAlpha(50),
                       blurRadius: 24,
                       spreadRadius: 4,
                     )
                   ],
                 ),
-                child: const Icon(Icons.business_center, size: 72, color: AppTheme.primaryTeal),
+                child: const Icon(Icons.business_center, size: 72, color: AppColors.brandStrong),
               ),
               const SizedBox(height: 24),
               const Text(
@@ -310,7 +310,7 @@ class _SplashScreenState extends State<SplashScreen> {
                 style: TextStyle(
                   fontSize: 26, 
                   fontWeight: FontWeight.w900, 
-                  color: AppTheme.primaryTeal,
+                  color: AppColors.brandStrong,
                   fontFamily: 'Cairo',
                   letterSpacing: 1.1,
                 ),
@@ -320,7 +320,7 @@ class _SplashScreenState extends State<SplashScreen> {
                 'نظام الموارد البشرية وإدارة الدوام المتقدم',
                 style: TextStyle(
                   fontSize: 12, 
-                  color: Colors.grey,
+                  color: AppColors.textMuted,
                   fontFamily: 'Cairo',
                   fontWeight: FontWeight.w500,
                 ),
@@ -330,7 +330,7 @@ class _SplashScreenState extends State<SplashScreen> {
                 width: 24,
                 height: 24,
                 child: CircularProgressIndicator(
-                  color: AppTheme.primaryTeal,
+                  color: AppColors.brandStrong,
                   strokeWidth: 3,
                 ),
               ),

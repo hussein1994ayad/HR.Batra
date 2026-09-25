@@ -61,7 +61,7 @@ class FakeBackend {
   static http.Response _rest(http.Request req, String table) {
     if (req.method != 'GET' && req.method != 'HEAD') {
       final body = req.body.isEmpty ? null : jsonDecode(req.body);
-      final echo = body is List ? body : (body == null ? [] : [body]);
+      final echo = body is List ? body : (body == null ? <Object?>[] : [body]);
       return http.Response(jsonEncode(echo), 201, headers: _json);
     }
     var rows = List<Map<String, dynamic>>.from(tables[table] ?? const []);

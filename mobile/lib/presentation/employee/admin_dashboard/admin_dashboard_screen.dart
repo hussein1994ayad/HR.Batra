@@ -10,9 +10,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/design/design.dart';
 import '../../../core/models/models.dart';
 import '../../../core/routes/app_router.dart';
-import '../../../core/theme/app_theme.dart';
 import '../../../data/repositories/admin_actions_repository.dart';
 import '../../../data/repositories/admin_dashboard_repository.dart';
 import '../../../data/repositories/role_repository.dart';
@@ -81,7 +81,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
       if (mounted) setState(() => _snapshot = snapshot);
     } catch (e) {
       debugPrint('Error loading dashboard: $e');
-      _toast('تعذر تحميل بيانات اللوحة: $e', AppTheme.dangerRed);
+      _toast('تعذر تحميل بيانات اللوحة: $e', AppColors.danger);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -103,7 +103,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
       await _load();
     } catch (e) {
       debugPrint('Admin action failed: $e');
-      _toast('فشل تنفيذ العملية: $e', AppTheme.dangerRed);
+      _toast('فشل تنفيذ العملية: $e', AppColors.danger);
     } finally {
       if (mounted) setState(() => _busyKey = null);
     }
@@ -129,7 +129,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
           backgroundColor: Colors.transparent,
           elevation: 0,
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
+            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textPrimary),
             onPressed: () => Navigator.pop(context),
           ),
           title: const Text(
@@ -138,18 +138,18 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
               fontFamily: 'Cairo',
               fontWeight: FontWeight.bold,
               fontSize: 16,
-              color: Colors.white,
-              shadows: [Shadow(color: AppTheme.neonCyan, blurRadius: 10)],
+              color: AppColors.textPrimary,
+              shadows: [Shadow(color: AppColors.brand, blurRadius: 10)],
             ),
           ),
           actions: [
-            _nav(Icons.location_searching_rounded, AppTheme.neonCyan, 'خريطة التتبع الحي للموظفين', AppRoutes.adminTracking),
-            _nav(Icons.account_balance_wallet_rounded, AppTheme.neonCyan, 'متابعة السلف وكشوف Excel', AppRoutes.adminLoans),
-            _nav(Icons.bar_chart_rounded, AppTheme.neonCyan, 'تقارير الحضور', AppRoutes.adminAttendanceReport),
-            _nav(Icons.people_alt_rounded, AppTheme.successGreen, 'إدارة الموظفين', AppRoutes.adminEmployeeManagement),
-            _nav(Icons.schedule_rounded, AppTheme.warningOrange, 'أوقات عمل الأفرع', AppRoutes.adminBranchSchedule),
-            _nav(Icons.delete_sweep_rounded, AppTheme.neonPink, 'سلة المحذوفات', AppRoutes.adminTrash),
-            _nav(Icons.cloud_queue_rounded, AppTheme.neonCyan, 'إحصائيات التخزين', AppRoutes.adminStorage),
+            _nav(Icons.location_searching_rounded, AppColors.brand, 'خريطة التتبع الحي للموظفين', AppRoutes.adminTracking),
+            _nav(Icons.account_balance_wallet_rounded, AppColors.brand, 'متابعة السلف وكشوف Excel', AppRoutes.adminLoans),
+            _nav(Icons.bar_chart_rounded, AppColors.brand, 'تقارير الحضور', AppRoutes.adminAttendanceReport),
+            _nav(Icons.people_alt_rounded, AppColors.success, 'إدارة الموظفين', AppRoutes.adminEmployeeManagement),
+            _nav(Icons.schedule_rounded, AppColors.warning, 'أوقات عمل الأفرع', AppRoutes.adminBranchSchedule),
+            _nav(Icons.delete_sweep_rounded, AppColors.accent, 'سلة المحذوفات', AppRoutes.adminTrash),
+            _nav(Icons.cloud_queue_rounded, AppColors.brand, 'إحصائيات التخزين', AppRoutes.adminStorage),
           ],
           bottom: PreferredSize(
             preferredSize: const Size.fromHeight(150),
@@ -166,9 +166,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                   isScrollable: true,
                   labelStyle: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 11),
                   unselectedLabelStyle: const TextStyle(fontFamily: 'Cairo', fontSize: 11),
-                  indicatorColor: AppTheme.neonCyan,
-                  labelColor: AppTheme.neonCyan,
-                  unselectedLabelColor: Colors.white70,
+                  indicatorColor: AppColors.brand,
+                  labelColor: AppColors.brand,
+                  unselectedLabelColor: AppColors.textSecondary,
                   indicatorSize: TabBarIndicatorSize.tab,
                   tabs: [
                     Tab(text: 'القرارات (${s.decisions.length})'),
@@ -184,16 +184,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
         ),
         floatingActionButton: FloatingActionButton.extended(
           onPressed: () => context.push(AppRoutes.adminAnnouncement),
-          backgroundColor: AppTheme.cyberPurple,
-          icon: const Icon(Icons.campaign_rounded, color: Colors.white),
-          label: const Text('تعميم جديد', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: Colors.white)),
+          backgroundColor: AppColors.accent,
+          icon: const Icon(Icons.campaign_rounded, color: AppColors.textPrimary),
+          label: const Text('تعميم جديد', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
         ),
         body: _isLoading
-            ? const Center(child: CircularProgressIndicator(color: AppTheme.neonCyan))
+            ? const Center(child: CircularProgressIndicator(color: AppColors.brand))
             : RefreshIndicator(
                 onRefresh: _load,
-                color: AppTheme.neonCyan,
-                backgroundColor: AppTheme.darkSurface,
+                color: AppColors.brand,
+                backgroundColor: AppColors.surface1,
                 child: Column(
                   children: [
                     DashboardStatsRow(present: s.present, absent: s.absent, violations: s.securityLogs.length),
@@ -210,7 +210,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                               item.key,
                               () => _actions.applyDecision(item, deduct: deduct, reason: reason, amount: amount),
                               deduct ? 'تم تطبيق الخصم ⚠️' : 'تم الإعفاء من الخصم ✅',
-                              deduct ? AppTheme.warningOrange : AppTheme.successGreen,
+                              deduct ? AppColors.warning : AppColors.success,
                             ),
                           ),
                           LeavesTab(
@@ -220,7 +220,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                               leave.id,
                               () => _actions.decideLeave(leave.id, approve: approve),
                               approve ? 'تم قبول طلب الإجازة بنجاح ✅' : 'تم رفض طلب الإجازة ❌',
-                              approve ? AppTheme.successGreen : AppTheme.dangerRed,
+                              approve ? AppColors.success : AppColors.danger,
                             ),
                           ),
                           LoansTab(
@@ -230,7 +230,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                               loan.id,
                               () => approve ? _actions.approveLoan(loan) : _actions.rejectLoan(loan.id),
                               approve ? 'تم اعتماد السلفة وتوليد الأقساط ✅' : 'تم رفض طلب السلفة ❌',
-                              approve ? AppTheme.successGreen : AppTheme.dangerRed,
+                              approve ? AppColors.success : AppColors.danger,
                             ),
                           ),
                           DevicesTab(
@@ -240,7 +240,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                               device.id,
                               () => approve ? _actions.approveDevice(device) : _actions.rejectDevice(device.id),
                               approve ? 'تم اعتماد الجهاز بنجاح ✅' : 'تم رفض وإزالة الهاتف المذكور ❌',
-                              approve ? AppTheme.successGreen : AppTheme.dangerRed,
+                              approve ? AppColors.success : AppColors.danger,
                             ),
                           ),
                           SecurityTab(logs: s.securityLogs),

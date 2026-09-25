@@ -11,9 +11,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/design/design.dart';
 import '../../core/routes/app_router.dart';
 import '../../core/services/auth_service.dart';
-import '../../core/theme/app_theme.dart';
 import '../shared/widgets/glass_background.dart';
 
 class ChangePasswordScreen extends StatefulWidget {
@@ -74,7 +74,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen>
             'تم تحديث كلمة المرور بنجاح — أهلاً بك في النظام',
             style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w600),
           ),
-          backgroundColor: AppTheme.successGreen,
+          backgroundColor: AppColors.success,
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -120,10 +120,10 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen>
         builder: (context, constraints) {
           return SingleChildScrollView(
             padding: EdgeInsets.only(
-              left: AppTheme.space6,
-              right: AppTheme.space6,
-              top: AppTheme.space6,
-              bottom: AppTheme.space6 + media.viewInsets.bottom,
+              left: AppSpace.xxl,
+              right: AppSpace.xxl,
+              top: AppSpace.xxl,
+              bottom: AppSpace.xxl + media.viewInsets.bottom,
             ),
             child: ConstrainedBox(
               constraints: BoxConstraints(minHeight: constraints.maxHeight),
@@ -134,9 +134,9 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen>
                   children: [
                     const Spacer(),
                     _buildIcon(isDark),
-                    const SizedBox(height: AppTheme.space5),
+                    const SizedBox(height: AppSpace.xl),
                     _buildTitle(t, isDark),
-                    const SizedBox(height: AppTheme.space6),
+                    const SizedBox(height: AppSpace.xxl),
                     _buildFormCard(isDark, t, cs),
                     const Spacer(flex: 2),
                   ],
@@ -155,24 +155,24 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen>
       height: 96,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: isDark ? AppTheme.darkSurface : Colors.white,
+        color: isDark ? AppColors.surface1 : AppColors.textPrimary,
         boxShadow: [
           BoxShadow(
-            color: AppTheme.warningOrange.withValues(alpha: 0.35),
+            color: AppColors.warning.withValues(alpha: 0.35),
             blurRadius: 32,
             spreadRadius: 4,
             offset: const Offset(0, 8),
           ),
         ],
         border: Border.all(
-          color: AppTheme.warningOrange.withValues(alpha: 0.2),
+          color: AppColors.warning.withValues(alpha: 0.2),
           width: 1.5,
         ),
       ),
       child: const Icon(
         Icons.security_rounded,
         size: 48,
-        color: AppTheme.warningOrange,
+        color: AppColors.warning,
       ),
     );
   }
@@ -184,16 +184,16 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen>
           'تغيير كلمة المرور',
           style: t.displaySmall?.copyWith(fontWeight: FontWeight.w900),
         ),
-        const SizedBox(height: AppTheme.space2),
+        const SizedBox(height: AppSpace.sm),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppTheme.space4),
+          padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg),
           child: Text(
             'لأمانك، يجب تغيير كلمة المرور المؤقتة قبل استخدام النظام.',
             textAlign: TextAlign.center,
             style: t.bodyMedium?.copyWith(
               color: isDark
-                  ? AppTheme.darkTextSecondary
-                  : AppTheme.lightTextSecondary,
+                  ? AppColors.textSecondary
+                  : AppColors.textSecondary,
             ),
           ),
         ),
@@ -204,16 +204,16 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen>
   Widget _buildFormCard(bool isDark, TextTheme t, ColorScheme cs) {
     return Container(
       constraints: const BoxConstraints(maxWidth: 480),
-      padding: const EdgeInsets.all(AppTheme.space6),
+      padding: const EdgeInsets.all(AppSpace.xxl),
       decoration: BoxDecoration(
         color: isDark
-            ? AppTheme.darkSurface.withValues(alpha: 0.92)
-            : Colors.white.withValues(alpha: 0.96),
-        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+            ? AppColors.surface1.withValues(alpha: 0.92)
+            : AppColors.textPrimary.withValues(alpha: 0.96),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
         border: Border.all(
-          color: isDark ? Colors.white.withValues(alpha: 0.08) : AppTheme.lightBorder,
+          color: isDark ? AppColors.textPrimary.withValues(alpha: 0.08) : AppColors.borderStrong,
         ),
-        boxShadow: AppTheme.shadowLg(isDark),
+        boxShadow: AppElevation.high,
       ),
       child: Form(
         key: _formKey,
@@ -223,11 +223,11 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen>
           children: [
             if (_errorMessage != null) ...[
               _errorBanner(_errorMessage!),
-              const SizedBox(height: AppTheme.space5),
+              const SizedBox(height: AppSpace.xl),
             ],
             Text('كلمة المرور الجديدة',
                 style: t.labelLarge?.copyWith(fontWeight: FontWeight.w700)),
-            const SizedBox(height: AppTheme.space2),
+            const SizedBox(height: AppSpace.sm),
             TextFormField(
               controller: _passwordController,
               obscureText: !_isPasswordVisible,
@@ -251,12 +251,12 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen>
                 return null;
               },
             ),
-            const SizedBox(height: AppTheme.space3),
+            const SizedBox(height: AppSpace.md),
             _StrengthMeter(strength: _strength(_passwordController.text)),
-            const SizedBox(height: AppTheme.space5),
+            const SizedBox(height: AppSpace.xl),
             Text('تأكيد كلمة المرور',
                 style: t.labelLarge?.copyWith(fontWeight: FontWeight.w700)),
-            const SizedBox(height: AppTheme.space2),
+            const SizedBox(height: AppSpace.sm),
             TextFormField(
               controller: _confirmPasswordController,
               obscureText: !_isConfirmPasswordVisible,
@@ -279,7 +279,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen>
                 return null;
               },
             ),
-            const SizedBox(height: AppTheme.space8),
+            const SizedBox(height: AppSpace.x3),
             SizedBox(
               height: 54,
               child: FilledButton.icon(
@@ -289,7 +289,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen>
                         width: 20,
                         height: 20,
                         child: CircularProgressIndicator(
-                            color: Colors.white, strokeWidth: 2.5))
+                            color: AppColors.textPrimary, strokeWidth: 2.5))
                     : const Icon(Icons.lock_reset_rounded),
                 label: Text(
                   _isLoading ? 'جاري التحديث...' : 'تحديث كلمة المرور',
@@ -313,23 +313,23 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen>
 
   Widget _errorBanner(String msg) {
     return Container(
-      padding: const EdgeInsets.all(AppTheme.space3),
+      padding: const EdgeInsets.all(AppSpace.md),
       decoration: BoxDecoration(
-        color: AppTheme.dangerRed.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(AppTheme.radiusSm),
-        border: Border.all(color: AppTheme.dangerRed.withValues(alpha: 0.35)),
+        color: AppColors.danger.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+        border: Border.all(color: AppColors.danger.withValues(alpha: 0.35)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Icon(Icons.error_outline_rounded,
-              color: AppTheme.dangerRed, size: 20),
-          const SizedBox(width: AppTheme.space2),
+              color: AppColors.danger, size: 20),
+          const SizedBox(width: AppSpace.sm),
           Expanded(
             child: Text(
               msg,
               style: const TextStyle(
-                color: AppTheme.dangerRed,
+                color: AppColors.danger,
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
                 fontFamily: 'Cairo',
@@ -351,10 +351,10 @@ class _StrengthMeter extends StatelessWidget {
   Widget build(BuildContext context) {
     final labels = ['ضعيفة', 'متوسطة', 'جيدة', 'قوية'];
     final colors = [
-      AppTheme.dangerRed,
-      AppTheme.warningOrange,
-      AppTheme.successGreen.withValues(alpha: 0.8),
-      AppTheme.successGreen,
+      AppColors.danger,
+      AppColors.warning,
+      AppColors.success.withValues(alpha: 0.8),
+      AppColors.success,
     ];
     return Row(
       children: [
@@ -376,7 +376,7 @@ class _StrengthMeter extends StatelessWidget {
             }),
           ),
         ),
-        const SizedBox(width: AppTheme.space3),
+        const SizedBox(width: AppSpace.md),
         Text(
           labels[strength],
           style: TextStyle(

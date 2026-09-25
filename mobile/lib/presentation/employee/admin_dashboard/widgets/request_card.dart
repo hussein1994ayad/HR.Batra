@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../../core/theme/app_theme.dart';
+import '../../../../core/design/design.dart';
 import '../../../shared/widgets/glass_container.dart';
 
 /// شارة ملونة صغيرة (نوع الطلب أو حالته).
@@ -51,7 +51,6 @@ class RequestCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(16),
       borderRadius: 20,
-      opacity: opacity,
       borderColor: accent.withValues(alpha: glow ? 0.35 : 0.25),
       boxShadow: glow ? [BoxShadow(color: accent.withValues(alpha: 0.12), blurRadius: 10)] : null,
       child: Column(
@@ -63,7 +62,7 @@ class RequestCard extends StatelessWidget {
               Flexible(
                 child: Text(
                   title,
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white, fontFamily: 'Cairo'),
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textPrimary, fontFamily: 'Cairo'),
                 ),
               ),
               if (trailing != null) trailing!,
@@ -71,7 +70,7 @@ class RequestCard extends StatelessWidget {
           ),
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 10),
-            child: Divider(color: Colors.white10, height: 1),
+            child: Divider(color: AppColors.border, height: 1),
           ),
           ...children,
           if (actions != null) ...[const SizedBox(height: 16), actions!],
@@ -108,8 +107,8 @@ class DecisionButtons extends StatelessWidget {
           child: ElevatedButton(
             onPressed: busy ? null : onApprove,
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.successGreen,
-              foregroundColor: Colors.white,
+              backgroundColor: AppColors.success,
+              foregroundColor: AppColors.textPrimary,
               elevation: 0,
               shape: shape,
             ),
@@ -121,8 +120,8 @@ class DecisionButtons extends StatelessWidget {
           child: OutlinedButton(
             onPressed: busy ? null : onReject,
             style: OutlinedButton.styleFrom(
-              foregroundColor: AppTheme.dangerRed,
-              side: const BorderSide(color: AppTheme.dangerRed),
+              foregroundColor: AppColors.danger,
+              side: const BorderSide(color: AppColors.danger),
               shape: shape,
             ),
             child: Text(rejectLabel, style: label),

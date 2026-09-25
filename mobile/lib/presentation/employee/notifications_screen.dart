@@ -6,8 +6,8 @@
 
 import 'package:flutter/material.dart';
 
+import '../../core/design/design.dart';
 import '../../core/services/supabase_service.dart';
-import '../../core/theme/app_theme.dart';
 import '../shared/widgets/skeleton_loader.dart';
 
 class NotificationsScreen extends StatefulWidget {
@@ -85,7 +85,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   Widget _buildBody(bool isDark, TextTheme t, ColorScheme cs) {
     if (_isLoading) {
       return const Padding(
-        padding: EdgeInsets.all(AppTheme.space4),
+        padding: EdgeInsets.all(AppSpace.lg),
         child: SkeletonList(itemCount: 6, itemHeight: 84),
       );
     }
@@ -94,13 +94,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       return SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         child: Padding(
-          padding: const EdgeInsets.all(AppTheme.space6),
+          padding: const EdgeInsets.all(AppSpace.xxl),
           child: Center(
             child: Container(
-              padding: const EdgeInsets.all(AppTheme.space8),
+              padding: const EdgeInsets.all(AppSpace.x3),
               decoration: BoxDecoration(
                 color: cs.surface,
-                borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+                borderRadius: BorderRadius.circular(AppRadius.lg),
                 border: Border.all(color: cs.outline),
               ),
               child: Column(
@@ -111,20 +111,20 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     size: 56,
                     color: cs.outline,
                   ),
-                  const SizedBox(height: AppTheme.space4),
+                  const SizedBox(height: AppSpace.lg),
                   Text(
                     'لا توجد إشعارات حالياً',
                     style: t.titleMedium?.copyWith(fontWeight: FontWeight.w800),
                     textAlign: TextAlign.center,
                   ),
-                  const SizedBox(height: AppTheme.space2),
+                  const SizedBox(height: AppSpace.sm),
                   Text(
                     'ستظهر التنبيهات والإشعارات الجديدة هنا فور وصولها.',
                     textAlign: TextAlign.center,
                     style: t.bodySmall?.copyWith(
                       color: isDark
-                          ? AppTheme.darkTextMuted
-                          : AppTheme.lightTextMuted,
+                          ? AppColors.textMuted
+                          : AppColors.textMuted,
                     ),
                   ),
                 ],
@@ -136,9 +136,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
 
     return ListView.separated(
-      padding: const EdgeInsets.all(AppTheme.space4),
+      padding: const EdgeInsets.all(AppSpace.lg),
       itemCount: _notifications.length,
-      separatorBuilder: (_, __) => const SizedBox(height: AppTheme.space3),
+      separatorBuilder: (_, __) => const SizedBox(height: AppSpace.md),
       itemBuilder: (context, index) {
         final n = _notifications[index];
         return _NotificationCard(
@@ -177,32 +177,32 @@ class _NotificationCard extends StatelessWidget {
     final accent = _typeColor(type);
 
     return Container(
-      padding: const EdgeInsets.all(AppTheme.space4),
+      padding: const EdgeInsets.all(AppSpace.lg),
       decoration: BoxDecoration(
         color: cs.surface,
-        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
         border: Border.all(
           color: isRead
               ? (isDark
-                  ? AppTheme.darkBorder.withValues(alpha: 0.5)
-                  : AppTheme.lightBorder)
+                  ? AppColors.borderStrong.withValues(alpha: 0.5)
+                  : AppColors.borderStrong)
               : accent.withValues(alpha: 0.4),
           width: isRead ? 1 : 1.5,
         ),
-        boxShadow: isRead ? null : AppTheme.shadowSm(isDark),
+        boxShadow: isRead ? null : AppElevation.low,
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            padding: const EdgeInsets.all(AppTheme.space3),
+            padding: const EdgeInsets.all(AppSpace.md),
             decoration: BoxDecoration(
               color: accent.withValues(alpha: 0.14),
-              borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+              borderRadius: BorderRadius.circular(AppRadius.md),
             ),
             child: Icon(_typeIcon(type), color: accent, size: 22),
           ),
-          const SizedBox(width: AppTheme.space3),
+          const SizedBox(width: AppSpace.md),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -219,18 +219,18 @@ class _NotificationCard extends StatelessWidget {
                         ),
                       ),
                     ),
-                    const SizedBox(width: AppTheme.space2),
+                    const SizedBox(width: AppSpace.sm),
                     Text(
                       _formatDate(createdAt),
                       style: t.bodySmall?.copyWith(
                         color: isDark
-                            ? AppTheme.darkTextMuted
-                            : AppTheme.lightTextMuted,
+                            ? AppColors.textMuted
+                            : AppColors.textMuted,
                         fontSize: 11,
                       ),
                     ),
                     if (!isRead) ...[
-                      const SizedBox(width: AppTheme.space2),
+                      const SizedBox(width: AppSpace.sm),
                       Container(
                         width: 8,
                         height: 8,
@@ -242,13 +242,13 @@ class _NotificationCard extends StatelessWidget {
                     ],
                   ],
                 ),
-                const SizedBox(height: AppTheme.space2),
+                const SizedBox(height: AppSpace.sm),
                 Text(
                   body,
                   style: t.bodyMedium?.copyWith(
                     color: isDark
-                        ? AppTheme.darkTextSecondary
-                        : AppTheme.lightTextSecondary,
+                        ? AppColors.textSecondary
+                        : AppColors.textSecondary,
                     height: 1.5,
                   ),
                 ),
@@ -282,19 +282,19 @@ class _NotificationCard extends StatelessWidget {
   Color _typeColor(String type) {
     switch (type) {
       case 'leave':
-        return AppTheme.accentIndigo;
+        return AppColors.accent;
       case 'loan':
-        return AppTheme.warningOrange;
+        return AppColors.warning;
       case 'attendance':
-        return AppTheme.successGreen;
+        return AppColors.success;
       case 'salary':
-        return AppTheme.primaryTeal;
+        return AppColors.brandStrong;
       case 'device':
-        return AppTheme.dangerRed;
+        return AppColors.danger;
       case 'ota':
-        return AppTheme.cyberPurple;
+        return AppColors.accent;
       default:
-        return AppTheme.neonCyan;
+        return AppColors.brand;
     }
   }
 

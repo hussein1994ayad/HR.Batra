@@ -4,10 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../../core/constants/constants.dart';
+import '../../../../core/design/design.dart';
 import '../../../../core/logic/loan_rules.dart';
 import '../../../../core/models/models.dart';
 import '../../../../core/services/excel_export_service.dart';
-import '../../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/glass_container.dart';
 
 /// البحث بالاسم، قائمة الفروع، وشرائح الحالة.
@@ -50,22 +50,22 @@ class LoansFilterBar extends StatelessWidget {
           child: Container(
             height: 40,
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.08),
+              color: AppColors.textPrimary.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: Colors.white12),
+              border: Border.all(color: AppColors.border),
             ),
             child: TextField(
               controller: searchController,
-              style: const TextStyle(fontFamily: 'Cairo', color: Colors.white, fontSize: 12),
+              style: const TextStyle(fontFamily: 'Cairo', color: AppColors.textPrimary, fontSize: 12),
               onChanged: onQueryChanged,
               decoration: InputDecoration(
                 hintText: 'البحث باسم الموظف المستلف...',
-                hintStyle: const TextStyle(fontFamily: 'Cairo', color: Colors.white38, fontSize: 11),
-                prefixIcon: const Icon(Icons.search_rounded, color: Colors.white60, size: 18),
+                hintStyle: const TextStyle(fontFamily: 'Cairo', color: AppColors.textDisabled, fontSize: 11),
+                prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textMuted, size: 18),
                 suffixIcon: query.isEmpty
                     ? null
                     : IconButton(
-                        icon: const Icon(Icons.clear_rounded, color: Colors.white60, size: 16),
+                        icon: const Icon(Icons.clear_rounded, color: AppColors.textMuted, size: 16),
                         onPressed: () {
                           searchController.clear();
                           onQueryChanged('');
@@ -83,25 +83,25 @@ class LoansFilterBar extends StatelessWidget {
             height: 38,
             padding: const EdgeInsets.symmetric(horizontal: 12),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.06),
+              color: AppColors.textPrimary.withValues(alpha: 0.06),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: branchSelected ? AppTheme.neonCyan : Colors.white12, width: branchSelected ? 1.5 : 1.0),
+              border: Border.all(color: branchSelected ? AppColors.brand : AppColors.border, width: branchSelected ? 1.5 : 1.0),
             ),
             child: DropdownButtonHideUnderline(
               child: DropdownButton<String>(
                 isExpanded: true,
-                dropdownColor: const Color(0xFF0F172A),
+                dropdownColor: AppColors.surface1,
                 value: branches.any((b) => b.id == branchId) ? branchId : 'all',
-                icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppTheme.neonCyan, size: 20),
+                icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.brand, size: 20),
                 items: [
                   const DropdownMenuItem(
                     value: 'all',
                     child: Row(
                       children: [
-                        Icon(Icons.domain_rounded, color: AppTheme.neonCyan, size: 16),
+                        Icon(Icons.domain_rounded, color: AppColors.brand, size: 16),
                         SizedBox(width: 8),
                         Text('🏢 جميع الفروع (كافة الموظفين)',
-                            style: TextStyle(fontFamily: 'Cairo', color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                            style: TextStyle(fontFamily: 'Cairo', color: AppColors.textPrimary, fontSize: 12, fontWeight: FontWeight.bold)),
                       ],
                     ),
                   ),
@@ -110,9 +110,9 @@ class LoansFilterBar extends StatelessWidget {
                       value: b.id,
                       child: Row(
                         children: [
-                          const Icon(Icons.storefront_rounded, color: AppTheme.successGreen, size: 16),
+                          const Icon(Icons.storefront_rounded, color: AppColors.success, size: 16),
                           const SizedBox(width: 8),
-                          Text('فرع: ${b.name}', style: const TextStyle(fontFamily: 'Cairo', color: Colors.white, fontSize: 12)),
+                          Text('فرع: ${b.name}', style: const TextStyle(fontFamily: 'Cairo', color: AppColors.textPrimary, fontSize: 12)),
                         ],
                       ),
                     ),
@@ -143,9 +143,9 @@ class LoansFilterBar extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
           decoration: BoxDecoration(
-            color: selected ? AppTheme.primaryTeal : Colors.white.withValues(alpha: 0.06),
+            color: selected ? AppColors.brandStrong : AppColors.textPrimary.withValues(alpha: 0.06),
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: selected ? AppTheme.neonCyan : Colors.white12),
+            border: Border.all(color: selected ? AppColors.brand : AppColors.border),
           ),
           child: Text(
             label,
@@ -153,7 +153,7 @@ class LoansFilterBar extends StatelessWidget {
               fontFamily: 'Cairo',
               fontSize: 11,
               fontWeight: selected ? FontWeight.bold : FontWeight.normal,
-              color: selected ? Colors.white : Colors.white70,
+              color: selected ? AppColors.textPrimary : AppColors.textSecondary,
             ),
           ),
         ),
@@ -171,27 +171,26 @@ class LoansKpiPanel extends StatelessWidget {
     return GlassContainer(
       padding: const EdgeInsets.all(16),
       borderRadius: 22,
-      opacity: 0.08,
-      borderColor: AppTheme.neonCyan.withValues(alpha: 0.2),
+      borderColor: AppColors.brand.withValues(alpha: 0.2),
       child: Column(
         children: [
           Row(
             children: [
-              _Kpi('إجمالي السلف الممنوحة', AppConstants.formatMoney(kpis.total), Colors.white,
-                  Icons.account_balance_wallet_rounded, AppTheme.primaryTeal.withValues(alpha: 0.2)),
+              _Kpi('إجمالي السلف الممنوحة', AppConstants.formatMoney(kpis.total), AppColors.textPrimary,
+                  Icons.account_balance_wallet_rounded, AppColors.brandStrong.withValues(alpha: 0.2)),
               const SizedBox(width: 10),
-              _Kpi('إجمالي المبالغ المسددة', AppConstants.formatMoney(kpis.paid), AppTheme.successGreen, Icons.task_alt_rounded,
-                  AppTheme.successGreen.withValues(alpha: 0.2)),
+              _Kpi('إجمالي المبالغ المسددة', AppConstants.formatMoney(kpis.paid), AppColors.success, Icons.task_alt_rounded,
+                  AppColors.success.withValues(alpha: 0.2)),
             ],
           ),
           const SizedBox(height: 10),
           Row(
             children: [
-              _Kpi('المتبقي بذمة الموظفين', AppConstants.formatMoney(kpis.remaining), const Color(0xFFF87171),
-                  Icons.hourglass_bottom_rounded, const Color(0xFFEF4444).withValues(alpha: 0.2)),
+              _Kpi('المتبقي بذمة الموظفين', AppConstants.formatMoney(kpis.remaining), AppColors.danger,
+                  Icons.hourglass_bottom_rounded, AppColors.danger.withValues(alpha: 0.2)),
               const SizedBox(width: 10),
-              _Kpi('السلف النشطة الجارية', '${kpis.activeCount} موظف', AppTheme.neonCyan, Icons.people_alt_rounded,
-                  AppTheme.neonCyan.withValues(alpha: 0.2)),
+              _Kpi('السلف النشطة الجارية', '${kpis.activeCount} موظف', AppColors.brand, Icons.people_alt_rounded,
+                  AppColors.brand.withValues(alpha: 0.2)),
             ],
           ),
         ],
@@ -215,9 +214,9 @@ class _Kpi extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.03),
+          color: AppColors.textPrimary.withValues(alpha: 0.03),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.white10),
+          border: Border.all(color: AppColors.border),
         ),
         child: Row(
           children: [
@@ -232,7 +231,7 @@ class _Kpi extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(title,
-                      style: const TextStyle(fontFamily: 'Cairo', fontSize: 10, color: Colors.white60),
+                      style: const TextStyle(fontFamily: 'Cairo', fontSize: 10, color: AppColors.textMuted),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis),
                   const SizedBox(height: 2),
@@ -255,22 +254,22 @@ Future<void> showExcelExportedDialog(BuildContext context, {required String empl
   return showDialog<void>(
     context: context,
     builder: (ctx) => AlertDialog(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: AppColors.surface1,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(24),
-        side: BorderSide(color: AppTheme.successGreen.withValues(alpha: 0.4)),
+        side: BorderSide(color: AppColors.success.withValues(alpha: 0.4)),
       ),
       title: Row(
         children: [
           Container(
             padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(color: AppTheme.successGreen.withValues(alpha: 0.2), shape: BoxShape.circle),
-            child: const Icon(Icons.table_chart_rounded, color: AppTheme.successGreen, size: 24),
+            decoration: BoxDecoration(color: AppColors.success.withValues(alpha: 0.2), shape: BoxShape.circle),
+            child: const Icon(Icons.table_chart_rounded, color: AppColors.success, size: 24),
           ),
           const SizedBox(width: 12),
           const Flexible(
             child: Text('تم تصدير كشف Excel بنجاح! 📊',
-                style: TextStyle(fontFamily: 'Cairo', fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white)),
+                style: TextStyle(fontFamily: 'Cairo', fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
           ),
         ],
       ),
@@ -280,24 +279,24 @@ Future<void> showExcelExportedDialog(BuildContext context, {required String empl
         children: [
           Text(
             'تم إنشاء كشف حساب السلفة الاحترافي الخاص بالموظف ($employeeName) متضمناً كافة التسديدات والملاحظات وجدول الأقساط.',
-            style: const TextStyle(fontFamily: 'Cairo', fontSize: 13, color: Colors.white70, height: 1.5),
+            style: const TextStyle(fontFamily: 'Cairo', fontSize: 13, color: AppColors.textSecondary, height: 1.5),
           ),
           const SizedBox(height: 14),
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.05),
+              color: AppColors.textPrimary.withValues(alpha: 0.05),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.white10),
+              border: Border.all(color: AppColors.border),
             ),
             child: Row(
               children: [
-                const Icon(Icons.folder_rounded, color: AppTheme.neonCyan, size: 20),
+                const Icon(Icons.folder_rounded, color: AppColors.brand, size: 20),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     filePath.split(Platform.pathSeparator).last,
-                    style: const TextStyle(fontFamily: 'Cairo', fontSize: 11, color: AppTheme.neonCyan, fontWeight: FontWeight.bold),
+                    style: const TextStyle(fontFamily: 'Cairo', fontSize: 11, color: AppColors.brand, fontWeight: FontWeight.bold),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
@@ -314,12 +313,12 @@ Future<void> showExcelExportedDialog(BuildContext context, {required String empl
             ScaffoldMessenger.of(ctx).showSnackBar(
               const SnackBar(
                 content: Text('تم نسخ مسار الملف إلى الحافظة 📋', style: TextStyle(fontFamily: 'Cairo')),
-                backgroundColor: AppTheme.primaryTeal,
+                backgroundColor: AppColors.brandStrong,
               ),
             );
           },
-          icon: const Icon(Icons.copy_rounded, size: 18, color: Colors.white70),
-          label: const Text('نسخ المسار', style: TextStyle(fontFamily: 'Cairo', color: Colors.white70, fontSize: 11)),
+          icon: const Icon(Icons.copy_rounded, size: 18, color: AppColors.textSecondary),
+          label: const Text('نسخ المسار', style: TextStyle(fontFamily: 'Cairo', color: AppColors.textSecondary, fontSize: 11)),
         ),
         OutlinedButton.icon(
           onPressed: () {
@@ -327,8 +326,8 @@ Future<void> showExcelExportedDialog(BuildContext context, {required String empl
             ExcelExportService.shareExcelFile(filePath, text: 'كشف حساب سلفة الموظف: $employeeName');
           },
           style: OutlinedButton.styleFrom(
-            foregroundColor: AppTheme.neonCyan,
-            side: const BorderSide(color: AppTheme.neonCyan),
+            foregroundColor: AppColors.brand,
+            side: const BorderSide(color: AppColors.brand),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
           icon: const Icon(Icons.share_rounded, size: 18),
@@ -340,8 +339,8 @@ Future<void> showExcelExportedDialog(BuildContext context, {required String empl
             ExcelExportService.openExcelFile(filePath);
           },
           style: ElevatedButton.styleFrom(
-            backgroundColor: AppTheme.successGreen,
-            foregroundColor: Colors.white,
+            backgroundColor: AppColors.success,
+            foregroundColor: AppColors.textPrimary,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
           icon: const Icon(Icons.open_in_new_rounded, size: 18),

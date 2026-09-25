@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/constants/constants.dart';
+import '../../../../core/design/design.dart';
 import '../../../../core/logic/loan_rules.dart';
 import '../../../../core/models/models.dart';
-import '../../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/glass_container.dart';
 
 /// شارة حالة السلفة (معلقة، مسددة، مرفوضة، نشطة).
 ({String label, Color color}) loanBadge(LoanModel loan) {
-  if (loan.isPending) return (label: 'طلب معلق ⏳', color: Colors.amber);
-  if (loan.isRejected) return (label: 'مرفوضة ❌', color: AppTheme.dangerRed);
-  if (loan.remainingAmount <= 0) return (label: 'مسددة بالكامل 🏁', color: AppTheme.successGreen);
-  return (label: 'سلفة نشطة 💸', color: AppTheme.neonCyan);
+  if (loan.isPending) return (label: 'طلب معلق ⏳', color: AppColors.warning);
+  if (loan.isRejected) return (label: 'مرفوضة ❌', color: AppColors.danger);
+  if (loan.remainingAmount <= 0) return (label: 'مسددة بالكامل 🏁', color: AppColors.success);
+  return (label: 'سلفة نشطة 💸', color: AppColors.brand);
 }
 
 /// صورة الموظف أو أيقونة بديلة.
@@ -26,9 +26,9 @@ class EmployeeAvatar extends StatelessWidget {
     final hasUrl = url != null && url!.isNotEmpty;
     return CircleAvatar(
       radius: radius,
-      backgroundColor: AppTheme.primaryTeal.withValues(alpha: 0.2),
+      backgroundColor: AppColors.brandStrong.withValues(alpha: 0.2),
       backgroundImage: hasUrl ? NetworkImage(url!) : null,
-      child: hasUrl ? null : Icon(Icons.person_rounded, color: AppTheme.neonCyan, size: radius),
+      child: hasUrl ? null : Icon(Icons.person_rounded, color: AppColors.brand, size: radius),
     );
   }
 }
@@ -43,7 +43,7 @@ class LoanCard extends StatelessWidget {
   Widget _amount(String label, double value, Color color, CrossAxisAlignment align) => Column(
         crossAxisAlignment: align,
         children: [
-          Text(label, style: const TextStyle(fontFamily: 'Cairo', fontSize: 10, color: Colors.white60)),
+          Text(label, style: const TextStyle(fontFamily: 'Cairo', fontSize: 10, color: AppColors.textMuted)),
           Text(
             AppConstants.formatMoney(value),
             style: TextStyle(fontFamily: 'Cairo', fontSize: 13, fontWeight: FontWeight.bold, color: color),
@@ -62,8 +62,7 @@ class LoanCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(14),
       borderRadius: 18,
-      opacity: 0.06,
-      borderColor: Colors.white12,
+      borderColor: AppColors.border,
       child: InkWell(
         onTap: onOpen,
         borderRadius: BorderRadius.circular(18),
@@ -80,9 +79,9 @@ class LoanCard extends StatelessWidget {
                     children: [
                       Text(
                         loan.employeeName ?? 'موظف غير معروف',
-                        style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white),
+                        style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textPrimary),
                       ),
-                      Text(record.branchName, style: const TextStyle(fontFamily: 'Cairo', fontSize: 10, color: Colors.white60)),
+                      Text(record.branchName, style: const TextStyle(fontFamily: 'Cairo', fontSize: 10, color: AppColors.textMuted)),
                     ],
                   ),
                 ),
@@ -98,14 +97,14 @@ class LoanCard extends StatelessWidget {
             ),
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 8),
-              child: Divider(color: Colors.white10, height: 1),
+              child: Divider(color: AppColors.border, height: 1),
             ),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                _amount('المبلغ الكلي', loan.amount, Colors.white, CrossAxisAlignment.start),
-                _amount('المسدد', loan.paidAmount > 0 ? loan.paidAmount : 0, AppTheme.successGreen, CrossAxisAlignment.center),
-                _amount('المتبقي بذمته', loan.remainingAmount, const Color(0xFFF87171), CrossAxisAlignment.end),
+                _amount('المبلغ الكلي', loan.amount, AppColors.textPrimary, CrossAxisAlignment.start),
+                _amount('المسدد', loan.paidAmount > 0 ? loan.paidAmount : 0, AppColors.success, CrossAxisAlignment.center),
+                _amount('المتبقي بذمته', loan.remainingAmount, AppColors.danger, CrossAxisAlignment.end),
               ],
             ),
             const SizedBox(height: 10),
@@ -120,14 +119,14 @@ class LoanCard extends StatelessWidget {
                         child: LinearProgressIndicator(
                           value: progress,
                           minHeight: 6,
-                          backgroundColor: Colors.white10,
-                          valueColor: AlwaysStoppedAnimation<Color>(progress >= 1.0 ? AppTheme.successGreen : AppTheme.neonCyan),
+                          backgroundColor: AppColors.border,
+                          valueColor: AlwaysStoppedAnimation<Color>(progress >= 1.0 ? AppColors.success : AppColors.brand),
                         ),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         'الأقساط المسددة: $paidCount من ${loan.installmentCount} أقساط (${(progress * 100).toStringAsFixed(0)}%)',
-                        style: const TextStyle(fontFamily: 'Cairo', fontSize: 10, color: Colors.white60),
+                        style: const TextStyle(fontFamily: 'Cairo', fontSize: 10, color: AppColors.textMuted),
                       ),
                     ],
                   ),
@@ -139,18 +138,18 @@ class LoanCard extends StatelessWidget {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
-                      color: AppTheme.successGreen.withValues(alpha: 0.15),
+                      color: AppColors.success.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: AppTheme.successGreen.withValues(alpha: 0.3)),
+                      border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
                     ),
                     child: const Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.file_download_outlined, color: AppTheme.successGreen, size: 15),
+                        Icon(Icons.file_download_outlined, color: AppColors.success, size: 15),
                         SizedBox(width: 4),
                         Text(
                           'Excel',
-                          style: TextStyle(fontFamily: 'Cairo', fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.successGreen),
+                          style: TextStyle(fontFamily: 'Cairo', fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.success),
                         ),
                       ],
                     ),

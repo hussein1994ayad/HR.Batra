@@ -6,8 +6,8 @@ import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../core/design/design.dart';
 import '../constants/constants.dart';
-import '../theme/app_theme.dart';
 import 'supabase_service.dart';
 
 /// الحالات المختلفة لفحص تحديث التطبيق
@@ -110,7 +110,7 @@ class OtaService {
               borderRadius: BorderRadius.circular(24),
             ),
             elevation: 16,
-            backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+            backgroundColor: isDark ? AppColors.surface2 : AppColors.textPrimary,
             child: Padding(
               padding: const EdgeInsets.all(24.0),
               child: Column(
@@ -124,13 +124,13 @@ class OtaService {
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         color: isMandatory 
-                            ? AppTheme.dangerRed.withAlpha(25) 
-                            : AppTheme.primaryTeal.withAlpha(25),
+                            ? AppColors.danger.withAlpha(25) 
+                            : AppColors.brandStrong.withAlpha(25),
                       ),
                       child: Icon(
                         isMandatory ? Icons.system_update_alt : Icons.cloud_download,
                         size: 48,
-                        color: isMandatory ? AppTheme.dangerRed : AppTheme.primaryTeal,
+                        color: isMandatory ? AppColors.danger : AppColors.brandStrong,
                       ),
                     ),
                   ),
@@ -143,7 +143,7 @@ class OtaService {
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.w900,
-                      color: isMandatory ? AppTheme.dangerRed : AppTheme.primaryTeal,
+                      color: isMandatory ? AppColors.danger : AppColors.brandStrong,
                       fontFamily: 'Cairo',
                     ),
                   ),
@@ -156,7 +156,7 @@ class OtaService {
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
-                      color: isDark ? Colors.grey[300] : Colors.grey[700],
+                      color: isDark ? AppColors.textMuted : AppColors.textMuted,
                       fontFamily: 'Cairo',
                     ),
                   ),
@@ -166,7 +166,7 @@ class OtaService {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: isDark ? const Color(0xFF0F172A) : Colors.grey[100],
+                      color: isDark ? AppColors.surface1 : AppColors.textMuted,
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Column(
@@ -177,7 +177,7 @@ class OtaService {
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.bold,
-                            color: AppTheme.primaryTeal,
+                            color: AppColors.brandStrong,
                             fontFamily: 'Cairo',
                           ),
                         ),
@@ -187,7 +187,7 @@ class OtaService {
                           style: TextStyle(
                             fontSize: 12,
                             height: 1.5,
-                            color: isDark ? Colors.grey[400] : Colors.grey[800],
+                            color: isDark ? AppColors.textMuted : AppColors.textMuted,
                             fontFamily: 'Cairo',
                           ),
                         ),
@@ -211,7 +211,7 @@ class OtaService {
                             }
                           },
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: isMandatory ? AppTheme.dangerRed : AppTheme.primaryTeal,
+                            backgroundColor: isMandatory ? AppColors.danger : AppColors.brandStrong,
                             padding: const EdgeInsets.symmetric(vertical: 12),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
@@ -222,7 +222,7 @@ class OtaService {
                             style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.bold,
-                              color: Colors.white,
+                              color: AppColors.textPrimary,
                               fontFamily: 'Cairo',
                             ),
                           ),
@@ -241,7 +241,7 @@ class OtaService {
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               side: BorderSide(
-                                color: isDark ? Colors.grey[700]! : Colors.grey[300]!,
+                                color: isDark ? AppColors.textMuted : AppColors.textMuted,
                               ),
                             ),
                             child: Text(
@@ -249,7 +249,7 @@ class OtaService {
                               style: TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.bold,
-                                color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                color: isDark ? AppColors.textMuted : AppColors.textMuted,
                                 fontFamily: 'Cairo',
                               ),
                             ),

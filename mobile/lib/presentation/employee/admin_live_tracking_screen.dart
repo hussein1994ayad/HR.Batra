@@ -12,9 +12,9 @@ import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/design/design.dart';
 import '../../core/routes/app_router.dart';
 import '../../core/services/supabase_service.dart';
-import '../../core/theme/app_theme.dart';
 import '../shared/widgets/glass_background.dart';
 
 class AdminLiveTrackingScreen extends StatefulWidget {
@@ -133,7 +133,7 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('عذراً، هذه الشاشة مخصصة لحسابات الإدارة والمدراء فقط ⚠️', style: TextStyle(fontFamily: 'Cairo')),
-              backgroundColor: AppTheme.dangerRed,
+              backgroundColor: AppColors.danger,
             ),
           );
           context.go(AppRoutes.employeeHome);
@@ -182,7 +182,7 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('تعذر تحميل بيانات التتبع: $e', style: const TextStyle(fontFamily: 'Cairo')),
-            backgroundColor: AppTheme.dangerRed,
+            backgroundColor: AppColors.danger,
           ),
         );
       }
@@ -455,8 +455,8 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
         return Theme(
           data: ThemeData.dark().copyWith(
             colorScheme: const ColorScheme.dark(
-              primary: AppTheme.neonCyan,
-              surface: Color(0xFF0F172A),
+              primary: AppColors.brand,
+              surface: AppColors.surface1,
             ),
           ),
           child: child!,
@@ -481,19 +481,19 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
           backgroundColor: Colors.transparent,
           elevation: 0,
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
+            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textPrimary),
             onPressed: () => Navigator.pop(context),
           ),
           title: const Text(
             'خريطة التتبع الحي للموظفين 📍',
-            style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white),
+            style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.textPrimary),
           ),
           actions: [
             // زر تشغيل/إيقاف التحديث التلقائي الحي
             IconButton(
               icon: Icon(
                 _autoRefreshEnabled ? Icons.wifi_tethering_rounded : Icons.wifi_tethering_off_rounded,
-                color: _autoRefreshEnabled ? AppTheme.successGreen : Colors.white38,
+                color: _autoRefreshEnabled ? AppColors.success : AppColors.textDisabled,
                 size: 20,
               ),
               tooltip: _autoRefreshEnabled ? 'التحديث التلقائي نشط (كل 15 ثانية)' : 'التحديث التلقائي متوقف',
@@ -514,8 +514,8 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
             // زر التحديث اليدوي
             IconButton(
               icon: _isRefreshing
-                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.neonCyan))
-                  : const Icon(Icons.refresh_rounded, color: AppTheme.neonCyan),
+                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.brand))
+                  : const Icon(Icons.refresh_rounded, color: AppColors.brand),
               tooltip: 'تحديث البيانات الآن',
               onPressed: _loadAllTrackingData,
             ),
@@ -537,17 +537,17 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
                           height: 38,
                           padding: const EdgeInsets.symmetric(horizontal: 10),
                           decoration: BoxDecoration(
-                            color: AppTheme.primaryTeal.withValues(alpha: 0.2),
+                            color: AppColors.brandStrong.withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: AppTheme.neonCyan.withValues(alpha: 0.5)),
+                            border: Border.all(color: AppColors.brand.withValues(alpha: 0.5)),
                           ),
                           child: Row(
                             children: [
-                              const Icon(Icons.calendar_month_rounded, color: AppTheme.neonCyan, size: 16),
+                              const Icon(Icons.calendar_month_rounded, color: AppColors.brand, size: 16),
                               const SizedBox(width: 6),
                               Text(
                                 DateFormat('yyyy-MM-dd').format(_selectedDate),
-                                style: const TextStyle(fontFamily: 'Cairo', color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                                style: const TextStyle(fontFamily: 'Cairo', color: AppColors.textPrimary, fontSize: 11, fontWeight: FontWeight.bold),
                               ),
                             ],
                           ),
@@ -561,24 +561,24 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
                           height: 38,
                           padding: const EdgeInsets.symmetric(horizontal: 10),
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.08),
+                            color: AppColors.textPrimary.withValues(alpha: 0.08),
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: _selectedBranchId != 'all' ? AppTheme.neonCyan : Colors.white12),
+                            border: Border.all(color: _selectedBranchId != 'all' ? AppColors.brand : AppColors.border),
                           ),
                           child: DropdownButtonHideUnderline(
                             child: DropdownButton<String>(
                               isExpanded: true,
-                              dropdownColor: const Color(0xFF0F172A),
+                              dropdownColor: AppColors.surface1,
                               value: _selectedBranchId,
-                              icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppTheme.neonCyan, size: 18),
+                              icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.brand, size: 18),
                               items: [
                                 const DropdownMenuItem<String>(
                                   value: 'all',
                                   child: Row(
                                     children: [
-                                      Icon(Icons.domain_rounded, color: AppTheme.neonCyan, size: 15),
+                                      Icon(Icons.domain_rounded, color: AppColors.brand, size: 15),
                                       SizedBox(width: 6),
-                                      Text('🏢 جميع الفروع والمواقع', style: TextStyle(fontFamily: 'Cairo', color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                                      Text('🏢 جميع الفروع والمواقع', style: TextStyle(fontFamily: 'Cairo', color: AppColors.textPrimary, fontSize: 11, fontWeight: FontWeight.bold)),
                                     ],
                                   ),
                                 ),
@@ -587,9 +587,9 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
                                     value: branch['id'] as String,
                                     child: Row(
                                       children: [
-                                        const Icon(Icons.storefront_rounded, color: AppTheme.successGreen, size: 15),
+                                        const Icon(Icons.storefront_rounded, color: AppColors.success, size: 15),
                                         const SizedBox(width: 6),
-                                        Text('فرع: ${branch['name']}', style: const TextStyle(fontFamily: 'Cairo', color: Colors.white, fontSize: 11)),
+                                        Text('فرع: ${branch['name']}', style: const TextStyle(fontFamily: 'Cairo', color: AppColors.textPrimary, fontSize: 11)),
                                       ],
                                     ),
                                   );
@@ -615,20 +615,20 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
                     height: 34,
                     padding: const EdgeInsets.symmetric(horizontal: 10),
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.06),
+                      color: AppColors.textPrimary.withValues(alpha: 0.06),
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: Colors.white12),
+                      border: Border.all(color: AppColors.border),
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.search_rounded, color: Colors.white54, size: 16),
+                        const Icon(Icons.search_rounded, color: AppColors.textMuted, size: 16),
                         const SizedBox(width: 8),
                         Expanded(
                           child: TextField(
-                            style: const TextStyle(fontFamily: 'Cairo', color: Colors.white, fontSize: 11),
+                            style: const TextStyle(fontFamily: 'Cairo', color: AppColors.textPrimary, fontSize: 11),
                             decoration: const InputDecoration(
                               hintText: 'البحث باسم الموظف المستهدف...',
-                              hintStyle: TextStyle(fontFamily: 'Cairo', color: Colors.white38, fontSize: 11),
+                              hintStyle: TextStyle(fontFamily: 'Cairo', color: AppColors.textDisabled, fontSize: 11),
                               border: InputBorder.none,
                               isDense: true,
                               contentPadding: EdgeInsets.zero,
@@ -639,7 +639,7 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
                         if (_searchQuery.isNotEmpty)
                           GestureDetector(
                             onTap: () => setState(() => _searchQuery = ''),
-                            child: const Icon(Icons.close_rounded, color: Colors.white54, size: 16),
+                            child: const Icon(Icons.close_rounded, color: AppColors.textMuted, size: 16),
                           ),
                       ],
                     ),
@@ -654,13 +654,13 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
                     children: [
                       _buildFilterChip('الكل ($_totalCount)', 'all'),
                       const SizedBox(width: 6),
-                      _buildFilterChip('داخل الفرع ($_insideCount) 🟢', 'inside', color: AppTheme.successGreen),
+                      _buildFilterChip('داخل الفرع ($_insideCount) 🟢', 'inside', color: AppColors.success),
                       const SizedBox(width: 6),
-                      _buildFilterChip('خارج النطاق ($_outsideCount) 🔴', 'outside', color: AppTheme.dangerRed),
+                      _buildFilterChip('خارج النطاق ($_outsideCount) 🔴', 'outside', color: AppColors.danger),
                       const SizedBox(width: 6),
-                      _buildFilterChip('انصراف ($_checkedOutCount) 🏁', 'checked_out', color: Colors.amber),
+                      _buildFilterChip('انصراف ($_checkedOutCount) 🏁', 'checked_out', color: AppColors.warning),
                       const SizedBox(width: 6),
-                      _buildFilterChip('لم يبصم ($_absentCount) ⏳', 'absent', color: Colors.grey),
+                      _buildFilterChip('لم يبصم ($_absentCount) ⏳', 'absent', color: AppColors.textMuted),
                     ],
                   ),
                 ),
@@ -669,7 +669,7 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
           ),
         ),
         body: _isLoading
-            ? const Center(child: CircularProgressIndicator(color: AppTheme.neonCyan))
+            ? const Center(child: CircularProgressIndicator(color: AppColors.brand))
             : Stack(
                 children: [
                   // 1. خريطة OpenStreetMap التفاعلية مع خطوط المسار والإشارات
@@ -743,8 +743,8 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
             point: LatLng(lat, lng),
             radius: radius,
             useRadiusInMeter: true,
-            color: AppTheme.neonCyan.withValues(alpha: 0.12),
-            borderColor: AppTheme.neonCyan,
+            color: AppColors.brand.withValues(alpha: 0.12),
+            borderColor: AppColors.brand,
             borderStrokeWidth: 2,
           ),
         );
@@ -763,9 +763,9 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
       Polyline(
         points: coords,
         strokeWidth: 4.5,
-        color: AppTheme.neonCyan,
+        color: AppColors.brand,
         borderStrokeWidth: 2.0,
-        borderColor: Colors.black45,
+        borderColor: AppColors.shadow,
       ),
     ];
   }
@@ -784,10 +784,10 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
       final String status = item['status'] as String;
       final bool isFocused = _selectedEmployeeForFocus != null && _selectedEmployeeForFocus!['employee']['id'] == emp['id'];
 
-      Color markerColor = Colors.grey;
-      if (status == 'inside') markerColor = AppTheme.successGreen;
-      if (status == 'outside') markerColor = AppTheme.dangerRed;
-      if (status == 'checked_out') markerColor = Colors.amber;
+      Color markerColor = AppColors.textMuted;
+      if (status == 'inside') markerColor = AppColors.success;
+      if (status == 'outside') markerColor = AppColors.danger;
+      if (status == 'checked_out') markerColor = AppColors.warning;
 
       markers.add(
         Marker(
@@ -807,7 +807,7 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
                   decoration: BoxDecoration(
                     color: markerColor,
                     shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white, width: isFocused ? 3 : 2),
+                    border: Border.all(color: AppColors.textPrimary, width: isFocused ? 3 : 2),
                     boxShadow: [
                       BoxShadow(
                         color: markerColor.withValues(alpha: 0.7),
@@ -822,7 +822,7 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
                       style: const TextStyle(
                         fontFamily: 'Cairo',
                         fontWeight: FontWeight.bold,
-                        color: Colors.white,
+                        color: AppColors.textPrimary,
                         fontSize: 13,
                       ),
                     ),
@@ -848,9 +848,9 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
             height: 32,
             child: Container(
               decoration: const BoxDecoration(
-                color: Color(0xFF0F172A),
+                color: AppColors.surface1,
                 shape: BoxShape.circle,
-                boxShadow: [BoxShadow(color: Colors.black54, blurRadius: 4)],
+                boxShadow: [BoxShadow(color: AppColors.shadow, blurRadius: 4)],
               ),
               child: const Center(
                 child: Text('🏁', style: TextStyle(fontSize: 14)),
@@ -877,26 +877,26 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
     final int? battery = item['batteryLevel'] as int?;
     final List<LatLng> trail = (item['trailCoords'] ?? <LatLng>[]) as List<LatLng>;
 
-    Color statusColor = Colors.grey;
+    Color statusColor = AppColors.textMuted;
     String statusText = 'لم يبصم حضور اليوم';
     if (status == 'inside') {
-      statusColor = AppTheme.successGreen;
+      statusColor = AppColors.success;
       statusText = 'داخل نطاق الفرع (باصم حضور) 🟢';
     } else if (status == 'outside') {
-      statusColor = AppTheme.dangerRed;
+      statusColor = AppColors.danger;
       statusText = 'خارج نطاق الفرع (باصم حضور) 🔴';
     } else if (status == 'checked_out') {
-      statusColor = Colors.amber;
+      statusColor = AppColors.warning;
       statusText = 'سجل انصراف من الدوام 🏁';
     }
 
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFF0F172A).withValues(alpha: 0.96),
+        color: AppColors.surface1.withValues(alpha: 0.96),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: statusColor, width: 1.5),
-        boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 16)],
+        boxShadow: const [BoxShadow(color: AppColors.shadow, blurRadius: 16)],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -915,19 +915,19 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(name as String, style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: Colors.white, fontSize: 13)),
-                      Text('فرع: $branch', style: const TextStyle(fontFamily: 'Cairo', color: Colors.white60, fontSize: 10)),
+                      Text(name as String, style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: AppColors.textPrimary, fontSize: 13)),
+                      Text('فرع: $branch', style: const TextStyle(fontFamily: 'Cairo', color: AppColors.textMuted, fontSize: 10)),
                     ],
                   ),
                 ],
               ),
               IconButton(
-                icon: const Icon(Icons.close_rounded, color: Colors.white60, size: 18),
+                icon: const Icon(Icons.close_rounded, color: AppColors.textMuted, size: 18),
                 onPressed: () => setState(() => _selectedEmployeeForFocus = null),
               ),
             ],
           ),
-          const Divider(color: Colors.white12, height: 14),
+          const Divider(color: AppColors.border, height: 14),
 
           // تفاصيل الموقف والبصمة
           Row(
@@ -937,7 +937,7 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
               if (distance != null)
                 Text(
                   'المسافة عن الفرع: ${((distance < 1000) as bool) ? "${distance.round()} م" : "${(distance / 1000).toStringAsFixed(1)} كم"}',
-                  style: const TextStyle(fontFamily: 'Cairo', color: AppTheme.neonCyan, fontSize: 11, fontWeight: FontWeight.bold),
+                  style: const TextStyle(fontFamily: 'Cairo', color: AppColors.brand, fontSize: 11, fontWeight: FontWeight.bold),
                 ),
             ],
           ),
@@ -947,9 +947,9 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('بصمة الحضور: $checkIn ${checkOut != null ? " • الانصراف: $checkOut" : ""}', style: const TextStyle(fontFamily: 'Cairo', color: Colors.white70, fontSize: 10)),
+                Text('بصمة الحضور: $checkIn ${checkOut != null ? " • الانصراف: $checkOut" : ""}', style: const TextStyle(fontFamily: 'Cairo', color: AppColors.textSecondary, fontSize: 10)),
                 if (battery != null)
-                  Text('البطارية: $battery% 🔋', style: const TextStyle(fontFamily: 'Cairo', color: Colors.white60, fontSize: 10)),
+                  Text('البطارية: $battery% 🔋', style: const TextStyle(fontFamily: 'Cairo', color: AppColors.textMuted, fontSize: 10)),
               ],
             ),
           ],
@@ -960,7 +960,7 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.05),
+                color: AppColors.textPrimary.withValues(alpha: 0.05),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Row(
@@ -968,11 +968,11 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.route_rounded, color: AppTheme.neonCyan, size: 16),
+                      const Icon(Icons.route_rounded, color: AppColors.brand, size: 16),
                       const SizedBox(width: 6),
                       Text(
                         'مسار التحركات: ${totalKm.toStringAsFixed(2)} كم (${trail.length} نقطة رصد)',
-                        style: const TextStyle(fontFamily: 'Cairo', color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                        style: const TextStyle(fontFamily: 'Cairo', color: AppColors.textPrimary, fontSize: 10, fontWeight: FontWeight.bold),
                       ),
                     ],
                   ),
@@ -980,7 +980,7 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
                     onTap: () => setState(() => _showTrail = !_showTrail),
                     child: Text(
                       _showTrail ? 'إخفاء المسار ✕' : 'إظهار المسار 🛣️',
-                      style: const TextStyle(fontFamily: 'Cairo', color: AppTheme.neonCyan, fontSize: 10, fontWeight: FontWeight.bold),
+                      style: const TextStyle(fontFamily: 'Cairo', color: AppColors.brand, fontSize: 10, fontWeight: FontWeight.bold),
                     ),
                   ),
                 ],
@@ -999,10 +999,10 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
     return Container(
       height: 230,
       decoration: BoxDecoration(
-        color: const Color(0xFF0F172A).withValues(alpha: 0.96),
+        color: AppColors.surface1.withValues(alpha: 0.96),
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        border: Border.all(color: Colors.white12),
-        boxShadow: const [BoxShadow(color: Colors.black87, blurRadius: 20)],
+        border: Border.all(color: AppColors.border),
+        boxShadow: const [BoxShadow(color: AppColors.onStatus, blurRadius: 20)],
       ),
       child: Column(
         children: [
@@ -1010,7 +1010,7 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
             margin: const EdgeInsets.only(top: 8, bottom: 4),
             width: 40,
             height: 4,
-            decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(10)),
+            decoration: BoxDecoration(color: AppColors.borderStrong, borderRadius: BorderRadius.circular(10)),
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
@@ -1019,21 +1019,21 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
               children: [
                 Text(
                   'الموظفون وموقف البصمة (${filtered.length})',
-                  style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 12, color: Colors.white),
+                  style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 12, color: AppColors.textPrimary),
                 ),
                 Text(
                   'اضغط على أي موظف لتحديده وتتبع مساره 📍',
-                  style: TextStyle(fontFamily: 'Cairo', fontSize: 10, color: AppTheme.neonCyan.withValues(alpha: 0.8)),
+                  style: TextStyle(fontFamily: 'Cairo', fontSize: 10, color: AppColors.brand.withValues(alpha: 0.8)),
                 ),
               ],
             ),
           ),
-          const Divider(color: Colors.white10, height: 1),
+          const Divider(color: AppColors.border, height: 1),
 
           Expanded(
             child: filtered.isEmpty
                 ? const Center(
-                    child: Text('لا توجد بيانات تطابق الفلتر المحدد', style: TextStyle(fontFamily: 'Cairo', color: Colors.white38, fontSize: 12)),
+                    child: Text('لا توجد بيانات تطابق الفلتر المحدد', style: TextStyle(fontFamily: 'Cairo', color: AppColors.textDisabled, fontSize: 12)),
                   )
                 : ListView.builder(
                     itemCount: filtered.length,
@@ -1050,25 +1050,25 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
                       final distance = item['distanceToBranch'];
                       final List<LatLng> trail = (item['trailCoords'] ?? <LatLng>[]) as List<LatLng>;
 
-                      Color statusColor = Colors.grey;
+                      Color statusColor = AppColors.textMuted;
                       String statusLabel = 'لم يبصم ⏳';
                       if (status == 'inside') {
-                        statusColor = AppTheme.successGreen;
+                        statusColor = AppColors.success;
                         statusLabel = 'داخل الفرع 🟢';
                       } else if (status == 'outside') {
-                        statusColor = AppTheme.dangerRed;
+                        statusColor = AppColors.danger;
                         statusLabel = 'خارج النطاق 🔴';
                       } else if (status == 'checked_out') {
-                        statusColor = Colors.amber;
+                        statusColor = AppColors.warning;
                         statusLabel = 'انصراف 🏁';
                       }
 
                       return Container(
                         margin: const EdgeInsets.only(bottom: 6),
                         decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.04),
+                          color: AppColors.textPrimary.withValues(alpha: 0.04),
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+                          border: Border.all(color: AppColors.textPrimary.withValues(alpha: 0.06)),
                         ),
                         child: ListTile(
                           dense: true,
@@ -1078,10 +1078,10 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
                             radius: 16,
                             child: Text(((name.isNotEmpty as bool) ? name.substring(0, 1) : '؟') as String, style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: statusColor, fontSize: 11)),
                           ),
-                          title: Text(name as String, style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: Colors.white, fontSize: 12)),
+                          title: Text(name as String, style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: AppColors.textPrimary, fontSize: 12)),
                           subtitle: Text(
                             '$branch ${checkIn != null ? "• حضور: $checkIn" : ""} ${distance != null ? "• (${((distance < 1000) as bool) ? "${distance.round()}م" : "${(distance / 1000).toStringAsFixed(1)}كم"})" : ""}',
-                            style: const TextStyle(fontFamily: 'Cairo', color: Colors.white54, fontSize: 9.5),
+                            style: const TextStyle(fontFamily: 'Cairo', color: AppColors.textMuted, fontSize: 9.5),
                           ),
                           trailing: Row(
                             mainAxisSize: MainAxisSize.min,
@@ -1089,7 +1089,7 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
                               if (trail.length >= 2)
                                 const Padding(
                                   padding: EdgeInsets.only(left: 4),
-                                  child: Icon(Icons.timeline_rounded, color: AppTheme.neonCyan, size: 16),
+                                  child: Icon(Icons.timeline_rounded, color: AppColors.brand, size: 16),
                                 ),
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -1130,16 +1130,16 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
 
   Widget _buildFilterChip(String label, String value, {Color? color}) {
     final bool isSelected = _selectedStatusFilter == value;
-    final activeColor = color ?? AppTheme.neonCyan;
+    final activeColor = color ?? AppColors.brand;
 
     return GestureDetector(
       onTap: () => setState(() => _selectedStatusFilter = value),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
-          color: isSelected ? activeColor.withValues(alpha: 0.25) : Colors.white.withValues(alpha: 0.06),
+          color: isSelected ? activeColor.withValues(alpha: 0.25) : AppColors.textPrimary.withValues(alpha: 0.06),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: isSelected ? activeColor : Colors.white12),
+          border: Border.all(color: isSelected ? activeColor : AppColors.border),
         ),
         child: Text(
           label,
@@ -1147,7 +1147,7 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
             fontFamily: 'Cairo',
             fontSize: 10.5,
             fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-            color: isSelected ? Colors.white : Colors.white60,
+            color: isSelected ? AppColors.textPrimary : AppColors.textMuted,
           ),
         ),
       ),

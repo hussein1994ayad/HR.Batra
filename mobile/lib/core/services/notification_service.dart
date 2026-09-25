@@ -15,6 +15,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
+import '../../core/design/design.dart';
 import 'schedule_service.dart';
 
 @pragma('vm:entry-point')
@@ -89,7 +90,7 @@ class NotificationService {
             importance: Importance.max,
             sound: RawResourceAndroidNotificationSound('special_chime'),
             enableLights: true,
-            ledColor: Color(0xFF0F766E),
+            ledColor: AppColors.brandStrong,
           ),
         );
 
@@ -102,7 +103,7 @@ class NotificationService {
             importance: Importance.max,
             sound: RawResourceAndroidNotificationSound('special_chime'),
             enableLights: true,
-            ledColor: Color(0xFF0F766E),
+            ledColor: AppColors.brandStrong,
           ),
         );
 
@@ -138,7 +139,7 @@ class NotificationService {
               icon: '@mipmap/launcher_icon',
               sound: const RawResourceAndroidNotificationSound('special_chime'),
               enableLights: true,
-              ledColor: const Color(0xFF0F766E),
+              ledColor: AppColors.brandStrong,
               category: AndroidNotificationCategory.message,
               visibility: NotificationVisibility.public,
               ticker: message.notification!.title,
@@ -236,7 +237,7 @@ class NotificationService {
             icon: '@mipmap/launcher_icon',
             sound: const RawResourceAndroidNotificationSound('special_chime'),
             enableLights: true,
-            ledColor: const Color(0xFF0F766E),
+            ledColor: AppColors.brandStrong,
             category: targetChannel == reminderChannelId 
                 ? AndroidNotificationCategory.alarm 
                 : AndroidNotificationCategory.message,
@@ -350,7 +351,7 @@ class NotificationService {
               icon: '@mipmap/launcher_icon',
               sound: RawResourceAndroidNotificationSound('special_chime'),
               enableLights: true,
-              ledColor: Color(0xFF0F766E),
+              ledColor: AppColors.brandStrong,
               category: AndroidNotificationCategory.alarm,
               visibility: NotificationVisibility.public,
             ),
@@ -386,7 +387,7 @@ class NotificationService {
               icon: '@mipmap/launcher_icon',
               sound: RawResourceAndroidNotificationSound('special_chime'),
               enableLights: true,
-              ledColor: Color(0xFF0F766E),
+              ledColor: AppColors.brandStrong,
               category: AndroidNotificationCategory.alarm,
               visibility: NotificationVisibility.public,
             ),

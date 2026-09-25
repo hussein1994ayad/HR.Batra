@@ -7,8 +7,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/design/design.dart';
 import '../../core/services/supabase_service.dart';
-import '../../core/theme/app_theme.dart';
 import '../shared/widgets/glass_background.dart';
 import '../shared/widgets/glass_container.dart';
 
@@ -99,7 +99,7 @@ class _TrashScreenState extends State<TrashScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('تم استعادة الملف بنجاح ✅', style: TextStyle(fontFamily: 'Cairo')),
-            backgroundColor: AppTheme.successGreen,
+            backgroundColor: AppColors.success,
           ),
         );
       }
@@ -110,7 +110,7 @@ class _TrashScreenState extends State<TrashScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('فشل استعادة الملف: $e', style: const TextStyle(fontFamily: 'Cairo')),
-            backgroundColor: AppTheme.dangerRed,
+            backgroundColor: AppColors.danger,
           ),
         );
       }
@@ -139,7 +139,7 @@ class _TrashScreenState extends State<TrashScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('تم إتلاف الملف وحذفه نهائياً 🗑️', style: TextStyle(fontFamily: 'Cairo')),
-            backgroundColor: Colors.black87,
+            backgroundColor: AppColors.onStatus,
           ),
         );
       }
@@ -150,7 +150,7 @@ class _TrashScreenState extends State<TrashScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('فشل في إتلاف الملف: $e', style: const TextStyle(fontFamily: 'Cairo')),
-            backgroundColor: AppTheme.dangerRed,
+            backgroundColor: AppColors.danger,
           ),
         );
       }
@@ -174,7 +174,7 @@ class _TrashScreenState extends State<TrashScreen> {
           label,
           style: TextStyle(
             fontSize: 10,
-            color: Colors.white.withValues(alpha: 0.4),
+            color: AppColors.textPrimary.withValues(alpha: 0.4),
             fontFamily: 'Cairo',
           ),
         ),
@@ -185,7 +185,7 @@ class _TrashScreenState extends State<TrashScreen> {
             fontSize: 11,
             fontWeight: FontWeight.bold,
             fontFamily: 'Cairo',
-            color: Colors.white,
+            color: AppColors.textPrimary,
           ),
         ),
       ],
@@ -195,16 +195,15 @@ class _TrashScreenState extends State<TrashScreen> {
   void _showDeleteConfirmationDialog(BuildContext context, Map<String, dynamic> file) {
     showDialog<dynamic>(
       context: context,
-      barrierColor: Colors.black.withValues(alpha: 0.6),
+      barrierColor: AppColors.onStatus.withValues(alpha: 0.6),
       builder: (context) => Dialog(
         backgroundColor: Colors.transparent,
         child: GlassContainer(
           padding: const EdgeInsets.all(24),
-          opacity: 0.9,
-            borderColor: AppTheme.dangerRed.withValues(alpha: 0.4),
+            borderColor: AppColors.danger.withValues(alpha: 0.4),
             boxShadow: [
               BoxShadow(
-                color: AppTheme.dangerRed.withValues(alpha: 0.12),
+                color: AppColors.danger.withValues(alpha: 0.12),
                 blurRadius: 24,
               )
             ],
@@ -214,22 +213,22 @@ class _TrashScreenState extends State<TrashScreen> {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: AppTheme.dangerRed.withValues(alpha: 0.15),
+                    color: AppColors.danger.withValues(alpha: 0.15),
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: AppTheme.dangerRed.withValues(alpha: 0.35),
+                      color: AppColors.danger.withValues(alpha: 0.35),
                       width: 1.5,
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: AppTheme.dangerRed.withValues(alpha: 0.2),
+                        color: AppColors.danger.withValues(alpha: 0.2),
                         blurRadius: 10,
                       )
                     ],
                   ),
                   child: const Icon(
                     Icons.warning_amber_rounded,
-                    color: AppTheme.dangerRed,
+                    color: AppColors.danger,
                     size: 32,
                   ),
                 ),
@@ -240,7 +239,7 @@ class _TrashScreenState extends State<TrashScreen> {
                     fontFamily: 'Cairo',
                     fontWeight: FontWeight.bold,
                     fontSize: 16,
-                    color: Colors.white,
+                    color: AppColors.textPrimary,
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -250,7 +249,7 @@ class _TrashScreenState extends State<TrashScreen> {
                   style: TextStyle(
                     fontFamily: 'Cairo',
                     fontSize: 13,
-                    color: Colors.white.withValues(alpha: 0.8),
+                    color: AppColors.textPrimary.withValues(alpha: 0.8),
                     height: 1.5,
                   ),
                 ),
@@ -262,14 +261,14 @@ class _TrashScreenState extends State<TrashScreen> {
                         onPressed: () => Navigator.of(context).pop(),
                         style: OutlinedButton.styleFrom(
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          side: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
+                          side: BorderSide(color: AppColors.textPrimary.withValues(alpha: 0.2)),
                           padding: const EdgeInsets.symmetric(vertical: 12),
                         ),
                         child: const Text(
                           'إلغاء',
                           style: TextStyle(
                             fontFamily: 'Cairo',
-                            color: Colors.white70,
+                            color: AppColors.textSecondary,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
@@ -282,7 +281,7 @@ class _TrashScreenState extends State<TrashScreen> {
                           borderRadius: BorderRadius.circular(12),
                           boxShadow: [
                             BoxShadow(
-                              color: AppTheme.dangerRed.withValues(alpha: 0.25),
+                              color: AppColors.danger.withValues(alpha: 0.25),
                               blurRadius: 8,
                               offset: const Offset(0, 3),
                             )
@@ -294,7 +293,7 @@ class _TrashScreenState extends State<TrashScreen> {
                             _permanentDeleteFile(file);
                           },
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: AppTheme.dangerRed,
+                            backgroundColor: AppColors.danger,
                             elevation: 0,
                             shadowColor: Colors.transparent,
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -304,7 +303,7 @@ class _TrashScreenState extends State<TrashScreen> {
                             'إتلاف نهائي',
                             style: TextStyle(
                               fontFamily: 'Cairo',
-                              color: Colors.white,
+                              color: AppColors.textPrimary,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
@@ -329,7 +328,7 @@ class _TrashScreenState extends State<TrashScreen> {
           backgroundColor: Colors.transparent,
           elevation: 0,
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
+            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textPrimary),
             onPressed: () => Navigator.pop(context),
           ),
           title: const Text(
@@ -337,10 +336,10 @@ class _TrashScreenState extends State<TrashScreen> {
             style: TextStyle(
               fontFamily: 'Cairo',
               fontWeight: FontWeight.bold,
-              color: Colors.white,
+              color: AppColors.textPrimary,
               shadows: [
                 Shadow(
-                  color: AppTheme.neonCyan,
+                  color: AppColors.brand,
                   blurRadius: 10,
                 ),
               ],
@@ -351,7 +350,7 @@ class _TrashScreenState extends State<TrashScreen> {
         body: _isLoading
             ? const Center(
                 child: CircularProgressIndicator(
-                  color: AppTheme.neonCyan,
+                  color: AppColors.brand,
                 ),
               )
             : _deletedFiles.isEmpty
@@ -365,7 +364,7 @@ class _TrashScreenState extends State<TrashScreen> {
                           Icon(
                             Icons.delete_outline_rounded,
                             size: 64,
-                            color: Colors.white.withValues(alpha: 0.4),
+                            color: AppColors.textPrimary.withValues(alpha: 0.4),
                           ),
                           const SizedBox(height: 16),
                           const Text(
@@ -373,7 +372,7 @@ class _TrashScreenState extends State<TrashScreen> {
                             style: TextStyle(
                               fontFamily: 'Cairo',
                               fontSize: 16,
-                              color: Colors.white,
+                              color: AppColors.textPrimary,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
@@ -384,7 +383,7 @@ class _TrashScreenState extends State<TrashScreen> {
                             style: TextStyle(
                               fontFamily: 'Cairo',
                               fontSize: 12,
-                              color: Colors.white.withValues(alpha: 0.5),
+                              color: AppColors.textPrimary.withValues(alpha: 0.5),
                             ),
                           ),
                         ],
@@ -401,12 +400,11 @@ class _TrashScreenState extends State<TrashScreen> {
                       final DateTime deletedAt = DateTime.parse(file['deleted_at'] as String).toLocal();
                       final DateTime expiryDate = DateTime.parse(file['scheduled_deletion_date'] as String).toLocal();
                       final daysLeft = expiryDate.difference(DateTime.now()).inDays;
-                      final warningColor = daysLeft <= 5 ? AppTheme.dangerRed : AppTheme.warningOrange;
+                      final warningColor = daysLeft <= 5 ? AppColors.danger : AppColors.warning;
 
                       return GlassContainer(
                         margin: const EdgeInsets.only(bottom: 16),
                         borderRadius: 20,
-                        opacity: 0.1,
                         borderColor: warningColor.withValues(alpha: 0.4),
                         boxShadow: [
                           BoxShadow(
@@ -424,20 +422,20 @@ class _TrashScreenState extends State<TrashScreen> {
                                 Container(
                                   padding: const EdgeInsets.all(10),
                                   decoration: BoxDecoration(
-                                    color: AppTheme.neonCyan.withValues(alpha: 0.15),
+                                    color: AppColors.brand.withValues(alpha: 0.15),
                                     shape: BoxShape.circle,
                                     border: Border.all(
-                                      color: AppTheme.neonCyan.withValues(alpha: 0.35),
+                                      color: AppColors.brand.withValues(alpha: 0.35),
                                       width: 1.5,
                                     ),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: AppTheme.neonCyan.withValues(alpha: 0.2),
+                                        color: AppColors.brand.withValues(alpha: 0.2),
                                         blurRadius: 8,
                                       )
                                     ],
                                   ),
-                                  child: const Icon(Icons.insert_drive_file_outlined, color: AppTheme.neonCyan, size: 22),
+                                  child: const Icon(Icons.insert_drive_file_outlined, color: AppColors.brand, size: 22),
                                 ),
                                 const SizedBox(width: 12),
                                 Expanded(
@@ -452,7 +450,7 @@ class _TrashScreenState extends State<TrashScreen> {
                                           fontWeight: FontWeight.bold,
                                           fontSize: 14,
                                           fontFamily: 'Cairo',
-                                          color: Colors.white,
+                                          color: AppColors.textPrimary,
                                         ),
                                       ),
                                       const SizedBox(height: 2),
@@ -460,7 +458,7 @@ class _TrashScreenState extends State<TrashScreen> {
                                         'النوع: ${_getFileTypeName(file['file_type'] as String)}',
                                         style: TextStyle(
                                           fontSize: 11,
-                                          color: Colors.white.withValues(alpha: 0.5),
+                                          color: AppColors.textPrimary.withValues(alpha: 0.5),
                                           fontFamily: 'Cairo',
                                         ),
                                       ),
@@ -491,7 +489,7 @@ class _TrashScreenState extends State<TrashScreen> {
                             const SizedBox(height: 12),
                             Container(
                               height: 1,
-                              color: Colors.white.withValues(alpha: 0.08),
+                              color: AppColors.textPrimary.withValues(alpha: 0.08),
                             ),
                             const SizedBox(height: 12),
                             
@@ -515,7 +513,7 @@ class _TrashScreenState extends State<TrashScreen> {
                                       borderRadius: BorderRadius.circular(12),
                                       boxShadow: [
                                         BoxShadow(
-                                          color: AppTheme.successGreen.withValues(alpha: 0.2),
+                                          color: AppColors.success.withValues(alpha: 0.2),
                                           blurRadius: 8,
                                           offset: const Offset(0, 3),
                                         )
@@ -523,18 +521,18 @@ class _TrashScreenState extends State<TrashScreen> {
                                     ),
                                     child: ElevatedButton.icon(
                                       onPressed: () => _restoreFile(file),
-                                      icon: const Icon(Icons.settings_backup_restore_rounded, size: 16, color: Colors.white),
+                                      icon: const Icon(Icons.settings_backup_restore_rounded, size: 16, color: AppColors.textPrimary),
                                       label: const Text(
                                         'استعادة الملف',
                                         style: TextStyle(
                                           fontSize: 12,
                                           fontFamily: 'Cairo',
                                           fontWeight: FontWeight.bold,
-                                          color: Colors.white,
+                                          color: AppColors.textPrimary,
                                         ),
                                       ),
                                       style: ElevatedButton.styleFrom(
-                                        backgroundColor: AppTheme.successGreen,
+                                        backgroundColor: AppColors.success,
                                         elevation: 0,
                                         shadowColor: Colors.transparent,
                                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -547,21 +545,21 @@ class _TrashScreenState extends State<TrashScreen> {
                                 Expanded(
                                   child: OutlinedButton.icon(
                                     onPressed: () => _showDeleteConfirmationDialog(context, file),
-                                    icon: const Icon(Icons.delete_forever_rounded, size: 16, color: AppTheme.dangerRed),
+                                    icon: const Icon(Icons.delete_forever_rounded, size: 16, color: AppColors.danger),
                                     label: const Text(
                                       'إتلاف نهائي',
                                       style: TextStyle(
                                         fontSize: 12,
                                         fontFamily: 'Cairo',
                                         fontWeight: FontWeight.bold,
-                                        color: AppTheme.dangerRed,
+                                        color: AppColors.danger,
                                       ),
                                     ),
                                     style: OutlinedButton.styleFrom(
                                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                      side: const BorderSide(color: AppTheme.dangerRed, width: 1.2),
+                                      side: const BorderSide(color: AppColors.danger, width: 1.2),
                                       padding: const EdgeInsets.symmetric(vertical: 12),
-                                      backgroundColor: AppTheme.dangerRed.withValues(alpha: 0.04),
+                                      backgroundColor: AppColors.danger.withValues(alpha: 0.04),
                                     ),
                                   ),
                                 ),

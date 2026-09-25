@@ -6,7 +6,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../../../core/theme/app_theme.dart';
+import '../../../core/design/design.dart';
 
 class PremiumBottomNavBar extends StatelessWidget {
   final int currentIndex;
@@ -34,20 +34,20 @@ class PremiumBottomNavBar extends StatelessWidget {
       top: false,
       child: Container(
         margin: const EdgeInsets.fromLTRB(
-          AppTheme.space4, 0, AppTheme.space4, AppTheme.space3,
+          AppSpace.lg, 0, AppSpace.lg, AppSpace.md,
         ),
-        padding: const EdgeInsets.symmetric(horizontal: AppTheme.space2, vertical: AppTheme.space2),
+        padding: const EdgeInsets.symmetric(horizontal: AppSpace.sm, vertical: AppSpace.sm),
         decoration: BoxDecoration(
           color: isDark
-              ? AppTheme.darkSurface.withValues(alpha: 0.94)
-              : Colors.white.withValues(alpha: 0.96),
-          borderRadius: BorderRadius.circular(AppTheme.radiusXl),
+              ? AppColors.surface1.withValues(alpha: 0.94)
+              : AppColors.textPrimary.withValues(alpha: 0.96),
+          borderRadius: BorderRadius.circular(AppRadius.xl),
           border: Border.all(
             color: isDark
-                ? Colors.white.withValues(alpha: 0.08)
-                : AppTheme.lightBorder,
+                ? AppColors.textPrimary.withValues(alpha: 0.08)
+                : AppColors.borderStrong,
           ),
-          boxShadow: AppTheme.shadowLg(isDark),
+          boxShadow: AppElevation.high,
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -86,27 +86,27 @@ class _NavButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final activeColor = isDark ? AppTheme.primaryTealLight : AppTheme.primaryTeal;
-    final inactiveColor = isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextSecondary;
+    final activeColor = isDark ? AppColors.brand : AppColors.brandStrong;
+    final inactiveColor = isDark ? AppColors.textSecondary : AppColors.textSecondary;
 
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+        borderRadius: BorderRadius.circular(AppRadius.md),
         onTap: onTap,
         child: AnimatedContainer(
-          duration: AppTheme.motionNormal,
-          curve: AppTheme.curveEmphasized,
+          duration: AppMotion.normal,
+          curve: AppMotion.emphasized,
           padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+            borderRadius: BorderRadius.circular(AppRadius.md),
             color: isSelected ? activeColor.withValues(alpha: 0.12) : Colors.transparent,
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               AnimatedSwitcher(
-                duration: AppTheme.motionFast,
+                duration: AppMotion.fast,
                 transitionBuilder: (child, anim) => ScaleTransition(scale: anim, child: child),
                 child: Icon(
                   isSelected ? item.activeIcon : item.icon,
@@ -117,7 +117,7 @@ class _NavButton extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               AnimatedDefaultTextStyle(
-                duration: AppTheme.motionFast,
+                duration: AppMotion.fast,
                 style: TextStyle(
                   fontFamily: 'Cairo',
                   fontSize: 10,
@@ -131,13 +131,13 @@ class _NavButton extends StatelessWidget {
                 ),
               ),
               AnimatedContainer(
-                duration: AppTheme.motionNormal,
+                duration: AppMotion.normal,
                 margin: const EdgeInsets.only(top: 4),
                 height: 3,
                 width: isSelected ? 20 : 0,
                 decoration: BoxDecoration(
                   color: activeColor,
-                  borderRadius: BorderRadius.circular(AppTheme.radiusFull),
+                  borderRadius: BorderRadius.circular(AppRadius.full),
                 ),
               ),
             ],

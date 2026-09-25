@@ -10,6 +10,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 
+import '../../core/design/design.dart';
 import '../../core/services/attendance_sync_service.dart';
 import '../../core/services/location_service.dart';
 import '../../core/services/notification_service.dart';
@@ -114,7 +115,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
         const SnackBar(
           content: Text('جاري جلب إحداثيات الـ GPS الفورية بأعلى دقة... 📍', style: TextStyle(fontFamily: 'Cairo')),
           duration: Duration(seconds: 1),
-          backgroundColor: AppTheme.primaryTeal,
+          backgroundColor: AppColors.brandStrong,
         ),
       );
     }
@@ -426,10 +427,10 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
       barrierDismissible: false,
       builder: (BuildContext context) {
         return AlertDialog(
-          backgroundColor: const Color(0xFF1E293B),
+          backgroundColor: AppColors.surface2,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(24),
-            side: BorderSide(color: (isSynced ? AppTheme.successGreen : AppTheme.warningOrange).withValues(alpha: 0.3), width: 1.5),
+            side: BorderSide(color: (isSynced ? AppColors.success : AppColors.warning).withValues(alpha: 0.3), width: 1.5),
           ),
             content: Column(
               mainAxisSize: MainAxisSize.min,
@@ -439,26 +440,26 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                   duration: const Duration(milliseconds: 500),
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: (isSynced ? AppTheme.successGreen : AppTheme.warningOrange).withValues(alpha: 0.2),
+                    color: (isSynced ? AppColors.success : AppColors.warning).withValues(alpha: 0.2),
                     shape: BoxShape.circle,
-                    border: Border.all(color: isSynced ? AppTheme.successGreen : AppTheme.warningOrange, width: 2),
+                    border: Border.all(color: isSynced ? AppColors.success : AppColors.warning, width: 2),
                     boxShadow: [
                       BoxShadow(
-                        color: (isSynced ? AppTheme.successGreen : AppTheme.warningOrange).withValues(alpha: 0.3),
+                        color: (isSynced ? AppColors.success : AppColors.warning).withValues(alpha: 0.3),
                         blurRadius: 16,
                       ),
                     ],
                   ),
                   child: Icon(
                     isSynced ? Icons.check_circle_outline_rounded : Icons.cloud_off_rounded,
-                    color: isSynced ? AppTheme.successGreen : AppTheme.warningOrange,
+                    color: isSynced ? AppColors.success : AppColors.warning,
                     size: 64,
                   ),
                 ),
                 const SizedBox(height: 24),
                 Text(
                   isCheckIn ? 'تم تسجيل حضورك اليوم بنجاح!' : 'تم تسجيل انصرافك بنجاح!',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, fontFamily: 'Cairo', color: Colors.white),
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, fontFamily: 'Cairo', color: AppColors.textPrimary),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 12),
@@ -469,7 +470,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 12, 
-                    color: isSynced ? Colors.white70 : AppTheme.warningOrange, 
+                    color: isSynced ? AppColors.textSecondary : AppColors.warning, 
                     fontWeight: isSynced ? FontWeight.normal : FontWeight.bold,
                     fontFamily: 'Cairo'
                   ),
@@ -488,13 +489,13 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                   child: Ink(
                     decoration: BoxDecoration(
                       gradient: isSynced 
-                          ? AppTheme.cyberGradient 
-                          : const LinearGradient(colors: [AppTheme.warningOrange, Colors.orange]),
+                          ? AppTheme.primaryGradient 
+                          : const LinearGradient(colors: [AppColors.warning, AppColors.warning]),
                       borderRadius: const BorderRadius.all(Radius.circular(14)),
                     ),
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
-                      child: const Text('موافق', style: TextStyle(color: Colors.white, fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+                      child: const Text('موافق', style: TextStyle(color: AppColors.textPrimary, fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
                     ),
                   ),
                 ),
@@ -520,12 +521,12 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
           style: TextStyle(
             fontFamily: 'Cairo',
             fontWeight: FontWeight.bold,
-            color: Colors.white,
+            color: AppColors.textPrimary,
           ),
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.my_location_rounded, color: AppTheme.neonCyan),
+            icon: const Icon(Icons.my_location_rounded, color: AppColors.brand),
             onPressed: _initLocationAndBranch,
           ),
         ],
@@ -550,9 +551,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                 circles: [
                   CircleMarker(
                     point: LatLng(_branchLat, _branchLng),
-                    color: AppTheme.neonCyan.withValues(alpha: 0.15),
+                    color: AppColors.brand.withValues(alpha: 0.15),
                     borderStrokeWidth: 2,
-                    borderColor: AppTheme.neonCyan,
+                    borderColor: AppColors.brand,
                     useRadiusInMeter: true,
                     radius: _branchRadius,
                   ),
@@ -570,17 +571,17 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                       message: _branchName,
                       child: Column(
                         children: [
-                          const Icon(Icons.business_center, color: AppTheme.neonCyan, size: 36),
+                          const Icon(Icons.business_center, color: AppColors.brand, size: 36),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                             decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: 0.65),
+                              color: AppColors.onStatus.withValues(alpha: 0.65),
                               borderRadius: BorderRadius.circular(6),
-                              border: Border.all(color: AppTheme.neonCyan),
+                              border: Border.all(color: AppColors.brand),
                             ),
                             child: Text(
                               _branchName.length > 10 ? '${_branchName.substring(0, 9)}..' : _branchName,
-                              style: const TextStyle(fontSize: 8, color: Colors.white, fontWeight: FontWeight.bold),
+                              style: const TextStyle(fontSize: 8, color: AppColors.textPrimary, fontWeight: FontWeight.bold),
                             ),
                           ),
                         ],
@@ -595,7 +596,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                       height: 50,
                       child: const Icon(
                         Icons.person_pin_circle_rounded,
-                        color: AppTheme.neonPink,
+                        color: AppColors.accent,
                         size: 42,
                       ),
                     ),
@@ -612,23 +613,22 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
             child: GlassContainer(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               borderRadius: 16,
-              opacity: 0.2,
-              borderColor: AppTheme.neonCyan.withValues(alpha: 0.4),
+              borderColor: AppColors.brand.withValues(alpha: 0.4),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.3),
+                  color: AppColors.onStatus.withValues(alpha: 0.3),
                   blurRadius: 10,
                 )
               ],
               child: Row(
                 children: [
-                  const Icon(Icons.info_outline_rounded, color: AppTheme.neonCyan, size: 20),
+                  const Icon(Icons.info_outline_rounded, color: AppColors.brand, size: 20),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
                       'يتم استخدام الموقع لتأكيد التواجد ضمن الفروع المعتمدة ولأغراض إثبات الحضور والانصراف الذكي تلقائياً أثناء ساعات العمل الرسمية فقط.',
                       style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.9),
+                        color: AppColors.textPrimary.withValues(alpha: 0.9),
                         fontSize: 10.5,
                         fontFamily: 'Cairo',
                         fontWeight: FontWeight.w600,
@@ -650,11 +650,10 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
             child: GlassContainer(
               padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
               borderRadius: 28,
-              opacity: 0.15,
-              borderColor: AppTheme.neonCyan.withValues(alpha: 0.3),
+              borderColor: AppColors.brand.withValues(alpha: 0.3),
               boxShadow: [
                 BoxShadow(
-                  color: AppTheme.neonCyan.withValues(alpha: 0.08),
+                  color: AppColors.brand.withValues(alpha: 0.08),
                   blurRadius: 24,
                   spreadRadius: 2,
                 )
@@ -669,11 +668,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                     mainAxisSize: MainAxisSize.min,
                 children: [
                   if (_isLocating) ...[
-                    const CircularProgressIndicator(color: AppTheme.neonCyan),
+                    const CircularProgressIndicator(color: AppColors.brand),
                     const SizedBox(height: 12),
                     const Text(
                       'جاري التحقق من الموقع الجغرافي والإحداثيات الفورية...',
-                      style: TextStyle(fontSize: 12, color: Colors.white70, fontFamily: 'Cairo'),
+                      style: TextStyle(fontSize: 12, color: AppColors.textSecondary, fontFamily: 'Cairo'),
                     ),
                   ] else ...[
                     // إظهار رسالة الخطأ أو التحذير إن وجد مع زر إعادة المحاولة
@@ -681,21 +680,21 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: AppTheme.dangerRed.withAlpha(20),
+                          color: AppColors.danger.withAlpha(20),
                           borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: AppTheme.dangerRed.withAlpha(50)),
+                          border: Border.all(color: AppColors.danger.withAlpha(50)),
                         ),
                         child: Column(
                           children: [
                             Row(
                               children: [
-                                const Icon(Icons.warning_amber_rounded, color: AppTheme.dangerRed, size: 28),
+                                const Icon(Icons.warning_amber_rounded, color: AppColors.danger, size: 28),
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: Text(
                                     _errorMessage!,
                                     style: const TextStyle(
-                                      color: AppTheme.dangerRed, 
+                                      color: AppColors.danger, 
                                       fontSize: 11.5, 
                                       fontWeight: FontWeight.bold,
                                       fontFamily: 'Cairo',
@@ -716,8 +715,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                                   style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, fontFamily: 'Cairo')
                                 ),
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppTheme.dangerRed,
-                                  foregroundColor: Colors.white,
+                                  backgroundColor: AppColors.danger,
+                                  foregroundColor: AppColors.textPrimary,
                                   elevation: 0,
                                   padding: const EdgeInsets.symmetric(vertical: 10),
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -735,13 +734,13 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                         padding: const EdgeInsets.all(12),
                         margin: const EdgeInsets.only(bottom: 16),
                         decoration: BoxDecoration(
-                          color: AppTheme.neonPink.withValues(alpha: 0.1),
+                          color: AppColors.accent.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: AppTheme.neonPink.withValues(alpha: 0.3)),
+                          border: Border.all(color: AppColors.accent.withValues(alpha: 0.3)),
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.access_time_filled_rounded, color: AppTheme.neonPink, size: 24),
+                            const Icon(Icons.access_time_filled_rounded, color: AppColors.accent, size: 24),
                             const SizedBox(width: 12),
                             Expanded(
                               child: Column(
@@ -749,11 +748,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                                 children: [
                                   const Text(
                                     'أوقات الدوام المعتمدة للفرع',
-                                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13, fontFamily: 'Cairo'),
+                                    style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 13, fontFamily: 'Cairo'),
                                   ),
                                   Text(
                                     'الدخول: ${_formatTimeString12Hr(_workSchedule!['check_in_time']?.toString())} | الخروج: ${_formatTimeString12Hr(_workSchedule!['check_out_time']?.toString())}',
-                                    style: const TextStyle(color: Colors.white70, fontSize: 11, fontFamily: 'Cairo'),
+                                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 11, fontFamily: 'Cairo'),
                                   ),
                                 ],
                               ),
@@ -767,9 +766,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                     Container(
                       padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.05),
+                        color: AppColors.textPrimary.withValues(alpha: 0.05),
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Colors.white.withValues(alpha: 0.09)),
+                        border: Border.all(color: AppColors.textPrimary.withValues(alpha: 0.09)),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -780,25 +779,25 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                               Expanded(
                                 child: Text(
                                   hasCheckOut ? 'الحالة: مكتمل 🟢' : (hasCheckIn ? 'الحالة: دوام نشط 🟡' : 'الحالة: لم تبصم بعد 🔴'),
-                                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white, fontFamily: 'Cairo'),
+                                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textPrimary, fontFamily: 'Cairo'),
                                 ),
                               ),
                               if (hasCheckIn)
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
                                   decoration: BoxDecoration(
-                                    color: AppTheme.successGreen.withValues(alpha: 0.15),
+                                    color: AppColors.success.withValues(alpha: 0.15),
                                     borderRadius: BorderRadius.circular(10),
-                                    border: Border.all(color: AppTheme.successGreen.withValues(alpha: 0.4)),
+                                    border: Border.all(color: AppColors.success.withValues(alpha: 0.4)),
                                   ),
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      const Icon(Icons.check_circle, color: AppTheme.successGreen, size: 13),
+                                      const Icon(Icons.check_circle, color: AppColors.success, size: 13),
                                       const SizedBox(width: 4),
                                       Text(
                                         _formatTime(_todayAttendance?['check_in_time'] as String?),
-                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: AppTheme.successGreen, fontFamily: 'Cairo'),
+                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: AppColors.success, fontFamily: 'Cairo'),
                                       ),
                                     ],
                                   ),
@@ -809,7 +808,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                           // اسم الفرع
                           Text(
                             'الموقع المعتمد: $_branchName',
-                            style: const TextStyle(fontSize: 11, color: Colors.white70, fontFamily: 'Cairo'),
+                            style: const TextStyle(fontSize: 11, color: AppColors.textSecondary, fontFamily: 'Cairo'),
                           ),
                           // المسافة عن الفرع
                           if (_currentPosition != null) ...[
@@ -820,8 +819,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                                   Icons.my_location_rounded,
                                   size: 12,
                                   color: _distanceToBranch != null && _distanceToBranch! <= _branchRadius
-                                      ? AppTheme.successGreen
-                                      : AppTheme.neonPink,
+                                      ? AppColors.success
+                                      : AppColors.accent,
                                 ),
                                 const SizedBox(width: 4),
                                 Expanded(
@@ -834,8 +833,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                                       fontWeight: FontWeight.bold,
                                       fontFamily: 'Cairo',
                                       color: _distanceToBranch != null && _distanceToBranch! <= _branchRadius
-                                          ? AppTheme.successGreen
-                                          : AppTheme.neonPink,
+                                          ? AppColors.success
+                                          : AppColors.accent,
                                     ),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
@@ -850,14 +849,14 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                             width: double.infinity,
                             child: OutlinedButton.icon(
                               onPressed: () => _refreshGpsLocation(userInitiated: true),
-                              icon: const Icon(Icons.my_location_rounded, size: 15, color: AppTheme.neonCyan),
+                              icon: const Icon(Icons.my_location_rounded, size: 15, color: AppColors.brand),
                               label: const Text(
                                 'تحديث الموقع الآن',
-                                style: TextStyle(fontFamily: 'Cairo', fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.neonCyan),
+                                style: TextStyle(fontFamily: 'Cairo', fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.brand),
                               ),
                               style: OutlinedButton.styleFrom(
-                                side: BorderSide(color: AppTheme.neonCyan.withValues(alpha: 0.5)),
-                                backgroundColor: AppTheme.neonCyan.withValues(alpha: 0.07),
+                                side: BorderSide(color: AppColors.brand.withValues(alpha: 0.5)),
+                                backgroundColor: AppColors.brand.withValues(alpha: 0.07),
                                 padding: const EdgeInsets.symmetric(vertical: 8),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                               ),
@@ -883,11 +882,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               gradient: _selectedPunchType == 'check_out' 
-                                  ? const LinearGradient(colors: [AppTheme.neonPink, AppTheme.dangerRed])
-                                  : AppTheme.cyberGradient,
+                                  ? const LinearGradient(colors: [AppColors.accent, AppColors.danger])
+                                  : AppTheme.primaryGradient,
                               boxShadow: [
                                 BoxShadow(
-                                  color: (_selectedPunchType == 'check_out' ? AppTheme.neonPink : AppTheme.neonCyan).withValues(alpha: 0.4),
+                                  color: (_selectedPunchType == 'check_out' ? AppColors.accent : AppColors.brand).withValues(alpha: 0.4),
                                   blurRadius: 20,
                                   spreadRadius: 2,
                                 )
@@ -895,10 +894,10 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                             ),
                             child: Center(
                               child: _isSubmitting
-                                  ? const CircularProgressIndicator(color: Colors.white)
+                                  ? const CircularProgressIndicator(color: AppColors.textPrimary)
                                   : Icon(
                                       _selectedPunchType == 'check_out' ? Icons.exit_to_app_rounded : Icons.fingerprint_rounded,
-                                      color: Colors.white,
+                                      color: AppColors.textPrimary,
                                       size: 40,
                                     ),
                             ),
@@ -911,14 +910,14 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                         width: double.infinity,
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         decoration: BoxDecoration(
-                          color: AppTheme.successGreen.withValues(alpha: 0.15),
+                          color: AppColors.success.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: AppTheme.successGreen.withValues(alpha: 0.3)),
+                          border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
                         ),
                         child: const Center(
                           child: Text(
                             'لقد أتممت بصمة حضور وانصراف هذا اليوم. دوام موفق! 🎉',
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppTheme.successGreen, fontFamily: 'Cairo'),
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.success, fontFamily: 'Cairo'),
                           ),
                         ),
                       ),
@@ -927,7 +926,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                     if (!hasCheckOut)
                       Text(
                         _selectedPunchType == 'check_out' ? 'اضغط لتسجيل بصمة الانصراف 🔴' : 'اضغط لتسجيل بصمة الحضور 🟢',
-                        style: const TextStyle(fontSize: 11, color: Colors.white70, fontWeight: FontWeight.w600, fontFamily: 'Cairo'),
+                        style: const TextStyle(fontSize: 11, color: AppColors.textSecondary, fontWeight: FontWeight.w600, fontFamily: 'Cairo'),
                       ),
                   ],
                 ],
@@ -946,9 +945,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
       margin: const EdgeInsets.only(bottom: 20),
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.05),
+        color: AppColors.textPrimary.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+        border: Border.all(color: AppColors.textPrimary.withValues(alpha: 0.1)),
       ),
       child: Row(
         children: [
@@ -966,11 +965,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(12),
                   color: _selectedPunchType == 'check_in'
-                      ? AppTheme.neonCyan.withValues(alpha: 0.2)
+                      ? AppColors.brand.withValues(alpha: 0.2)
                       : Colors.transparent,
                   border: Border.all(
                     color: _selectedPunchType == 'check_in'
-                        ? AppTheme.neonCyan.withValues(alpha: 0.5)
+                        ? AppColors.brand.withValues(alpha: 0.5)
                         : Colors.transparent,
                   ),
                 ),
@@ -981,8 +980,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                       Icons.login_rounded,
                       size: 16,
                       color: _selectedPunchType == 'check_in'
-                          ? AppTheme.neonCyan
-                          : Colors.white70,
+                          ? AppColors.brand
+                          : AppColors.textSecondary,
                     ),
                     const SizedBox(width: 6),
                     Text(
@@ -992,8 +991,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                         fontSize: 12,
                         fontWeight: FontWeight.bold,
                         color: _selectedPunchType == 'check_in'
-                            ? Colors.white
-                            : Colors.white70,
+                            ? AppColors.textPrimary
+                            : AppColors.textSecondary,
                       ),
                     ),
                   ],
@@ -1015,11 +1014,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(12),
                   color: _selectedPunchType == 'check_out'
-                      ? AppTheme.neonPink.withValues(alpha: 0.2)
+                      ? AppColors.accent.withValues(alpha: 0.2)
                       : Colors.transparent,
                   border: Border.all(
                     color: _selectedPunchType == 'check_out'
-                        ? AppTheme.neonPink.withValues(alpha: 0.5)
+                        ? AppColors.accent.withValues(alpha: 0.5)
                         : Colors.transparent,
                   ),
                 ),
@@ -1030,8 +1029,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                       Icons.logout_rounded,
                       size: 16,
                       color: _selectedPunchType == 'check_out'
-                          ? AppTheme.neonPink
-                          : Colors.white70,
+                          ? AppColors.accent
+                          : AppColors.textSecondary,
                     ),
                     const SizedBox(width: 6),
                     Text(
@@ -1041,8 +1040,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                         fontSize: 12,
                         fontWeight: FontWeight.bold,
                         color: _selectedPunchType == 'check_out'
-                            ? Colors.white
-                            : Colors.white70,
+                            ? AppColors.textPrimary
+                            : AppColors.textSecondary,
                       ),
                     ),
                   ],

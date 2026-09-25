@@ -7,8 +7,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import '../../core/design/design.dart';
 import '../../core/services/supabase_service.dart';
-import '../../core/theme/app_theme.dart';
 import '../shared/widgets/glass_background.dart';
 import '../shared/widgets/glass_container.dart';
 
@@ -71,12 +71,12 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
             return Container(
               height: MediaQuery.of(context).size.height * 0.9,
               decoration: BoxDecoration(
-                color: const Color(0xFF1A1F3A),
+                color: AppColors.surface2,
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-                border: Border.all(color: AppTheme.neonCyan.withValues(alpha: 0.2)),
+                border: Border.all(color: AppColors.brand.withValues(alpha: 0.2)),
               ),
               child: isSaving 
-                  ? const Center(child: CircularProgressIndicator(color: AppTheme.neonCyan))
+                  ? const Center(child: CircularProgressIndicator(color: AppColors.brand))
                   : Column(
                 children: [
                   Container(
@@ -84,7 +84,7 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
                     width: 40,
                     height: 4,
                     decoration: BoxDecoration(
-                      color: Colors.white24,
+                      color: AppColors.borderStrong,
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -95,20 +95,20 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
                         Container(
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
-                            color: AppTheme.neonCyan.withValues(alpha: 0.15),
+                            color: AppColors.brand.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          child: Icon(branch == null ? Icons.add_location_alt_rounded : Icons.edit_location_alt_rounded, color: AppTheme.neonCyan, size: 22),
+                          child: Icon(branch == null ? Icons.add_location_alt_rounded : Icons.edit_location_alt_rounded, color: AppColors.brand, size: 22),
                         ),
                         const SizedBox(width: 12),
                         Text(
                           branch == null ? 'إضافة فرع جديد' : 'تعديل بيانات الفرع',
-                          style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white),
+                          style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.textPrimary),
                         ),
                       ],
                     ),
                   ),
-                  const Divider(color: Colors.white10, height: 1),
+                  const Divider(color: AppColors.border, height: 1),
                   Expanded(
                     child: ListView(
                       padding: const EdgeInsets.all(20),
@@ -117,13 +117,13 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
                         const SizedBox(height: 16),
                         _buildTextField(radiusController, 'نطاق الفرع (بالمتر)', Icons.radar_rounded, isNumber: true),
                         const SizedBox(height: 16),
-                        const Text('حدد موقع الفرع على الخريطة:', style: TextStyle(fontFamily: 'Cairo', color: Colors.white70, fontSize: 12)),
+                        const Text('حدد موقع الفرع على الخريطة:', style: TextStyle(fontFamily: 'Cairo', color: AppColors.textSecondary, fontSize: 12)),
                         const SizedBox(height: 8),
                         Container(
                           height: 250,
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: AppTheme.neonCyan.withValues(alpha: 0.3)),
+                            border: Border.all(color: AppColors.brand.withValues(alpha: 0.3)),
                           ),
                           clipBehavior: Clip.antiAlias,
                           child: FlutterMap(
@@ -146,9 +146,9 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
                                 circles: [
                                   CircleMarker(
                                     point: selectedLocation,
-                                    color: AppTheme.neonCyan.withValues(alpha: 0.3),
+                                    color: AppColors.brand.withValues(alpha: 0.3),
                                     borderStrokeWidth: 2,
-                                    borderColor: AppTheme.neonCyan,
+                                    borderColor: AppColors.brand,
                                     useRadiusInMeter: true,
                                     radius: double.tryParse(radiusController.text) ?? 50.0,
                                   ),
@@ -160,7 +160,7 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
                                     point: selectedLocation,
                                     width: 40,
                                     height: 40,
-                                    child: const Icon(Icons.location_on, color: AppTheme.dangerRed, size: 40),
+                                    child: const Icon(Icons.location_on, color: AppColors.danger, size: 40),
                                   ),
                                 ],
                               ),
@@ -168,7 +168,7 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
                           ),
                         ),
                         const SizedBox(height: 8),
-                        const Text('💡 اضغط على أي نقطة في الخريطة لتغيير الموقع', style: TextStyle(fontFamily: 'Cairo', color: AppTheme.warningOrange, fontSize: 10)),
+                        const Text('💡 اضغط على أي نقطة في الخريطة لتغيير الموقع', style: TextStyle(fontFamily: 'Cairo', color: AppColors.warning, fontSize: 10)),
                       ],
                     ),
                   ),
@@ -204,7 +204,7 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
                             if (context.mounted) {
                               Navigator.pop(context);
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('تم حفظ الفرع بنجاح ✅', style: TextStyle(fontFamily: 'Cairo')), backgroundColor: AppTheme.successGreen),
+                                const SnackBar(content: Text('تم حفظ الفرع بنجاح ✅', style: TextStyle(fontFamily: 'Cairo')), backgroundColor: AppColors.success),
                               );
                               unawaited(_loadBranches());
                             }
@@ -212,13 +212,13 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
                             setModalState(() => isSaving = false);
                             if (!context.mounted) return;
                             ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('خطأ: $e', style: const TextStyle(fontFamily: 'Cairo')), backgroundColor: AppTheme.dangerRed),
+                              SnackBar(content: Text('خطأ: $e', style: const TextStyle(fontFamily: 'Cairo')), backgroundColor: AppColors.danger),
                             );
                           }
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: AppTheme.neonCyan,
-                          foregroundColor: Colors.black,
+                          backgroundColor: AppColors.brand,
+                          foregroundColor: AppColors.onStatus,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                         ),
                         child: Text(branch == null ? 'إضافة الفرع' : 'حفظ التعديلات', style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 15)),
@@ -238,15 +238,15 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
     return TextField(
       controller: controller,
       keyboardType: isNumber ? TextInputType.number : TextInputType.text,
-      style: const TextStyle(fontFamily: 'Cairo', color: Colors.white, fontSize: 14),
+      style: const TextStyle(fontFamily: 'Cairo', color: AppColors.textPrimary, fontSize: 14),
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: const TextStyle(fontFamily: 'Cairo', color: Colors.white54, fontSize: 12),
-        prefixIcon: Icon(icon, color: AppTheme.neonCyan, size: 20),
+        labelStyle: const TextStyle(fontFamily: 'Cairo', color: AppColors.textMuted, fontSize: 12),
+        prefixIcon: Icon(icon, color: AppColors.brand, size: 20),
         filled: true,
-        fillColor: Colors.white.withValues(alpha: 0.05),
+        fillColor: AppColors.textPrimary.withValues(alpha: 0.05),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: AppTheme.neonCyan)),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: AppColors.brand)),
       ),
     );
   }
@@ -255,18 +255,18 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1A1F3A),
-        title: const Text('حذف الفرع', style: TextStyle(fontFamily: 'Cairo', color: Colors.white)),
-        content: const Text('هل أنت متأكد من حذف هذا الفرع؟', style: TextStyle(fontFamily: 'Cairo', color: Colors.white70)),
+        backgroundColor: AppColors.surface2,
+        title: const Text('حذف الفرع', style: TextStyle(fontFamily: 'Cairo', color: AppColors.textPrimary)),
+        content: const Text('هل أنت متأكد من حذف هذا الفرع؟', style: TextStyle(fontFamily: 'Cairo', color: AppColors.textSecondary)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('إلغاء', style: TextStyle(fontFamily: 'Cairo', color: Colors.white54)),
+            child: const Text('إلغاء', style: TextStyle(fontFamily: 'Cairo', color: AppColors.textMuted)),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.dangerRed),
-            child: const Text('حذف', style: TextStyle(fontFamily: 'Cairo', color: Colors.white)),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
+            child: const Text('حذف', style: TextStyle(fontFamily: 'Cairo', color: AppColors.textPrimary)),
           ),
         ],
       ),
@@ -280,7 +280,7 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
       unawaited(_loadBranches());
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('تم حذف الفرع بنجاح', style: TextStyle(fontFamily: 'Cairo')), backgroundColor: AppTheme.successGreen),
+          const SnackBar(content: Text('تم حذف الفرع بنجاح', style: TextStyle(fontFamily: 'Cairo')), backgroundColor: AppColors.success),
         );
       }
     } catch (e) {
@@ -299,21 +299,21 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
           backgroundColor: Colors.transparent,
           elevation: 0,
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
+            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textPrimary),
             onPressed: () => Navigator.pop(context),
           ),
-          title: const Text('إدارة الأفرع 🏢', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white)),
+          title: const Text('إدارة الأفرع 🏢', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.textPrimary)),
           actions: [
             IconButton(
-              icon: const Icon(Icons.add_business_rounded, color: AppTheme.neonCyan),
+              icon: const Icon(Icons.add_business_rounded, color: AppColors.brand),
               onPressed: _showAddEditBranchModal,
             ),
           ],
         ),
         body: _isLoading
-            ? const Center(child: CircularProgressIndicator(color: AppTheme.neonCyan))
+            ? const Center(child: CircularProgressIndicator(color: AppColors.brand))
             : _branches.isEmpty
-                ? const Center(child: Text('لا توجد أفرع مسجلة', style: TextStyle(color: Colors.white54, fontFamily: 'Cairo')))
+                ? const Center(child: Text('لا توجد أفرع مسجلة', style: TextStyle(color: AppColors.textMuted, fontFamily: 'Cairo')))
                 : ListView.builder(
                     padding: const EdgeInsets.all(16),
                     itemCount: _branches.length,
@@ -323,36 +323,35 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
                         margin: const EdgeInsets.only(bottom: 12),
                         padding: const EdgeInsets.all(16),
                         borderRadius: 16,
-                        opacity: 0.08,
                         child: Row(
                           children: [
                             Container(
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
-                                color: AppTheme.neonCyan.withValues(alpha: 0.15),
+                                color: AppColors.brand.withValues(alpha: 0.15),
                                 borderRadius: BorderRadius.circular(12),
                               ),
-                              child: const Icon(Icons.business_rounded, color: AppTheme.neonCyan, size: 24),
+                              child: const Icon(Icons.business_rounded, color: AppColors.brand, size: 24),
                             ),
                             const SizedBox(width: 16),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text((branch['name'] ?? 'بدون اسم') as String, style: const TextStyle(color: Colors.white, fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 14)),
+                                  Text((branch['name'] ?? 'بدون اسم') as String, style: const TextStyle(color: AppColors.textPrimary, fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 14)),
                                   const SizedBox(height: 4),
-                                  Text('النطاق: ${branch['radius_meters'] ?? 50} متر', style: const TextStyle(color: AppTheme.warningOrange, fontSize: 11, fontFamily: 'Cairo')),
+                                  Text('النطاق: ${branch['radius_meters'] ?? 50} متر', style: const TextStyle(color: AppColors.warning, fontSize: 11, fontFamily: 'Cairo')),
                                   if (branch['latitude'] != null)
-                                    Text('${branch['latitude']}, ${branch['longitude']}', style: const TextStyle(color: Colors.white38, fontSize: 9, fontFamily: 'monospace')),
+                                    Text('${branch['latitude']}, ${branch['longitude']}', style: const TextStyle(color: AppColors.textDisabled, fontSize: 9, fontFamily: 'monospace')),
                                 ],
                               ),
                             ),
                             IconButton(
-                              icon: const Icon(Icons.edit_rounded, color: AppTheme.neonCyan),
+                              icon: const Icon(Icons.edit_rounded, color: AppColors.brand),
                               onPressed: () => _showAddEditBranchModal(branch),
                             ),
                             IconButton(
-                              icon: const Icon(Icons.delete_rounded, color: AppTheme.dangerRed),
+                              icon: const Icon(Icons.delete_rounded, color: AppColors.danger),
                               onPressed: () => _deleteBranch(branch['id'] as String),
                             ),
                           ],

@@ -7,9 +7,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/design/design.dart';
 import '../../core/routes/app_router.dart';
 import '../../core/services/supabase_service.dart';
-import '../../core/theme/app_theme.dart';
 import '../shared/widgets/glass_background.dart';
 import '../shared/widgets/glass_container.dart';
 
@@ -127,9 +127,9 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
             return Container(
               height: MediaQuery.of(context).size.height * 0.85,
               decoration: BoxDecoration(
-                color: const Color(0xFF1A1F3A),
+                color: AppColors.surface2,
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-                border: Border.all(color: AppTheme.neonCyan.withValues(alpha: 0.2)),
+                border: Border.all(color: AppColors.brand.withValues(alpha: 0.2)),
               ),
               child: Column(
                 children: [
@@ -139,7 +139,7 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
                     width: 40,
                     height: 4,
                     decoration: BoxDecoration(
-                      color: Colors.white24,
+                      color: AppColors.borderStrong,
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -151,10 +151,10 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
                         Container(
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
-                            color: AppTheme.neonCyan.withValues(alpha: 0.15),
+                            color: AppColors.brand.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          child: const Icon(Icons.schedule_rounded, color: AppTheme.neonCyan, size: 22),
+                          child: const Icon(Icons.schedule_rounded, color: AppColors.brand, size: 22),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
@@ -167,7 +167,7 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
                                   fontFamily: 'Cairo',
                                   fontWeight: FontWeight.bold,
                                   fontSize: 15,
-                                  color: Colors.white,
+                                  color: AppColors.textPrimary,
                                 ),
                               ),
                               Text(
@@ -175,7 +175,7 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
                                 style: TextStyle(
                                   fontFamily: 'Cairo',
                                   fontSize: 11,
-                                  color: Colors.white.withValues(alpha: 0.5),
+                                  color: AppColors.textPrimary.withValues(alpha: 0.5),
                                 ),
                               ),
                             ],
@@ -184,14 +184,14 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
                       ],
                     ),
                   ),
-                  const Divider(color: Colors.white10, height: 1),
+                  const Divider(color: AppColors.border, height: 1),
                   // المحتوى
                   Expanded(
                     child: ListView(
                       padding: const EdgeInsets.all(20),
                       children: [
                         // أيام العمل
-                        const Text('أيام العمل', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
+                        const Text('أيام العمل', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textPrimary)),
                         const SizedBox(height: 8),
                         Wrap(
                           spacing: 8,
@@ -215,13 +215,13 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
                                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                                 decoration: BoxDecoration(
                                   color: isSelected
-                                      ? (isFriday ? AppTheme.warningOrange.withValues(alpha: 0.2) : AppTheme.neonCyan.withValues(alpha: 0.2))
-                                      : Colors.white.withValues(alpha: 0.05),
+                                      ? (isFriday ? AppColors.warning.withValues(alpha: 0.2) : AppColors.brand.withValues(alpha: 0.2))
+                                      : AppColors.textPrimary.withValues(alpha: 0.05),
                                   borderRadius: BorderRadius.circular(12),
                                   border: Border.all(
                                     color: isSelected
-                                        ? (isFriday ? AppTheme.warningOrange : AppTheme.neonCyan)
-                                        : Colors.white12,
+                                        ? (isFriday ? AppColors.warning : AppColors.brand)
+                                        : AppColors.border,
                                     width: isSelected ? 1.5 : 1,
                                   ),
                                 ),
@@ -232,8 +232,8 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
                                     fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                                     fontSize: 11,
                                     color: isSelected
-                                        ? (isFriday ? AppTheme.warningOrange : AppTheme.neonCyan)
-                                        : Colors.white38,
+                                        ? (isFriday ? AppColors.warning : AppColors.brand)
+                                        : AppColors.textDisabled,
                                   ),
                                 ),
                               ),
@@ -243,7 +243,7 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
                         const SizedBox(height: 24),
 
                         // أوقات الدوام
-                        const Text('أوقات الدوام', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
+                        const Text('أوقات الدوام', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textPrimary)),
                         const SizedBox(height: 12),
                         Row(
                           children: [
@@ -252,7 +252,7 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
                                 label: 'بداية الدوام',
                                 time: shiftStart,
                                 icon: Icons.login_rounded,
-                                color: AppTheme.successGreen,
+                                color: AppColors.success,
                                 onTap: () async {
                                   final picked = await showTimePicker(
                                     context: context,
@@ -261,8 +261,8 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
                                       return Theme(
                                         data: ThemeData.dark().copyWith(
                                           colorScheme: const ColorScheme.dark(
-                                            primary: AppTheme.neonCyan,
-                                            surface: Color(0xFF1A1F3A),
+                                            primary: AppColors.brand,
+                                            surface: AppColors.surface2,
                                           ),
                                         ),
                                         child: child!,
@@ -281,7 +281,7 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
                                 label: 'نهاية الدوام',
                                 time: shiftEnd,
                                 icon: Icons.logout_rounded,
-                                color: AppTheme.dangerRed,
+                                color: AppColors.danger,
                                 onTap: () async {
                                   final picked = await showTimePicker(
                                     context: context,
@@ -290,8 +290,8 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
                                       return Theme(
                                         data: ThemeData.dark().copyWith(
                                           colorScheme: const ColorScheme.dark(
-                                            primary: AppTheme.neonCyan,
-                                            surface: Color(0xFF1A1F3A),
+                                            primary: AppColors.brand,
+                                            surface: AppColors.surface2,
                                           ),
                                         ),
                                         child: child!,
@@ -309,32 +309,31 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
                         const SizedBox(height: 24),
 
                         // التذكير وفترة السماح
-                        const Text('إعدادات التذكير', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
+                        const Text('إعدادات التذكير', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textPrimary)),
                         const SizedBox(height: 12),
                         GlassContainer(
                           padding: const EdgeInsets.all(16),
                           borderRadius: 16,
-                          opacity: 0.08,
                           child: Column(
                             children: [
                               Row(
                                 children: [
-                                  const Icon(Icons.notifications_active_rounded, color: AppTheme.warningOrange, size: 18),
+                                  const Icon(Icons.notifications_active_rounded, color: AppColors.warning, size: 18),
                                   const SizedBox(width: 8),
-                                  const Text('إرسال التذكير بعد بداية الدوام بـ', style: TextStyle(fontFamily: 'Cairo', fontSize: 11, color: Colors.white70)),
+                                  const Text('إرسال التذكير بعد بداية الدوام بـ', style: TextStyle(fontFamily: 'Cairo', fontSize: 11, color: AppColors.textSecondary)),
                                   const Spacer(),
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                                     decoration: BoxDecoration(
-                                      color: AppTheme.warningOrange.withValues(alpha: 0.15),
+                                      color: AppColors.warning.withValues(alpha: 0.15),
                                       borderRadius: BorderRadius.circular(8),
                                     ),
                                     child: DropdownButton<int>(
                                       value: reminderMinutes,
-                                      dropdownColor: const Color(0xFF1A1F3A),
+                                      dropdownColor: AppColors.surface2,
                                       underline: const SizedBox(),
                                       isDense: true,
-                                      style: const TextStyle(fontFamily: 'Cairo', fontSize: 12, color: AppTheme.warningOrange, fontWeight: FontWeight.bold),
+                                      style: const TextStyle(fontFamily: 'Cairo', fontSize: 12, color: AppColors.warning, fontWeight: FontWeight.bold),
                                       items: [5, 10, 15, 30].map((m) => DropdownMenuItem(value: m, child: Text('$m د'))).toList(),
                                       onChanged: (v) => setModalState(() => reminderMinutes = v!),
                                     ),
@@ -344,22 +343,22 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
                               const SizedBox(height: 16),
                               Row(
                                 children: [
-                                  const Icon(Icons.timer_rounded, color: AppTheme.neonCyan, size: 18),
+                                  const Icon(Icons.timer_rounded, color: AppColors.brand, size: 18),
                                   const SizedBox(width: 8),
-                                  const Text('فترة السماح بالتأخير', style: TextStyle(fontFamily: 'Cairo', fontSize: 11, color: Colors.white70)),
+                                  const Text('فترة السماح بالتأخير', style: TextStyle(fontFamily: 'Cairo', fontSize: 11, color: AppColors.textSecondary)),
                                   const Spacer(),
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                                     decoration: BoxDecoration(
-                                      color: AppTheme.neonCyan.withValues(alpha: 0.15),
+                                      color: AppColors.brand.withValues(alpha: 0.15),
                                       borderRadius: BorderRadius.circular(8),
                                     ),
                                     child: DropdownButton<int>(
                                       value: graceMinutes,
-                                      dropdownColor: const Color(0xFF1A1F3A),
+                                      dropdownColor: AppColors.surface2,
                                       underline: const SizedBox(),
                                       isDense: true,
-                                      style: const TextStyle(fontFamily: 'Cairo', fontSize: 12, color: AppTheme.neonCyan, fontWeight: FontWeight.bold),
+                                      style: const TextStyle(fontFamily: 'Cairo', fontSize: 12, color: AppColors.brand, fontWeight: FontWeight.bold),
                                       items: [5, 10, 15, 20, 30].map((m) => DropdownMenuItem(value: m, child: Text('$m د'))).toList(),
                                       onChanged: (v) => setModalState(() => graceMinutes = v!),
                                     ),
@@ -386,7 +385,7 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
                                     content: Text('يجب أن يكون وقت البداية قبل وقت النهاية!', style: TextStyle(fontFamily: 'Cairo')),
-                                    backgroundColor: AppTheme.dangerRed,
+                                    backgroundColor: AppColors.danger,
                                   ),
                                 );
                               }
@@ -418,7 +417,7 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
                                   content: Text('تم حفظ جدول العمل بنجاح ✅', style: TextStyle(fontFamily: 'Cairo')),
-                                  backgroundColor: AppTheme.successGreen,
+                                  backgroundColor: AppColors.success,
                                 ),
                               );
                               unawaited(_loadBranches());
@@ -429,15 +428,15 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
                                   content: Text('خطأ: $e', style: const TextStyle(fontFamily: 'Cairo')),
-                                  backgroundColor: AppTheme.dangerRed,
+                                  backgroundColor: AppColors.danger,
                                 ),
                               );
                             }
                           }
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: AppTheme.neonCyan,
-                          foregroundColor: Colors.black,
+                          backgroundColor: AppColors.brand,
+                          foregroundColor: AppColors.onStatus,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                           elevation: 0,
                         ),
@@ -476,13 +475,12 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
       child: GlassContainer(
         padding: const EdgeInsets.all(14),
         borderRadius: 14,
-        opacity: 0.08,
         borderColor: color.withValues(alpha: 0.3),
         child: Column(
           children: [
             Icon(icon, color: color, size: 20),
             const SizedBox(height: 6),
-            Text(label, style: TextStyle(fontFamily: 'Cairo', fontSize: 10, color: Colors.white.withValues(alpha: 0.5))),
+            Text(label, style: TextStyle(fontFamily: 'Cairo', fontSize: 10, color: AppColors.textPrimary.withValues(alpha: 0.5))),
             const SizedBox(height: 4),
             Text(
               formattedTime,
@@ -508,7 +506,7 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
           backgroundColor: Colors.transparent,
           elevation: 0,
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
+            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textPrimary),
             onPressed: () => Navigator.pop(context),
           ),
           title: const Text(
@@ -517,13 +515,13 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
               fontFamily: 'Cairo',
               fontWeight: FontWeight.bold,
               fontSize: 16,
-              color: Colors.white,
-              shadows: [Shadow(color: AppTheme.neonCyan, blurRadius: 10)],
+              color: AppColors.textPrimary,
+              shadows: [Shadow(color: AppColors.brand, blurRadius: 10)],
             ),
           ),
           actions: [
             IconButton(
-              icon: const Icon(Icons.map_rounded, color: AppTheme.successGreen),
+              icon: const Icon(Icons.map_rounded, color: AppColors.success),
               tooltip: 'إدارة مواقع الأفرع',
               onPressed: () {
                 context.push(AppRoutes.adminBranchManagement);
@@ -532,7 +530,7 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
           ],
         ),
         body: _isLoading
-            ? const Center(child: CircularProgressIndicator(color: AppTheme.neonCyan))
+            ? const Center(child: CircularProgressIndicator(color: AppColors.brand))
             : _branches.isEmpty
                 ? const Center(
                     child: GlassContainer(
@@ -541,18 +539,18 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.location_off_rounded, color: AppTheme.warningOrange, size: 54),
+                          Icon(Icons.location_off_rounded, color: AppColors.warning, size: 54),
                           SizedBox(height: 16),
                           Text(
                             'لا توجد أفرع مسجلة حالياً',
                             textAlign: TextAlign.center,
-                            style: TextStyle(fontSize: 14, color: Colors.white70, fontWeight: FontWeight.bold, fontFamily: 'Cairo'),
+                            style: TextStyle(fontSize: 14, color: AppColors.textSecondary, fontWeight: FontWeight.bold, fontFamily: 'Cairo'),
                           ),
                           SizedBox(height: 8),
                           Text(
                             'يرجى إضافة أفرع (مناطق جيوفينس) أولاً من قاعدة البيانات',
                             textAlign: TextAlign.center,
-                            style: TextStyle(fontSize: 11, color: Colors.white38, fontFamily: 'Cairo'),
+                            style: TextStyle(fontSize: 11, color: AppColors.textDisabled, fontFamily: 'Cairo'),
                           ),
                         ],
                       ),
@@ -560,8 +558,8 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
                   )
                 : RefreshIndicator(
                     onRefresh: _loadBranches,
-                    color: AppTheme.neonCyan,
-                    backgroundColor: AppTheme.darkSurface,
+                    color: AppColors.brand,
+                    backgroundColor: AppColors.surface1,
                     child: ListView.builder(
                       padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
                       itemCount: _branches.length,
@@ -574,10 +572,9 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
                           margin: const EdgeInsets.only(bottom: 14),
                           padding: const EdgeInsets.all(16),
                           borderRadius: 20,
-                          opacity: 0.08,
                           borderColor: (hasSchedule as bool)
-                              ? AppTheme.successGreen.withValues(alpha: 0.25)
-                              : AppTheme.warningOrange.withValues(alpha: 0.25),
+                              ? AppColors.success.withValues(alpha: 0.25)
+                              : AppColors.warning.withValues(alpha: 0.25),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -586,12 +583,12 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
                                   Container(
                                     padding: const EdgeInsets.all(8),
                                     decoration: BoxDecoration(
-                                      color: (hasSchedule ? AppTheme.successGreen : AppTheme.warningOrange).withValues(alpha: 0.15),
+                                      color: (hasSchedule ? AppColors.success : AppColors.warning).withValues(alpha: 0.15),
                                       borderRadius: BorderRadius.circular(10),
                                     ),
                                     child: Icon(
                                       hasSchedule ? Icons.business_rounded : Icons.warning_amber_rounded,
-                                      color: hasSchedule ? AppTheme.successGreen : AppTheme.warningOrange,
+                                      color: hasSchedule ? AppColors.success : AppColors.warning,
                                       size: 20,
                                     ),
                                   ),
@@ -602,14 +599,14 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
                                       children: [
                                         Text(
                                           (branch['zone_name'] ?? 'فرع غير مسمى') as String,
-                                          style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white),
+                                          style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.textPrimary),
                                         ),
                                         Text(
                                           hasSchedule ? 'الجدول مُعَد ✅' : 'بدون جدول عمل ⚠️',
                                           style: TextStyle(
                                             fontFamily: 'Cairo',
                                             fontSize: 10,
-                                            color: hasSchedule ? AppTheme.successGreen : AppTheme.warningOrange,
+                                            color: hasSchedule ? AppColors.success : AppColors.warning,
                                           ),
                                         ),
                                       ],
@@ -618,7 +615,7 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
                                   IconButton(
                                     icon: Icon(
                                       hasSchedule ? Icons.edit_rounded : Icons.add_circle_outline_rounded,
-                                      color: AppTheme.neonCyan,
+                                      color: AppColors.brand,
                                     ),
                                     onPressed: () => _editSchedule(branch),
                                   ),
@@ -626,7 +623,7 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
                               ),
                               if (hasSchedule) ...[
                                 const SizedBox(height: 12),
-                                const Divider(color: Colors.white10, height: 1),
+                                const Divider(color: AppColors.border, height: 1),
                                 const SizedBox(height: 12),
                                 // عرض أوقات الدوام
                                 Row(
@@ -634,19 +631,19 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
                                     _buildTimeChip(
                                       'الدخول',
                                       _formatTimeStr((schedule['check_in_time'] ?? '08:00:00') as String),
-                                      AppTheme.successGreen,
+                                      AppColors.success,
                                     ),
                                     const SizedBox(width: 8),
                                     _buildTimeChip(
                                       'الخروج',
                                       _formatTimeStr((schedule['check_out_time'] ?? '16:00:00') as String),
-                                      AppTheme.dangerRed,
+                                      AppColors.danger,
                                     ),
                                     const SizedBox(width: 8),
                                     _buildTimeChip(
                                       'التذكير بعد',
                                       '${schedule['reminder_minutes_after'] ?? 5} د',
-                                      AppTheme.warningOrange,
+                                      AppColors.warning,
                                     ),
                                   ],
                                 ),
@@ -661,11 +658,11 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
                                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                       decoration: BoxDecoration(
                                         color: isWork
-                                            ? AppTheme.neonCyan.withValues(alpha: 0.15)
-                                            : AppTheme.dangerRed.withValues(alpha: 0.08),
+                                            ? AppColors.brand.withValues(alpha: 0.15)
+                                            : AppColors.danger.withValues(alpha: 0.08),
                                         borderRadius: BorderRadius.circular(6),
                                         border: Border.all(
-                                          color: isWork ? AppTheme.neonCyan.withValues(alpha: 0.3) : Colors.white10,
+                                          color: isWork ? AppColors.brand.withValues(alpha: 0.3) : AppColors.border,
                                         ),
                                       ),
                                       child: Text(
@@ -674,7 +671,7 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
                                           fontFamily: 'Cairo',
                                           fontSize: 9,
                                           fontWeight: FontWeight.bold,
-                                          color: isWork ? AppTheme.neonCyan : Colors.white24,
+                                          color: isWork ? AppColors.brand : AppColors.borderStrong,
                                         ),
                                       ),
                                     );

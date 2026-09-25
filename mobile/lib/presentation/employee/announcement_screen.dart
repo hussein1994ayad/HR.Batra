@@ -3,8 +3,8 @@
 // =========================================================================
 
 import 'package:flutter/material.dart';
+import '../../core/design/design.dart';
 import '../../core/services/supabase_service.dart';
-import '../../core/theme/app_theme.dart';
 import '../shared/widgets/glass_background.dart';
 import '../shared/widgets/glass_container.dart';
 
@@ -91,7 +91,7 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
       if (targetEmployeeIds.isEmpty) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('لا يوجد موظفين في هذا النطاق', style: TextStyle(fontFamily: 'Cairo')), backgroundColor: AppTheme.warningOrange),
+            const SnackBar(content: Text('لا يوجد موظفين في هذا النطاق', style: TextStyle(fontFamily: 'Cairo')), backgroundColor: AppColors.warning),
           );
         }
         setState(() => _isLoading = false);
@@ -113,14 +113,14 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
         _titleController.clear();
         _bodyController.clear();
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('تم إرسال التعميم بنجاح إلى ${targetEmployeeIds.length} موظف ✅', style: const TextStyle(fontFamily: 'Cairo')), backgroundColor: AppTheme.successGreen),
+          SnackBar(content: Text('تم إرسال التعميم بنجاح إلى ${targetEmployeeIds.length} موظف ✅', style: const TextStyle(fontFamily: 'Cairo')), backgroundColor: AppColors.success),
         );
       }
     } catch (e) {
       debugPrint('Error sending announcement: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('خطأ: $e', style: const TextStyle(fontFamily: 'Cairo')), backgroundColor: AppTheme.dangerRed),
+          SnackBar(content: Text('خطأ: $e', style: const TextStyle(fontFamily: 'Cairo')), backgroundColor: AppColors.danger),
         );
       }
     } finally {
@@ -137,10 +137,10 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
           backgroundColor: Colors.transparent,
           elevation: 0,
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
+            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textPrimary),
             onPressed: () => Navigator.pop(context),
           ),
-          title: const Text('إرسال تعميم 📢', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white)),
+          title: const Text('إرسال تعميم 📢', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.textPrimary)),
         ),
         body: SingleChildScrollView(
           padding: const EdgeInsets.all(20),
@@ -150,36 +150,35 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
               GlassContainer(
                 padding: const EdgeInsets.all(20),
                 borderRadius: 20,
-                opacity: 0.08,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('محتوى التعميم', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white)),
+                    const Text('محتوى التعميم', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.textPrimary)),
                     const SizedBox(height: 16),
                     TextField(
                       controller: _titleController,
-                      style: const TextStyle(fontFamily: 'Cairo', color: Colors.white, fontSize: 14),
+                      style: const TextStyle(fontFamily: 'Cairo', color: AppColors.textPrimary, fontSize: 14),
                       decoration: InputDecoration(
                         labelText: 'عنوان التعميم (مثال: هام وعاجل)',
-                        labelStyle: const TextStyle(fontFamily: 'Cairo', color: Colors.white54, fontSize: 12),
+                        labelStyle: const TextStyle(fontFamily: 'Cairo', color: AppColors.textMuted, fontSize: 12),
                         filled: true,
-                        fillColor: Colors.white.withValues(alpha: 0.05),
+                        fillColor: AppColors.textPrimary.withValues(alpha: 0.05),
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
-                        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: AppTheme.neonCyan)),
+                        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: AppColors.brand)),
                       ),
                     ),
                     const SizedBox(height: 16),
                     TextField(
                       controller: _bodyController,
                       maxLines: 5,
-                      style: const TextStyle(fontFamily: 'Cairo', color: Colors.white, fontSize: 14),
+                      style: const TextStyle(fontFamily: 'Cairo', color: AppColors.textPrimary, fontSize: 14),
                       decoration: InputDecoration(
                         labelText: 'نص التعميم التفصيلي...',
-                        labelStyle: const TextStyle(fontFamily: 'Cairo', color: Colors.white54, fontSize: 12),
+                        labelStyle: const TextStyle(fontFamily: 'Cairo', color: AppColors.textMuted, fontSize: 12),
                         filled: true,
-                        fillColor: Colors.white.withValues(alpha: 0.05),
+                        fillColor: AppColors.textPrimary.withValues(alpha: 0.05),
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
-                        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: AppTheme.neonCyan)),
+                        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: AppColors.brand)),
                       ),
                     ),
                   ],
@@ -189,11 +188,10 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
               GlassContainer(
                 padding: const EdgeInsets.all(20),
                 borderRadius: 20,
-                opacity: 0.08,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('الاستهداف', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white)),
+                    const Text('الاستهداف', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.textPrimary)),
                     const SizedBox(height: 16),
                     Row(
                       children: [
@@ -215,16 +213,16 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.05),
+                          color: AppColors.textPrimary.withValues(alpha: 0.05),
                           borderRadius: BorderRadius.circular(14),
                         ),
                         child: DropdownButtonHideUnderline(
                           child: DropdownButton<String>(
                             value: _selectedBranchId,
-                            hint: const Text('اختر الفرع...', style: TextStyle(fontFamily: 'Cairo', color: Colors.white54, fontSize: 12)),
+                            hint: const Text('اختر الفرع...', style: TextStyle(fontFamily: 'Cairo', color: AppColors.textMuted, fontSize: 12)),
                             isExpanded: true,
-                            dropdownColor: const Color(0xFF1A1F3A),
-                            style: const TextStyle(fontFamily: 'Cairo', color: Colors.white, fontSize: 14),
+                            dropdownColor: AppColors.surface2,
+                            style: const TextStyle(fontFamily: 'Cairo', color: AppColors.textPrimary, fontSize: 14),
                             items: _branches.map((b) {
                               return DropdownMenuItem<String>(
                                 value: b['id'] as String?,
@@ -242,10 +240,10 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
                         width: double.infinity,
                         child: ElevatedButton.icon(
                           onPressed: _showEmployeeSelectionDialog,
-                          icon: const Icon(Icons.person_search_rounded, color: AppTheme.neonCyan),
-                          label: Text(_selectedEmployeeIds.isEmpty ? 'اختر الموظفين' : 'تم تحديد ${_selectedEmployeeIds.length} موظف', style: const TextStyle(fontFamily: 'Cairo', color: Colors.white)),
+                          icon: const Icon(Icons.person_search_rounded, color: AppColors.brand),
+                          label: Text(_selectedEmployeeIds.isEmpty ? 'اختر الموظفين' : 'تم تحديد ${_selectedEmployeeIds.length} موظف', style: const TextStyle(fontFamily: 'Cairo', color: AppColors.textPrimary)),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.white.withValues(alpha: 0.05),
+                            backgroundColor: AppColors.textPrimary.withValues(alpha: 0.05),
                             padding: const EdgeInsets.symmetric(vertical: 14),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                           ),
@@ -262,12 +260,12 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
                 child: ElevatedButton(
                   onPressed: _isLoading ? null : _sendAnnouncement,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.neonCyan,
-                    foregroundColor: Colors.black,
+                    backgroundColor: AppColors.brand,
+                    foregroundColor: AppColors.onStatus,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                   ),
                   child: _isLoading
-                      ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2))
+                      ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: AppColors.onStatus, strokeWidth: 2))
                       : const Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
@@ -293,20 +291,20 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(vertical: 14),
         decoration: BoxDecoration(
-          color: isSelected ? AppTheme.neonCyan.withValues(alpha: 0.2) : Colors.white.withValues(alpha: 0.05),
+          color: isSelected ? AppColors.brand.withValues(alpha: 0.2) : AppColors.textPrimary.withValues(alpha: 0.05),
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: isSelected ? AppTheme.neonCyan : Colors.white10),
+          border: Border.all(color: isSelected ? AppColors.brand : AppColors.border),
         ),
         child: Column(
           children: [
-            Icon(icon, color: isSelected ? AppTheme.neonCyan : Colors.white54, size: 28),
+            Icon(icon, color: isSelected ? AppColors.brand : AppColors.textMuted, size: 28),
             const SizedBox(height: 8),
             Text(
               label,
               style: TextStyle(
                 fontFamily: 'Cairo',
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                color: isSelected ? AppTheme.neonCyan : Colors.white54,
+                color: isSelected ? AppColors.brand : AppColors.textMuted,
                 fontSize: 12,
               ),
             ),
@@ -323,9 +321,9 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              backgroundColor: const Color(0xFF1A1F3A),
+              backgroundColor: AppColors.surface2,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-              title: const Text('اختيار الموظفين', style: TextStyle(fontFamily: 'Cairo', color: Colors.white)),
+              title: const Text('اختيار الموظفين', style: TextStyle(fontFamily: 'Cairo', color: AppColors.textPrimary)),
               content: SizedBox(
                 width: double.maxFinite,
                 child: ListView.builder(
@@ -335,10 +333,10 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
                     final emp = _employees[index];
                     final isSelected = _selectedEmployeeIds.contains(emp['id']);
                     return CheckboxListTile(
-                      title: Text(emp['full_name'] as String, style: const TextStyle(fontFamily: 'Cairo', color: Colors.white, fontSize: 14)),
+                      title: Text(emp['full_name'] as String, style: const TextStyle(fontFamily: 'Cairo', color: AppColors.textPrimary, fontSize: 14)),
                       value: isSelected,
-                      activeColor: AppTheme.neonCyan,
-                      checkColor: Colors.black,
+                      activeColor: AppColors.brand,
+                      checkColor: AppColors.onStatus,
                       onChanged: (val) {
                         setDialogState(() {
                           if (val == true) {
@@ -356,7 +354,7 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text('تم', style: TextStyle(fontFamily: 'Cairo', color: AppTheme.neonCyan)),
+                  child: const Text('تم', style: TextStyle(fontFamily: 'Cairo', color: AppColors.brand)),
                 ),
               ],
             );

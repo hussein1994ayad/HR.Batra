@@ -12,7 +12,7 @@
 
 import 'package:flutter/material.dart';
 
-import '../../../core/theme/app_theme.dart';
+import '../../../core/design/design.dart';
 
 /// صندوق skeleton أساسي بحركة shimmer.
 class SkeletonBox extends StatefulWidget {
@@ -24,7 +24,7 @@ class SkeletonBox extends StatefulWidget {
     super.key,
     this.width,
     this.height = 16,
-    this.radius = AppTheme.radiusSm,
+    this.radius = AppRadius.sm,
   });
 
   @override
@@ -54,11 +54,11 @@ class _SkeletonBoxState extends State<SkeletonBox>
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final base = isDark
-        ? AppTheme.darkSurfaceVariant
-        : AppTheme.lightSurfaceVariant;
+        ? AppColors.surface2
+        : AppColors.surface2;
     final highlight = isDark
-        ? AppTheme.darkBorder.withValues(alpha: 0.5)
-        : Colors.white;
+        ? AppColors.borderStrong.withValues(alpha: 0.5)
+        : AppColors.textPrimary;
 
     return AnimatedBuilder(
       animation: _controller,
@@ -91,7 +91,7 @@ class SkeletonList extends StatelessWidget {
     super.key,
     this.itemCount = 5,
     this.itemHeight = 72,
-    this.spacing = AppTheme.space3,
+    this.spacing = AppSpace.md,
   });
 
   @override
@@ -103,7 +103,7 @@ class SkeletonList extends StatelessWidget {
           child: SkeletonBox(
             width: double.infinity,
             height: itemHeight,
-            radius: AppTheme.radiusMd,
+            radius: AppRadius.md,
           ),
         );
       }),
@@ -119,14 +119,14 @@ class SkeletonCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
-      padding: const EdgeInsets.all(AppTheme.space4),
+      padding: const EdgeInsets.all(AppSpace.lg),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
         border: Border.all(
           color: isDark
-              ? AppTheme.darkBorder.withValues(alpha: 0.5)
-              : AppTheme.lightBorder,
+              ? AppColors.borderStrong.withValues(alpha: 0.5)
+              : AppColors.borderStrong,
         ),
       ),
       child: const Column(
@@ -134,14 +134,14 @@ class SkeletonCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              SkeletonBox(width: 40, height: 40, radius: AppTheme.radiusFull),
-              SizedBox(width: AppTheme.space3),
+              SkeletonBox(width: 40, height: 40, radius: AppRadius.full),
+              SizedBox(width: AppSpace.md),
               Expanded(child: SkeletonBox()),
             ],
           ),
-          SizedBox(height: AppTheme.space4),
+          SizedBox(height: AppSpace.lg),
           SkeletonBox(width: double.infinity, height: 12),
-          SizedBox(height: AppTheme.space2),
+          SizedBox(height: AppSpace.sm),
           SkeletonBox(width: 200, height: 12),
         ],
       ),

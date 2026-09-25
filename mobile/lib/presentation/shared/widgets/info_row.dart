@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../../core/theme/app_theme.dart';
+import '../../../core/design/design.dart';
 
 /// سطر معلومة: أيقونة، عنوان صغير، وقيمة (نص، رمز قابل للنسخ، أو رابط يُفتح خارجياً).
 class InfoRow extends StatelessWidget {
@@ -42,7 +42,7 @@ class InfoRow extends StatelessWidget {
           value,
           style: const TextStyle(
             fontSize: 11,
-            color: AppTheme.neonCyan,
+            color: AppColors.brand,
             fontWeight: FontWeight.bold,
             decoration: TextDecoration.underline,
             fontFamily: 'Cairo',
@@ -52,25 +52,25 @@ class InfoRow extends StatelessWidget {
     } else if (isCode) {
       valueWidget = SelectableText(
         value,
-        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500, fontFamily: 'monospace', color: AppTheme.neonCyan),
+        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500, fontFamily: 'monospace', color: AppColors.brand),
       );
     } else {
       valueWidget = Text(
         value,
-        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, fontFamily: 'Cairo', color: Colors.white),
+        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, fontFamily: 'Cairo', color: AppColors.textPrimary),
       );
     }
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, size: 16, color: Colors.white54),
+        Icon(icon, size: 16, color: AppColors.textMuted),
         const SizedBox(width: 8),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(label, style: const TextStyle(fontSize: 9.5, color: Colors.white38, fontFamily: 'Cairo')),
+              Text(label, style: const TextStyle(fontSize: 9.5, color: AppColors.textDisabled, fontFamily: 'Cairo')),
               const SizedBox(height: 2),
               valueWidget,
             ],

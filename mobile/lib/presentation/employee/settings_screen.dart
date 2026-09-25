@@ -13,13 +13,13 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../core/constants/constants.dart';
+import '../../core/design/design.dart';
 import '../../core/routes/app_router.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/device_service.dart';
 import '../../core/services/file_upload_service.dart';
 import '../../core/services/notification_service.dart';
 import '../../core/services/supabase_service.dart';
-import '../../core/theme/app_theme.dart';
 import '../shared/widgets/glass_container.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -170,7 +170,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('تم تحديث صورتك الشخصية بنجاح وضغطها أوتوماتيكياً! 📸', style: TextStyle(fontFamily: 'Cairo')),
-            backgroundColor: AppTheme.successGreen,
+            backgroundColor: AppColors.success,
           ),
         );
       }
@@ -180,7 +180,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('فشل رفع الصورة: $e', style: const TextStyle(fontFamily: 'Cairo')),
-            backgroundColor: AppTheme.dangerRed,
+            backgroundColor: AppColors.danger,
           ),
         );
       }
@@ -225,7 +225,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('تم رفع الوثيقة بنجاح وضغطها أوتوماتيكياً! 📄', style: TextStyle(fontFamily: 'Cairo')),
-            backgroundColor: AppTheme.successGreen,
+            backgroundColor: AppColors.success,
           ),
         );
       }
@@ -234,7 +234,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('فشل رفع الوثيقة: $e', style: const TextStyle(fontFamily: 'Cairo')),
-            backgroundColor: AppTheme.dangerRed,
+            backgroundColor: AppColors.danger,
           ),
         );
       }
@@ -248,7 +248,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     unawaited(showDialog<dynamic>(
       context: context,
       builder: (ctx) => Dialog(
-        backgroundColor: const Color(0xFF0F172A),
+        backgroundColor: AppColors.surface1,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -260,13 +260,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 children: [
                   const Row(
                     children: [
-                      Icon(Icons.description_rounded, color: AppTheme.neonCyan, size: 20),
+                      Icon(Icons.description_rounded, color: AppColors.brand, size: 20),
                       SizedBox(width: 8),
-                      Text('معاينة الوثيقة المعتمدة 📄', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: Colors.white, fontSize: 13)),
+                      Text('معاينة الوثيقة المعتمدة 📄', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: AppColors.textPrimary, fontSize: 13)),
                     ],
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close_rounded, color: Colors.white60, size: 18),
+                    icon: const Icon(Icons.close_rounded, color: AppColors.textMuted, size: 18),
                     onPressed: () => Navigator.pop(ctx),
                   ),
                 ],
@@ -276,7 +276,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 borderRadius: BorderRadius.circular(12),
                 child: Container(
                   constraints: const BoxConstraints(maxHeight: 300),
-                  color: Colors.black26,
+                  color: AppColors.shadow,
                   child: Image.network(
                     url,
                     fit: BoxFit.contain,
@@ -285,9 +285,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.picture_as_pdf_rounded, color: AppTheme.neonPink, size: 48),
+                          Icon(Icons.picture_as_pdf_rounded, color: AppColors.accent, size: 48),
                           SizedBox(height: 8),
-                          Text('مستند PDF أو ملف رقمي', style: TextStyle(fontFamily: 'Cairo', color: Colors.white70, fontSize: 12)),
+                          Text('مستند PDF أو ملف رقمي', style: TextStyle(fontFamily: 'Cairo', color: AppColors.textSecondary, fontSize: 12)),
                         ],
                       ),
                     ),
@@ -304,8 +304,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         await SharePlus.instance.share(ShareParams(uri: Uri.parse(url)));
                       },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.primaryTeal,
-                        foregroundColor: Colors.white,
+                        backgroundColor: AppColors.brandStrong,
+                        foregroundColor: AppColors.textPrimary,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                       icon: const Icon(Icons.share_rounded, size: 16),
@@ -328,7 +328,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('عذراً، حذف الوثائق المعتمدة مخصص للآدمن ومسؤول الـ HR فقط 🔒', style: TextStyle(fontFamily: 'Cairo')),
-          backgroundColor: AppTheme.dangerRed,
+          backgroundColor: AppColors.danger,
         ),
       );
       return;
@@ -340,13 +340,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF0F172A),
-        title: const Text('حذف وثيقة', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: Colors.white)),
-        content: const Text('هل أنت متأكد أنك تريد حذف هذه الوثيقة من السيرفر بشكل نهائي؟', style: TextStyle(fontFamily: 'Cairo', color: Colors.white70)),
+        backgroundColor: AppColors.surface1,
+        title: const Text('حذف وثيقة', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+        content: const Text('هل أنت متأكد أنك تريد حذف هذه الوثيقة من السيرفر بشكل نهائي؟', style: TextStyle(fontFamily: 'Cairo', color: AppColors.textSecondary)),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('إلغاء', style: TextStyle(fontFamily: 'Cairo', color: Colors.grey))),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('إلغاء', style: TextStyle(fontFamily: 'Cairo', color: AppColors.textMuted))),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.dangerRed),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
             onPressed: () => Navigator.pop(context, true), 
             child: const Text('حذف نهائي', style: TextStyle(fontFamily: 'Cairo'))
           ),
@@ -396,7 +396,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('إلغاء', style: TextStyle(fontFamily: 'Cairo', color: Colors.grey)),
+            child: const Text('إلغاء', style: TextStyle(fontFamily: 'Cairo', color: AppColors.textMuted)),
           ),
           ElevatedButton(
             onPressed: () async {
@@ -405,7 +405,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               await SupabaseService.signOut();
               router.go(AppRoutes.login);
             },
-            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.dangerRed),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
             child: const Text('تسجيل خروج', style: TextStyle(fontFamily: 'Cairo')),
           ),
         ],
@@ -423,7 +423,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       barrierDismissible: false,
       builder: (context) => const Center(
-        child: CircularProgressIndicator(color: AppTheme.neonCyan),
+        child: CircularProgressIndicator(color: AppColors.brand),
       ),
     ));
 
@@ -459,7 +459,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text('حسناً', style: TextStyle(fontFamily: 'Cairo', color: AppTheme.neonCyan)),
+                  child: const Text('حسناً', style: TextStyle(fontFamily: 'Cairo', color: AppColors.brand)),
                 ),
               ],
             ),
@@ -481,7 +481,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text('إلغاء', style: TextStyle(fontFamily: 'Cairo', color: Colors.grey)),
+                child: const Text('إلغاء', style: TextStyle(fontFamily: 'Cairo', color: AppColors.textMuted)),
               ),
               ElevatedButton(
                 onPressed: () async {
@@ -492,7 +492,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     context: context,
                     barrierDismissible: false,
                     builder: (context) => const Center(
-                      child: CircularProgressIndicator(color: AppTheme.neonCyan),
+                      child: CircularProgressIndicator(color: AppColors.brand),
                     ),
                   ));
 
@@ -505,7 +505,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       unawaited(showDialog<dynamic>(
                         context: context,
                         builder: (context) => AlertDialog(
-                          title: const Text('تم تقديم الطلب ✅', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: Colors.green)),
+                          title: const Text('تم تقديم الطلب ✅', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: AppColors.success)),
                           content: const Text(
                             'تم إرسال طلب حذف حسابك بنجاح للمدير العام. سيتم مراجعة المديونيات والأقساط والموافقة على الحذف قريباً.',
                             style: TextStyle(fontFamily: 'Cairo', fontSize: 13),
@@ -513,7 +513,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           actions: [
                             TextButton(
                               onPressed: () => Navigator.pop(context),
-                              child: const Text('حسناً', style: TextStyle(fontFamily: 'Cairo', color: AppTheme.neonCyan)),
+                              child: const Text('حسناً', style: TextStyle(fontFamily: 'Cairo', color: AppColors.brand)),
                             ),
                           ],
                         ),
@@ -529,7 +529,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     }
                   }
                 },
-                style: ElevatedButton.styleFrom(backgroundColor: AppTheme.dangerRed),
+                style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
                 child: const Text('تأكيد الطلب', style: TextStyle(fontFamily: 'Cairo')),
               ),
             ],
@@ -555,7 +555,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (_isLoading) {
       return const Scaffold(
         backgroundColor: Colors.transparent,
-        body: Center(child: CircularProgressIndicator(color: AppTheme.neonCyan)),
+        body: Center(child: CircularProgressIndicator(color: AppColors.brand)),
       );
     }
 
@@ -570,7 +570,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           style: TextStyle(
             fontFamily: 'Cairo',
             fontWeight: FontWeight.bold,
-            color: Colors.white,
+            color: AppColors.textPrimary,
           ),
         ),
       ),
@@ -582,11 +582,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             GlassContainer(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
-              opacity: 0.1,
-              borderColor: AppTheme.neonCyan.withValues(alpha: 0.2),
+              borderColor: AppColors.brand.withValues(alpha: 0.2),
               boxShadow: [
                 BoxShadow(
-                  color: AppTheme.neonCyan.withValues(alpha: 0.04),
+                  color: AppColors.brand.withValues(alpha: 0.04),
                   blurRadius: 20,
                 )
               ],
@@ -598,10 +597,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       Container(
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          border: Border.all(color: AppTheme.neonCyan, width: 3),
+                          border: Border.all(color: AppColors.brand, width: 3),
                           boxShadow: [
                             BoxShadow(
-                              color: AppTheme.neonCyan.withValues(alpha: 0.3),
+                              color: AppColors.brand.withValues(alpha: 0.3),
                               blurRadius: 16,
                               spreadRadius: 1,
                             )
@@ -609,10 +608,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                         child: CircleAvatar(
                           radius: 50,
-                          backgroundColor: Colors.white.withValues(alpha: 0.04),
+                          backgroundColor: AppColors.textPrimary.withValues(alpha: 0.04),
                           backgroundImage: _avatarUrl.isNotEmpty ? NetworkImage(_avatarUrl) : null,
                           child: _avatarUrl.isEmpty
-                              ? const Icon(Icons.person, size: 50, color: AppTheme.neonCyan)
+                              ? const Icon(Icons.person, size: 50, color: AppColors.brand)
                               : null,
                         ),
                       ),
@@ -624,16 +623,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           child: Container(
                             padding: const EdgeInsets.all(6),
                             decoration: const BoxDecoration(
-                              color: AppTheme.neonCyan,
+                              color: AppColors.brand,
                               shape: BoxShape.circle,
                             ),
                             child: _isUploadingAvatar
                                 ? const SizedBox(
                                     width: 16,
                                     height: 16,
-                                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                                    child: CircularProgressIndicator(color: AppColors.textPrimary, strokeWidth: 2),
                                   )
-                                : const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 16),
+                                : const Icon(Icons.camera_alt_rounded, color: AppColors.textPrimary, size: 16),
                           ),
                         ),
                       ),
@@ -644,23 +643,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   // بيانات الموظف
                   Text(
                     _employeeName,
-                    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: Colors.white, fontFamily: 'Cairo'),
+                    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: AppColors.textPrimary, fontFamily: 'Cairo'),
                   ),
                   const SizedBox(height: 6),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: AppTheme.neonCyan.withValues(alpha: 0.15),
+                      color: AppColors.brand.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: AppTheme.neonCyan.withValues(alpha: 0.3)),
+                      border: Border.all(color: AppColors.brand.withValues(alpha: 0.3)),
                     ),
                     child: Text(
                       _employeeCode,
-                      style: const TextStyle(color: AppTheme.neonCyan, fontSize: 11, fontWeight: FontWeight.bold, fontFamily: 'Cairo'),
+                      style: const TextStyle(color: AppColors.brand, fontSize: 11, fontWeight: FontWeight.bold, fontFamily: 'Cairo'),
                     ),
                   ),
                   const SizedBox(height: 18),
-                  const Divider(color: Colors.white12),
+                  const Divider(color: AppColors.border),
                   const SizedBox(height: 8),
 
                   _buildProfileRow(Icons.email_outlined, 'البريد الإلكتروني للعمل', _email, isDark),
@@ -675,11 +674,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             GlassContainer(
               width: double.infinity,
               padding: const EdgeInsets.all(20),
-              opacity: 0.1,
-              borderColor: AppTheme.warningOrange.withValues(alpha: 0.2),
+              borderColor: AppColors.warning.withValues(alpha: 0.2),
               boxShadow: [
                 BoxShadow(
-                  color: AppTheme.warningOrange.withValues(alpha: 0.04),
+                  color: AppColors.warning.withValues(alpha: 0.04),
                   blurRadius: 20,
                 )
               ],
@@ -688,14 +686,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 children: [
                   const Row(
                     children: [
-                      Icon(Icons.verified_user_rounded, color: AppTheme.warningOrange),
+                      Icon(Icons.verified_user_rounded, color: AppColors.warning),
                       SizedBox(width: 8),
                       Text(
                         'حماية الحساب وقفل الأجهزة 🛡️',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 14,
-                          color: Colors.white,
+                          color: AppColors.textPrimary,
                           fontFamily: 'Cairo',
                         ),
                       ),
@@ -704,9 +702,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   const SizedBox(height: 6),
                   const Text(
                     'تطبيقاً لأعلى معايير الحماية ومكافحة التزوير، تم قفل حسابك وربطه تلقائياً بجهازك الحالي المعتمد أدناه. لا يمكن تسجيل الدخول من أي هاتف آخر إلا بموافقة الإدارة.',
-                    style: TextStyle(fontSize: 11, color: Colors.white70, height: 1.5, fontFamily: 'Cairo'),
+                    style: TextStyle(fontSize: 11, color: AppColors.textSecondary, height: 1.5, fontFamily: 'Cairo'),
                   ),
-                  const Divider(height: 24, color: Colors.white12),
+                  const Divider(height: 24, color: AppColors.border),
                   _buildProfileRow(Icons.phone_android_rounded, 'طراز وهاتف الدخول المقفل', _deviceModel, isDark),
                   const SizedBox(height: 12),
                   _buildProfileRow(Icons.adb_rounded, 'نسخة نظام الدوران الفوري', _osVersion, isDark),
@@ -722,21 +720,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
             GlassContainer(
               width: double.infinity,
               padding: const EdgeInsets.all(20),
-              opacity: 0.1,
-              borderColor: AppTheme.neonCyan.withValues(alpha: 0.2),
+              borderColor: AppColors.brand.withValues(alpha: 0.2),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Row(
                     children: [
-                      Icon(Icons.notifications_active_rounded, color: AppTheme.neonCyan),
+                      Icon(Icons.notifications_active_rounded, color: AppColors.brand),
                       SizedBox(width: 8),
                       Text(
                         'إعدادات الإشعارات 🔔',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 14,
-                          color: Colors.white,
+                          color: AppColors.textPrimary,
                           fontFamily: 'Cairo',
                         ),
                       ),
@@ -749,13 +746,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
                       color: _notificationPermissionGranted
-                          ? AppTheme.successGreen.withValues(alpha: 0.1)
-                          : AppTheme.dangerRed.withValues(alpha: 0.1),
+                          ? AppColors.success.withValues(alpha: 0.1)
+                          : AppColors.danger.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
                         color: _notificationPermissionGranted
-                            ? AppTheme.successGreen.withValues(alpha: 0.3)
-                            : AppTheme.dangerRed.withValues(alpha: 0.3),
+                            ? AppColors.success.withValues(alpha: 0.3)
+                            : AppColors.danger.withValues(alpha: 0.3),
                       ),
                     ),
                     child: Row(
@@ -765,8 +762,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               ? Icons.check_circle_rounded
                               : Icons.cancel_rounded,
                           color: _notificationPermissionGranted
-                              ? AppTheme.successGreen
-                              : AppTheme.dangerRed,
+                              ? AppColors.success
+                              : AppColors.danger,
                           size: 20,
                         ),
                         const SizedBox(width: 10),
@@ -779,8 +776,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               fontFamily: 'Cairo',
                               fontSize: 12,
                               color: _notificationPermissionGranted
-                                  ? AppTheme.successGreen
-                                  : AppTheme.dangerRed,
+                                  ? AppColors.success
+                                  : AppColors.danger,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
@@ -803,8 +800,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       icon: const Icon(Icons.notifications_active_rounded, size: 18),
                       label: const Text('تفعيل الإشعارات', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 13)),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.dangerRed,
-                        foregroundColor: Colors.white,
+                        backgroundColor: AppColors.danger,
+                        foregroundColor: AppColors.textPrimary,
                         minimumSize: const Size(double.infinity, 48),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
@@ -818,8 +815,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             GlassContainer(
               width: double.infinity,
               padding: const EdgeInsets.all(20),
-              opacity: 0.1,
-              borderColor: Colors.blueAccent.withValues(alpha: 0.2),
+              borderColor: AppColors.info.withValues(alpha: 0.2),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -828,14 +824,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     children: [
                       const Row(
                         children: [
-                          Icon(Icons.folder_shared_rounded, color: Colors.blueAccent),
+                          Icon(Icons.folder_shared_rounded, color: AppColors.info),
                           SizedBox(width: 8),
                           Text(
                             'وثائقي وملفاتي 📄',
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 14,
-                              color: Colors.white,
+                              color: AppColors.textPrimary,
                               fontFamily: 'Cairo',
                             ),
                           ),
@@ -844,12 +840,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       if (_isUploadingDoc)
                         const SizedBox(
                           width: 16, height: 16,
-                          child: CircularProgressIndicator(color: Colors.blueAccent, strokeWidth: 2),
+                          child: CircularProgressIndicator(color: AppColors.info, strokeWidth: 2),
                         )
                       else
                         IconButton(
                           onPressed: _uploadDocument,
-                          icon: const Icon(Icons.add_circle_outline, color: Colors.blueAccent),
+                          icon: const Icon(Icons.add_circle_outline, color: AppColors.info),
                           tooltip: 'رفع وثيقة جديدة',
                           constraints: const BoxConstraints(),
                           padding: EdgeInsets.zero,
@@ -858,7 +854,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   const SizedBox(height: 16),
                   if (_documentUrls.isEmpty)
-                    const Text('لا توجد وثائق مرفوعة حالياً.', style: TextStyle(color: Colors.white54, fontSize: 12, fontFamily: 'Cairo'))
+                    const Text('لا توجد وثائق مرفوعة حالياً.', style: TextStyle(color: AppColors.textMuted, fontSize: 12, fontFamily: 'Cairo'))
                   else
                     Wrap(
                       spacing: 12,
@@ -875,9 +871,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 width: 68,
                                 height: 68,
                                 decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.05),
+                                  color: AppColors.textPrimary.withValues(alpha: 0.05),
                                   borderRadius: BorderRadius.circular(14),
-                                  border: Border.all(color: AppTheme.neonCyan.withValues(alpha: 0.4)),
+                                  border: Border.all(color: AppColors.brand.withValues(alpha: 0.4)),
                                 ),
                                 child: ClipRRect(
                                   borderRadius: BorderRadius.circular(14),
@@ -885,7 +881,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                     url,
                                     fit: BoxFit.cover,
                                     errorBuilder: (_, __, ___) => const Center(
-                                      child: Icon(Icons.picture_as_pdf_rounded, color: AppTheme.neonPink, size: 28),
+                                      child: Icon(Icons.picture_as_pdf_rounded, color: AppColors.accent, size: 28),
                                     ),
                                   ),
                                 ),
@@ -901,21 +897,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                         child: Container(
                                           padding: const EdgeInsets.all(4),
                                           decoration: const BoxDecoration(
-                                            color: AppTheme.dangerRed,
+                                            color: AppColors.danger,
                                             shape: BoxShape.circle,
-                                            boxShadow: [BoxShadow(color: Colors.black45, blurRadius: 4)],
+                                            boxShadow: [BoxShadow(color: AppColors.shadow, blurRadius: 4)],
                                           ),
-                                          child: const Icon(Icons.close, color: Colors.white, size: 12),
+                                          child: const Icon(Icons.close, color: AppColors.textPrimary, size: 12),
                                         ),
                                       )
                                     : Container(
                                         padding: const EdgeInsets.all(4),
                                         decoration: const BoxDecoration(
-                                          color: AppTheme.successGreen,
+                                          color: AppColors.success,
                                           shape: BoxShape.circle,
-                                          boxShadow: [BoxShadow(color: Colors.black45, blurRadius: 4)],
+                                          boxShadow: [BoxShadow(color: AppColors.shadow, blurRadius: 4)],
                                         ),
-                                        child: const Icon(Icons.lock_rounded, color: Colors.white, size: 10),
+                                        child: const Icon(Icons.lock_rounded, color: AppColors.textPrimary, size: 10),
                                       ),
                               ),
                             ],
@@ -931,21 +927,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
             GlassContainer(
               width: double.infinity,
               padding: const EdgeInsets.all(20),
-              opacity: 0.1,
-              borderColor: AppTheme.neonCyan.withValues(alpha: 0.2),
+              borderColor: AppColors.brand.withValues(alpha: 0.2),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Row(
                     children: [
-                      Icon(Icons.account_balance_wallet_rounded, color: AppTheme.neonCyan),
+                      Icon(Icons.account_balance_wallet_rounded, color: AppColors.brand),
                       SizedBox(width: 8),
                       Text(
                         'الخدمات المالية وكشف الراتب 💸',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 14,
-                          color: Colors.white,
+                          color: AppColors.textPrimary,
                           fontFamily: 'Cairo',
                         ),
                       ),
@@ -960,9 +955,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 13),
                     ),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.neonCyan.withValues(alpha: 0.2),
-                      foregroundColor: AppTheme.neonCyan,
-                      side: BorderSide(color: AppTheme.neonCyan.withValues(alpha: 0.4)),
+                      backgroundColor: AppColors.brand.withValues(alpha: 0.2),
+                      foregroundColor: AppColors.brand,
+                      side: BorderSide(color: AppColors.brand.withValues(alpha: 0.4)),
                       minimumSize: const Size(double.infinity, 48),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
@@ -977,9 +972,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 13),
                       ),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.cyberPurple.withValues(alpha: 0.2),
-                        foregroundColor: AppTheme.neonCyan,
-                        side: BorderSide(color: AppTheme.neonCyan.withValues(alpha: 0.4)),
+                        backgroundColor: AppColors.accent.withValues(alpha: 0.2),
+                        foregroundColor: AppColors.brand,
+                        side: BorderSide(color: AppColors.brand.withValues(alpha: 0.4)),
                         minimumSize: const Size(double.infinity, 48),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
@@ -993,9 +988,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 13),
                       ),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.successGreen.withValues(alpha: 0.2),
-                        foregroundColor: AppTheme.successGreen,
-                        side: BorderSide(color: AppTheme.successGreen.withValues(alpha: 0.4)),
+                        backgroundColor: AppColors.success.withValues(alpha: 0.2),
+                        foregroundColor: AppColors.success,
+                        side: BorderSide(color: AppColors.success.withValues(alpha: 0.4)),
                         minimumSize: const Size(double.infinity, 48),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
@@ -1014,7 +1009,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
-                    color: AppTheme.neonPink.withValues(alpha: 0.3),
+                    color: AppColors.accent.withValues(alpha: 0.3),
                     blurRadius: 16,
                     spreadRadius: 1,
                   )
@@ -1023,8 +1018,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: ElevatedButton(
                 onPressed: _handleLogout,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.neonPink,
-                  foregroundColor: Colors.white,
+                  backgroundColor: AppColors.accent,
+                  foregroundColor: AppColors.textPrimary,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                   minimumSize: const Size(double.infinity, 50),
@@ -1050,21 +1045,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SizedBox(height: 16),
             TextButton.icon(
               onPressed: _handleDeleteAccountRequest,
-              icon: const Icon(Icons.delete_forever_rounded, color: Colors.redAccent),
+              icon: const Icon(Icons.delete_forever_rounded, color: AppColors.danger),
               label: const Text(
                 'طلب حذف الحساب',
                 style: TextStyle(
                   fontFamily: 'Cairo',
                   fontWeight: FontWeight.bold,
                   fontSize: 14,
-                  color: Colors.redAccent,
+                  color: AppColors.danger,
                 ),
               ),
               style: TextButton.styleFrom(
                 minimumSize: const Size(double.infinity, 50),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
-                  side: const BorderSide(color: Colors.redAccent, width: 1.5),
+                  side: const BorderSide(color: AppColors.danger, width: 1.5),
                 ),
               ),
             ),
@@ -1078,13 +1073,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget _buildProfileRow(IconData icon, String title, String val, bool isDark, {bool isCode = false}) {
     return Row(
       children: [
-        Icon(icon, size: 20, color: Colors.white60),
+        Icon(icon, size: 20, color: AppColors.textMuted),
         const SizedBox(width: 12),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(title, style: const TextStyle(fontSize: 10, color: Colors.white54, fontFamily: 'Cairo')),
+              Text(title, style: const TextStyle(fontSize: 10, color: AppColors.textMuted, fontFamily: 'Cairo')),
               const SizedBox(height: 2),
               Text(
                 val,
@@ -1092,7 +1087,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   fontSize: 12,
                   fontWeight: isCode ? FontWeight.w500 : FontWeight.bold,
                   fontFamily: isCode ? 'monospace' : 'Cairo',
-                  color: Colors.white,
+                  color: AppColors.textPrimary,
                 ),
               ),
             ],

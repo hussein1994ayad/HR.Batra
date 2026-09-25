@@ -22,7 +22,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
-import '../../../core/theme/app_theme.dart';
+import '../../../core/design/design.dart';
 
 /// حالة الاتصال العالمية — تُحدَّث من AttendanceSyncService أو مراقبة الشبكة.
 class ConnectivityStatus {
@@ -69,8 +69,8 @@ class OfflineBanner extends StatelessWidget {
       valueListenable: ConnectivityStatus.isOnline,
       builder: (context, isOnline, _) {
         return AnimatedSize(
-          duration: AppTheme.motionNormal,
-          curve: AppTheme.curveStandard,
+          duration: AppMotion.normal,
+          curve: AppMotion.standard,
           child: isOnline ? const SizedBox.shrink() : _bar(context),
         );
       },
@@ -80,22 +80,22 @@ class OfflineBanner extends StatelessWidget {
   Widget _bar(BuildContext context) {
     return Container(
       width: double.infinity,
-      color: AppTheme.warningOrange,
+      color: AppColors.warning,
       padding: const EdgeInsets.symmetric(
-        horizontal: AppTheme.space4,
-        vertical: AppTheme.space2,
+        horizontal: AppSpace.lg,
+        vertical: AppSpace.sm,
       ),
       child: SafeArea(
         bottom: false,
         child: Row(
           children: [
-            const Icon(Icons.wifi_off_rounded, color: Colors.white, size: 18),
-            const SizedBox(width: AppTheme.space2),
+            const Icon(Icons.wifi_off_rounded, color: AppColors.textPrimary, size: 18),
+            const SizedBox(width: AppSpace.sm),
             const Expanded(
               child: Text(
                 'أنت غير متصل بالإنترنت — تُحفظ التغييرات محلياً وسنزامنها فور عودة الاتصال',
                 style: TextStyle(
-                  color: Colors.white,
+                  color: AppColors.textPrimary,
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
                   fontFamily: 'Cairo',
@@ -105,9 +105,9 @@ class OfflineBanner extends StatelessWidget {
             TextButton(
               onPressed: ConnectivityStatus.check,
               style: TextButton.styleFrom(
-                foregroundColor: Colors.white,
+                foregroundColor: AppColors.textPrimary,
                 minimumSize: const Size(0, 32),
-                padding: const EdgeInsets.symmetric(horizontal: AppTheme.space3),
+                padding: const EdgeInsets.symmetric(horizontal: AppSpace.md),
               ),
               child: const Text(
                 'إعادة محاولة',

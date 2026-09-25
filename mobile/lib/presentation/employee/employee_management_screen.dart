@@ -16,9 +16,9 @@ import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../core/design/design.dart';
 import '../../core/services/image_compression_service.dart';
 import '../../core/services/supabase_service.dart';
-import '../../core/theme/app_theme.dart';
 import '../shared/widgets/glass_background.dart';
 import '../shared/widgets/glass_container.dart';
 
@@ -92,7 +92,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(!currentStatus ? 'تم تفعيل حساب الموظف ✅' : 'تم تعطيل حساب الموظف ❌', style: const TextStyle(fontFamily: 'Cairo')),
-            backgroundColor: !currentStatus ? AppTheme.successGreen : AppTheme.warningOrange,
+            backgroundColor: !currentStatus ? AppColors.success : AppColors.warning,
           ),
         );
       }
@@ -124,7 +124,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('تم فك ربط جهاز الموظف بنجاح ✅', style: TextStyle(fontFamily: 'Cairo')),
-            backgroundColor: AppTheme.successGreen,
+            backgroundColor: AppColors.success,
           ),
         );
       }
@@ -180,12 +180,12 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
             return Container(
               height: MediaQuery.of(context).size.height * 0.9,
               decoration: BoxDecoration(
-                color: const Color(0xFF1A1F3A),
+                color: AppColors.surface2,
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-                border: Border.all(color: AppTheme.neonCyan.withValues(alpha: 0.2)),
+                border: Border.all(color: AppColors.brand.withValues(alpha: 0.2)),
               ),
               child: isSaving 
-                  ? const Center(child: CircularProgressIndicator(color: AppTheme.neonCyan))
+                  ? const Center(child: CircularProgressIndicator(color: AppColors.brand))
                   : Column(
                 children: [
                   Container(
@@ -193,7 +193,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                     width: 40,
                     height: 4,
                     decoration: BoxDecoration(
-                      color: Colors.white24,
+                      color: AppColors.borderStrong,
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -204,20 +204,20 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                         Container(
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
-                            color: AppTheme.neonCyan.withValues(alpha: 0.15),
+                            color: AppColors.brand.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          child: const Icon(Icons.person_add_rounded, color: AppTheme.neonCyan, size: 22),
+                          child: const Icon(Icons.person_add_rounded, color: AppColors.brand, size: 22),
                         ),
                         const SizedBox(width: 12),
                         const Text(
                           'إضافة موظف جديد',
-                          style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white),
+                          style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.textPrimary),
                         ),
                       ],
                     ),
                   ),
-                  const Divider(color: Colors.white10, height: 1),
+                  const Divider(color: AppColors.border, height: 1),
                   Expanded(
                     child: ListView(
                       padding: const EdgeInsets.all(20),
@@ -230,7 +230,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                         const SizedBox(height: 16),
                         _buildTextField(codeController, 'كود الموظف (الرقم الوظيفي)', Icons.badge_rounded),
                         const SizedBox(height: 16),
-                        const Text('الصلاحية', style: TextStyle(fontFamily: 'Cairo', color: Colors.white70, fontSize: 12)),
+                        const Text('الصلاحية', style: TextStyle(fontFamily: 'Cairo', color: AppColors.textSecondary, fontSize: 12)),
                         const SizedBox(height: 8),
                         Row(
                           children: [
@@ -244,7 +244,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                           ],
                         ),
                         const SizedBox(height: 16),
-                        const Text('المستمسكات الثبوتية (اختياري)', style: TextStyle(fontFamily: 'Cairo', color: Colors.white70, fontSize: 12)),
+                        const Text('المستمسكات الثبوتية (اختياري)', style: TextStyle(fontFamily: 'Cairo', color: AppColors.textSecondary, fontSize: 12)),
                         const SizedBox(height: 8),
                         Wrap(
                           spacing: 8,
@@ -264,7 +264,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                                     right: -4,
                                     child: GestureDetector(
                                       onTap: () => setModalState(() => selectedDocuments.removeAt(idx)),
-                                      child: const CircleAvatar(radius: 10, backgroundColor: Colors.red, child: Icon(Icons.close, size: 12, color: Colors.white)),
+                                      child: const CircleAvatar(radius: 10, backgroundColor: AppColors.danger, child: Icon(Icons.close, size: 12, color: AppColors.textPrimary)),
                                     ),
                                   )
                                 ],
@@ -283,17 +283,17 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                                 width: 60,
                                 height: 60,
                                 decoration: BoxDecoration(
-                                  border: Border.all(color: AppTheme.neonCyan.withValues(alpha: 0.5)),
+                                  border: Border.all(color: AppColors.brand.withValues(alpha: 0.5)),
                                   borderRadius: BorderRadius.circular(12),
-                                  color: AppTheme.neonCyan.withValues(alpha: 0.1),
+                                  color: AppColors.brand.withValues(alpha: 0.1),
                                 ),
-                                child: const Icon(Icons.add_a_photo_rounded, color: AppTheme.neonCyan),
+                                child: const Icon(Icons.add_a_photo_rounded, color: AppColors.brand),
                               ),
                             )
                           ],
                         ),
                         const SizedBox(height: 4),
-                        const Text('سيتم ضغط الصور تلقائياً', style: TextStyle(fontFamily: 'Cairo', color: Colors.white38, fontSize: 10)),
+                        const Text('سيتم ضغط الصور تلقائياً', style: TextStyle(fontFamily: 'Cairo', color: AppColors.textDisabled, fontSize: 10)),
                       ],
                     ),
                   ),
@@ -340,7 +340,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                             if (context.mounted) {
                               Navigator.pop(context);
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('تم إنشاء الموظف بنجاح ✅', style: TextStyle(fontFamily: 'Cairo')), backgroundColor: AppTheme.successGreen),
+                                const SnackBar(content: Text('تم إنشاء الموظف بنجاح ✅', style: TextStyle(fontFamily: 'Cairo')), backgroundColor: AppColors.success),
                               );
                               unawaited(_loadEmployees());
                             }
@@ -348,13 +348,13 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                             setModalState(() => isSaving = false);
                             if (!context.mounted) return;
                             ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('خطأ: $e', style: const TextStyle(fontFamily: 'Cairo')), backgroundColor: AppTheme.dangerRed),
+                              SnackBar(content: Text('خطأ: $e', style: const TextStyle(fontFamily: 'Cairo')), backgroundColor: AppColors.danger),
                             );
                           }
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: AppTheme.neonCyan,
-                          foregroundColor: Colors.black,
+                          backgroundColor: AppColors.brand,
+                          foregroundColor: AppColors.onStatus,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                         ),
                         child: const Text('إنشاء الحساب', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 15)),
@@ -386,12 +386,12 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
             return Container(
               height: MediaQuery.of(context).size.height * 0.9,
               decoration: BoxDecoration(
-                color: const Color(0xFF1A1F3A),
+                color: AppColors.surface2,
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-                border: Border.all(color: AppTheme.neonCyan.withValues(alpha: 0.2)),
+                border: Border.all(color: AppColors.brand.withValues(alpha: 0.2)),
               ),
               child: isSaving 
-                  ? const Center(child: CircularProgressIndicator(color: AppTheme.neonCyan))
+                  ? const Center(child: CircularProgressIndicator(color: AppColors.brand))
                   : Column(
                 children: [
                   Container(
@@ -399,7 +399,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                     width: 40,
                     height: 4,
                     decoration: BoxDecoration(
-                      color: Colors.white24,
+                      color: AppColors.borderStrong,
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -410,26 +410,26 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                         Container(
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
-                            color: AppTheme.neonCyan.withValues(alpha: 0.15),
+                            color: AppColors.brand.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          child: const Icon(Icons.edit_document, color: AppTheme.neonCyan, size: 22),
+                          child: const Icon(Icons.edit_document, color: AppColors.brand, size: 22),
                         ),
                         const SizedBox(width: 12),
                         Text(
                           'تعديل ملف ومستمسكات ${emp['full_name']}',
-                          style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white),
+                          style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.textPrimary),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ],
                     ),
                   ),
-                  const Divider(color: Colors.white10, height: 1),
+                  const Divider(color: AppColors.border, height: 1),
                   Expanded(
                     child: ListView(
                       padding: const EdgeInsets.all(20),
                       children: [
-                        const Text('تعديل المستمسكات الثبوتية', style: TextStyle(fontFamily: 'Cairo', color: Colors.white70, fontSize: 12)),
+                        const Text('تعديل المستمسكات الثبوتية', style: TextStyle(fontFamily: 'Cairo', color: AppColors.textSecondary, fontSize: 12)),
                         const SizedBox(height: 8),
                         Wrap(
                           spacing: 8,
@@ -449,7 +449,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                                     right: -4,
                                     child: GestureDetector(
                                       onTap: () => setModalState(() => existingDocuments.removeAt(idx)),
-                                      child: const CircleAvatar(radius: 10, backgroundColor: Colors.red, child: Icon(Icons.close, size: 12, color: Colors.white)),
+                                      child: const CircleAvatar(radius: 10, backgroundColor: AppColors.danger, child: Icon(Icons.close, size: 12, color: AppColors.textPrimary)),
                                     ),
                                   )
                                 ],
@@ -469,7 +469,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                                     right: -4,
                                     child: GestureDetector(
                                       onTap: () => setModalState(() => selectedDocuments.removeAt(idx)),
-                                      child: const CircleAvatar(radius: 10, backgroundColor: Colors.red, child: Icon(Icons.close, size: 12, color: Colors.white)),
+                                      child: const CircleAvatar(radius: 10, backgroundColor: AppColors.danger, child: Icon(Icons.close, size: 12, color: AppColors.textPrimary)),
                                     ),
                                   )
                                 ],
@@ -488,17 +488,17 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                                 width: 60,
                                 height: 60,
                                 decoration: BoxDecoration(
-                                  border: Border.all(color: AppTheme.neonCyan.withValues(alpha: 0.5)),
+                                  border: Border.all(color: AppColors.brand.withValues(alpha: 0.5)),
                                   borderRadius: BorderRadius.circular(12),
-                                  color: AppTheme.neonCyan.withValues(alpha: 0.1),
+                                  color: AppColors.brand.withValues(alpha: 0.1),
                                 ),
-                                child: const Icon(Icons.add_a_photo_rounded, color: AppTheme.neonCyan),
+                                child: const Icon(Icons.add_a_photo_rounded, color: AppColors.brand),
                               ),
                             )
                           ],
                         ),
                         const SizedBox(height: 8),
-                        const Text('ملاحظة: يمكنك إزالة أي صورة قديمة أو رفع صور جديدة سيتم استبدالها.', style: TextStyle(fontFamily: 'Cairo', color: Colors.white38, fontSize: 10)),
+                        const Text('ملاحظة: يمكنك إزالة أي صورة قديمة أو رفع صور جديدة سيتم استبدالها.', style: TextStyle(fontFamily: 'Cairo', color: AppColors.textDisabled, fontSize: 10)),
                       ],
                     ),
                   ),
@@ -537,7 +537,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                             if (context.mounted) {
                               Navigator.pop(context);
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('تم تحديث المستمسكات بنجاح ✅', style: TextStyle(fontFamily: 'Cairo')), backgroundColor: AppTheme.successGreen),
+                                const SnackBar(content: Text('تم تحديث المستمسكات بنجاح ✅', style: TextStyle(fontFamily: 'Cairo')), backgroundColor: AppColors.success),
                               );
                               unawaited(_loadEmployees());
                             }
@@ -545,13 +545,13 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                             setModalState(() => isSaving = false);
                             if (!context.mounted) return;
                             ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('خطأ: $e', style: const TextStyle(fontFamily: 'Cairo')), backgroundColor: AppTheme.dangerRed),
+                              SnackBar(content: Text('خطأ: $e', style: const TextStyle(fontFamily: 'Cairo')), backgroundColor: AppColors.danger),
                             );
                           }
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: AppTheme.neonCyan,
-                          foregroundColor: Colors.black,
+                          backgroundColor: AppColors.brand,
+                          foregroundColor: AppColors.onStatus,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                         ),
                         child: const Text('تحديث وحفظ', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 15)),
@@ -575,9 +575,9 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
-          color: isSelected ? AppTheme.neonCyan.withValues(alpha: 0.2) : Colors.white.withValues(alpha: 0.05),
+          color: isSelected ? AppColors.brand.withValues(alpha: 0.2) : AppColors.textPrimary.withValues(alpha: 0.05),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: isSelected ? AppTheme.neonCyan : Colors.white10),
+          border: Border.all(color: isSelected ? AppColors.brand : AppColors.border),
         ),
         child: Center(
           child: Text(
@@ -585,7 +585,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
             style: TextStyle(
               fontFamily: 'Cairo',
               fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-              color: isSelected ? AppTheme.neonCyan : Colors.white54,
+              color: isSelected ? AppColors.brand : AppColors.textMuted,
             ),
           ),
         ),
@@ -598,15 +598,15 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
       controller: controller,
       obscureText: isPassword,
       keyboardType: isEmail ? TextInputType.emailAddress : TextInputType.text,
-      style: const TextStyle(fontFamily: 'Cairo', color: Colors.white, fontSize: 14),
+      style: const TextStyle(fontFamily: 'Cairo', color: AppColors.textPrimary, fontSize: 14),
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: const TextStyle(fontFamily: 'Cairo', color: Colors.white54, fontSize: 12),
-        prefixIcon: Icon(icon, color: AppTheme.neonCyan, size: 20),
+        labelStyle: const TextStyle(fontFamily: 'Cairo', color: AppColors.textMuted, fontSize: 12),
+        prefixIcon: Icon(icon, color: AppColors.brand, size: 20),
         filled: true,
-        fillColor: Colors.white.withValues(alpha: 0.05),
+        fillColor: AppColors.textPrimary.withValues(alpha: 0.05),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: AppTheme.neonCyan)),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: AppColors.brand)),
       ),
     );
   }
@@ -633,9 +633,9 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
         insetPadding: const EdgeInsets.all(16),
         child: Container(
           decoration: BoxDecoration(
-            color: const Color(0xFF13182C),
+            color: AppColors.surface1,
             borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: AppTheme.neonCyan.withValues(alpha: 0.3)),
+            border: Border.all(color: AppColors.brand.withValues(alpha: 0.3)),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -644,23 +644,23 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                 padding: const EdgeInsets.all(16),
                 child: Row(
                   children: [
-                    Icon(isPdf ? Icons.picture_as_pdf_rounded : Icons.image_rounded, color: isPdf ? AppTheme.neonPink : AppTheme.neonCyan, size: 20),
+                    Icon(isPdf ? Icons.picture_as_pdf_rounded : Icons.image_rounded, color: isPdf ? AppColors.accent : AppColors.brand, size: 20),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         title,
-                        style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white),
+                        style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textPrimary),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.close_rounded, color: Colors.white60, size: 20),
+                      icon: const Icon(Icons.close_rounded, color: AppColors.textMuted, size: 20),
                       onPressed: () => Navigator.pop(ctx),
                     ),
                   ],
                 ),
               ),
-              const Divider(color: Colors.white10, height: 1),
+              const Divider(color: AppColors.border, height: 1),
               ClipRRect(
                 borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24)),
                 child: isPdf
@@ -668,17 +668,17 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                         padding: const EdgeInsets.all(32),
                         child: Column(
                           children: [
-                            const Icon(Icons.picture_as_pdf_rounded, size: 64, color: AppTheme.neonPink),
+                            const Icon(Icons.picture_as_pdf_rounded, size: 64, color: AppColors.accent),
                             const SizedBox(height: 12),
-                            const Text('مستند رقمي بصيغة PDF', style: TextStyle(fontFamily: 'Cairo', color: Colors.white, fontWeight: FontWeight.bold)),
+                            const Text('مستند رقمي بصيغة PDF', style: TextStyle(fontFamily: 'Cairo', color: AppColors.textPrimary, fontWeight: FontWeight.bold)),
                             const SizedBox(height: 16),
                             ElevatedButton.icon(
                               onPressed: () => _downloadAndOpenFile(url, 'document.pdf'),
                               icon: const Icon(Icons.open_in_new_rounded, size: 16),
                               label: const Text('فتح وتحميل المستند', style: TextStyle(fontFamily: 'Cairo')),
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: AppTheme.neonPink,
-                                foregroundColor: Colors.white,
+                                backgroundColor: AppColors.accent,
+                                foregroundColor: AppColors.textPrimary,
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                               ),
                             ),
@@ -696,13 +696,13 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                             return Container(
                               height: 250,
                               alignment: Alignment.center,
-                              child: const CircularProgressIndicator(color: AppTheme.neonCyan),
+                              child: const CircularProgressIndicator(color: AppColors.brand),
                             );
                           },
                           errorBuilder: (context, error, stackTrace) => Container(
                             height: 150,
                             alignment: Alignment.center,
-                            child: const Text('تعذر تحميل الصورة', style: TextStyle(fontFamily: 'Cairo', color: Colors.white54)),
+                            child: const Text('تعذر تحميل الصورة', style: TextStyle(fontFamily: 'Cairo', color: AppColors.textMuted)),
                           ),
                         ),
                       ),
@@ -714,16 +714,16 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                   children: [
                     TextButton.icon(
                       onPressed: () => _downloadAndOpenFile(url, isPdf ? 'document.pdf' : 'document.jpg'),
-                      icon: const Icon(Icons.download_rounded, size: 16, color: AppTheme.neonCyan),
-                      label: const Text('تحميل وفتح', style: TextStyle(fontFamily: 'Cairo', fontSize: 11, color: AppTheme.neonCyan)),
+                      icon: const Icon(Icons.download_rounded, size: 16, color: AppColors.brand),
+                      label: const Text('تحميل وفتح', style: TextStyle(fontFamily: 'Cairo', fontSize: 11, color: AppColors.brand)),
                     ),
                     const SizedBox(width: 8),
                     TextButton.icon(
                       onPressed: () async {
                         await SharePlus.instance.share(ShareParams(uri: Uri.parse(url)));
                       },
-                      icon: const Icon(Icons.share_rounded, size: 16, color: Colors.white70),
-                      label: const Text('مشاركة', style: TextStyle(fontFamily: 'Cairo', fontSize: 11, color: Colors.white70)),
+                      icon: const Icon(Icons.share_rounded, size: 16, color: AppColors.textSecondary),
+                      label: const Text('مشاركة', style: TextStyle(fontFamily: 'Cairo', fontSize: 11, color: AppColors.textSecondary)),
                     ),
                   ],
                 ),
@@ -749,7 +749,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('فشل فتح الملف: $e', style: const TextStyle(fontFamily: 'Cairo')), backgroundColor: AppTheme.dangerRed),
+          SnackBar(content: Text('فشل فتح الملف: $e', style: const TextStyle(fontFamily: 'Cairo')), backgroundColor: AppColors.danger),
         );
       }
     }
@@ -776,7 +776,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
       builder: (ctx) => Container(
         height: MediaQuery.of(context).size.height * 0.88,
         decoration: const BoxDecoration(
-          color: Color(0xFF13182C),
+          color: AppColors.surface1,
           borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
         ),
         child: Column(
@@ -786,7 +786,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                 width: 44,
                 height: 4,
                 margin: const EdgeInsets.only(top: 12, bottom: 8),
-                decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2)),
+                decoration: BoxDecoration(color: AppColors.borderStrong, borderRadius: BorderRadius.circular(2)),
               ),
             ),
             Expanded(
@@ -798,10 +798,10 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                     children: [
                       CircleAvatar(
                         radius: 28,
-                        backgroundColor: AppTheme.neonCyan.withValues(alpha: 0.2),
+                        backgroundColor: AppColors.brand.withValues(alpha: 0.2),
                         child: Text(
                           ((name.isNotEmpty as bool) ? name.substring(0, 1) : '?') as String,
-                          style: const TextStyle(color: AppTheme.neonCyan, fontSize: 22, fontWeight: FontWeight.bold),
+                          style: const TextStyle(color: AppColors.brand, fontSize: 22, fontWeight: FontWeight.bold),
                         ),
                       ),
                       const SizedBox(width: 14),
@@ -809,18 +809,18 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(name as String, style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white)),
+                            Text(name as String, style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.textPrimary)),
                             const SizedBox(height: 2),
                             Row(
                               children: [
-                                _buildBadge(role, AppTheme.cyberPurple),
+                                _buildBadge(role, AppColors.accent),
                                 const SizedBox(width: 6),
-                                _buildBadge((isActive as bool) ? 'نشط' : 'معطل', isActive ? AppTheme.successGreen : AppTheme.dangerRed),
+                                _buildBadge((isActive as bool) ? 'نشط' : 'معطل', isActive ? AppColors.success : AppColors.danger),
                                 const SizedBox(width: 6),
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(color: AppTheme.neonCyan.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6)),
-                                  child: Text('كود: $code', style: const TextStyle(fontFamily: 'Cairo', fontSize: 9, color: AppTheme.neonCyan, fontWeight: FontWeight.bold)),
+                                  decoration: BoxDecoration(color: AppColors.brand.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6)),
+                                  child: Text('كود: $code', style: const TextStyle(fontFamily: 'Cairo', fontSize: 9, color: AppColors.brand, fontWeight: FontWeight.bold)),
                                 ),
                               ],
                             ),
@@ -828,7 +828,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                         ),
                       ),
                       IconButton(
-                        icon: const Icon(Icons.close_rounded, color: Colors.white60),
+                        icon: const Icon(Icons.close_rounded, color: AppColors.textMuted),
                         onPressed: () => Navigator.pop(ctx),
                       ),
                     ],
@@ -848,8 +848,8 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                                 }
                               : null,
                           style: OutlinedButton.styleFrom(
-                            foregroundColor: AppTheme.successGreen,
-                            side: const BorderSide(color: AppTheme.successGreen),
+                            foregroundColor: AppColors.success,
+                            side: const BorderSide(color: AppColors.success),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                             padding: const EdgeInsets.symmetric(vertical: 8),
                           ),
@@ -868,8 +868,8 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                                 }
                               : null,
                           style: OutlinedButton.styleFrom(
-                            foregroundColor: AppTheme.neonCyan,
-                            side: const BorderSide(color: AppTheme.neonCyan),
+                            foregroundColor: AppColors.brand,
+                            side: const BorderSide(color: AppColors.brand),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                             padding: const EdgeInsets.symmetric(vertical: 8),
                           ),
@@ -884,12 +884,12 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                               content: Text('تم نسخ رقم الهاتف 📋', style: TextStyle(fontFamily: 'Cairo')),
-                              backgroundColor: AppTheme.primaryTeal,
+                              backgroundColor: AppColors.brandStrong,
                               duration: Duration(seconds: 2),
                             ),
                           );
                         },
-                        icon: const Icon(Icons.copy_rounded, color: Colors.white70, size: 18),
+                        icon: const Icon(Icons.copy_rounded, color: AppColors.textSecondary, size: 18),
                         tooltip: 'نسخ الرقم',
                       ),
                     ],
@@ -901,14 +901,14 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.04),
+                      color: AppColors.textPrimary.withValues(alpha: 0.04),
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                      border: Border.all(color: AppColors.textPrimary.withValues(alpha: 0.08)),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('المعلومات الوظيفية والشخصية', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 13, color: AppTheme.neonCyan)),
+                        const Text('المعلومات الوظيفية والشخصية', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.brand)),
                         const SizedBox(height: 12),
                         _buildProfileInfoRow(Icons.email_outlined, 'البريد الإلكتروني', email as String),
                         _buildProfileInfoRow(Icons.phone_android_rounded, 'رقم الهاتف', phone as String),
@@ -928,11 +928,11 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                     children: [
                       Row(
                         children: [
-                          const Icon(Icons.folder_shared_rounded, color: AppTheme.neonCyan, size: 20),
+                          const Icon(Icons.folder_shared_rounded, color: AppColors.brand, size: 20),
                           const SizedBox(width: 8),
                           Text(
                             'المستمسكات والوثائق (${docUrls.length})',
-                            style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white),
+                            style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textPrimary),
                           ),
                         ],
                       ),
@@ -944,16 +944,16 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                                 final text = docUrls.map((u) => u.toString()).join('\n');
                                 await SharePlus.instance.share(ShareParams(text: text, subject: 'وثائق الموظف: $name'));
                               },
-                              icon: const Icon(Icons.share_rounded, color: AppTheme.neonCyan, size: 14),
-                              label: const Text('مشاركة الكل', style: TextStyle(fontFamily: 'Cairo', fontSize: 10, color: AppTheme.neonCyan)),
+                              icon: const Icon(Icons.share_rounded, color: AppColors.brand, size: 14),
+                              label: const Text('مشاركة الكل', style: TextStyle(fontFamily: 'Cairo', fontSize: 10, color: AppColors.brand)),
                             ),
                           TextButton.icon(
                             onPressed: () {
                               Navigator.pop(ctx);
                               _showEditEmployeeModal(emp);
                             },
-                            icon: const Icon(Icons.edit_document, color: AppTheme.cyberPurple, size: 14),
-                            label: const Text('تعديل/إضافة', style: TextStyle(fontFamily: 'Cairo', fontSize: 10, color: AppTheme.cyberPurple)),
+                            icon: const Icon(Icons.edit_document, color: AppColors.accent, size: 14),
+                            label: const Text('تعديل/إضافة', style: TextStyle(fontFamily: 'Cairo', fontSize: 10, color: AppColors.accent)),
                           ),
                         ],
                       ),
@@ -966,12 +966,12 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.02),
+                        color: AppColors.textPrimary.withValues(alpha: 0.02),
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+                        border: Border.all(color: AppColors.textPrimary.withValues(alpha: 0.06)),
                       ),
                       child: const Center(
-                        child: Text('لا توجد وثائق أو مستمسكات مرفوعة لهذا الموظف.', style: TextStyle(fontFamily: 'Cairo', color: Colors.white38, fontSize: 11)),
+                        child: Text('لا توجد وثائق أو مستمسكات مرفوعة لهذا الموظف.', style: TextStyle(fontFamily: 'Cairo', color: AppColors.textDisabled, fontSize: 11)),
                       ),
                     )
                   else
@@ -984,21 +984,21 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                         margin: const EdgeInsets.only(bottom: 8),
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                         decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.04),
+                          color: AppColors.textPrimary.withValues(alpha: 0.04),
                           borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: AppTheme.neonCyan.withValues(alpha: 0.2)),
+                          border: Border.all(color: AppColors.brand.withValues(alpha: 0.2)),
                         ),
                         child: Row(
                           children: [
                             Container(
                               padding: const EdgeInsets.all(8),
                               decoration: BoxDecoration(
-                                color: (isPdf ? AppTheme.neonPink : AppTheme.neonCyan).withValues(alpha: 0.15),
+                                color: (isPdf ? AppColors.accent : AppColors.brand).withValues(alpha: 0.15),
                                 borderRadius: BorderRadius.circular(10),
                               ),
                               child: Icon(
                                 isPdf ? Icons.picture_as_pdf_rounded : Icons.image_rounded,
-                                color: isPdf ? AppTheme.neonPink : AppTheme.neonCyan,
+                                color: isPdf ? AppColors.accent : AppColors.brand,
                                 size: 20,
                               ),
                             ),
@@ -1007,18 +1007,18 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text('وثيقة رسمية رقم #$idx', style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 12, color: Colors.white)),
-                                  Text(isPdf ? 'مستند PDF رقمي' : 'صورة / مستمسك معتمد', style: const TextStyle(fontFamily: 'Cairo', fontSize: 10, color: Colors.white54)),
+                                  Text('وثيقة رسمية رقم #$idx', style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 12, color: AppColors.textPrimary)),
+                                  Text(isPdf ? 'مستند PDF رقمي' : 'صورة / مستمسك معتمد', style: const TextStyle(fontFamily: 'Cairo', fontSize: 10, color: AppColors.textMuted)),
                                 ],
                               ),
                             ),
                             IconButton(
-                              icon: const Icon(Icons.visibility_rounded, color: AppTheme.neonCyan, size: 18),
+                              icon: const Icon(Icons.visibility_rounded, color: AppColors.brand, size: 18),
                               tooltip: 'معاينة',
                               onPressed: () => _previewImageDialog(url, 'وثيقة الموظف $name #$idx'),
                             ),
                             IconButton(
-                              icon: const Icon(Icons.download_rounded, color: AppTheme.successGreen, size: 18),
+                              icon: const Icon(Icons.download_rounded, color: AppColors.success, size: 18),
                               tooltip: 'تحميل وفتح',
                               onPressed: () => _downloadAndOpenFile(url, isPdf ? 'doc_$idx.pdf' : 'doc_$idx.jpg'),
                             ),
@@ -1041,14 +1041,14 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 16, color: Colors.white54),
+          Icon(icon, size: 16, color: AppColors.textMuted),
           const SizedBox(width: 8),
           SizedBox(
             width: 110,
-            child: Text(label, style: const TextStyle(fontFamily: 'Cairo', fontSize: 11, color: Colors.white54)),
+            child: Text(label, style: const TextStyle(fontFamily: 'Cairo', fontSize: 11, color: AppColors.textMuted)),
           ),
           Expanded(
-            child: Text(value, style: const TextStyle(fontFamily: 'Cairo', fontSize: 11, color: Colors.white, fontWeight: FontWeight.bold)),
+            child: Text(value, style: const TextStyle(fontFamily: 'Cairo', fontSize: 11, color: AppColors.textPrimary, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -1081,13 +1081,13 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
           backgroundColor: Colors.transparent,
           elevation: 0,
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
+            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textPrimary),
             onPressed: () => Navigator.pop(context),
           ),
-          title: const Text('إدارة الموظفين 👥', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white)),
+          title: const Text('إدارة الموظفين 👥', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.textPrimary)),
           actions: [
             IconButton(
-              icon: const Icon(Icons.person_add_rounded, color: AppTheme.neonCyan),
+              icon: const Icon(Icons.person_add_rounded, color: AppColors.brand),
               onPressed: _showAddEmployeeModal,
             ),
           ],
@@ -1098,13 +1098,13 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: TextField(
                 onChanged: (val) => setState(() => _searchQuery = val),
-                style: const TextStyle(color: Colors.white, fontFamily: 'Cairo'),
+                style: const TextStyle(color: AppColors.textPrimary, fontFamily: 'Cairo'),
                 decoration: InputDecoration(
                   hintText: 'ابحث بالاسم، الكود، الهاتف، القسم، الفرع...',
-                  hintStyle: const TextStyle(color: Colors.white38, fontFamily: 'Cairo', fontSize: 12),
-                  prefixIcon: const Icon(Icons.search, color: Colors.white54),
+                  hintStyle: const TextStyle(color: AppColors.textDisabled, fontFamily: 'Cairo', fontSize: 12),
+                  prefixIcon: const Icon(Icons.search, color: AppColors.textMuted),
                   filled: true,
-                  fillColor: Colors.white.withValues(alpha: 0.05),
+                  fillColor: AppColors.textPrimary.withValues(alpha: 0.05),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
                   contentPadding: const EdgeInsets.symmetric(),
                 ),
@@ -1112,9 +1112,9 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
             ),
             Expanded(
               child: _isLoading
-                  ? const Center(child: CircularProgressIndicator(color: AppTheme.neonCyan))
+                  ? const Center(child: CircularProgressIndicator(color: AppColors.brand))
                   : filtered.isEmpty
-                      ? const Center(child: Text('لا يوجد موظفون مطابقون لبحثك', style: TextStyle(color: Colors.white54, fontFamily: 'Cairo')))
+                      ? const Center(child: Text('لا يوجد موظفون مطابقون لبحثك', style: TextStyle(color: AppColors.textMuted, fontFamily: 'Cairo')))
                       : ListView.builder(
                           padding: const EdgeInsets.all(16),
                           itemCount: filtered.length,
@@ -1131,33 +1131,32 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                                 margin: const EdgeInsets.only(bottom: 12),
                                 padding: const EdgeInsets.all(16),
                                 borderRadius: 16,
-                                opacity: 0.08,
-                                borderColor: (isActive as bool) ? AppTheme.neonCyan.withValues(alpha: 0.2) : AppTheme.dangerRed.withValues(alpha: 0.3),
+                                borderColor: (isActive as bool) ? AppColors.brand.withValues(alpha: 0.2) : AppColors.danger.withValues(alpha: 0.3),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Row(
                                       children: [
                                         CircleAvatar(
-                                          backgroundColor: AppTheme.neonCyan.withValues(alpha: 0.2),
-                                          child: Text((emp['full_name']?.isNotEmpty == true ? emp['full_name']!.substring(0, 1) : '?') as String, style: const TextStyle(color: AppTheme.neonCyan, fontWeight: FontWeight.bold)),
+                                          backgroundColor: AppColors.brand.withValues(alpha: 0.2),
+                                          child: Text((emp['full_name']?.isNotEmpty == true ? emp['full_name']!.substring(0, 1) : '?') as String, style: const TextStyle(color: AppColors.brand, fontWeight: FontWeight.bold)),
                                         ),
                                         const SizedBox(width: 12),
                                         Expanded(
                                           child: Column(
                                             crossAxisAlignment: CrossAxisAlignment.start,
                                             children: [
-                                              Text((emp['full_name'] ?? 'بدون اسم') as String, style: const TextStyle(color: Colors.white, fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 14)),
-                                              Text((emp['email'] ?? '') as String, style: const TextStyle(color: Colors.white54, fontSize: 10)),
+                                              Text((emp['full_name'] ?? 'بدون اسم') as String, style: const TextStyle(color: AppColors.textPrimary, fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 14)),
+                                              Text((emp['email'] ?? '') as String, style: const TextStyle(color: AppColors.textMuted, fontSize: 10)),
                                               const SizedBox(height: 4),
                                               Row(
                                                 children: [
-                                                  _buildBadge(emp['role'] == 'admin' ? 'مدير عام' : (emp['role'] == 'manager' ? 'مدير' : 'موظف'), AppTheme.cyberPurple),
+                                                  _buildBadge(emp['role'] == 'admin' ? 'مدير عام' : (emp['role'] == 'manager' ? 'مدير' : 'موظف'), AppColors.accent),
                                                   const SizedBox(width: 4),
-                                                  _buildBadge(isActive ? 'نشط' : 'معطل', isActive ? AppTheme.successGreen : AppTheme.dangerRed),
+                                                  _buildBadge(isActive ? 'نشط' : 'معطل', isActive ? AppColors.success : AppColors.danger),
                                                   if (hasDevice) ...[
                                                     const SizedBox(width: 4),
-                                                    _buildBadge('جهاز مربوط', AppTheme.warningOrange),
+                                                    _buildBadge('جهاز مربوط', AppColors.warning),
                                                   ]
                                                 ],
                                               )
@@ -1165,13 +1164,13 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                                           ),
                                         ),
                                         IconButton(
-                                          icon: const Icon(Icons.folder_shared_rounded, color: AppTheme.neonCyan, size: 20),
+                                          icon: const Icon(Icons.folder_shared_rounded, color: AppColors.brand, size: 20),
                                           tooltip: 'عرض الملف والوثائق',
                                           onPressed: () => _showEmployeeProfileModal(emp),
                                         ),
                                         PopupMenuButton<String>(
-                                          icon: const Icon(Icons.more_vert, color: Colors.white70),
-                                          color: const Color(0xFF1A1F3A),
+                                          icon: const Icon(Icons.more_vert, color: AppColors.textSecondary),
+                                          color: AppColors.surface2,
                                           onSelected: (value) {
                                             if (value == 'profile') _showEmployeeProfileModal(emp);
                                             if (value == 'edit') _showEditEmployeeModal(emp);
@@ -1181,20 +1180,20 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                                           itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
                                             const PopupMenuItem<String>(
                                               value: 'profile',
-                                              child: Text('عرض الملف والوثائق 📁', style: TextStyle(color: AppTheme.neonCyan, fontFamily: 'Cairo')),
+                                              child: Text('عرض الملف والوثائق 📁', style: TextStyle(color: AppColors.brand, fontFamily: 'Cairo')),
                                             ),
                                             const PopupMenuItem<String>(
                                               value: 'edit',
-                                              child: Text('تعديل المستمسكات 📝', style: TextStyle(color: Colors.white, fontFamily: 'Cairo')),
+                                              child: Text('تعديل المستمسكات 📝', style: TextStyle(color: AppColors.textPrimary, fontFamily: 'Cairo')),
                                             ),
                                             PopupMenuItem<String>(
                                               value: 'toggle',
-                                              child: Text(isActive ? 'تعطيل الحساب' : 'تفعيل الحساب', style: TextStyle(color: isActive ? AppTheme.dangerRed : AppTheme.successGreen, fontFamily: 'Cairo')),
+                                              child: Text(isActive ? 'تعطيل الحساب' : 'تفعيل الحساب', style: TextStyle(color: isActive ? AppColors.danger : AppColors.success, fontFamily: 'Cairo')),
                                             ),
                                             if (hasDevice)
                                               const PopupMenuItem<String>(
                                                 value: 'unbind',
-                                                child: Text('فك ربط الجهاز (السماح بتسجيل جديد)', style: TextStyle(color: AppTheme.warningOrange, fontFamily: 'Cairo')),
+                                                child: Text('فك ربط الجهاز (السماح بتسجيل جديد)', style: TextStyle(color: AppColors.warning, fontFamily: 'Cairo')),
                                               ),
                                           ],
                                         )

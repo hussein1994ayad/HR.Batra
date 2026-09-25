@@ -7,8 +7,8 @@ import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/design/design.dart';
 import '../../core/services/supabase_service.dart';
-import '../../core/theme/app_theme.dart';
 import '../shared/widgets/glass_background.dart';
 import '../shared/widgets/glass_container.dart';
 
@@ -128,7 +128,7 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
     showModalBottomSheet<dynamic>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: AppColors.surface1,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
@@ -148,7 +148,7 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
                   width: 44,
                   height: 4,
                   margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2)),
+                  decoration: BoxDecoration(color: AppColors.borderStrong, borderRadius: BorderRadius.circular(2)),
                 ),
               ),
 
@@ -158,14 +158,14 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
                   Container(
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      border: Border.all(color: AppTheme.neonCyan, width: 2),
-                      boxShadow: [BoxShadow(color: AppTheme.neonCyan.withValues(alpha: 0.3), blurRadius: 10)],
+                      border: Border.all(color: AppColors.brand, width: 2),
+                      boxShadow: [BoxShadow(color: AppColors.brand.withValues(alpha: 0.3), blurRadius: 10)],
                     ),
                     child: CircleAvatar(
                       radius: 30,
-                      backgroundColor: Colors.white.withValues(alpha: 0.08),
+                      backgroundColor: AppColors.textPrimary.withValues(alpha: 0.08),
                       backgroundImage: (avatarUrl.isNotEmpty as bool) ? NetworkImage(avatarUrl as String) : null,
-                      child: (avatarUrl.isEmpty as bool) ? const Icon(Icons.person, color: AppTheme.neonCyan, size: 30) : null,
+                      child: (avatarUrl.isEmpty as bool) ? const Icon(Icons.person, color: AppColors.brand, size: 30) : null,
                     ),
                   ),
                   const SizedBox(width: 14),
@@ -173,27 +173,27 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(name as String, style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 15, color: Colors.white)),
+                        Text(name as String, style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 15, color: AppColors.textPrimary)),
                         const SizedBox(height: 2),
                         Row(
                           children: [
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                               decoration: BoxDecoration(
-                                color: AppTheme.neonCyan.withValues(alpha: 0.15),
+                                color: AppColors.brand.withValues(alpha: 0.15),
                                 borderRadius: BorderRadius.circular(6),
                               ),
-                              child: Text(code as String, style: const TextStyle(fontFamily: 'Cairo', fontSize: 10, color: AppTheme.neonCyan, fontWeight: FontWeight.bold)),
+                              child: Text(code as String, style: const TextStyle(fontFamily: 'Cairo', fontSize: 10, color: AppColors.brand, fontWeight: FontWeight.bold)),
                             ),
                             const SizedBox(width: 6),
-                            Text(role, style: const TextStyle(fontFamily: 'Cairo', fontSize: 11, color: Colors.white70)),
+                            Text(role, style: const TextStyle(fontFamily: 'Cairo', fontSize: 11, color: AppColors.textSecondary)),
                           ],
                         ),
                       ],
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close_rounded, color: Colors.white60),
+                    icon: const Icon(Icons.close_rounded, color: AppColors.textMuted),
                     onPressed: () => Navigator.pop(ctx),
                   ),
                 ],
@@ -213,8 +213,8 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
                             }
                           : null,
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: AppTheme.successGreen,
-                        side: const BorderSide(color: AppTheme.successGreen),
+                        foregroundColor: AppColors.success,
+                        side: const BorderSide(color: AppColors.success),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         padding: const EdgeInsets.symmetric(vertical: 8),
                       ),
@@ -233,8 +233,8 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
                             }
                           : null,
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: AppTheme.neonCyan,
-                        side: const BorderSide(color: AppTheme.neonCyan),
+                        foregroundColor: AppColors.brand,
+                        side: const BorderSide(color: AppColors.brand),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         padding: const EdgeInsets.symmetric(vertical: 8),
                       ),
@@ -249,12 +249,12 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
                           content: Text('تم نسخ رقم الهاتف 📋', style: TextStyle(fontFamily: 'Cairo')),
-                          backgroundColor: AppTheme.primaryTeal,
+                          backgroundColor: AppColors.brandStrong,
                           duration: Duration(seconds: 2),
                         ),
                       );
                     },
-                    icon: const Icon(Icons.copy_rounded, color: Colors.white70, size: 18),
+                    icon: const Icon(Icons.copy_rounded, color: AppColors.textSecondary, size: 18),
                     tooltip: 'نسخ الرقم',
                   ),
                 ],
@@ -266,19 +266,19 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
               Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.04),
+                  color: AppColors.textPrimary.withValues(alpha: 0.04),
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.white10),
+                  border: Border.all(color: AppColors.border),
                 ),
                 child: Column(
                   children: [
-                    _buildInfoRow(Icons.domain_rounded, 'الفرع', branch as String, AppTheme.neonCyan),
-                    const Divider(color: Colors.white10, height: 16),
-                    _buildInfoRow(Icons.apartment_rounded, 'القسم', dept as String, AppTheme.cyberPurple),
-                    const Divider(color: Colors.white10, height: 16),
-                    _buildInfoRow(Icons.phone_iphone_rounded, 'الهاتف', phone as String, AppTheme.successGreen),
-                    const Divider(color: Colors.white10, height: 16),
-                    _buildInfoRow(Icons.email_rounded, 'البريد', email as String, Colors.amber),
+                    _buildInfoRow(Icons.domain_rounded, 'الفرع', branch as String, AppColors.brand),
+                    const Divider(color: AppColors.border, height: 16),
+                    _buildInfoRow(Icons.apartment_rounded, 'القسم', dept as String, AppColors.accent),
+                    const Divider(color: AppColors.border, height: 16),
+                    _buildInfoRow(Icons.phone_iphone_rounded, 'الهاتف', phone as String, AppColors.success),
+                    const Divider(color: AppColors.border, height: 16),
+                    _buildInfoRow(Icons.email_rounded, 'البريد', email as String, AppColors.warning),
                   ],
                 ),
               ),
@@ -291,11 +291,11 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.folder_shared_rounded, color: AppTheme.neonCyan, size: 20),
+                      const Icon(Icons.folder_shared_rounded, color: AppColors.brand, size: 20),
                       const SizedBox(width: 8),
                       Text(
                         'وثائق ومستندات الموظف (${docUrls.length}) 📁',
-                        style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white),
+                        style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textPrimary),
                       ),
                     ],
                   ),
@@ -305,8 +305,8 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
                         final text = docUrls.map((u) => u.toString()).join('\n');
                         await SharePlus.instance.share(ShareParams(text: text, subject: 'وثائق الموظف: $name'));
                       },
-                      icon: const Icon(Icons.share_rounded, color: AppTheme.neonCyan, size: 14),
-                      label: const Text('مشاركة الكل', style: TextStyle(fontFamily: 'Cairo', fontSize: 10, color: AppTheme.neonCyan)),
+                      icon: const Icon(Icons.share_rounded, color: AppColors.brand, size: 14),
+                      label: const Text('مشاركة الكل', style: TextStyle(fontFamily: 'Cairo', fontSize: 10, color: AppColors.brand)),
                     ),
                 ],
               ),
@@ -317,12 +317,12 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.02),
+                    color: AppColors.textPrimary.withValues(alpha: 0.02),
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+                    border: Border.all(color: AppColors.textPrimary.withValues(alpha: 0.06)),
                   ),
                   child: const Center(
-                    child: Text('لا توجد وثائق أو مستمسكات مرفوعة لهذا الموظف حتى الآن.', style: TextStyle(fontFamily: 'Cairo', color: Colors.white38, fontSize: 11)),
+                    child: Text('لا توجد وثائق أو مستمسكات مرفوعة لهذا الموظف حتى الآن.', style: TextStyle(fontFamily: 'Cairo', color: AppColors.textDisabled, fontSize: 11)),
                   ),
                 )
               else
@@ -335,21 +335,21 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
                     margin: const EdgeInsets.only(bottom: 8),
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.04),
+                      color: AppColors.textPrimary.withValues(alpha: 0.04),
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: AppTheme.neonCyan.withValues(alpha: 0.2)),
+                      border: Border.all(color: AppColors.brand.withValues(alpha: 0.2)),
                     ),
                     child: Row(
                       children: [
                         Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: (isPdf ? AppTheme.neonPink : AppTheme.neonCyan).withValues(alpha: 0.15),
+                            color: (isPdf ? AppColors.accent : AppColors.brand).withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: Icon(
                             isPdf ? Icons.picture_as_pdf_rounded : Icons.image_rounded,
-                            color: isPdf ? AppTheme.neonPink : AppTheme.neonCyan,
+                            color: isPdf ? AppColors.accent : AppColors.brand,
                             size: 20,
                           ),
                         ),
@@ -358,20 +358,20 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('وثيقة رسمية رقم #$idx', style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 12, color: Colors.white)),
-                              Text(isPdf ? 'مستند PDF رقمي' : 'صورة / مستمسك معتمد', style: const TextStyle(fontFamily: 'Cairo', fontSize: 10, color: Colors.white54)),
+                              Text('وثيقة رسمية رقم #$idx', style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 12, color: AppColors.textPrimary)),
+                              Text(isPdf ? 'مستند PDF رقمي' : 'صورة / مستمسك معتمد', style: const TextStyle(fontFamily: 'Cairo', fontSize: 10, color: AppColors.textMuted)),
                             ],
                           ),
                         ),
                         IconButton(
-                          icon: const Icon(Icons.visibility_rounded, color: AppTheme.neonCyan, size: 18),
+                          icon: const Icon(Icons.visibility_rounded, color: AppColors.brand, size: 18),
                           tooltip: 'معاينة',
                           onPressed: () {
                             _previewImageDialog(url, 'وثيقة الموظف #$idx');
                           },
                         ),
                         IconButton(
-                          icon: const Icon(Icons.download_rounded, color: AppTheme.successGreen, size: 18),
+                          icon: const Icon(Icons.download_rounded, color: AppColors.success, size: 18),
                           tooltip: 'تنزيل ومشاركة',
                           onPressed: () async {
                             await SharePlus.instance.share(ShareParams(uri: Uri.parse(url)));
@@ -394,7 +394,7 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
     showDialog<dynamic>(
       context: context,
       builder: (ctx) => Dialog(
-        backgroundColor: const Color(0xFF0F172A),
+        backgroundColor: AppColors.surface1,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -404,9 +404,9 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(title, style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: Colors.white, fontSize: 13)),
+                  Text(title, style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: AppColors.textPrimary, fontSize: 13)),
                   IconButton(
-                    icon: const Icon(Icons.close_rounded, color: Colors.white60, size: 18),
+                    icon: const Icon(Icons.close_rounded, color: AppColors.textMuted, size: 18),
                     onPressed: () => Navigator.pop(ctx),
                   ),
                 ],
@@ -416,7 +416,7 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
                 borderRadius: BorderRadius.circular(12),
                 child: Container(
                   constraints: const BoxConstraints(maxHeight: 340),
-                  color: Colors.black38,
+                  color: AppColors.shadow,
                   child: Image.network(
                     url,
                     fit: BoxFit.contain,
@@ -425,9 +425,9 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.picture_as_pdf_rounded, color: AppTheme.neonPink, size: 48),
+                          Icon(Icons.picture_as_pdf_rounded, color: AppColors.accent, size: 48),
                           SizedBox(height: 8),
-                          Text('مستند PDF رقمي', style: TextStyle(fontFamily: 'Cairo', color: Colors.white70, fontSize: 12)),
+                          Text('مستند PDF رقمي', style: TextStyle(fontFamily: 'Cairo', color: AppColors.textSecondary, fontSize: 12)),
                         ],
                       ),
                     ),
@@ -441,8 +441,8 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
                   await SharePlus.instance.share(ShareParams(uri: Uri.parse(url)));
                 },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.primaryTeal,
-                  foregroundColor: Colors.white,
+                  backgroundColor: AppColors.brandStrong,
+                  foregroundColor: AppColors.textPrimary,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 icon: const Icon(Icons.share_rounded, size: 16),
@@ -460,11 +460,11 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
       children: [
         Icon(icon, color: color, size: 16),
         const SizedBox(width: 8),
-        Text('$label: ', style: const TextStyle(fontFamily: 'Cairo', color: Colors.white60, fontSize: 11)),
+        Text('$label: ', style: const TextStyle(fontFamily: 'Cairo', color: AppColors.textMuted, fontSize: 11)),
         Expanded(
           child: Text(
             value,
-            style: const TextStyle(fontFamily: 'Cairo', color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+            style: const TextStyle(fontFamily: 'Cairo', color: AppColors.textPrimary, fontSize: 11, fontWeight: FontWeight.bold),
             overflow: TextOverflow.ellipsis,
           ),
         ),
@@ -481,14 +481,14 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
           backgroundColor: Colors.transparent,
           elevation: 0,
           centerTitle: true,
-          iconTheme: const IconThemeData(color: Colors.white),
+          iconTheme: const IconThemeData(color: AppColors.textPrimary),
           title: const Text(
             'دليل الموظفين المعتمد 👥',
             style: TextStyle(
               fontFamily: 'Cairo',
               fontWeight: FontWeight.bold,
               fontSize: 16,
-              color: Colors.white,
+              color: AppColors.textPrimary,
             ),
           ),
         ),
@@ -500,14 +500,14 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
               child: TextField(
                 controller: _searchController,
                 onChanged: (val) => _applyFilters(),
-                style: const TextStyle(color: Colors.white, fontSize: 12, fontFamily: 'Cairo'),
+                style: const TextStyle(color: AppColors.textPrimary, fontSize: 12, fontFamily: 'Cairo'),
                 decoration: InputDecoration(
                   hintText: 'ابحث بالاسم، القسم، الفرع، كود الموظف، أو الهاتف...',
-                  hintStyle: const TextStyle(color: Colors.white54, fontSize: 11, fontFamily: 'Cairo'),
-                  prefixIcon: const Icon(Icons.search_rounded, color: AppTheme.neonCyan, size: 20),
+                  hintStyle: const TextStyle(color: AppColors.textMuted, fontSize: 11, fontFamily: 'Cairo'),
+                  prefixIcon: const Icon(Icons.search_rounded, color: AppColors.brand, size: 20),
                   suffixIcon: _searchController.text.isNotEmpty
                       ? IconButton(
-                          icon: const Icon(Icons.clear_rounded, color: Colors.white70, size: 18),
+                          icon: const Icon(Icons.clear_rounded, color: AppColors.textSecondary, size: 18),
                           onPressed: () {
                             _searchController.clear();
                             _applyFilters();
@@ -515,16 +515,16 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
                         )
                       : null,
                   filled: true,
-                  fillColor: Colors.white.withValues(alpha: 0.05),
+                  fillColor: AppColors.textPrimary.withValues(alpha: 0.05),
                   isDense: true,
                   contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+                    borderSide: BorderSide(color: AppColors.textPrimary.withValues(alpha: 0.1)),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
-                    borderSide: const BorderSide(color: AppTheme.neonCyan),
+                    borderSide: const BorderSide(color: AppColors.brand),
                   ),
                 ),
               ),
@@ -549,9 +549,9 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
                         margin: const EdgeInsets.only(left: 6),
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
-                          color: isSelected ? AppTheme.neonCyan.withValues(alpha: 0.25) : Colors.white.withValues(alpha: 0.04),
+                          color: isSelected ? AppColors.brand.withValues(alpha: 0.25) : AppColors.textPrimary.withValues(alpha: 0.04),
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: isSelected ? AppTheme.neonCyan : Colors.white12),
+                          border: Border.all(color: isSelected ? AppColors.brand : AppColors.border),
                         ),
                         child: Text(
                           label,
@@ -559,7 +559,7 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
                             fontFamily: 'Cairo',
                             fontSize: 10.5,
                             fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                            color: isSelected ? Colors.white : Colors.white60,
+                            color: isSelected ? AppColors.textPrimary : AppColors.textMuted,
                           ),
                         ),
                       ),
@@ -571,17 +571,17 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
             // قائمة دليل الموظفين
             Expanded(
               child: _isLoading
-                  ? const Center(child: CircularProgressIndicator(color: AppTheme.neonCyan))
+                  ? const Center(child: CircularProgressIndicator(color: AppColors.brand))
                   : _filteredEmployees.isEmpty
                       ? const Center(
                           child: Text(
                             'لم يتم العثور على أي موظف مطابق للبحث 🔍',
-                            style: TextStyle(fontSize: 12, color: Colors.white70, fontFamily: 'Cairo'),
+                            style: TextStyle(fontSize: 12, color: AppColors.textSecondary, fontFamily: 'Cairo'),
                           ),
                         )
                       : RefreshIndicator(
                           onRefresh: _loadDirectory,
-                          color: AppTheme.neonCyan,
+                          color: AppColors.brand,
                           child: ListView.separated(
                             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                             itemCount: _filteredEmployees.length,
@@ -602,24 +602,23 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
                                 child: GlassContainer(
                                   padding: const EdgeInsets.all(12),
                                   borderRadius: 16,
-                                  opacity: 0.08,
-                                  borderColor: AppTheme.neonCyan.withValues(alpha: 0.18),
+                                  borderColor: AppColors.brand.withValues(alpha: 0.18),
                                   child: Row(
                                     children: [
                                       // الصورة الشخصية
                                       Container(
                                         decoration: BoxDecoration(
                                           shape: BoxShape.circle,
-                                          border: Border.all(color: AppTheme.neonCyan, width: 1.5),
+                                          border: Border.all(color: AppColors.brand, width: 1.5),
                                         ),
                                         child: CircleAvatar(
                                           radius: 24,
-                                          backgroundColor: Colors.white.withValues(alpha: 0.04),
+                                          backgroundColor: AppColors.textPrimary.withValues(alpha: 0.04),
                                           backgroundImage: (avatarUrl.isNotEmpty as bool)
                                               ? ResizeImage.resizeIfNeeded(100, 100, NetworkImage(avatarUrl as String))
                                               : null,
                                           child: (avatarUrl.isEmpty as bool)
-                                              ? const Icon(Icons.person, color: AppTheme.neonCyan, size: 22)
+                                              ? const Icon(Icons.person, color: AppColors.brand, size: 22)
                                               : null,
                                         ),
                                       ),
@@ -635,19 +634,19 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
                                                 Expanded(
                                                   child: Text(
                                                     name as String,
-                                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white, fontFamily: 'Cairo'),
+                                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textPrimary, fontFamily: 'Cairo'),
                                                     overflow: TextOverflow.ellipsis,
                                                   ),
                                                 ),
                                                 Container(
                                                   padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                                                   decoration: BoxDecoration(
-                                                    color: AppTheme.neonCyan.withValues(alpha: 0.15),
+                                                    color: AppColors.brand.withValues(alpha: 0.15),
                                                     borderRadius: BorderRadius.circular(6),
                                                   ),
                                                   child: Text(
                                                     code as String,
-                                                    style: const TextStyle(fontSize: 8.5, color: AppTheme.neonCyan, fontWeight: FontWeight.bold, fontFamily: 'Cairo'),
+                                                    style: const TextStyle(fontSize: 8.5, color: AppColors.brand, fontWeight: FontWeight.bold, fontFamily: 'Cairo'),
                                                   ),
                                                 ),
                                               ],
@@ -655,26 +654,26 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
                                             const SizedBox(height: 3),
                                             Text(
                                               '$dept • $branch',
-                                              style: const TextStyle(fontSize: 10.5, color: Colors.white70, fontFamily: 'Cairo'),
+                                              style: const TextStyle(fontSize: 10.5, color: AppColors.textSecondary, fontFamily: 'Cairo'),
                                             ),
                                             const SizedBox(height: 2),
                                             Row(
                                               children: [
                                                 Text(
                                                   phone as String,
-                                                  style: const TextStyle(fontSize: 9.5, color: Colors.white54, fontFamily: 'Cairo'),
+                                                  style: const TextStyle(fontSize: 9.5, color: AppColors.textMuted, fontFamily: 'Cairo'),
                                                 ),
                                                 if (docs.isNotEmpty) ...[
                                                   const SizedBox(width: 8),
                                                   Container(
                                                     padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                                                     decoration: BoxDecoration(
-                                                      color: AppTheme.successGreen.withValues(alpha: 0.15),
+                                                      color: AppColors.success.withValues(alpha: 0.15),
                                                       borderRadius: BorderRadius.circular(4),
                                                     ),
                                                     child: Text(
                                                       '${docs.length} وثائق 📁',
-                                                      style: const TextStyle(fontSize: 8, color: AppTheme.successGreen, fontFamily: 'Cairo', fontWeight: FontWeight.bold),
+                                                      style: const TextStyle(fontSize: 8, color: AppColors.success, fontFamily: 'Cairo', fontWeight: FontWeight.bold),
                                                     ),
                                                   ),
                                                 ],
@@ -684,7 +683,7 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
                                         ),
                                       ),
 
-                                      const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white38, size: 14),
+                                      const Icon(Icons.arrow_forward_ios_rounded, color: AppColors.textDisabled, size: 14),
                                     ],
                                   ),
                                 ),

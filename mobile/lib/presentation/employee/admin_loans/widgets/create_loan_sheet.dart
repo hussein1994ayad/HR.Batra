@@ -3,8 +3,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../../../core/design/design.dart';
 import '../../../../core/models/models.dart';
-import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/arabic_format.dart';
 import '../../../../core/utils/input_formatters.dart';
 import '../../../../data/repositories/loan_repository.dart';
@@ -47,7 +47,7 @@ class _CreateLoanSheetState extends State<_CreateLoanSheet> {
 
   void _error(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message, style: const TextStyle(fontFamily: 'Cairo')), backgroundColor: AppTheme.dangerRed),
+      SnackBar(content: Text(message, style: const TextStyle(fontFamily: 'Cairo')), backgroundColor: AppColors.danger),
     );
   }
 
@@ -92,16 +92,16 @@ class _CreateLoanSheetState extends State<_CreateLoanSheet> {
 
   InputDecoration _decoration(String hint, {String? suffix}) => InputDecoration(
         hintText: hint,
-        hintStyle: const TextStyle(fontFamily: 'Cairo', color: Colors.white38, fontSize: 12),
+        hintStyle: const TextStyle(fontFamily: 'Cairo', color: AppColors.textDisabled, fontSize: 12),
         suffixText: suffix,
-        suffixStyle: const TextStyle(fontFamily: 'Cairo', color: AppTheme.neonCyan, fontWeight: FontWeight.bold),
+        suffixStyle: const TextStyle(fontFamily: 'Cairo', color: AppColors.brand, fontWeight: FontWeight.bold),
         filled: true,
-        fillColor: Colors.white.withValues(alpha: 0.06),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: Colors.white12)),
+        fillColor: AppColors.textPrimary.withValues(alpha: 0.06),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: AppColors.border)),
       );
 
-  static const _label = TextStyle(fontFamily: 'Cairo', fontSize: 12, color: Colors.white70, fontWeight: FontWeight.bold);
-  static const _input = TextStyle(fontFamily: 'Cairo', color: Colors.white, fontWeight: FontWeight.bold);
+  static const _label = TextStyle(fontFamily: 'Cairo', fontSize: 12, color: AppColors.textSecondary, fontWeight: FontWeight.bold);
+  static const _input = TextStyle(fontFamily: 'Cairo', color: AppColors.textPrimary, fontWeight: FontWeight.bold);
 
   @override
   Widget build(BuildContext context) {
@@ -109,9 +109,9 @@ class _CreateLoanSheetState extends State<_CreateLoanSheet> {
     return Container(
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom + 24, top: 24, left: 20, right: 20),
       decoration: BoxDecoration(
-        color: const Color(0xFF0F172A),
+        color: AppColors.surface1,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-        border: Border.all(color: AppTheme.neonCyan.withValues(alpha: 0.4), width: 1.5),
+        border: Border.all(color: AppColors.brand.withValues(alpha: 0.4), width: 1.5),
       ),
       child: SingleChildScrollView(
         child: Column(
@@ -123,13 +123,13 @@ class _CreateLoanSheetState extends State<_CreateLoanSheet> {
               children: [
                 const Row(
                   children: [
-                    Icon(Icons.add_circle_rounded, color: AppTheme.neonCyan, size: 24),
+                    Icon(Icons.add_circle_rounded, color: AppColors.brand, size: 24),
                     SizedBox(width: 10),
                     Text('إضافة سلفة جديدة لموظف ➕',
-                        style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white)),
+                        style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.textPrimary)),
                   ],
                 ),
-                IconButton(icon: const Icon(Icons.close_rounded, color: Colors.white60), onPressed: () => Navigator.pop(context)),
+                IconButton(icon: const Icon(Icons.close_rounded, color: AppColors.textMuted), onPressed: () => Navigator.pop(context)),
               ],
             ),
             const SizedBox(height: 16),
@@ -138,22 +138,22 @@ class _CreateLoanSheetState extends State<_CreateLoanSheet> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14),
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.06),
+                color: AppColors.textPrimary.withValues(alpha: 0.06),
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: Colors.white12),
+                border: Border.all(color: AppColors.border),
               ),
               child: DropdownButtonHideUnderline(
                 child: DropdownButton<String>(
                   isExpanded: true,
-                  dropdownColor: const Color(0xFF1E293B),
+                  dropdownColor: AppColors.surface2,
                   value: _employeeId,
-                  hint: const Text('اضغط لاختيار موظف...', style: TextStyle(fontFamily: 'Cairo', color: Colors.white38, fontSize: 12)),
+                  hint: const Text('اضغط لاختيار موظف...', style: TextStyle(fontFamily: 'Cairo', color: AppColors.textDisabled, fontSize: 12)),
                   items: [
                     for (final emp in widget.employees)
                       DropdownMenuItem(
                         value: emp.id,
                         child: Text('${emp.fullName} (${emp.branchName ?? ''})',
-                            style: const TextStyle(fontFamily: 'Cairo', color: Colors.white, fontSize: 13)),
+                            style: const TextStyle(fontFamily: 'Cairo', color: AppColors.textPrimary, fontSize: 13)),
                       ),
                   ],
                   onChanged: (v) => setState(() => _employeeId = v),
@@ -185,7 +185,7 @@ class _CreateLoanSheetState extends State<_CreateLoanSheet> {
             TextField(
               controller: _notes,
               maxLines: 2,
-              style: const TextStyle(fontFamily: 'Cairo', color: Colors.white, fontSize: 12),
+              style: const TextStyle(fontFamily: 'Cairo', color: AppColors.textPrimary, fontSize: 12),
               decoration: _decoration('اكتب تفاصيل أو سبب منح السلفة...'),
             ),
             const SizedBox(height: 14),
@@ -194,19 +194,19 @@ class _CreateLoanSheetState extends State<_CreateLoanSheet> {
               child: OutlinedButton.icon(
                 onPressed: _saving ? null : _pickPledge,
                 style: OutlinedButton.styleFrom(
-                  side: BorderSide(color: hasPledge ? AppTheme.successGreen : AppTheme.neonCyan.withValues(alpha: 0.5)),
+                  side: BorderSide(color: hasPledge ? AppColors.success : AppColors.brand.withValues(alpha: 0.5)),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   padding: const EdgeInsets.symmetric(vertical: 10),
                 ),
                 icon: Icon(hasPledge ? Icons.check_circle_rounded : Icons.camera_alt_rounded,
-                    color: hasPledge ? AppTheme.successGreen : AppTheme.neonCyan, size: 18),
+                    color: hasPledge ? AppColors.success : AppColors.brand, size: 18),
                 label: Text(
                   hasPledge ? 'تم التقاط صورة التعهد ✅' : 'تصوير التعهد الخطي (إلزامي) 📷',
                   style: TextStyle(
                     fontFamily: 'Cairo',
                     fontSize: 11,
                     fontWeight: FontWeight.bold,
-                    color: hasPledge ? AppTheme.successGreen : Colors.white,
+                    color: hasPledge ? AppColors.success : AppColors.textPrimary,
                   ),
                 ),
               ),
@@ -218,13 +218,13 @@ class _CreateLoanSheetState extends State<_CreateLoanSheet> {
               child: ElevatedButton(
                 onPressed: _saving ? null : _submit,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.successGreen,
-                  foregroundColor: Colors.white,
+                  backgroundColor: AppColors.success,
+                  foregroundColor: AppColors.textPrimary,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                   elevation: 0,
                 ),
                 child: _saving
-                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: AppColors.textPrimary, strokeWidth: 2))
                     : const Text('حفظ واعتماد السلفة مباشرة 💸',
                         style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 14)),
               ),

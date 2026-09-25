@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/design/design.dart';
 import '../../../../core/models/models.dart';
-import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/arabic_format.dart';
 import '../../../../data/repositories/admin_dashboard_repository.dart';
 import '../../../shared/widgets/glass_container.dart';
@@ -18,14 +18,14 @@ class DashboardStatsRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
-      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Colors.white.withValues(alpha: 0.08)))),
+      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.textPrimary.withValues(alpha: 0.08)))),
       child: Row(
         children: [
-          Expanded(child: _StatCard('حاضر اليوم', '$present', AppTheme.successGreen, Icons.done_all_rounded)),
+          Expanded(child: _StatCard('حاضر اليوم', '$present', AppColors.success, Icons.done_all_rounded)),
           const SizedBox(width: 8),
-          Expanded(child: _StatCard('غائب اليوم', '$absent', AppTheme.dangerRed, Icons.close_rounded)),
+          Expanded(child: _StatCard('غائب اليوم', '$absent', AppColors.danger, Icons.close_rounded)),
           const SizedBox(width: 8),
-          Expanded(child: _StatCard('مخالفات أمنية', '$violations', AppTheme.warningOrange, Icons.security_rounded)),
+          Expanded(child: _StatCard('مخالفات أمنية', '$violations', AppColors.warning, Icons.security_rounded)),
         ],
       ),
     );
@@ -45,7 +45,6 @@ class _StatCard extends StatelessWidget {
     return GlassContainer(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
       borderRadius: 14,
-      opacity: 0.12,
       borderColor: color.withValues(alpha: 0.35),
       child: Row(
         children: [
@@ -64,7 +63,7 @@ class _StatCard extends StatelessWidget {
                   title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 8.5, color: Colors.white60, fontFamily: 'Cairo'),
+                  style: const TextStyle(fontSize: 8.5, color: AppColors.textMuted, fontFamily: 'Cairo'),
                 ),
                 const SizedBox(height: 2),
                 Text(value, style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: color)),
@@ -92,10 +91,10 @@ class DashboardFiltersBar extends StatelessWidget {
   final List<DashboardEmployee> employees;
   final ValueChanged<DashboardFilter> onChanged;
 
-  static const _textStyle = TextStyle(fontFamily: 'Cairo', color: Colors.white, fontSize: 11);
+  static const _textStyle = TextStyle(fontFamily: 'Cairo', color: AppColors.textPrimary, fontSize: 11);
 
   BoxDecoration _box(Color color) => BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.06),
+        color: AppColors.textPrimary.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: color.withValues(alpha: 0.2)),
       );
@@ -115,7 +114,7 @@ class DashboardFiltersBar extends StatelessWidget {
           // قيمة غير موجودة في القائمة (فرع/موظف محذوف) تُعرض كـ "الكل"
           value: items.any((i) => i.value == value) ? value : 'all',
           isExpanded: true,
-          dropdownColor: const Color(0xFF1A1F3A),
+          dropdownColor: AppColors.surface2,
           icon: Icon(Icons.arrow_drop_down_rounded, color: color),
           style: _textStyle,
           items: items,
@@ -134,7 +133,7 @@ class DashboardFiltersBar extends StatelessWidget {
       locale: const Locale('ar'),
       builder: (context, child) => Theme(
         data: Theme.of(context).copyWith(
-          colorScheme: const ColorScheme.dark(primary: AppTheme.neonCyan, surface: Color(0xFF1A1F3A)),
+          colorScheme: const ColorScheme.dark(primary: AppColors.brand, surface: AppColors.surface2),
         ),
         child: child!,
       ),
@@ -157,7 +156,7 @@ class DashboardFiltersBar extends StatelessWidget {
               Expanded(
                 child: _dropdown(
                   value: filter.branchId,
-                  color: AppTheme.neonCyan,
+                  color: AppColors.brand,
                   items: [
                     const DropdownMenuItem(value: 'all', child: Text('جميع الفروع')),
                     for (final b in branches) DropdownMenuItem(value: b.id, child: Text(b.name)),
@@ -178,7 +177,7 @@ class DashboardFiltersBar extends StatelessWidget {
               Expanded(
                 child: _dropdown(
                   value: filter.employeeId,
-                  color: AppTheme.successGreen,
+                  color: AppColors.success,
                   items: [
                     const DropdownMenuItem(value: 'all', child: Text('جميع الموظفين')),
                     for (final e in branchEmployees) DropdownMenuItem(value: e.id, child: Text(e.fullName)),
@@ -200,14 +199,14 @@ class DashboardFiltersBar extends StatelessWidget {
                   child: Container(
                     height: 34,
                     padding: const EdgeInsets.symmetric(horizontal: 12),
-                    decoration: _box(AppTheme.warningOrange),
+                    decoration: _box(AppColors.warning),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(filter.date == null ? 'تصفية حسب التاريخ' : formatDateSlash(filter.date!), style: _textStyle),
                         Icon(
                           filter.date == null ? Icons.calendar_today_rounded : Icons.edit_calendar_rounded,
-                          color: AppTheme.warningOrange,
+                          color: AppColors.warning,
                           size: 14,
                         ),
                       ],
@@ -223,17 +222,17 @@ class DashboardFiltersBar extends StatelessWidget {
                     height: 34,
                     padding: const EdgeInsets.symmetric(horizontal: 12),
                     decoration: BoxDecoration(
-                      color: AppTheme.dangerRed.withValues(alpha: 0.15),
+                      color: AppColors.danger.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: AppTheme.dangerRed.withValues(alpha: 0.3)),
+                      border: Border.all(color: AppColors.danger.withValues(alpha: 0.3)),
                     ),
                     child: const Row(
                       children: [
-                        Icon(Icons.filter_alt_off_rounded, color: Colors.white, size: 14),
+                        Icon(Icons.filter_alt_off_rounded, color: AppColors.textPrimary, size: 14),
                         SizedBox(width: 4),
                         Text(
                           'إعادة ضبط',
-                          style: TextStyle(fontFamily: 'Cairo', color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                          style: TextStyle(fontFamily: 'Cairo', color: AppColors.textPrimary, fontSize: 11, fontWeight: FontWeight.bold),
                         ),
                       ],
                     ),

@@ -7,8 +7,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/design/design.dart';
 import '../../core/services/supabase_service.dart';
-import '../../core/theme/app_theme.dart';
 import '../shared/widgets/glass_background.dart';
 import '../shared/widgets/glass_container.dart';
 
@@ -181,8 +181,8 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
         return Theme(
           data: ThemeData.dark().copyWith(
             colorScheme: const ColorScheme.dark(
-              primary: AppTheme.neonCyan,
-              surface: Color(0xFF1A1F3A),
+              primary: AppColors.brand,
+              surface: AppColors.surface2,
             ),
           ),
           child: child!,
@@ -251,26 +251,26 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
         return StatefulBuilder(
           builder: (context, setStateDialog) {
             return AlertDialog(
-              backgroundColor: const Color(0xFF1E293B),
+              backgroundColor: AppColors.surface2,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              title: Text('تعديل وقت الحضور: ${record['employee_name']}', style: const TextStyle(color: Colors.white, fontFamily: 'Cairo', fontSize: 14)),
+              title: Text('تعديل وقت الحضور: ${record['employee_name']}', style: const TextStyle(color: AppColors.textPrimary, fontFamily: 'Cairo', fontSize: 14)),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   ListTile(
-                    title: const Text('وقت الدخول', style: TextStyle(color: Colors.white70, fontFamily: 'Cairo')),
-                    subtitle: Text(newCheckIn != null ? newCheckIn!.format(context) : 'لم يُحدد', style: const TextStyle(color: AppTheme.successGreen, fontWeight: FontWeight.bold)),
-                    trailing: const Icon(Icons.access_time_filled_rounded, color: AppTheme.successGreen),
+                    title: const Text('وقت الدخول', style: TextStyle(color: AppColors.textSecondary, fontFamily: 'Cairo')),
+                    subtitle: Text(newCheckIn != null ? newCheckIn!.format(context) : 'لم يُحدد', style: const TextStyle(color: AppColors.success, fontWeight: FontWeight.bold)),
+                    trailing: const Icon(Icons.access_time_filled_rounded, color: AppColors.success),
                     onTap: () async {
                       final time = await showTimePicker(context: context, initialTime: newCheckIn ?? TimeOfDay.now());
                       if (time != null) setStateDialog(() => newCheckIn = time);
                     },
                   ),
-                  const Divider(color: Colors.white12),
+                  const Divider(color: AppColors.border),
                   ListTile(
-                    title: const Text('وقت الخروج', style: TextStyle(color: Colors.white70, fontFamily: 'Cairo')),
-                    subtitle: Text(newCheckOut != null ? newCheckOut!.format(context) : 'لم يُحدد', style: const TextStyle(color: AppTheme.dangerRed, fontWeight: FontWeight.bold)),
-                    trailing: const Icon(Icons.access_time_filled_rounded, color: AppTheme.dangerRed),
+                    title: const Text('وقت الخروج', style: TextStyle(color: AppColors.textSecondary, fontFamily: 'Cairo')),
+                    subtitle: Text(newCheckOut != null ? newCheckOut!.format(context) : 'لم يُحدد', style: const TextStyle(color: AppColors.danger, fontWeight: FontWeight.bold)),
+                    trailing: const Icon(Icons.access_time_filled_rounded, color: AppColors.danger),
                     onTap: () async {
                       final time = await showTimePicker(context: context, initialTime: newCheckOut ?? TimeOfDay.now());
                       if (time != null) setStateDialog(() => newCheckOut = time);
@@ -281,15 +281,15 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text('إلغاء', style: TextStyle(color: Colors.white54, fontFamily: 'Cairo')),
+                  child: const Text('إلغاء', style: TextStyle(color: AppColors.textMuted, fontFamily: 'Cairo')),
                 ),
                 ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: AppTheme.neonCyan),
+                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.brand),
                   onPressed: () async {
                     Navigator.pop(context);
                     unawaited(_saveEditedTime(record['id'] as String, record['work_date'] as String, newCheckIn, newCheckOut));
                   },
-                  child: const Text('حفظ التعديلات', style: TextStyle(color: Colors.black, fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+                  child: const Text('حفظ التعديلات', style: TextStyle(color: AppColors.onStatus, fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
                 ),
               ],
             );
@@ -320,7 +320,7 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
       if (updates.isNotEmpty) {
         await SupabaseService.client.from('attendance').update(updates).eq('id', recordId);
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم تحديث الأوقات بنجاح ✅', style: TextStyle(fontFamily: 'Cairo')), backgroundColor: AppTheme.successGreen));
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم تحديث الأوقات بنجاح ✅', style: TextStyle(fontFamily: 'Cairo')), backgroundColor: AppColors.success));
           unawaited(_loadRecords());
         }
       } else {
@@ -329,7 +329,7 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
     } catch (e) {
       debugPrint('Error updating time: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('حدث خطأ أثناء التحديث ❌', style: TextStyle(fontFamily: 'Cairo')), backgroundColor: AppTheme.dangerRed));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('حدث خطأ أثناء التحديث ❌', style: TextStyle(fontFamily: 'Cairo')), backgroundColor: AppColors.danger));
         setState(() => _isLoading = false);
       }
     }
@@ -347,10 +347,10 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
           backgroundColor: Colors.transparent,
           elevation: 0,
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
+            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textPrimary),
             onPressed: () => Navigator.pop(context),
           ),
-          title: const Text('تقارير الحضور المتقدمة 📊', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white)),
+          title: const Text('تقارير الحضور المتقدمة 📊', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.textPrimary)),
         ),
         body: Column(
           children: [
@@ -365,18 +365,18 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
                       height: 38,
                       padding: const EdgeInsets.symmetric(horizontal: 10),
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.06),
+                        color: AppColors.textPrimary.withValues(alpha: 0.06),
                         borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: AppTheme.neonCyan.withValues(alpha: 0.2)),
+                        border: Border.all(color: AppColors.brand.withValues(alpha: 0.2)),
                       ),
                       child: DropdownButtonHideUnderline(
                         child: DropdownButton<String>(
                           value: _selectedBranchId,
-                          hint: const Text('جميع الفروع', style: TextStyle(fontFamily: 'Cairo', color: Colors.white, fontSize: 11)),
+                          hint: const Text('جميع الفروع', style: TextStyle(fontFamily: 'Cairo', color: AppColors.textPrimary, fontSize: 11)),
                           isExpanded: true,
-                          dropdownColor: const Color(0xFF1A1F3A),
-                          icon: const Icon(Icons.arrow_drop_down_rounded, color: AppTheme.neonCyan),
-                          style: const TextStyle(fontFamily: 'Cairo', color: Colors.white, fontSize: 11),
+                          dropdownColor: AppColors.surface2,
+                          icon: const Icon(Icons.arrow_drop_down_rounded, color: AppColors.brand),
+                          style: const TextStyle(fontFamily: 'Cairo', color: AppColors.textPrimary, fontSize: 11),
                           items: [
                             const DropdownMenuItem(value: 'all', child: Text('جميع الفروع')),
                             ..._branches.map((b) => DropdownMenuItem<String>(value: b['id'] as String?, child: Text(b['name'] as String))),
@@ -404,18 +404,18 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
                       height: 38,
                       padding: const EdgeInsets.symmetric(horizontal: 10),
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.06),
+                        color: AppColors.textPrimary.withValues(alpha: 0.06),
                         borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: AppTheme.successGreen.withValues(alpha: 0.2)),
+                        border: Border.all(color: AppColors.success.withValues(alpha: 0.2)),
                       ),
                       child: DropdownButtonHideUnderline(
                         child: DropdownButton<String>(
                           value: _selectedEmployeeId,
-                          hint: const Text('جميع الموظفين', style: TextStyle(fontFamily: 'Cairo', color: Colors.white, fontSize: 11)),
+                          hint: const Text('جميع الموظفين', style: TextStyle(fontFamily: 'Cairo', color: AppColors.textPrimary, fontSize: 11)),
                           isExpanded: true,
-                          dropdownColor: const Color(0xFF1A1F3A),
-                          icon: const Icon(Icons.arrow_drop_down_rounded, color: AppTheme.successGreen),
-                          style: const TextStyle(fontFamily: 'Cairo', color: Colors.white, fontSize: 11),
+                          dropdownColor: AppColors.surface2,
+                          icon: const Icon(Icons.arrow_drop_down_rounded, color: AppColors.success),
+                          style: const TextStyle(fontFamily: 'Cairo', color: AppColors.textPrimary, fontSize: 11),
                           items: [
                             const DropdownMenuItem(value: 'all', child: Text('جميع الموظفين')),
                             ..._employeesList.where((emp) {
@@ -450,18 +450,18 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
                         height: 42,
                         padding: const EdgeInsets.symmetric(horizontal: 12),
                         decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.06),
+                          color: AppColors.textPrimary.withValues(alpha: 0.06),
                           borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: AppTheme.warningOrange.withValues(alpha: 0.2)),
+                          border: Border.all(color: AppColors.warning.withValues(alpha: 0.2)),
                         ),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text(
                               '${_selectedDateRange.start.month}/${_selectedDateRange.start.day} - ${_selectedDateRange.end.month}/${_selectedDateRange.end.day}',
-                              style: const TextStyle(fontFamily: 'Cairo', color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                              style: const TextStyle(fontFamily: 'Cairo', color: AppColors.textPrimary, fontSize: 12, fontWeight: FontWeight.bold),
                             ),
-                            const Icon(Icons.date_range_rounded, color: AppTheme.warningOrange, size: 18),
+                            const Icon(Icons.date_range_rounded, color: AppColors.warning, size: 18),
                           ],
                         ),
                       ),
@@ -473,9 +473,9 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
-                        _buildStatChip('حاضر', presentCount, AppTheme.successGreen),
+                        _buildStatChip('حاضر', presentCount, AppColors.success),
                         const SizedBox(width: 6),
-                        _buildStatChip('غائب', absentCount, AppTheme.dangerRed),
+                        _buildStatChip('غائب', absentCount, AppColors.danger),
                       ],
                     ),
                   ),
@@ -485,9 +485,9 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
 
             Expanded(
               child: _isLoading
-                  ? const Center(child: CircularProgressIndicator(color: AppTheme.neonCyan))
+                  ? const Center(child: CircularProgressIndicator(color: AppColors.brand))
                   : _records.isEmpty
-                      ? const Center(child: Text('لا توجد بيانات لهذه الفترة أو الفلاتر', style: TextStyle(color: Colors.white54, fontFamily: 'Cairo')))
+                      ? const Center(child: Text('لا توجد بيانات لهذه الفترة أو الفلاتر', style: TextStyle(color: AppColors.textMuted, fontFamily: 'Cairo')))
                       : ListView.builder(
                           padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
                           itemCount: _records.length,
@@ -501,15 +501,15 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
                               margin: const EdgeInsets.only(bottom: 12),
                               padding: const EdgeInsets.all(12),
                               borderRadius: 14,
-                              borderColor: isAbsent ? AppTheme.dangerRed.withValues(alpha: 0.2) : AppTheme.successGreen.withValues(alpha: 0.2),
+                              borderColor: isAbsent ? AppColors.danger.withValues(alpha: 0.2) : AppColors.success.withValues(alpha: 0.2),
                               child: Row(
                                 children: [
                                   CircleAvatar(
                                     radius: 20,
-                                    backgroundColor: (isAbsent ? AppTheme.dangerRed : AppTheme.successGreen).withValues(alpha: 0.15),
+                                    backgroundColor: (isAbsent ? AppColors.danger : AppColors.success).withValues(alpha: 0.15),
                                     child: Icon(
                                       isAbsent ? Icons.person_off_rounded : Icons.how_to_reg_rounded,
-                                      color: isAbsent ? AppTheme.dangerRed : AppTheme.successGreen,
+                                      color: isAbsent ? AppColors.danger : AppColors.success,
                                       size: 20,
                                     ),
                                   ),
@@ -518,8 +518,8 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        Text((r['employee_name'] ?? 'مجهول') as String, style: const TextStyle(color: Colors.white, fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 13)),
-                                        Text('${r['employee_code']} | ${r['work_date']}', style: const TextStyle(color: Colors.white38, fontSize: 10)),
+                                        Text((r['employee_name'] ?? 'مجهول') as String, style: const TextStyle(color: AppColors.textPrimary, fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 13)),
+                                        Text('${r['employee_code']} | ${r['work_date']}', style: const TextStyle(color: AppColors.textDisabled, fontSize: 10)),
                                       ],
                                     ),
                                   ),
@@ -532,16 +532,16 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
                                             Column(
                                               crossAxisAlignment: CrossAxisAlignment.end,
                                               children: [
-                                                const Text('دخول', style: TextStyle(color: AppTheme.successGreen, fontFamily: 'Cairo', fontSize: 9)),
+                                                const Text('دخول', style: TextStyle(color: AppColors.success, fontFamily: 'Cairo', fontSize: 9)),
                                                 Row(
                                                   children: [
                                                     if (r['check_in_lat'] != null)
                                                       GestureDetector(
                                                         onTap: () => _openMap(r['check_in_lat'] as double?, r['check_in_lng'] as double?),
-                                                        child: const Icon(Icons.location_on_rounded, color: AppTheme.successGreen, size: 14),
+                                                        child: const Icon(Icons.location_on_rounded, color: AppColors.success, size: 14),
                                                       ),
                                                     const SizedBox(width: 2),
-                                                    Text(checkIn, style: const TextStyle(color: Colors.white, fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 11)),
+                                                    Text(checkIn, style: const TextStyle(color: AppColors.textPrimary, fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 11)),
                                                   ],
                                                 ),
                                               ],
@@ -550,16 +550,16 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
                                             Column(
                                               crossAxisAlignment: CrossAxisAlignment.end,
                                               children: [
-                                                const Text('خروج', style: TextStyle(color: AppTheme.dangerRed, fontFamily: 'Cairo', fontSize: 9)),
+                                                const Text('خروج', style: TextStyle(color: AppColors.danger, fontFamily: 'Cairo', fontSize: 9)),
                                                 Row(
                                                   children: [
                                                     if (r['check_out_lat'] != null)
                                                       GestureDetector(
                                                         onTap: () => _openMap(r['check_out_lat'] as double?, r['check_out_lng'] as double?),
-                                                        child: const Icon(Icons.location_on_rounded, color: AppTheme.dangerRed, size: 14),
+                                                        child: const Icon(Icons.location_on_rounded, color: AppColors.danger, size: 14),
                                                       ),
                                                     const SizedBox(width: 2),
-                                                    Text(checkOut, style: const TextStyle(color: Colors.white, fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 11)),
+                                                    Text(checkOut, style: const TextStyle(color: AppColors.textPrimary, fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 11)),
                                                   ],
                                                 ),
                                               ],
@@ -567,7 +567,7 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
                                             const SizedBox(width: 8),
                                             // Edit Button
                                             IconButton(
-                                              icon: const Icon(Icons.edit_calendar_rounded, color: AppTheme.neonCyan, size: 18),
+                                              icon: const Icon(Icons.edit_calendar_rounded, color: AppColors.brand, size: 18),
                                               padding: EdgeInsets.zero,
                                               constraints: const BoxConstraints(),
                                               onPressed: () => _editTimeDialog(r),
@@ -579,8 +579,8 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
                                   else
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                      decoration: BoxDecoration(color: AppTheme.dangerRed.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
-                                      child: const Text('غائب', style: TextStyle(color: AppTheme.dangerRed, fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 11)),
+                                      decoration: BoxDecoration(color: AppColors.danger.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+                                      child: const Text('غائب', style: TextStyle(color: AppColors.danger, fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 11)),
                                     ),
                                 ],
                               ),
@@ -605,7 +605,7 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(label, style: const TextStyle(color: Colors.white70, fontFamily: 'Cairo', fontSize: 10)),
+          Text(label, style: const TextStyle(color: AppColors.textSecondary, fontFamily: 'Cairo', fontSize: 10)),
           const SizedBox(width: 4),
           Text(count.toString(), style: TextStyle(color: color, fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 11)),
         ],

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/design/design.dart';
 import '../../../../core/logic/attendance_rules.dart';
 import '../../../../core/models/models.dart';
-import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/arabic_format.dart';
 import '../../../../core/utils/input_formatters.dart';
 import '../../../shared/widgets/info_row.dart';
@@ -54,9 +54,9 @@ class _DecisionCardState extends State<DecisionCard> {
 
   InputDecoration _field(String hint) => InputDecoration(
         hintText: hint,
-        hintStyle: const TextStyle(color: Colors.white38),
+        hintStyle: const TextStyle(color: AppColors.textDisabled),
         filled: true,
-        fillColor: Colors.white.withValues(alpha: 0.05),
+        fillColor: AppColors.textPrimary.withValues(alpha: 0.05),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       );
@@ -66,8 +66,8 @@ class _DecisionCardState extends State<DecisionCard> {
   @override
   Widget build(BuildContext context) {
     final item = widget.item;
-    final color = item.status == 'absent' ? AppTheme.dangerRed : AppTheme.warningOrange;
-    const inputStyle = TextStyle(fontFamily: 'Cairo', color: Colors.white, fontSize: 12);
+    final color = item.status == 'absent' ? AppColors.danger : AppColors.warning;
+    const inputStyle = TextStyle(fontFamily: 'Cairo', color: AppColors.textPrimary, fontSize: 12);
 
     return RequestCard(
       title: item.employeeName,

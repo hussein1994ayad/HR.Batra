@@ -11,6 +11,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../core/design/design.dart';
 import '../../core/services/file_upload_service.dart';
 import '../../core/services/supabase_service.dart';
 import '../../core/theme/app_theme.dart';
@@ -189,7 +190,7 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
     if (startDay.isBefore(today)) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('لا يمكن طلب إجازة لتاريخ مضى', style: TextStyle(fontFamily: 'Cairo')), backgroundColor: AppTheme.dangerRed)
+          const SnackBar(content: Text('لا يمكن طلب إجازة لتاريخ مضى', style: TextStyle(fontFamily: 'Cairo')), backgroundColor: AppColors.danger)
         );
       }
       return;
@@ -200,7 +201,7 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
       if (endDay.isBefore(startDay)) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('تاريخ النهاية يجب أن يكون بعد تاريخ البداية أو مساوياً له', style: TextStyle(fontFamily: 'Cairo')), backgroundColor: AppTheme.dangerRed)
+            const SnackBar(content: Text('تاريخ النهاية يجب أن يكون بعد تاريخ البداية أو مساوياً له', style: TextStyle(fontFamily: 'Cairo')), backgroundColor: AppColors.danger)
           );
         }
         return;
@@ -211,7 +212,7 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
       if (endMin <= startMin) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('وقت النهاية يجب أن يكون بعد وقت البداية', style: TextStyle(fontFamily: 'Cairo')), backgroundColor: AppTheme.dangerRed)
+            const SnackBar(content: Text('وقت النهاية يجب أن يكون بعد وقت البداية', style: TextStyle(fontFamily: 'Cairo')), backgroundColor: AppColors.danger)
           );
         }
         return;
@@ -238,7 +239,7 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
     if (isOverlap) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('توجد إجازة سابقة تتعارض مع التواريخ المحددة', style: TextStyle(fontFamily: 'Cairo')), backgroundColor: AppTheme.dangerRed)
+          const SnackBar(content: Text('توجد إجازة سابقة تتعارض مع التواريخ المحددة', style: TextStyle(fontFamily: 'Cairo')), backgroundColor: AppColors.danger)
         );
       }
       return;
@@ -301,7 +302,7 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('تم إرسال طلب الإجازة بنجاح، جاري الانتظار للموافقة عليها.', style: TextStyle(fontFamily: 'Cairo')),
-            backgroundColor: AppTheme.successGreen,
+            backgroundColor: AppColors.success,
           ),
         );
         _resetForm();
@@ -314,7 +315,7 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('حدث خطأ في تقديم الطلب: $e', style: const TextStyle(fontFamily: 'Cairo')),
-            backgroundColor: AppTheme.dangerRed,
+            backgroundColor: AppColors.danger,
           ),
         );
       }
@@ -349,14 +350,14 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
           style: TextStyle(
             fontFamily: 'Cairo',
             fontWeight: FontWeight.bold,
-            color: Colors.white,
+            color: AppColors.textPrimary,
           ),
         ),
         bottom: TabBar(
           controller: _tabController,
-          indicatorColor: AppTheme.neonCyan,
-          labelColor: AppTheme.neonCyan,
-          unselectedLabelColor: Colors.white70,
+          indicatorColor: AppColors.brand,
+          labelColor: AppColors.brand,
+          unselectedLabelColor: AppColors.textSecondary,
           labelStyle: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 13),
           tabs: const [
             Tab(text: 'تقديم طلب إجازة', icon: Icon(Icons.note_add_rounded)),
@@ -394,7 +395,7 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
   /*
   Widget _buildBalancesRow(bool isDark) {
     if (_isLoadingBalances) {
-      return const Center(child: CircularProgressIndicator(color: AppTheme.neonCyan));
+      return const Center(child: CircularProgressIndicator(color: AppColors.brand));
     }
 
     final annualTotal = _balances['annual_entitlement'] ?? 21;
@@ -412,7 +413,7 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
             title: 'إجازات سنوية متبقية',
             value: '$annualLeft يوم',
             sub: 'من أصل $annualTotal',
-            color: AppTheme.neonCyan,
+            color: AppColors.brand,
             isDark: isDark,
           ),
         ),
@@ -422,7 +423,7 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
             title: 'رصيد مرضي متبقي',
             value: '$sickLeft يوم',
             sub: 'من أصل $sickTotal',
-            color: AppTheme.neonPink,
+            color: AppColors.accent,
             isDark: isDark,
           ),
         ),
@@ -452,11 +453,11 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: const TextStyle(fontSize: 11, color: Colors.white70, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
+          Text(title, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
           const SizedBox(height: 8),
           Text(value, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color, fontFamily: 'Cairo')),
           const SizedBox(height: 4),
-          Text(sub, style: const TextStyle(fontSize: 10, color: Colors.white54, fontFamily: 'Cairo')),
+          Text(sub, style: const TextStyle(fontSize: 10, color: AppColors.textMuted, fontFamily: 'Cairo')),
         ],
       ),
     );
@@ -467,11 +468,10 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
   Widget _buildLeaveForm(bool isDark) {
     return GlassContainer(
       padding: const EdgeInsets.all(20),
-      opacity: 0.1,
-      borderColor: AppTheme.neonCyan.withValues(alpha: 0.2),
+      borderColor: AppColors.brand.withValues(alpha: 0.2),
       boxShadow: [
         BoxShadow(
-          color: AppTheme.neonCyan.withValues(alpha: 0.04),
+          color: AppColors.brand.withValues(alpha: 0.04),
           blurRadius: 20,
         )
       ],
@@ -481,29 +481,29 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // نوع الإجازة
-            const Text('تصنيف ونوع الإجازة المرجوة', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white, fontFamily: 'Cairo')),
+            const Text('تصنيف ونوع الإجازة المرجوة', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textPrimary, fontFamily: 'Cairo')),
             const SizedBox(height: 8),
             DropdownButtonFormField<String>(
               initialValue: _leaveType,
-              style: const TextStyle(color: Colors.white, fontSize: 13, fontFamily: 'Cairo'),
+              style: const TextStyle(color: AppColors.textPrimary, fontSize: 13, fontFamily: 'Cairo'),
               decoration: InputDecoration(
                 filled: true,
-                fillColor: Colors.white.withValues(alpha: 0.04),
-                prefixIcon: const Icon(Icons.category_rounded, color: AppTheme.neonCyan),
+                fillColor: AppColors.textPrimary.withValues(alpha: 0.04),
+                prefixIcon: const Icon(Icons.category_rounded, color: AppColors.brand),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(16),
-                  borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+                  borderSide: BorderSide(color: AppColors.textPrimary.withValues(alpha: 0.1)),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(16),
-                  borderSide: const BorderSide(color: AppTheme.neonCyan),
+                  borderSide: const BorderSide(color: AppColors.brand),
                 ),
               ),
-              dropdownColor: const Color(0xFF1E293B),
+              dropdownColor: AppColors.surface2,
               items: _leaveTypes.map((e) {
                 return DropdownMenuItem(
                   value: e['id'],
-                  child: Text(e['name']!, style: const TextStyle(fontSize: 13, color: Colors.white, fontFamily: 'Cairo')),
+                  child: Text(e['name']!, style: const TextStyle(fontSize: 13, color: AppColors.textPrimary, fontFamily: 'Cairo')),
                 );
               }).toList(),
               onChanged: (val) {
@@ -521,14 +521,14 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
                 const Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('هل الإجازة ساعية (مأذونية)؟', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white, fontFamily: 'Cairo')),
-                    Text('تفعيل لحساب الساعات والدقائق', style: TextStyle(fontSize: 10, color: Colors.white54, fontFamily: 'Cairo')),
+                    Text('هل الإجازة ساعية (مأذونية)؟', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textPrimary, fontFamily: 'Cairo')),
+                    Text('تفعيل لحساب الساعات والدقائق', style: TextStyle(fontSize: 10, color: AppColors.textMuted, fontFamily: 'Cairo')),
                   ],
                 ),
                 Switch.adaptive(
                   value: _isHourly,
-                  activeThumbColor: AppTheme.neonCyan,
-                  activeTrackColor: AppTheme.neonCyan.withValues(alpha: 0.3),
+                  activeThumbColor: AppColors.brand,
+                  activeTrackColor: AppColors.brand.withValues(alpha: 0.3),
                   onChanged: (val) {
                     setState(() => _isHourly = val);
                   },
@@ -544,16 +544,16 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
                 const Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('نوع الإجازة المالي', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white, fontFamily: 'Cairo')),
-                    Text('مستقطعة بدون راتب / مدفوعة الراتب', style: TextStyle(fontSize: 10, color: Colors.white54, fontFamily: 'Cairo')),
+                    Text('نوع الإجازة المالي', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textPrimary, fontFamily: 'Cairo')),
+                    Text('مستقطعة بدون راتب / مدفوعة الراتب', style: TextStyle(fontSize: 10, color: AppColors.textMuted, fontFamily: 'Cairo')),
                   ],
                 ),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: _isPaid ? AppTheme.successGreen.withValues(alpha: 0.15) : AppTheme.dangerRed.withValues(alpha: 0.15),
+                    color: _isPaid ? AppColors.success.withValues(alpha: 0.15) : AppColors.danger.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: _isPaid ? AppTheme.successGreen.withValues(alpha: 0.3) : AppTheme.dangerRed.withValues(alpha: 0.3)),
+                    border: Border.all(color: _isPaid ? AppColors.success.withValues(alpha: 0.3) : AppColors.danger.withValues(alpha: 0.3)),
                   ),
                   child: Row(
                     children: [
@@ -562,17 +562,17 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.bold,
-                          color: _isPaid ? AppTheme.successGreen : AppTheme.dangerRed,
+                          color: _isPaid ? AppColors.success : AppColors.danger,
                           fontFamily: 'Cairo'
                         ),
                       ),
                       const SizedBox(width: 8),
                       Switch.adaptive(
                         value: _isPaid,
-                        activeThumbColor: AppTheme.successGreen,
-                        activeTrackColor: AppTheme.successGreen.withValues(alpha: 0.3),
-                        inactiveThumbColor: AppTheme.dangerRed,
-                        inactiveTrackColor: AppTheme.dangerRed.withValues(alpha: 0.3),
+                        activeThumbColor: AppColors.success,
+                        activeTrackColor: AppColors.success.withValues(alpha: 0.3),
+                        inactiveThumbColor: AppColors.danger,
+                        inactiveTrackColor: AppColors.danger.withValues(alpha: 0.3),
                         onChanged: (val) {
                           setState(() => _isPaid = val);
                         },
@@ -592,22 +592,22 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('تاريخ البداية', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.white, fontFamily: 'Cairo')),
+                        const Text('تاريخ البداية', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppColors.textPrimary, fontFamily: 'Cairo')),
                         const SizedBox(height: 6),
                         InkWell(
                           onTap: () => _selectDate(true),
                           child: Container(
                             padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
                             decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.04),
+                              color: AppColors.textPrimary.withValues(alpha: 0.04),
                               borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                              border: Border.all(color: AppColors.textPrimary.withValues(alpha: 0.1)),
                             ),
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Text('${_startDate.year}/${_startDate.month}/${_startDate.day}', style: const TextStyle(fontSize: 12, color: Colors.white, fontFamily: 'Cairo')),
-                                const Icon(Icons.calendar_month, color: AppTheme.neonCyan, size: 18),
+                                Text('${_startDate.year}/${_startDate.month}/${_startDate.day}', style: const TextStyle(fontSize: 12, color: AppColors.textPrimary, fontFamily: 'Cairo')),
+                                const Icon(Icons.calendar_month, color: AppColors.brand, size: 18),
                               ],
                             ),
                           ),
@@ -620,22 +620,22 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('تاريخ النهاية', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.white, fontFamily: 'Cairo')),
+                        const Text('تاريخ النهاية', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppColors.textPrimary, fontFamily: 'Cairo')),
                         const SizedBox(height: 6),
                         InkWell(
                           onTap: () => _selectDate(false),
                           child: Container(
                             padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
                             decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.04),
+                              color: AppColors.textPrimary.withValues(alpha: 0.04),
                               borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                              border: Border.all(color: AppColors.textPrimary.withValues(alpha: 0.1)),
                             ),
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Text('${_endDate.year}/${_endDate.month}/${_endDate.day}', style: const TextStyle(fontSize: 12, color: Colors.white, fontFamily: 'Cairo')),
-                                const Icon(Icons.calendar_month, color: AppTheme.neonCyan, size: 18),
+                                Text('${_endDate.year}/${_endDate.month}/${_endDate.day}', style: const TextStyle(fontSize: 12, color: AppColors.textPrimary, fontFamily: 'Cairo')),
+                                const Icon(Icons.calendar_month, color: AppColors.brand, size: 18),
                               ],
                             ),
                           ),
@@ -650,22 +650,22 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('تاريخ المأذونية', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.white, fontFamily: 'Cairo')),
+                  const Text('تاريخ المأذونية', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppColors.textPrimary, fontFamily: 'Cairo')),
                   const SizedBox(height: 6),
                   InkWell(
                     onTap: () => _selectDate(true),
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.04),
+                        color: AppColors.textPrimary.withValues(alpha: 0.04),
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                        border: Border.all(color: AppColors.textPrimary.withValues(alpha: 0.1)),
                       ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text('${_startDate.year}/${_startDate.month}/${_startDate.day}', style: const TextStyle(fontSize: 12, color: Colors.white, fontFamily: 'Cairo')),
-                          const Icon(Icons.calendar_month, color: AppTheme.neonCyan, size: 18),
+                          Text('${_startDate.year}/${_startDate.month}/${_startDate.day}', style: const TextStyle(fontSize: 12, color: AppColors.textPrimary, fontFamily: 'Cairo')),
+                          const Icon(Icons.calendar_month, color: AppColors.brand, size: 18),
                         ],
                       ),
                     ),
@@ -677,22 +677,22 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('من الساعة', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.white, fontFamily: 'Cairo')),
+                            const Text('من الساعة', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppColors.textPrimary, fontFamily: 'Cairo')),
                             const SizedBox(height: 6),
                             InkWell(
                               onTap: () => _selectTime(true),
                               child: Container(
                                 padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
                                 decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.04),
+                                  color: AppColors.textPrimary.withValues(alpha: 0.04),
                                   borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                                  border: Border.all(color: AppColors.textPrimary.withValues(alpha: 0.1)),
                                 ),
                                 child: Row(
                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
-                                    Text(_formatTimeOfDay(_startHour), style: const TextStyle(fontSize: 12, color: Colors.white, fontFamily: 'Cairo')),
-                                    const Icon(Icons.access_time_filled_rounded, color: AppTheme.neonCyan, size: 18),
+                                    Text(_formatTimeOfDay(_startHour), style: const TextStyle(fontSize: 12, color: AppColors.textPrimary, fontFamily: 'Cairo')),
+                                    const Icon(Icons.access_time_filled_rounded, color: AppColors.brand, size: 18),
                                   ],
                                 ),
                               ),
@@ -705,22 +705,22 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('إلى الساعة', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.white, fontFamily: 'Cairo')),
+                            const Text('إلى الساعة', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppColors.textPrimary, fontFamily: 'Cairo')),
                             const SizedBox(height: 6),
                             InkWell(
                               onTap: () => _selectTime(false),
                               child: Container(
                                 padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
                                 decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.04),
+                                  color: AppColors.textPrimary.withValues(alpha: 0.04),
                                   borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                                  border: Border.all(color: AppColors.textPrimary.withValues(alpha: 0.1)),
                                 ),
                                 child: Row(
                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
-                                    Text(_formatTimeOfDay(_endHour), style: const TextStyle(fontSize: 12, color: Colors.white, fontFamily: 'Cairo')),
-                                    const Icon(Icons.access_time_filled_rounded, color: AppTheme.neonCyan, size: 18),
+                                    Text(_formatTimeOfDay(_endHour), style: const TextStyle(fontSize: 12, color: AppColors.textPrimary, fontFamily: 'Cairo')),
+                                    const Icon(Icons.access_time_filled_rounded, color: AppColors.brand, size: 18),
                                   ],
                                 ),
                               ),
@@ -736,24 +736,24 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
             const SizedBox(height: 18),
 
             // سبب الإجازة
-            const Text('مبررات وأسباب طلب الإجازة', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white, fontFamily: 'Cairo')),
+            const Text('مبررات وأسباب طلب الإجازة', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textPrimary, fontFamily: 'Cairo')),
             const SizedBox(height: 8),
             TextFormField(
               controller: _reasonController,
               maxLines: 3,
-              style: const TextStyle(color: Colors.white, fontSize: 13, fontFamily: 'Cairo'),
+              style: const TextStyle(color: AppColors.textPrimary, fontSize: 13, fontFamily: 'Cairo'),
               decoration: InputDecoration(
                 hintText: 'اكتب الأسباب بالتفصيل هنا...',
-                hintStyle: const TextStyle(color: Colors.white38, fontSize: 12, fontFamily: 'Cairo'),
+                hintStyle: const TextStyle(color: AppColors.textDisabled, fontSize: 12, fontFamily: 'Cairo'),
                 filled: true,
-                fillColor: Colors.white.withValues(alpha: 0.04),
+                fillColor: AppColors.textPrimary.withValues(alpha: 0.04),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(16),
-                  borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+                  borderSide: BorderSide(color: AppColors.textPrimary.withValues(alpha: 0.1)),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(16),
-                  borderSide: const BorderSide(color: AppTheme.neonCyan),
+                  borderSide: const BorderSide(color: AppColors.brand),
                 ),
               ),
               validator: (value) {
@@ -766,17 +766,17 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
             const SizedBox(height: 18),
 
             // ملف مرفق (مستند أو تقرير طبي)
-            const Text('إرفاق وثيقة مبررة (صورة أو تقرير)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white, fontFamily: 'Cairo')),
+            const Text('إرفاق وثيقة مبررة (صورة أو تقرير)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textPrimary, fontFamily: 'Cairo')),
             const SizedBox(height: 8),
             InkWell(
               onTap: _pickAttachment,
               child: Container(
                 padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.04),
+                  color: AppColors.textPrimary.withValues(alpha: 0.04),
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
-                    color: _attachmentFile != null ? AppTheme.successGreen : Colors.white.withValues(alpha: 0.1),
+                    color: _attachmentFile != null ? AppColors.success : AppColors.textPrimary.withValues(alpha: 0.1),
                     width: _attachmentFile != null ? 1.5 : 1,
                   ),
                 ),
@@ -785,7 +785,7 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
                   children: [
                     Icon(
                       _attachmentFile != null ? Icons.task_alt_rounded : Icons.cloud_upload_outlined,
-                      color: _attachmentFile != null ? AppTheme.successGreen : AppTheme.neonCyan,
+                      color: _attachmentFile != null ? AppColors.success : AppColors.brand,
                     ),
                     const SizedBox(width: 10),
                     Text(
@@ -796,7 +796,7 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
                         fontSize: 12,
                         fontWeight: FontWeight.bold,
                         fontFamily: 'Cairo',
-                        color: _attachmentFile != null ? AppTheme.successGreen : AppTheme.neonCyan,
+                        color: _attachmentFile != null ? AppColors.success : AppColors.brand,
                       ),
                     ),
                   ],
@@ -812,7 +812,7 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
                 boxShadow: [
                   if (!_isUploading)
                     BoxShadow(
-                      color: AppTheme.neonCyan.withValues(alpha: 0.3),
+                      color: AppColors.brand.withValues(alpha: 0.3),
                       blurRadius: 12,
                       offset: const Offset(0, 4),
                     )
@@ -831,7 +831,7 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
                   ),
                   child: Ink(
                     decoration: const BoxDecoration(
-                      gradient: AppTheme.cyberGradient,
+                      gradient: AppTheme.primaryGradient,
                     ),
                     child: Container(
                       constraints: const BoxConstraints(minHeight: 52.0),
@@ -840,7 +840,7 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
                           ? const SizedBox(
                               height: 20,
                               width: 20,
-                              child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
+                              child: CircularProgressIndicator(color: AppColors.textPrimary, strokeWidth: 2.5),
                             )
                           : const Text(
                               'تقديم طلب الإجازة رسمياً',
@@ -848,7 +848,7 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
                                 fontWeight: FontWeight.bold,
                                 fontFamily: 'Cairo',
                                 fontSize: 15,
-                                color: Colors.white,
+                                color: AppColors.textPrimary,
                               ),
                             ),
                     ),
@@ -865,14 +865,14 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
   // تبويب سجل الإجازات السابقة
   Widget _buildLeaveHistoryTab(bool isDark) {
     if (_isLoadingHistory) {
-      return const Center(child: CircularProgressIndicator(color: AppTheme.neonCyan));
+      return const Center(child: CircularProgressIndicator(color: AppColors.brand));
     }
 
     if (_leaveHistory.isEmpty) {
       return const Center(
         child: Text(
           'لا توجد سجلات إجازات سابقة لك حالياً ✨',
-          style: TextStyle(fontSize: 12, color: Colors.white70, fontFamily: 'Cairo'),
+          style: TextStyle(fontSize: 12, color: AppColors.textSecondary, fontFamily: 'Cairo'),
         ),
       );
     }
@@ -885,7 +885,7 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
 
     return RefreshIndicator(
       onRefresh: _loadHistory,
-      color: AppTheme.neonCyan,
+      color: AppColors.brand,
       child: ListView.separated(
         padding: const EdgeInsets.all(16),
         itemCount: _leaveHistory.length,
@@ -912,7 +912,6 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
           return GlassContainer(
             padding: const EdgeInsets.all(16),
             borderRadius: 20,
-            opacity: 0.08,
             borderColor: cardColor.withValues(alpha: 0.3),
             boxShadow: [
               BoxShadow(
@@ -928,7 +927,7 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
                   children: [
                     Text(
                       'إجازة $typeLabelStr (${(isHourly as bool) ? "ساعية" : "يومية"})',
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white, fontFamily: 'Cairo'),
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textPrimary, fontFamily: 'Cairo'),
                     ),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -947,20 +946,20 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
                 const SizedBox(height: 10),
                 Text(
                   'الفترة: ${_formatDate(req['start_date'] as String?)} إلى ${_formatDate(req['end_date'] as String?)}',
-                  style: const TextStyle(fontSize: 11, color: Colors.white70, fontFamily: 'Cairo'),
+                  style: const TextStyle(fontSize: 11, color: AppColors.textSecondary, fontFamily: 'Cairo'),
                 ),
                 if (isHourly && req['start_hour'] != null) ...[
                   const SizedBox(height: 4),
                   Text(
                     'التوقيت: ${_formatTimeStr(req['start_hour'] as String?)} إلى ${_formatTimeStr(req['end_hour'] as String?)}',
-                    style: const TextStyle(fontSize: 11, color: Colors.white70, fontFamily: 'Cairo'),
+                    style: const TextStyle(fontSize: 11, color: AppColors.textSecondary, fontFamily: 'Cairo'),
                   ),
                 ],
                 if (req['reason'] != null) ...[
                   const SizedBox(height: 10),
                   Text(
                     'السبب: ${req['reason']}',
-                    style: const TextStyle(fontSize: 12, color: Colors.white70, fontFamily: 'Cairo'),
+                    style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, fontFamily: 'Cairo'),
                   ),
                 ],
                 if (req['attachment_url'] != null) ...[
@@ -977,9 +976,9 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
                     }, // فتح المرفق
                     child: const Row(
                       children: [
-                        Icon(Icons.attachment_rounded, size: 16, color: AppTheme.neonCyan),
+                        Icon(Icons.attachment_rounded, size: 16, color: AppColors.brand),
                         SizedBox(width: 4),
-                        Text('عرض المستند المرفق 📸', style: TextStyle(fontSize: 11, color: AppTheme.neonCyan, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
+                        Text('عرض المستند المرفق 📸', style: TextStyle(fontSize: 11, color: AppColors.brand, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
                       ],
                     ),
                   )
@@ -995,11 +994,11 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
   Color _getStatusColor(String status) {
     switch (status) {
       case 'approved':
-        return AppTheme.successGreen;
+        return AppColors.success;
       case 'rejected':
-        return AppTheme.neonPink;
+        return AppColors.accent;
       default:
-        return AppTheme.warningOrange;
+        return AppColors.warning;
     }
   }
 
@@ -1024,9 +1023,9 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
         return Theme(
           data: Theme.of(context).copyWith(
             colorScheme: const ColorScheme.dark(
-              primary: AppTheme.neonCyan,
-              onPrimary: Colors.white,
-              surface: Color(0xFF1E293B),
+              primary: AppColors.brand,
+              onPrimary: AppColors.textPrimary,
+              surface: AppColors.surface2,
             ),
           ),
           child: child!,
@@ -1056,9 +1055,9 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
         return Theme(
           data: Theme.of(context).copyWith(
             colorScheme: const ColorScheme.dark(
-              primary: AppTheme.neonCyan,
-              onPrimary: Colors.white,
-              surface: Color(0xFF1E293B),
+              primary: AppColors.brand,
+              onPrimary: AppColors.textPrimary,
+              surface: AppColors.surface2,
             ),
           ),
           child: child!,

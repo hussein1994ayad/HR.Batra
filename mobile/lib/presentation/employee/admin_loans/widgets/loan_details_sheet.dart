@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/constants/constants.dart';
+import '../../../../core/design/design.dart';
 import '../../../../core/logic/loan_rules.dart';
 import '../../../../core/models/models.dart';
-import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/arabic_format.dart';
 import 'loan_card.dart';
 
@@ -37,7 +37,7 @@ class _LoanDetails extends StatelessWidget {
   final ScrollController scrollController;
   final VoidCallback onExport;
 
-  static const _title = TextStyle(fontFamily: 'Cairo', fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white);
+  static const _title = TextStyle(fontFamily: 'Cairo', fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textPrimary);
 
   @override
   Widget build(BuildContext context) {
@@ -49,10 +49,10 @@ class _LoanDetails extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF0F172A),
+        color: AppColors.surface1,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-        border: Border.all(color: AppTheme.neonCyan.withValues(alpha: 0.3), width: 1.5),
-        boxShadow: [BoxShadow(color: AppTheme.neonCyan.withValues(alpha: 0.15), blurRadius: 30, spreadRadius: 2)],
+        border: Border.all(color: AppColors.brand.withValues(alpha: 0.3), width: 1.5),
+        boxShadow: [BoxShadow(color: AppColors.brand.withValues(alpha: 0.15), blurRadius: 30, spreadRadius: 2)],
       ),
       child: ListView(
         controller: scrollController,
@@ -63,7 +63,7 @@ class _LoanDetails extends StatelessWidget {
               width: 48,
               height: 5,
               margin: const EdgeInsets.only(bottom: 16),
-              decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(10)),
+              decoration: BoxDecoration(color: AppColors.borderStrong, borderRadius: BorderRadius.circular(10)),
             ),
           ),
           Row(
@@ -76,17 +76,17 @@ class _LoanDetails extends StatelessWidget {
                   children: [
                     Text(
                       loan.employeeName ?? 'موظف غير معروف',
-                      style: const TextStyle(fontFamily: 'Cairo', fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                      style: const TextStyle(fontFamily: 'Cairo', fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       '${record.branchName} • ${record.departmentName}',
-                      style: const TextStyle(fontFamily: 'Cairo', fontSize: 12, color: Colors.white60),
+                      style: const TextStyle(fontFamily: 'Cairo', fontSize: 12, color: AppColors.textMuted),
                     ),
                     if (salary > 0)
                       Text(
                         'الراتب الشهري: ${AppConstants.formatMoney(salary)}',
-                        style: const TextStyle(fontFamily: 'Cairo', fontSize: 11, color: AppTheme.neonCyan, fontWeight: FontWeight.w600),
+                        style: const TextStyle(fontFamily: 'Cairo', fontSize: 11, color: AppColors.brand, fontWeight: FontWeight.w600),
                       ),
                   ],
                 ),
@@ -94,8 +94,8 @@ class _LoanDetails extends StatelessWidget {
               ElevatedButton.icon(
                 onPressed: onExport,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.successGreen,
-                  foregroundColor: Colors.white,
+                  backgroundColor: AppColors.success,
+                  foregroundColor: AppColors.textPrimary,
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                   elevation: 0,
@@ -111,12 +111,12 @@ class _LoanDetails extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    _KpiBox('أصل السلفة', AppConstants.formatMoney(loan.amount), Colors.white, Icons.monetization_on_rounded),
+                    _KpiBox('أصل السلفة', AppConstants.formatMoney(loan.amount), AppColors.textPrimary, Icons.monetization_on_rounded),
                     const SizedBox(width: 10),
                     _KpiBox('المبلغ المدفوع', AppConstants.formatMoney(loan.paidAmount > 0 ? loan.paidAmount : 0),
-                        AppTheme.successGreen, Icons.check_circle_rounded),
+                        AppColors.success, Icons.check_circle_rounded),
                     const SizedBox(width: 10),
-                    _KpiBox('المبلغ المتبقي', AppConstants.formatMoney(loan.remainingAmount), const Color(0xFFF87171),
+                    _KpiBox('المبلغ المتبقي', AppConstants.formatMoney(loan.remainingAmount), AppColors.danger,
                         Icons.hourglass_top_rounded),
                   ],
                 ),
@@ -126,11 +126,11 @@ class _LoanDetails extends StatelessWidget {
                   children: [
                     Text(
                       'نسبة السداد: ${(progress * 100).toStringAsFixed(1)}%',
-                      style: const TextStyle(fontFamily: 'Cairo', fontSize: 12, color: Colors.white70, fontWeight: FontWeight.bold),
+                      style: const TextStyle(fontFamily: 'Cairo', fontSize: 12, color: AppColors.textSecondary, fontWeight: FontWeight.bold),
                     ),
                     Text(
                       'تم تسديد $paidCount من ${loan.installmentCount} أقساط',
-                      style: const TextStyle(fontFamily: 'Cairo', fontSize: 12, color: AppTheme.neonCyan, fontWeight: FontWeight.bold),
+                      style: const TextStyle(fontFamily: 'Cairo', fontSize: 12, color: AppColors.brand, fontWeight: FontWeight.bold),
                     ),
                   ],
                 ),
@@ -140,8 +140,8 @@ class _LoanDetails extends StatelessWidget {
                   child: LinearProgressIndicator(
                     value: progress,
                     minHeight: 8,
-                    backgroundColor: Colors.white10,
-                    valueColor: AlwaysStoppedAnimation<Color>(progress >= 1.0 ? AppTheme.successGreen : AppTheme.neonCyan),
+                    backgroundColor: AppColors.border,
+                    valueColor: AlwaysStoppedAnimation<Color>(progress >= 1.0 ? AppColors.success : AppColors.brand),
                   ),
                 ),
               ],
@@ -155,11 +155,11 @@ class _LoanDetails extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _SheetRow('تاريخ تقديم السلفة', loan.createdAt == null ? '-' : isoDate(loan.createdAt!), Icons.calendar_today_rounded),
-                const Divider(color: Colors.white10, height: 16),
+                const Divider(color: AppColors.border, height: 16),
                 _SheetRow('القسط الشهري المعتمد', '${AppConstants.formatMoney(loan.installmentAmount)} / الشهر', Icons.payments_rounded),
-                const Divider(color: Colors.white10, height: 16),
+                const Divider(color: AppColors.border, height: 16),
                 _SheetRow('مدة السداد', '${loan.installmentCount} أشهر متتالية', Icons.timelapse_rounded),
-                const Divider(color: Colors.white10, height: 16),
+                const Divider(color: AppColors.border, height: 16),
                 _SheetRow('الملاحظات والسبب', record.notes ?? 'لا توجد ملاحظات مسجلة', Icons.notes_rounded),
               ],
             ),
@@ -174,9 +174,9 @@ class _LoanDetails extends StatelessWidget {
               radius: 14,
               child: Row(
                 children: [
-                  Icon(Icons.info_outline_rounded, color: Colors.white38, size: 20),
+                  Icon(Icons.info_outline_rounded, color: AppColors.textDisabled, size: 20),
                   SizedBox(width: 10),
-                  Text('لم يتم إرفاق صورة تعهد خطي مع هذا الطلب.', style: TextStyle(fontFamily: 'Cairo', fontSize: 12, color: Colors.white60)),
+                  Text('لم يتم إرفاق صورة تعهد خطي مع هذا الطلب.', style: TextStyle(fontFamily: 'Cairo', fontSize: 12, color: AppColors.textMuted)),
                 ],
               ),
             ),
@@ -187,7 +187,7 @@ class _LoanDetails extends StatelessWidget {
               const Text('🗓️ جدول الأقساط والتسديدات الشهرية', style: _title),
               Text(
                 '${loan.installments.length} أقساط',
-                style: const TextStyle(fontFamily: 'Cairo', fontSize: 12, color: AppTheme.neonCyan, fontWeight: FontWeight.bold),
+                style: const TextStyle(fontFamily: 'Cairo', fontSize: 12, color: AppColors.brand, fontWeight: FontWeight.bold),
               ),
             ],
           ),
@@ -197,7 +197,7 @@ class _LoanDetails extends StatelessWidget {
               opacity: 0.03,
               radius: 14,
               child: Center(
-                child: Text('لم يتم توليد أقساط لهذه السلفة بعد.', style: TextStyle(fontFamily: 'Cairo', fontSize: 12, color: Colors.white60)),
+                child: Text('لم يتم توليد أقساط لهذه السلفة بعد.', style: TextStyle(fontFamily: 'Cairo', fontSize: 12, color: AppColors.textMuted)),
               ),
             )
           else
@@ -223,9 +223,9 @@ class _Panel extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: opacity),
+          color: AppColors.textPrimary.withValues(alpha: opacity),
           borderRadius: BorderRadius.circular(radius),
-          border: Border.all(color: Colors.white10),
+          border: Border.all(color: AppColors.border),
         ),
         child: child,
       );
@@ -245,16 +245,16 @@ class _KpiBox extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.04),
+          color: AppColors.textPrimary.withValues(alpha: 0.04),
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Colors.white10),
+          border: Border.all(color: AppColors.border),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Icon(icon, size: 18, color: color),
             const SizedBox(height: 6),
-            Text(title, style: const TextStyle(fontFamily: 'Cairo', fontSize: 10, color: Colors.white60)),
+            Text(title, style: const TextStyle(fontFamily: 'Cairo', fontSize: 10, color: AppColors.textMuted)),
             const SizedBox(height: 2),
             FittedBox(
               fit: BoxFit.scaleDown,
@@ -279,11 +279,11 @@ class _SheetRow extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, size: 18, color: AppTheme.neonCyan),
+        Icon(icon, size: 18, color: AppColors.brand),
         const SizedBox(width: 10),
-        Text('$title: ', style: const TextStyle(fontFamily: 'Cairo', fontSize: 12, color: Colors.white60, fontWeight: FontWeight.w600)),
+        Text('$title: ', style: const TextStyle(fontFamily: 'Cairo', fontSize: 12, color: AppColors.textMuted, fontWeight: FontWeight.w600)),
         Expanded(
-          child: Text(value, style: const TextStyle(fontFamily: 'Cairo', fontSize: 12, color: Colors.white, fontWeight: FontWeight.bold)),
+          child: Text(value, style: const TextStyle(fontFamily: 'Cairo', fontSize: 12, color: AppColors.textPrimary, fontWeight: FontWeight.bold)),
         ),
       ],
     );
@@ -310,9 +310,9 @@ class _PledgePreview extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.04),
+        color: AppColors.textPrimary.withValues(alpha: 0.04),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppTheme.primaryTeal.withValues(alpha: 0.3)),
+        border: Border.all(color: AppColors.brandStrong.withValues(alpha: 0.3)),
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
@@ -322,7 +322,7 @@ class _PledgePreview extends StatelessWidget {
             child: Container(
               height: 180,
               width: double.infinity,
-              color: Colors.black26,
+              color: AppColors.shadow,
               child: Stack(
                 alignment: Alignment.center,
                 children: [
@@ -332,19 +332,19 @@ class _PledgePreview extends StatelessWidget {
                     height: 180,
                     fit: BoxFit.cover,
                     errorBuilder: (_, __, ___) =>
-                        const Center(child: Icon(Icons.broken_image_rounded, color: Colors.white38, size: 48)),
+                        const Center(child: Icon(Icons.broken_image_rounded, color: AppColors.textDisabled, size: 48)),
                     loadingBuilder: (_, child, progress) =>
-                        progress == null ? child : const Center(child: CircularProgressIndicator(color: AppTheme.neonCyan)),
+                        progress == null ? child : const Center(child: CircularProgressIndicator(color: AppColors.brand)),
                   ),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(20)),
+                    decoration: BoxDecoration(color: AppColors.shadow, borderRadius: BorderRadius.circular(20)),
                     child: const Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.zoom_in_rounded, color: Colors.white, size: 16),
+                        Icon(Icons.zoom_in_rounded, color: AppColors.textPrimary, size: 16),
                         SizedBox(width: 6),
-                        Text('انقر لتكبير صورة التعهد 🔍', style: TextStyle(fontFamily: 'Cairo', fontSize: 11, color: Colors.white)),
+                        Text('انقر لتكبير صورة التعهد 🔍', style: TextStyle(fontFamily: 'Cairo', fontSize: 11, color: AppColors.textPrimary)),
                       ],
                     ),
                   ),
@@ -359,8 +359,8 @@ class _PledgePreview extends StatelessWidget {
               child: ElevatedButton.icon(
                 onPressed: () => _openExternal(context),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.primaryTeal,
-                  foregroundColor: Colors.white,
+                  backgroundColor: AppColors.brandStrong,
+                  foregroundColor: AppColors.textPrimary,
                   padding: const EdgeInsets.symmetric(vertical: 10),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
@@ -388,9 +388,9 @@ class _InstallmentTile extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: paid ? AppTheme.successGreen.withValues(alpha: 0.08) : Colors.white.withValues(alpha: 0.03),
+        color: paid ? AppColors.success.withValues(alpha: 0.08) : AppColors.textPrimary.withValues(alpha: 0.03),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: paid ? AppTheme.successGreen.withValues(alpha: 0.3) : Colors.white10),
+        border: Border.all(color: paid ? AppColors.success.withValues(alpha: 0.3) : AppColors.border),
       ),
       child: Row(
         children: [
@@ -398,9 +398,9 @@ class _InstallmentTile extends StatelessWidget {
             width: 28,
             height: 28,
             alignment: Alignment.center,
-            decoration: BoxDecoration(color: paid ? AppTheme.successGreen : Colors.white12, shape: BoxShape.circle),
+            decoration: BoxDecoration(color: paid ? AppColors.success : AppColors.border, shape: BoxShape.circle),
             child: Text('${index + 1}',
-                style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 12, color: Colors.white)),
+                style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 12, color: AppColors.textPrimary)),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -409,12 +409,12 @@ class _InstallmentTile extends StatelessWidget {
               children: [
                 Text(
                   'تاريخ الاستحقاق: ${isoDate(installment.dueDate)}',
-                  style: const TextStyle(fontFamily: 'Cairo', fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
+                  style: const TextStyle(fontFamily: 'Cairo', fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
                 ),
                 if (paid && installment.paidAt != null)
                   Text(
                     'تم التسديد بتاريخ: ${isoDate(installment.paidAt!)}${installment.isCash ? ' (نقداً)' : ''}',
-                    style: const TextStyle(fontFamily: 'Cairo', fontSize: 10, color: AppTheme.successGreen),
+                    style: const TextStyle(fontFamily: 'Cairo', fontSize: 10, color: AppColors.success),
                   ),
               ],
             ),
@@ -428,14 +428,14 @@ class _InstallmentTile extends StatelessWidget {
                   fontFamily: 'Cairo',
                   fontWeight: FontWeight.bold,
                   fontSize: 12,
-                  color: paid ? AppTheme.successGreen : Colors.white,
+                  color: paid ? AppColors.success : AppColors.textPrimary,
                 ),
               ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 margin: const EdgeInsets.only(top: 2),
                 decoration: BoxDecoration(
-                  color: (paid ? AppTheme.successGreen : Colors.amber).withValues(alpha: 0.2),
+                  color: (paid ? AppColors.success : AppColors.warning).withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
@@ -444,7 +444,7 @@ class _InstallmentTile extends StatelessWidget {
                     fontFamily: 'Cairo',
                     fontSize: 10,
                     fontWeight: FontWeight.bold,
-                    color: paid ? AppTheme.successGreen : Colors.amber,
+                    color: paid ? AppColors.success : AppColors.warning,
                   ),
                 ),
               ),
@@ -461,7 +461,7 @@ Future<void> showFullScreenImage(BuildContext context, String imageUrl, String c
   return showDialog<void>(
     context: context,
     builder: (dialogContext) => Dialog(
-      backgroundColor: Colors.black,
+      backgroundColor: AppColors.onStatus,
       insetPadding: EdgeInsets.zero,
       child: Stack(
         children: [
@@ -474,7 +474,7 @@ Future<void> showFullScreenImage(BuildContext context, String imageUrl, String c
                 imageUrl,
                 fit: BoxFit.contain,
                 errorBuilder: (_, __, ___) => const Center(
-                  child: Text('تعذر تحميل الصورة', style: TextStyle(color: Colors.white, fontFamily: 'Cairo')),
+                  child: Text('تعذر تحميل الصورة', style: TextStyle(color: AppColors.textPrimary, fontFamily: 'Cairo')),
                 ),
               ),
             ),
@@ -483,7 +483,7 @@ Future<void> showFullScreenImage(BuildContext context, String imageUrl, String c
             top: 40,
             right: 20,
             child: IconButton(
-              icon: const Icon(Icons.close_rounded, color: Colors.white, size: 30),
+              icon: const Icon(Icons.close_rounded, color: AppColors.textPrimary, size: 30),
               onPressed: () => Navigator.pop(dialogContext),
             ),
           ),
@@ -495,12 +495,12 @@ Future<void> showFullScreenImage(BuildContext context, String imageUrl, String c
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 decoration: BoxDecoration(
-                  color: Colors.black87,
+                  color: AppColors.onStatus,
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: Colors.white24),
+                  border: Border.all(color: AppColors.borderStrong),
                 ),
                 child: Text(caption,
-                    style: const TextStyle(fontFamily: 'Cairo', color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                    style: const TextStyle(fontFamily: 'Cairo', color: AppColors.textPrimary, fontSize: 13, fontWeight: FontWeight.bold)),
               ),
             ),
           ),

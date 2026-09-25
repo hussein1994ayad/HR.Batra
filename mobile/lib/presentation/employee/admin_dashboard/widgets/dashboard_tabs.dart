@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/constants/constants.dart';
+import '../../../../core/design/design.dart';
 import '../../../../core/logic/attendance_rules.dart';
 import '../../../../core/models/models.dart';
 import '../../../../core/routes/app_router.dart';
-import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/arabic_format.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/info_row.dart';
@@ -37,7 +37,7 @@ class DecisionsTab extends StatelessWidget {
       return const EmptyState(
         'يرجى تحديد تاريخ أولاً لعرض القرارات المعلقة 📅',
         icon: Icons.calendar_today_rounded,
-        iconColor: AppTheme.warningOrange,
+        tone: AppTone.warning,
       );
     }
     if (decisions.isEmpty) return const EmptyState('لا توجد قرارات غياب أو تأخير معلقة لليوم المختار 👏');
@@ -82,8 +82,8 @@ class LeavesTab extends StatelessWidget {
         final leave = leaves[index];
         return RequestCard(
           title: leave.employeeName ?? 'موظف غير معروف',
-          accent: AppTheme.neonCyan,
-          trailing: StatusBadge(leave.typeArabic, color: AppTheme.neonCyan),
+          accent: AppColors.brand,
+          trailing: StatusBadge(leave.typeArabic, color: AppColors.brand),
           actions: DecisionButtons(
             busy: busyKey == leave.id,
             onApprove: () => onDecide(leave, true),
@@ -128,10 +128,10 @@ class LoansTab extends StatelessWidget {
           for (final loan in loans)
             RequestCard(
               title: loan.employeeName ?? 'موظف غير معروف',
-              accent: AppTheme.cyberPurple,
+              accent: AppColors.accent,
               trailing: Text(
                 AppConstants.formatMoney(loan.amount),
-                style: const TextStyle(color: AppTheme.neonCyan, fontWeight: FontWeight.w900, fontSize: 14, fontFamily: 'Cairo'),
+                style: const TextStyle(color: AppColors.brand, fontWeight: FontWeight.w900, fontSize: 14, fontFamily: 'Cairo'),
               ),
               actions: DecisionButtons(
                 busy: busyKey == loan.id,
@@ -175,20 +175,20 @@ class _LoansLedgerShortcut extends StatelessWidget {
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           gradient: LinearGradient(
-            colors: [AppTheme.primaryTeal.withValues(alpha: 0.35), AppTheme.cyberPurple.withValues(alpha: 0.25)],
+            colors: [AppColors.brandStrong.withValues(alpha: 0.35), AppColors.accent.withValues(alpha: 0.25)],
             begin: Alignment.topRight,
             end: Alignment.bottomLeft,
           ),
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: AppTheme.neonCyan.withValues(alpha: 0.4), width: 1.5),
-          boxShadow: [BoxShadow(color: AppTheme.neonCyan.withValues(alpha: 0.12), blurRadius: 16, spreadRadius: 1)],
+          border: Border.all(color: AppColors.brand.withValues(alpha: 0.4), width: 1.5),
+          boxShadow: [BoxShadow(color: AppColors.brand.withValues(alpha: 0.12), blurRadius: 16, spreadRadius: 1)],
         ),
         child: Row(
           children: [
             Container(
               padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: AppTheme.primaryTeal, borderRadius: BorderRadius.circular(14)),
-              child: const Icon(Icons.table_chart_rounded, color: Colors.white, size: 24),
+              decoration: BoxDecoration(color: AppColors.brandStrong, borderRadius: BorderRadius.circular(14)),
+              child: const Icon(Icons.table_chart_rounded, color: AppColors.textPrimary, size: 24),
             ),
             const SizedBox(width: 14),
             const Expanded(
@@ -197,18 +197,18 @@ class _LoansLedgerShortcut extends StatelessWidget {
                 children: [
                   Text(
                     'سجل ومتابعة المستلفين وكشوف Excel 📊',
-                    style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white),
+                    style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textPrimary),
                   ),
                   SizedBox(height: 2),
                   Text(
                     'عرض مبالغ السلف، الأقساط المسددة والمتبقية، صور التعهدات، وتصدير كشف Excel احترافي',
-                    style: TextStyle(fontFamily: 'Cairo', fontSize: 10, color: Colors.white70, height: 1.3),
+                    style: TextStyle(fontFamily: 'Cairo', fontSize: 10, color: AppColors.textSecondary, height: 1.3),
                   ),
                 ],
               ),
             ),
             const SizedBox(width: 8),
-            const Icon(Icons.arrow_forward_ios_rounded, color: AppTheme.neonCyan, size: 16),
+            const Icon(Icons.arrow_forward_ios_rounded, color: AppColors.brand, size: 16),
           ],
         ),
       ),
@@ -234,7 +234,7 @@ class DevicesTab extends StatelessWidget {
         final device = devices[index];
         return RequestCard(
           title: device.employeeName,
-          accent: AppTheme.neonPink,
+          accent: AppColors.accent,
           actions: DecisionButtons(
             busy: busyKey == device.id,
             approveLabel: 'اعتماد الجهاز',
@@ -271,10 +271,10 @@ class SecurityTab extends StatelessWidget {
         final log = logs[index];
         return RequestCard(
           title: log.employeeName,
-          accent: AppTheme.dangerRed,
+          accent: AppColors.danger,
           opacity: 0.12,
           glow: true,
-          trailing: const StatusBadge('خطر أمني ⚠️', color: AppTheme.dangerRed),
+          trailing: const StatusBadge('خطر أمني ⚠️', color: AppColors.danger),
           children: [
             InfoRow(icon: Icons.warning_amber_rounded, label: 'تفاصيل الخرق المكتشف', value: log.details),
             const SizedBox(height: 10),

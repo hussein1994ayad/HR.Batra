@@ -7,9 +7,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../core/constants/constants.dart';
+import '../../core/design/design.dart';
 import '../../core/services/pdf_export_service.dart';
 import '../../core/services/supabase_service.dart';
-import '../../core/theme/app_theme.dart';
 import '../shared/widgets/glass_background.dart';
 
 class PayslipsScreen extends StatefulWidget {
@@ -193,7 +193,7 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
         if (!mounted) return;
         unawaited(showModalBottomSheet<dynamic>(
           context: context,
-          backgroundColor: const Color(0xFF0F172A),
+          backgroundColor: AppColors.surface1,
           shape: const RoundedRectangleBorder(
             borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
           ),
@@ -206,25 +206,25 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
                   width: 40,
                   height: 4,
                   margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2)),
+                  decoration: BoxDecoration(color: AppColors.borderStrong, borderRadius: BorderRadius.circular(2)),
                 ),
                 Row(
                   children: [
                     Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: AppTheme.successGreen.withValues(alpha: 0.2),
+                        color: AppColors.success.withValues(alpha: 0.2),
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(Icons.check_circle_rounded, color: AppTheme.successGreen, size: 24),
+                      child: const Icon(Icons.check_circle_rounded, color: AppColors.success, size: 24),
                     ),
                     const SizedBox(width: 12),
                     const Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('تم إنشاء كشف الراتب بنجاح! 📄', style: TextStyle(fontFamily: 'Cairo', fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white)),
-                          Text('تم حفظ نسخة رسمية في مجلد المستندات والتنزيلات (Downloads)', style: TextStyle(fontFamily: 'Cairo', fontSize: 11, color: Colors.white60)),
+                          Text('تم إنشاء كشف الراتب بنجاح! 📄', style: TextStyle(fontFamily: 'Cairo', fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+                          Text('تم حفظ نسخة رسمية في مجلد المستندات والتنزيلات (Downloads)', style: TextStyle(fontFamily: 'Cairo', fontSize: 11, color: AppColors.textMuted)),
                         ],
                       ),
                     ),
@@ -240,8 +240,8 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
                           PdfExportService.openPdfFile(filePath);
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: AppTheme.primaryTeal,
-                          foregroundColor: Colors.white,
+                          backgroundColor: AppColors.brandStrong,
+                          foregroundColor: AppColors.textPrimary,
                           padding: const EdgeInsets.symmetric(vertical: 12),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         ),
@@ -257,8 +257,8 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
                           PdfExportService.sharePdfFile(filePath);
                         },
                         style: OutlinedButton.styleFrom(
-                          foregroundColor: AppTheme.neonCyan,
-                          side: const BorderSide(color: AppTheme.neonCyan),
+                          foregroundColor: AppColors.brand,
+                          side: const BorderSide(color: AppColors.brand),
                           padding: const EdgeInsets.symmetric(vertical: 12),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         ),
@@ -280,7 +280,7 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('فشل إنشاء ملف PDF: $e', style: const TextStyle(fontFamily: 'Cairo')),
-            backgroundColor: AppTheme.dangerRed,
+            backgroundColor: AppColors.danger,
           ),
         );
       }
@@ -301,7 +301,7 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
           elevation: 0,
           centerTitle: true,
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
+            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textPrimary),
             onPressed: () => Navigator.pop(context),
           ),
           title: const Text(
@@ -309,17 +309,17 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
             style: TextStyle(
               fontFamily: 'Cairo',
               fontWeight: FontWeight.bold,
-              color: Colors.white,
+              color: AppColors.textPrimary,
             ),
           ),
         ),
         body: _isLoading
-            ? const Center(child: CircularProgressIndicator(color: AppTheme.neonCyan))
+            ? const Center(child: CircularProgressIndicator(color: AppColors.brand))
             : _slips.isEmpty
                 ? _buildEmptyState()
                 : RefreshIndicator(
                     onRefresh: _loadPayslips,
-                    color: AppTheme.neonCyan,
+                    color: AppColors.brand,
                     child: ListView.separated(
                       padding: const EdgeInsets.all(16),
                       itemCount: _slips.length,
@@ -339,11 +339,11 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.receipt_long_rounded, size: 64, color: Colors.grey),
+          Icon(Icons.receipt_long_rounded, size: 64, color: AppColors.textMuted),
           SizedBox(height: 16),
           Text(
             'لا توجد كشوف رواتب معتمدة لك حالياً ✨',
-            style: TextStyle(fontFamily: 'Cairo', fontSize: 13, color: Colors.white70),
+            style: TextStyle(fontFamily: 'Cairo', fontSize: 13, color: AppColors.textSecondary),
           ),
         ],
       ),
@@ -368,7 +368,7 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
       title: Text(
         'كشف راتب $arabicMonth',
         style: const TextStyle(
-          color: Colors.white,
+          color: AppColors.textPrimary,
           fontWeight: FontWeight.w800,
           fontFamily: 'Cairo',
           fontSize: 14,
@@ -377,7 +377,7 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
       subtitle: Text(
         'صافي الراتب: ${AppConstants.formatMoney(net)}',
         style: const TextStyle(
-          color: AppTheme.neonCyan,
+          color: AppColors.brand,
           fontWeight: FontWeight.bold,
           fontFamily: 'Cairo',
           fontSize: 12,
@@ -385,16 +385,16 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
       ),
       collapsedShape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
-        side: BorderSide(color: AppTheme.neonCyan.withValues(alpha: 0.2)),
+        side: BorderSide(color: AppColors.brand.withValues(alpha: 0.2)),
       ),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
-        side: const BorderSide(color: AppTheme.neonCyan),
+        side: const BorderSide(color: AppColors.brand),
       ),
-      backgroundColor: const Color(0xFF1E293B).withValues(alpha: 0.35),
-      collapsedBackgroundColor: const Color(0xFF1E293B).withValues(alpha: 0.15),
-      iconColor: AppTheme.neonCyan,
-      collapsedIconColor: Colors.white70,
+      backgroundColor: AppColors.surface2.withValues(alpha: 0.35),
+      collapsedBackgroundColor: AppColors.surface2.withValues(alpha: 0.15),
+      iconColor: AppColors.brand,
+      collapsedIconColor: AppColors.textSecondary,
       onExpansionChanged: (expanded) {
         if (expanded) {
           _loadSlipDetails(slipId, workMonth);
@@ -406,15 +406,15 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Divider(color: Colors.white12),
+              const Divider(color: AppColors.border),
               
               // 1. جدول البيانات الأساسية
               _buildBreakdownRow('الراتب الأساسي', basic, isDeduction: false),
-              _buildBreakdownRow('المكافآت والزيادات (+)', allowances, isDeduction: false, color: AppTheme.successGreen),
+              _buildBreakdownRow('المكافآت والزيادات (+)', allowances, isDeduction: false, color: AppColors.success),
               _buildBreakdownRow('الغيابات والخصومات (-)', deductions, isDeduction: true),
               _buildBreakdownRow('خصم السلفة والأقساط (-)', loans, isDeduction: true),
               
-              const Divider(color: Colors.white24, height: 24),
+              const Divider(color: AppColors.borderStrong, height: 24),
               
               // 2. الراتب الصافي
               Row(
@@ -426,7 +426,7 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
                       fontFamily: 'Cairo',
                       fontWeight: FontWeight.w900,
                       fontSize: 13,
-                      color: Colors.white,
+                      color: AppColors.textPrimary,
                     ),
                   ),
                   Text(
@@ -435,7 +435,7 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
                       fontFamily: 'Cairo',
                       fontWeight: FontWeight.w900,
                       fontSize: 16,
-                      color: AppTheme.neonCyan,
+                      color: AppColors.brand,
                     ),
                   ),
                 ],
@@ -450,22 +450,22 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
                     fontFamily: 'Cairo',
                     fontWeight: FontWeight.bold,
                     fontSize: 11,
-                    color: Colors.white70,
+                    color: AppColors.textSecondary,
                   ),
                 ),
                 const SizedBox(height: 8),
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.black12,
+                    color: AppColors.shadow,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.white10),
+                    border: Border.all(color: AppColors.border),
                   ),
                   child: _slipsDetails[slipId]!.isEmpty
                       ? const Center(
                           child: Text(
                             'لم تسجل أي تسويات مالية استثنائية هذا الشهر.',
-                            style: TextStyle(fontFamily: 'Cairo', fontSize: 10, color: Colors.grey),
+                            style: TextStyle(fontFamily: 'Cairo', fontSize: 10, color: AppColors.textMuted),
                           ),
                         )
                       : Column(
@@ -485,7 +485,7 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
                                   Expanded(
                                     child: Text(
                                       '$reason ($date)',
-                                      style: const TextStyle(fontFamily: 'Cairo', fontSize: 10, color: Colors.white70),
+                                      style: const TextStyle(fontFamily: 'Cairo', fontSize: 10, color: AppColors.textSecondary),
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
@@ -495,7 +495,7 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
                                       fontFamily: 'Cairo',
                                       fontSize: 10,
                                       fontWeight: FontWeight.bold,
-                                      color: isBonus ? AppTheme.successGreen : AppTheme.dangerRed,
+                                      color: isBonus ? AppColors.success : AppColors.danger,
                                     ),
                                   ),
                                 ],
@@ -515,14 +515,14 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
                 child: ElevatedButton.icon(
                   onPressed: _exportingSlipId == slipId ? null : () => _exportPayslipToPdf(slip),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.primaryTeal.withValues(alpha: 0.3),
-                    foregroundColor: AppTheme.neonCyan,
-                    side: const BorderSide(color: AppTheme.neonCyan, width: 1.2),
+                    backgroundColor: AppColors.brandStrong.withValues(alpha: 0.3),
+                    foregroundColor: AppColors.brand,
+                    side: const BorderSide(color: AppColors.brand, width: 1.2),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     elevation: 0,
                   ),
                   icon: _exportingSlipId == slipId
-                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.neonCyan))
+                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.brand))
                       : const Icon(Icons.picture_as_pdf_rounded, size: 20),
                   label: Text(
                     _exportingSlipId == slipId ? 'جاري إنشاء ملف PDF...' : 'تحميل وطباعة كشف الراتب PDF 📄',
@@ -540,7 +540,7 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
   Widget _buildBreakdownRow(String label, double val, {required bool isDeduction, Color? color}) {
     if (val <= 0) return const SizedBox.shrink();
 
-    final displayColor = color ?? (isDeduction ? AppTheme.dangerRed : Colors.white70);
+    final displayColor = color ?? (isDeduction ? AppColors.danger : AppColors.textSecondary);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
@@ -548,7 +548,7 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
         children: [
           Text(
             label,
-            style: const TextStyle(fontFamily: 'Cairo', fontSize: 12, color: Colors.white70),
+            style: const TextStyle(fontFamily: 'Cairo', fontSize: 12, color: AppColors.textSecondary),
           ),
           Text(
             '${isDeduction ? "-" : "+"}${AppConstants.formatMoney(val)}',

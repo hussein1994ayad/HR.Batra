@@ -1,9 +1,16 @@
+// =========================================================================
+// HR Pro — GlassContainer (للتوافق مع الشاشات القديمة)
+// =========================================================================
+// صار بطاقة مسطّحة من رموز التصميم (بدون ضبابية ولا ظلال ثقيلة) حتى يكون
+// التمرير سريعاً. للشاشات الجديدة استعمل AppCard من shared/ui.
+// =========================================================================
+
 import 'package:flutter/material.dart';
+
+import '../../../core/design/design.dart';
 
 class GlassContainer extends StatelessWidget {
   final Widget child;
-  final double blur;
-  final double opacity;
   final double borderRadius;
   final Color? borderColor;
   final Color? color;
@@ -18,9 +25,7 @@ class GlassContainer extends StatelessWidget {
   const GlassContainer({
     super.key,
     required this.child,
-    this.blur = 4.0,
-    this.opacity = 0.05,
-    this.borderRadius = 24.0,
+    this.borderRadius = AppRadius.md,
     this.borderColor,
     this.color,
     this.padding,
@@ -34,27 +39,6 @@ class GlassContainer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    
-    // الألوان الافتراضية عالية الأداء لنمط الزجاج المعتم والخفيف جداً على المعالج
-    final effectiveOpacity = opacity <= 0.1 
-        ? (isDark ? 0.75 : 0.85) 
-        : opacity;
-    
-    final baseColor = color ?? (isDark ? const Color(0xFF1E293B) : Colors.white);
-    final finalBorderColor = borderColor ?? 
-        (isDark ? Colors.white.withAlpha(25) : Colors.black.withAlpha(15));
-
-    final effectiveShadow = boxShadow ?? [
-      BoxShadow(
-        color: isDark 
-            ? Colors.black.withValues(alpha: 0.2) 
-            : Colors.black.withValues(alpha: 0.04),
-        blurRadius: 16,
-        offset: const Offset(0, 4),
-      ),
-    ];
-
     return Container(
       width: width,
       height: height,
@@ -62,15 +46,12 @@ class GlassContainer extends StatelessWidget {
       padding: padding,
       alignment: alignment,
       decoration: BoxDecoration(
-        color: baseColor.withValues(alpha: effectiveOpacity),
-        borderRadius: BorderRadius.circular(borderRadius),
-        border: border ?? Border.all(
-          color: finalBorderColor,
-        ),
-        boxShadow: effectiveShadow,
+        color: color == null ? AppColors.surface1 : Color.alphaBlend(color!.withValues(alpha: 0.14), AppColors.surface1),
+        borderRadius: BorderRadius.circular(borderRadius.clamp(0, AppRadius.lg)),
+        border: border ?? Border.all(color: borderColor ?? AppColors.border),
+        boxShadow: boxShadow,
       ),
       child: child,
     );
   }
 }
-

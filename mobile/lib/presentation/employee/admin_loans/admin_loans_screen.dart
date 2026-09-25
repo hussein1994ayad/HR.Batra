@@ -10,11 +10,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/design/design.dart';
 import '../../../core/logic/loan_rules.dart';
 import '../../../core/models/models.dart';
 import '../../../core/routes/app_router.dart';
 import '../../../core/services/excel_export_service.dart';
-import '../../../core/theme/app_theme.dart';
 import '../../../data/repositories/loan_repository.dart';
 import '../../../data/repositories/role_repository.dart';
 import '../../shared/widgets/glass_background.dart';
@@ -64,7 +64,7 @@ class _AdminLoansManagementScreenState extends State<AdminLoansManagementScreen>
     final allowed = await RoleRepository().isAdminOrManager().catchError((Object _) => false);
     if (!mounted) return;
     if (!allowed) {
-      _toast('عذراً، هذه الشاشة مخصصة لحسابات الإدارة والموارد البشرية فقط ⚠️', AppTheme.dangerRed);
+      _toast('عذراً، هذه الشاشة مخصصة لحسابات الإدارة والموارد البشرية فقط ⚠️', AppColors.danger);
       context.go(AppRoutes.employeeHome);
       return;
     }
@@ -79,7 +79,7 @@ class _AdminLoansManagementScreenState extends State<AdminLoansManagementScreen>
       if (mounted) setState(() => _data = data);
     } catch (e) {
       debugPrint('خطأ في تحميل بيانات السلف: $e');
-      _toast('فشل تحميل السلف: $e', AppTheme.dangerRed);
+      _toast('فشل تحميل السلف: $e', AppColors.danger);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -94,7 +94,7 @@ class _AdminLoansManagementScreenState extends State<AdminLoansManagementScreen>
       }
     } catch (e) {
       debugPrint('خطأ في تصدير ملف Excel: $e');
-      _toast('فشل تصدير ملف Excel: $e', AppTheme.dangerRed);
+      _toast('فشل تصدير ملف Excel: $e', AppColors.danger);
     } finally {
       if (mounted) setState(() => _isExporting = false);
     }
@@ -103,7 +103,7 @@ class _AdminLoansManagementScreenState extends State<AdminLoansManagementScreen>
   Future<void> _createLoan() async {
     final created = await showCreateLoanSheet(context, employees: _data.employees, repo: _repo);
     if (created ?? false) {
-      _toast('تمت إضافة واعتماد السلفة وتوليد الأقساط بنجاح ✅', AppTheme.successGreen);
+      _toast('تمت إضافة واعتماد السلفة وتوليد الأقساط بنجاح ✅', AppColors.success);
       await _load();
     }
   }
@@ -117,8 +117,8 @@ class _AdminLoansManagementScreenState extends State<AdminLoansManagementScreen>
         backgroundColor: Colors.transparent,
         floatingActionButton: FloatingActionButton.extended(
           heroTag: 'create_loan_admin_fab',
-          backgroundColor: AppTheme.primaryTeal,
-          foregroundColor: Colors.white,
+          backgroundColor: AppColors.brandStrong,
+          foregroundColor: AppColors.textPrimary,
           elevation: 4,
           icon: const Icon(Icons.add_circle_outline_rounded),
           label: const Text('إضافة سلفة لموظف ➕', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 13)),
@@ -128,16 +128,16 @@ class _AdminLoansManagementScreenState extends State<AdminLoansManagementScreen>
           backgroundColor: Colors.transparent,
           elevation: 0,
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
+            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textPrimary),
             onPressed: () => Navigator.pop(context),
           ),
           title: const Text(
             'متابعة سلف وأقساط الموظفين 💼',
-            style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white),
+            style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.textPrimary),
           ),
           actions: [
             IconButton(
-              icon: const Icon(Icons.refresh_rounded, color: AppTheme.neonCyan),
+              icon: const Icon(Icons.refresh_rounded, color: AppColors.brand),
               tooltip: 'تحديث البيانات',
               onPressed: _load,
             ),
@@ -157,10 +157,10 @@ class _AdminLoansManagementScreenState extends State<AdminLoansManagementScreen>
           ),
         ),
         body: _isLoading
-            ? const Center(child: CircularProgressIndicator(color: AppTheme.neonCyan))
+            ? const Center(child: CircularProgressIndicator(color: AppColors.brand))
             : RefreshIndicator(
                 onRefresh: _load,
-                color: AppTheme.neonCyan,
+                color: AppColors.brand,
                 child: ListView(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
                   children: [
@@ -171,14 +171,14 @@ class _AdminLoansManagementScreenState extends State<AdminLoansManagementScreen>
                       children: [
                         Text(
                           'قائمة المستلفين (${loans.length})',
-                          style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white),
+                          style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.textPrimary),
                         ),
                         if (_isExporting)
                           const Row(
                             children: [
-                              SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.successGreen)),
+                              SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.success)),
                               SizedBox(width: 6),
-                              Text('جاري إنشاء Excel...', style: TextStyle(fontFamily: 'Cairo', fontSize: 11, color: AppTheme.successGreen)),
+                              Text('جاري إنشاء Excel...', style: TextStyle(fontFamily: 'Cairo', fontSize: 11, color: AppColors.success)),
                             ],
                           ),
                       ],
@@ -189,11 +189,11 @@ class _AdminLoansManagementScreenState extends State<AdminLoansManagementScreen>
                         padding: const EdgeInsets.all(32),
                         child: Column(
                           children: [
-                            Icon(Icons.search_off_rounded, size: 64, color: Colors.white.withValues(alpha: 0.3)),
+                            Icon(Icons.search_off_rounded, size: 64, color: AppColors.textPrimary.withValues(alpha: 0.3)),
                             const SizedBox(height: 16),
                             const Text(
                               'لا توجد سجلات سلف مطابقة للبحث أو الفلتر المختار',
-                              style: TextStyle(fontFamily: 'Cairo', fontSize: 13, color: Colors.white60),
+                              style: TextStyle(fontFamily: 'Cairo', fontSize: 13, color: AppColors.textMuted),
                               textAlign: TextAlign.center,
                             ),
                           ],

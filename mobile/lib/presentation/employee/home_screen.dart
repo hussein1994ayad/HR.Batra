@@ -12,6 +12,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/design/design.dart';
 import '../../core/routes/app_router.dart';
 import '../../core/services/location_service.dart';
 import '../../core/services/notification_service.dart';
@@ -272,7 +273,7 @@ class _HomeScreenState extends State<HomeScreen> {
               'تعذر تحديث البيانات، يرجى التحقق من اتصال الإنترنت.',
               style: TextStyle(fontFamily: 'Cairo'),
             ),
-            backgroundColor: AppTheme.dangerRed,
+            backgroundColor: AppColors.danger,
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -303,29 +304,29 @@ class _HomeScreenState extends State<HomeScreen> {
             _buildAppBar(isDark, cs, t),
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(
-                AppTheme.space4,
-                AppTheme.space2,
-                AppTheme.space4,
-                AppTheme.space10,
+                AppSpace.lg,
+                AppSpace.sm,
+                AppSpace.lg,
+                AppSpace.x4,
               ),
               sliver: SliverList(
                 delegate: SliverChildListDelegate([
                   if (_workSchedule != null) ...[
                     _buildScheduleCard(isDark, cs, t),
-                    const SizedBox(height: AppTheme.space4),
+                    const SizedBox(height: AppSpace.lg),
                   ],
                   _buildAttendanceCard(isDark, cs, t),
-                  const SizedBox(height: AppTheme.space6),
+                  const SizedBox(height: AppSpace.xxl),
                   if (_userRole == 'admin' || _userRole == 'manager') ...[
                     _buildAdminCard(isDark, cs, t),
-                    const SizedBox(height: AppTheme.space6),
+                    const SizedBox(height: AppSpace.xxl),
                   ],
                   _buildSectionHeader('الخدمات السريعة', Icons.grid_view_rounded, cs, t),
-                  const SizedBox(height: AppTheme.space3),
+                  const SizedBox(height: AppSpace.md),
                   _buildQuickActionsGrid(context),
-                  const SizedBox(height: AppTheme.space6),
+                  const SizedBox(height: AppSpace.xxl),
                   _buildAnnouncementsHeader(context, cs, t),
-                  const SizedBox(height: AppTheme.space3),
+                  const SizedBox(height: AppSpace.md),
                   _buildAnnouncementsSection(isDark, cs, t),
                 ]),
               ),
@@ -355,7 +356,7 @@ class _HomeScreenState extends State<HomeScreen> {
             unawaited(_loadDashboardData());
           },
         ),
-        const SizedBox(width: AppTheme.space2),
+        const SizedBox(width: AppSpace.sm),
       ],
       title: Text(
         'HR Pro',
@@ -371,7 +372,7 @@ class _HomeScreenState extends State<HomeScreen> {
         background: SafeArea(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(
-              AppTheme.space4, 60, AppTheme.space4, AppTheme.space3,
+              AppSpace.lg, 60, AppSpace.lg, AppSpace.md,
             ),
             child: Row(
               children: [
@@ -396,7 +397,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(width: AppTheme.space3),
+                const SizedBox(width: AppSpace.md),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -405,7 +406,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       Text(
                         _greeting(),
                         style: t.bodySmall?.copyWith(
-                          color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                          color: isDark ? AppColors.textMuted : AppColors.textMuted,
                         ),
                       ),
                       Text(
@@ -420,7 +421,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       Text(
                         _departmentName,
                         style: t.bodySmall?.copyWith(
-                          color: isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextSecondary,
+                          color: isDark ? AppColors.textSecondary : AppColors.textSecondary,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -445,18 +446,18 @@ class _HomeScreenState extends State<HomeScreen> {
     final grace = _workSchedule!['grace_period_minutes'] ?? 15;
 
     return _SectionCard(
-      accent: AppTheme.accentIndigo,
+      accent: AppColors.accent,
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(AppTheme.space3),
+            padding: const EdgeInsets.all(AppSpace.md),
             decoration: BoxDecoration(
-              color: AppTheme.accentIndigo.withValues(alpha: 0.14),
-              borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+              color: AppColors.accent.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(AppRadius.md),
             ),
-            child: const Icon(Icons.access_time_filled_rounded, color: AppTheme.accentIndigo, size: 26),
+            child: const Icon(Icons.access_time_filled_rounded, color: AppColors.accent, size: 26),
           ),
-          const SizedBox(width: AppTheme.space4),
+          const SizedBox(width: AppSpace.lg),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -466,7 +467,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 Text(
                   'من $checkIn إلى $checkOut  •  سماحية $grace د',
                   style: t.bodySmall?.copyWith(
-                    color: isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextSecondary,
+                    color: isDark ? AppColors.textSecondary : AppColors.textSecondary,
                   ),
                 ),
               ],
@@ -482,14 +483,14 @@ class _HomeScreenState extends State<HomeScreen> {
     final hasCheckOut = _todayAttendance != null && _todayAttendance!['check_out_time'] != null;
 
     final (statusText, statusColor, statusIcon) = hasCheckOut
-        ? ('مكتمل الدوام اليومي', AppTheme.successGreen, Icons.check_circle_rounded)
+        ? ('مكتمل الدوام اليومي', AppColors.success, Icons.check_circle_rounded)
         : hasCheckIn
-            ? ('أنت في فترة الدوام', AppTheme.warningOrange, Icons.watch_later_rounded)
-            : ('لم تسجل الحضور بعد', AppTheme.dangerRed, Icons.error_rounded);
+            ? ('أنت في فترة الدوام', AppColors.warning, Icons.watch_later_rounded)
+            : ('لم تسجل الحضور بعد', AppColors.danger, Icons.error_rounded);
 
     return _SectionCard(
       accent: statusColor,
-      padding: const EdgeInsets.all(AppTheme.space5),
+      padding: const EdgeInsets.all(AppSpace.xl),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -498,10 +499,10 @@ class _HomeScreenState extends State<HomeScreen> {
             children: [
               Text('بصمة الدوام اليومية', style: t.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: AppTheme.space3, vertical: 6),
+                padding: const EdgeInsets.symmetric(horizontal: AppSpace.md, vertical: 6),
                 decoration: BoxDecoration(
                   color: cs.primary.withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.circular(AppTheme.radiusFull),
+                  borderRadius: BorderRadius.circular(AppRadius.full),
                 ),
                 child: Text(
                   _getFormattedTodayDate(),
@@ -510,18 +511,18 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ],
           ),
-          const SizedBox(height: AppTheme.space4),
+          const SizedBox(height: AppSpace.lg),
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(AppTheme.space3),
+                padding: const EdgeInsets.all(AppSpace.md),
                 decoration: BoxDecoration(
                   color: statusColor.withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                  borderRadius: BorderRadius.circular(AppRadius.md),
                 ),
                 child: Icon(statusIcon, color: statusColor, size: 28),
               ),
-              const SizedBox(width: AppTheme.space3),
+              const SizedBox(width: AppSpace.md),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -533,7 +534,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           ? 'تسجيل الحضور: ${_formatTime(_todayAttendance!['check_in_time'] as String?)}'
                           : 'يرجى تسجيل حضورك عند الوصول للفرع.',
                       style: t.bodySmall?.copyWith(
-                        color: isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextSecondary,
+                        color: isDark ? AppColors.textSecondary : AppColors.textSecondary,
                       ),
                     ),
                   ],
@@ -541,7 +542,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ],
           ),
-          const SizedBox(height: AppTheme.space5),
+          const SizedBox(height: AppSpace.xl),
           SizedBox(
             width: double.infinity,
             child: FilledButton.icon(
@@ -553,7 +554,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               style: FilledButton.styleFrom(
                 backgroundColor: statusColor,
-                foregroundColor: Colors.white,
+                foregroundColor: AppColors.textPrimary,
                 minimumSize: const Size(0, 52),
               ),
             ),
@@ -565,28 +566,28 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildAdminCard(bool isDark, ColorScheme cs, TextTheme t) {
     return _SectionCard(
-      accent: AppTheme.cyberPurple,
+      accent: AppColors.accent,
       padding: EdgeInsets.zero,
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+          borderRadius: BorderRadius.circular(AppRadius.lg),
           onTap: () => context.push(AppRoutes.adminDashboard),
           child: Padding(
-            padding: const EdgeInsets.all(AppTheme.space5),
+            padding: const EdgeInsets.all(AppSpace.xl),
             child: Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.all(AppTheme.space3),
+                  padding: const EdgeInsets.all(AppSpace.md),
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
-                      colors: [AppTheme.cyberPurple.withValues(alpha: 0.20), AppTheme.cyberPurple.withValues(alpha: 0.08)],
+                      colors: [AppColors.accent.withValues(alpha: 0.20), AppColors.accent.withValues(alpha: 0.08)],
                     ),
-                    borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                    borderRadius: BorderRadius.circular(AppRadius.md),
                   ),
-                  child: const Icon(Icons.admin_panel_settings_rounded, color: AppTheme.cyberPurple, size: 32),
+                  child: const Icon(Icons.admin_panel_settings_rounded, color: AppColors.accent, size: 32),
                 ),
-                const SizedBox(width: AppTheme.space4),
+                const SizedBox(width: AppSpace.lg),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -595,20 +596,20 @@ class _HomeScreenState extends State<HomeScreen> {
                         'بوابة الإدارة والمدراء',
                         style: t.titleMedium?.copyWith(
                           fontWeight: FontWeight.w800,
-                          color: AppTheme.cyberPurple,
+                          color: AppColors.accent,
                         ),
                       ),
                       const SizedBox(height: 2),
                       Text(
                         'الإجازات، السلف، الأجهزة المقفلة، والتتبع الحي',
                         style: t.bodySmall?.copyWith(
-                          color: isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextSecondary,
+                          color: isDark ? AppColors.textSecondary : AppColors.textSecondary,
                         ),
                       ),
                     ],
                   ),
                 ),
-                const Icon(Icons.arrow_forward_ios_rounded, color: AppTheme.cyberPurple, size: 16),
+                const Icon(Icons.arrow_forward_ios_rounded, color: AppColors.accent, size: 16),
               ],
             ),
           ),
@@ -622,12 +623,12 @@ class _HomeScreenState extends State<HomeScreen> {
   // ==========================================================================
   Widget _buildQuickActionsGrid(BuildContext context) {
     final actions = <_QuickAction>[
-      _QuickAction(Icons.calendar_today_rounded, 'تقديم إجازة', AppTheme.accentIndigo, () => widget.onTabChange(2)),
-      _QuickAction(Icons.monetization_on_rounded, 'طلب سلفة', AppTheme.warningOrange, () => widget.onTabChange(3)),
-      _QuickAction(Icons.receipt_long_rounded, 'كشف الراتب', AppTheme.successGreen, () => context.push(AppRoutes.employeePayslips)),
-      _QuickAction(Icons.fingerprint_rounded, 'بصمة الدوام', AppTheme.primaryTeal, () => widget.onTabChange(1)),
-      _QuickAction(Icons.people_alt_rounded, 'دليل الموظفين', AppTheme.cyberPurple, () => context.push(AppRoutes.employeeDirectory)),
-      _QuickAction(Icons.settings_rounded, 'الإعدادات', AppTheme.neonCyan, () => widget.onTabChange(4)),
+      _QuickAction(Icons.calendar_today_rounded, 'تقديم إجازة', AppColors.accent, () => widget.onTabChange(2)),
+      _QuickAction(Icons.monetization_on_rounded, 'طلب سلفة', AppColors.warning, () => widget.onTabChange(3)),
+      _QuickAction(Icons.receipt_long_rounded, 'كشف الراتب', AppColors.success, () => context.push(AppRoutes.employeePayslips)),
+      _QuickAction(Icons.fingerprint_rounded, 'بصمة الدوام', AppColors.brandStrong, () => widget.onTabChange(1)),
+      _QuickAction(Icons.people_alt_rounded, 'دليل الموظفين', AppColors.accent, () => context.push(AppRoutes.employeeDirectory)),
+      _QuickAction(Icons.settings_rounded, 'الإعدادات', AppColors.brand, () => widget.onTabChange(4)),
     ];
 
     return LayoutBuilder(
@@ -637,8 +638,8 @@ class _HomeScreenState extends State<HomeScreen> {
           crossAxisCount: cols,
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          crossAxisSpacing: AppTheme.space3,
-          mainAxisSpacing: AppTheme.space3,
+          crossAxisSpacing: AppSpace.md,
+          mainAxisSpacing: AppSpace.md,
           children: actions.map((a) => _QuickActionTile(action: a)).toList(),
         );
       },
@@ -666,7 +667,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_isLoading) {
       return Column(
         children: List.generate(2, (_) => Padding(
-          padding: const EdgeInsets.only(bottom: AppTheme.space3),
+          padding: const EdgeInsets.only(bottom: AppSpace.md),
           child: _SkeletonBox(height: 84, isDark: isDark),
         )),
       );
@@ -674,15 +675,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (_announcements.isEmpty) {
       return _SectionCard(
-        padding: const EdgeInsets.symmetric(vertical: AppTheme.space6),
+        padding: const EdgeInsets.symmetric(vertical: AppSpace.xxl),
         child: Center(
           child: Column(
             children: [
               Icon(Icons.notifications_off_outlined, color: cs.outline, size: 40),
-              const SizedBox(height: AppTheme.space2),
+              const SizedBox(height: AppSpace.sm),
               Text(
                 'لا توجد تعاميم جديدة حالياً',
-                style: t.bodyMedium?.copyWith(color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted),
+                style: t.bodyMedium?.copyWith(color: isDark ? AppColors.textMuted : AppColors.textMuted),
               ),
             ],
           ),
@@ -694,10 +695,10 @@ class _HomeScreenState extends State<HomeScreen> {
       children: _announcements.asMap().entries.map((entry) {
         final a = entry.value;
         final isPinned = a['is_pinned'] ?? false;
-        final accent = (isPinned as bool) ? AppTheme.warningOrange : cs.primary;
+        final accent = (isPinned as bool) ? AppColors.warning : cs.primary;
 
         return Padding(
-          padding: EdgeInsets.only(bottom: entry.key < _announcements.length - 1 ? AppTheme.space3 : 0),
+          padding: EdgeInsets.only(bottom: entry.key < _announcements.length - 1 ? AppSpace.md : 0),
           child: _SectionCard(
             accent: accent,
             child: Column(
@@ -727,15 +728,15 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     Text(
                       _formatAnnounceDate(a['created_at'] as String?),
-                      style: t.bodySmall?.copyWith(color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted),
+                      style: t.bodySmall?.copyWith(color: isDark ? AppColors.textMuted : AppColors.textMuted),
                     ),
                   ],
                 ),
-                const SizedBox(height: AppTheme.space2),
+                const SizedBox(height: AppSpace.sm),
                 Text(
                   (a['content'] ?? '') as String,
                   style: t.bodyMedium?.copyWith(
-                    color: isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextSecondary,
+                    color: isDark ? AppColors.textSecondary : AppColors.textSecondary,
                     height: 1.55,
                   ),
                 ),
@@ -829,7 +830,7 @@ class _SectionCard extends StatelessWidget {
   const _SectionCard({
     required this.child,
     this.accent,
-    this.padding = const EdgeInsets.all(AppTheme.space4),
+    this.padding = const EdgeInsets.all(AppSpace.lg),
   });
 
   @override
@@ -843,12 +844,12 @@ class _SectionCard extends StatelessWidget {
       padding: padding,
       decoration: BoxDecoration(
         color: cs.surface,
-        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
         border: Border.all(
           color: accent?.withValues(alpha: 0.18) ??
-              (isDark ? AppTheme.darkBorder.withValues(alpha: 0.5) : AppTheme.lightBorder),
+              (isDark ? AppColors.borderStrong.withValues(alpha: 0.5) : AppColors.borderStrong),
         ),
-        boxShadow: AppTheme.shadowSm(isDark),
+        boxShadow: AppElevation.low,
       ),
       child: child,
     );
@@ -875,33 +876,33 @@ class _QuickActionTile extends StatelessWidget {
 
     return Material(
       color: theme.colorScheme.surface,
-      borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+      borderRadius: BorderRadius.circular(AppRadius.md),
       child: InkWell(
         onTap: () {
           HapticFeedback.selectionClick();
           action.onTap();
         },
-        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+        borderRadius: BorderRadius.circular(AppRadius.md),
         child: Container(
-          padding: const EdgeInsets.all(AppTheme.space3),
+          padding: const EdgeInsets.all(AppSpace.md),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+            borderRadius: BorderRadius.circular(AppRadius.md),
             border: Border.all(
-              color: isDark ? AppTheme.darkBorder.withValues(alpha: 0.5) : AppTheme.lightBorder,
+              color: isDark ? AppColors.borderStrong.withValues(alpha: 0.5) : AppColors.borderStrong,
             ),
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Container(
-                padding: const EdgeInsets.all(AppTheme.space3),
+                padding: const EdgeInsets.all(AppSpace.md),
                 decoration: BoxDecoration(
                   color: action.color.withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(AppTheme.radiusFull),
+                  borderRadius: BorderRadius.circular(AppRadius.full),
                 ),
                 child: Icon(action.icon, color: action.color, size: 22),
               ),
-              const SizedBox(height: AppTheme.space2),
+              const SizedBox(height: AppSpace.sm),
               Text(
                 action.title,
                 textAlign: TextAlign.center,
@@ -940,7 +941,7 @@ class _NotificationButton extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.all(4),
               decoration: BoxDecoration(
-                color: AppTheme.dangerRed,
+                color: AppColors.danger,
                 shape: BoxShape.circle,
                 border: Border.all(color: cs.surface, width: 2),
               ),
@@ -948,7 +949,7 @@ class _NotificationButton extends StatelessWidget {
               child: Text(
                 count > 99 ? '99+' : '$count',
                 style: const TextStyle(
-                  color: Colors.white,
+                  color: AppColors.textPrimary,
                   fontSize: 9,
                   fontWeight: FontWeight.w800,
                   fontFamily: 'Cairo',
@@ -972,8 +973,8 @@ class _SkeletonBox extends StatelessWidget {
     return Container(
       height: height,
       decoration: BoxDecoration(
-        color: isDark ? AppTheme.darkSurfaceVariant : AppTheme.lightSurfaceVariant,
-        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+        color: isDark ? AppColors.surface2 : AppColors.surface2,
+        borderRadius: BorderRadius.circular(AppRadius.md),
       ),
     );
   }

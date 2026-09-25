@@ -4,8 +4,8 @@
 // =========================================================================
 
 import 'package:flutter/material.dart';
+import '../../core/design/design.dart';
 import '../../core/services/supabase_service.dart';
-import '../../core/theme/app_theme.dart';
 import '../shared/widgets/glass_background.dart';
 import '../shared/widgets/glass_container.dart';
 
@@ -115,7 +115,7 @@ class _StorageStatsScreenState extends State<StorageStatsScreen> {
           backgroundColor: Colors.transparent,
           elevation: 0,
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
+            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textPrimary),
             onPressed: () => Navigator.pop(context),
           ),
           centerTitle: true,
@@ -125,10 +125,10 @@ class _StorageStatsScreenState extends State<StorageStatsScreen> {
               fontFamily: 'Cairo', 
               fontWeight: FontWeight.bold,
               fontSize: 16,
-              color: Colors.white,
+              color: AppColors.textPrimary,
               shadows: [
                 Shadow(
-                  color: AppTheme.neonCyan,
+                  color: AppColors.brand,
                   blurRadius: 10,
                 ),
               ],
@@ -138,7 +138,7 @@ class _StorageStatsScreenState extends State<StorageStatsScreen> {
         body: _isLoading
             ? const Center(
                 child: CircularProgressIndicator(
-                  color: AppTheme.neonCyan,
+                  color: AppColors.brand,
                 ),
               )
             : SingleChildScrollView(
@@ -149,13 +149,12 @@ class _StorageStatsScreenState extends State<StorageStatsScreen> {
                     // بطاقة التخزين الإجمالية الإبداعية
                     GlassContainer(
                       padding: const EdgeInsets.all(24),
-                      opacity: 0.12,
                       borderColor: isWarning 
-                          ? AppTheme.dangerRed.withValues(alpha: 0.5) 
-                          : AppTheme.neonCyan.withValues(alpha: 0.3),
+                          ? AppColors.danger.withValues(alpha: 0.5) 
+                          : AppColors.brand.withValues(alpha: 0.3),
                       boxShadow: [
                         BoxShadow(
-                          color: (isWarning ? AppTheme.dangerRed : AppTheme.neonCyan).withValues(alpha: 0.08),
+                          color: (isWarning ? AppColors.danger : AppColors.brand).withValues(alpha: 0.08),
                           blurRadius: 16,
                           offset: const Offset(0, 8),
                         )
@@ -167,7 +166,7 @@ class _StorageStatsScreenState extends State<StorageStatsScreen> {
                             style: TextStyle(
                               fontFamily: 'Cairo',
                               fontSize: 13,
-                              color: Colors.white60,
+                              color: AppColors.textMuted,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
@@ -178,10 +177,10 @@ class _StorageStatsScreenState extends State<StorageStatsScreen> {
                               fontFamily: 'Cairo',
                               fontSize: 32,
                               fontWeight: FontWeight.w900,
-                              color: isWarning ? AppTheme.dangerRed : AppTheme.neonCyan,
+                              color: isWarning ? AppColors.danger : AppColors.brand,
                               shadows: [
                                 Shadow(
-                                  color: isWarning ? AppTheme.dangerRed : AppTheme.neonCyan,
+                                  color: isWarning ? AppColors.danger : AppColors.brand,
                                   blurRadius: 15,
                                 ),
                               ],
@@ -193,7 +192,7 @@ class _StorageStatsScreenState extends State<StorageStatsScreen> {
                             style: TextStyle(
                               fontFamily: 'Cairo',
                               fontSize: 11,
-                              color: Colors.white.withValues(alpha: 0.4),
+                              color: AppColors.textPrimary.withValues(alpha: 0.4),
                             ),
                           ),
                           const SizedBox(height: 24),
@@ -205,8 +204,8 @@ class _StorageStatsScreenState extends State<StorageStatsScreen> {
                               height: 10,
                               child: LinearProgressIndicator(
                                 value: usageRatio.clamp(0.0, 1.0),
-                                backgroundColor: Colors.white.withValues(alpha: 0.1),
-                                color: isWarning ? AppTheme.dangerRed : AppTheme.neonCyan,
+                                backgroundColor: AppColors.textPrimary.withValues(alpha: 0.1),
+                                color: isWarning ? AppColors.danger : AppColors.brand,
                               ),
                             ),
                           ),
@@ -220,7 +219,7 @@ class _StorageStatsScreenState extends State<StorageStatsScreen> {
                                   fontFamily: 'Cairo',
                                   fontSize: 11,
                                   fontWeight: FontWeight.bold,
-                                  color: isWarning ? AppTheme.dangerRed : AppTheme.neonCyan,
+                                  color: isWarning ? AppColors.danger : AppColors.brand,
                                 ),
                               ),
                               Text(
@@ -228,7 +227,7 @@ class _StorageStatsScreenState extends State<StorageStatsScreen> {
                                 style: TextStyle(
                                   fontFamily: 'Cairo',
                                   fontSize: 11,
-                                  color: Colors.white.withValues(alpha: 0.5),
+                                  color: AppColors.textPrimary.withValues(alpha: 0.5),
                                 ),
                               ),
                             ],
@@ -243,11 +242,10 @@ class _StorageStatsScreenState extends State<StorageStatsScreen> {
                       GlassContainer(
                         padding: const EdgeInsets.all(16),
                         borderRadius: 16,
-                        opacity: 0.16,
-                        borderColor: AppTheme.dangerRed.withValues(alpha: 0.4),
+                        borderColor: AppColors.danger.withValues(alpha: 0.4),
                         child: Row(
                           children: [
-                            const Icon(Icons.warning_amber_rounded, color: AppTheme.dangerRed, size: 36),
+                            const Icon(Icons.warning_amber_rounded, color: AppColors.danger, size: 36),
                             const SizedBox(width: 12),
                             Expanded(
                               child: Column(
@@ -259,7 +257,7 @@ class _StorageStatsScreenState extends State<StorageStatsScreen> {
                                       fontFamily: 'Cairo',
                                       fontWeight: FontWeight.bold,
                                       fontSize: 13,
-                                      color: AppTheme.dangerRed,
+                                      color: AppColors.danger,
                                     ),
                                   ),
                                   const SizedBox(height: 4),
@@ -268,7 +266,7 @@ class _StorageStatsScreenState extends State<StorageStatsScreen> {
                                     style: TextStyle(
                                       fontFamily: 'Cairo',
                                       fontSize: 11,
-                                      color: Colors.white.withValues(alpha: 0.7),
+                                      color: AppColors.textPrimary.withValues(alpha: 0.7),
                                       height: 1.4,
                                     ),
                                   ),
@@ -290,31 +288,31 @@ class _StorageStatsScreenState extends State<StorageStatsScreen> {
                           fontFamily: 'Cairo',
                           fontSize: 15,
                           fontWeight: FontWeight.bold,
-                          color: Colors.white,
+                          color: AppColors.textPrimary,
                         ),
                       ),
                     ),
                     const SizedBox(height: 16),
                     
-                    _buildCategoryRow('الصورة الشخصية (Avatars)', _avatarBytes, totalUsedBytes, AppTheme.neonCyan, Icons.person),
-                    _buildCategoryRow('المستندات والوثائق', _documentBytes, totalUsedBytes, AppTheme.primaryTealLight, Icons.description),
-                    _buildCategoryRow('تعهدات السلف (Pledges)', _pledgeBytes, totalUsedBytes, AppTheme.warningOrange, Icons.monetization_on),
-                    _buildCategoryRow('سلة المحذوفات مؤقتاً', _trashSizeBytes, totalUsedBytes, AppTheme.dangerRed, Icons.delete),
-                    _buildCategoryRow('أخرى والنسخ الاحتياطية', _otherBytes, totalUsedBytes, AppTheme.cyberPurple, Icons.devices_other),
+                    _buildCategoryRow('الصورة الشخصية (Avatars)', _avatarBytes, totalUsedBytes, AppColors.brand, Icons.person),
+                    _buildCategoryRow('المستندات والوثائق', _documentBytes, totalUsedBytes, AppColors.brand, Icons.description),
+                    _buildCategoryRow('تعهدات السلف (Pledges)', _pledgeBytes, totalUsedBytes, AppColors.warning, Icons.monetization_on),
+                    _buildCategoryRow('سلة المحذوفات مؤقتاً', _trashSizeBytes, totalUsedBytes, AppColors.danger, Icons.delete),
+                    _buildCategoryRow('أخرى والنسخ الاحتياطية', _otherBytes, totalUsedBytes, AppColors.accent, Icons.devices_other),
                     
                     const SizedBox(height: 24),
                     
                     // زر تحديث فوري وإفراغ السلة
                     ElevatedButton.icon(
                       onPressed: _loadStorageData,
-                      icon: const Icon(Icons.refresh, color: Colors.white),
+                      icon: const Icon(Icons.refresh, color: AppColors.textPrimary),
                       label: const Text(
                         'تحديث التحليلات المباشرة ⚡',
-                        style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: Colors.white),
+                        style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: AppColors.textPrimary),
                       ),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.neonCyan,
-                        shadowColor: AppTheme.neonCyan.withValues(alpha: 0.3),
+                        backgroundColor: AppColors.brand,
+                        shadowColor: AppColors.brand.withValues(alpha: 0.3),
                         elevation: 8,
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -335,7 +333,6 @@ class _StorageStatsScreenState extends State<StorageStatsScreen> {
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(14),
       borderRadius: 16,
-      opacity: 0.08,
       borderColor: color.withValues(alpha: 0.25),
       child: Row(
         children: [
@@ -362,7 +359,7 @@ class _StorageStatsScreenState extends State<StorageStatsScreen> {
                         fontFamily: 'Cairo',
                         fontWeight: FontWeight.bold,
                         fontSize: 12,
-                        color: Colors.white,
+                        color: AppColors.textPrimary,
                       ),
                     ),
                     Text(
@@ -385,7 +382,7 @@ class _StorageStatsScreenState extends State<StorageStatsScreen> {
                       style: TextStyle(
                         fontFamily: 'Cairo',
                         fontSize: 11,
-                        color: Colors.white.withValues(alpha: 0.5),
+                        color: AppColors.textPrimary.withValues(alpha: 0.5),
                       ),
                     ),
                     ClipRRect(
@@ -395,7 +392,7 @@ class _StorageStatsScreenState extends State<StorageStatsScreen> {
                         height: 5,
                         child: LinearProgressIndicator(
                           value: (bytes / totalBytes).clamp(0.0, 1.0),
-                          backgroundColor: Colors.white.withValues(alpha: 0.08),
+                          backgroundColor: AppColors.textPrimary.withValues(alpha: 0.08),
                           color: color,
                         ),
                       ),
