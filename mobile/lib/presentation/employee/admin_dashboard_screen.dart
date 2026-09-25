@@ -103,7 +103,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
       return true;
     }).toList();
 
-    List<String>? filterEmployeeIds = filteredEmployees.map((e) => e['id'] as String).toList();
+    List<String> filterEmployeeIds = filteredEmployees.map((e) => e['id'] as String).toList();
     if (filterEmployeeIds.isEmpty) {
       filterEmployeeIds = ['no-employees-found'];
     }
@@ -151,7 +151,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
           .from('attendance')
           .select('status, employee_id')
           .eq('work_date', targetDateStr);
-    if (applyEmployeeFilter && filterEmployeeIds != null) {
+    if (applyEmployeeFilter) {
       attendanceQuery = attendanceQuery.inFilter('employee_id', filterEmployeeIds);
     }
     futures.add(
@@ -166,7 +166,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
         .from('leave_requests')
         .select('*, employees!leave_requests_employee_id_fkey!inner(full_name)')
         .eq('status', 'pending');
-    if (applyEmployeeFilter && filterEmployeeIds != null) {
+    if (applyEmployeeFilter) {
       leavesQuery = leavesQuery.inFilter('employee_id', filterEmployeeIds);
     }
     if (startOfDay != null && endOfDay != null) {
@@ -185,7 +185,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
         .from('loans')
         .select('*, employees!loans_employee_id_fkey!inner(full_name)')
         .eq('status', 'pending');
-    if (applyEmployeeFilter && filterEmployeeIds != null) {
+    if (applyEmployeeFilter) {
       loansQuery = loansQuery.inFilter('employee_id', filterEmployeeIds);
     }
     if (startOfDay != null && endOfDay != null) {
@@ -204,7 +204,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
         .from('employee_devices')
         .select('*, employees!inner(full_name)')
         .eq('is_approved', false);
-    if (applyEmployeeFilter && filterEmployeeIds != null) {
+    if (applyEmployeeFilter) {
       devicesQuery = devicesQuery.inFilter('employee_id', filterEmployeeIds);
     }
     if (startOfDay != null && endOfDay != null) {
@@ -222,7 +222,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
     var mockQuery = SupabaseService.client
         .from('mock_gps_attempts')
         .select('*, employees!inner(full_name)');
-    if (applyEmployeeFilter && filterEmployeeIds != null) {
+    if (applyEmployeeFilter) {
       mockQuery = mockQuery.inFilter('employee_id', filterEmployeeIds);
     }
     if (startOfDay != null && endOfDay != null) {
@@ -240,7 +240,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
     var violationsQuery = SupabaseService.client
         .from('geofence_violations')
         .select('*, employees!inner(full_name)');
-    if (applyEmployeeFilter && filterEmployeeIds != null) {
+    if (applyEmployeeFilter) {
       violationsQuery = violationsQuery.inFilter('employee_id', filterEmployeeIds);
     }
     if (startOfDay != null && endOfDay != null) {
@@ -262,7 +262,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
           .inFilter('status', ['absent', 'late', 'half_day'])
           .isFilter('deduction_applied', null)
           .eq('work_date', targetDateStr);
-      if (applyEmployeeFilter && filterEmployeeIds != null) {
+      if (applyEmployeeFilter) {
         decisionsQuery = decisionsQuery.inFilter('employee_id', filterEmployeeIds);
       }
       idxDecisions = futures.length;
@@ -689,16 +689,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                           height: 38,
                           padding: const EdgeInsets.symmetric(horizontal: 10),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.06),
+                            color: Colors.white.withValues(alpha: 0.06),
                             borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: AppTheme.neonCyan.withOpacity(0.2)),
+                            border: Border.all(color: AppTheme.neonCyan.withValues(alpha: 0.2)),
                           ),
                           child: DropdownButtonHideUnderline(
                             child: DropdownButton<String>(
                               value: _selectedBranchId,
                               hint: const Text('جميع الفروع', style: TextStyle(fontFamily: 'Cairo', color: Colors.white, fontSize: 11)),
                               isExpanded: true,
-                              dropdownColor: const Color(0xFF1A1F3A),
+                              dropdownColor: AppTheme.darkSurfaceHigh,
                               icon: const Icon(Icons.arrow_drop_down_rounded, color: AppTheme.neonCyan),
                               style: const TextStyle(fontFamily: 'Cairo', color: Colors.white, fontSize: 11),
                               items: [
@@ -729,16 +729,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                           height: 38,
                           padding: const EdgeInsets.symmetric(horizontal: 10),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.06),
+                            color: Colors.white.withValues(alpha: 0.06),
                             borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: AppTheme.successGreen.withOpacity(0.2)),
+                            border: Border.all(color: AppTheme.successGreen.withValues(alpha: 0.2)),
                           ),
                           child: DropdownButtonHideUnderline(
                             child: DropdownButton<String>(
                               value: _selectedEmployeeId,
                               hint: const Text('جميع الموظفين', style: TextStyle(fontFamily: 'Cairo', color: Colors.white, fontSize: 11)),
                               isExpanded: true,
-                              dropdownColor: const Color(0xFF1A1F3A),
+                              dropdownColor: AppTheme.darkSurfaceHigh,
                               icon: const Icon(Icons.arrow_drop_down_rounded, color: AppTheme.successGreen),
                               style: const TextStyle(fontFamily: 'Cairo', color: Colors.white, fontSize: 11),
                               items: [
@@ -783,7 +783,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                                     colorScheme: const ColorScheme.dark(
                                       primary: AppTheme.neonCyan,
                                       onPrimary: Colors.black,
-                                      surface: Color(0xFF1A1F3A),
+                                      surface: AppTheme.darkSurfaceHigh,
                                       onSurface: Colors.white,
                                     ),
                                   ),
@@ -802,9 +802,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                             height: 34,
                             padding: const EdgeInsets.symmetric(horizontal: 12),
                             decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.06),
+                              color: Colors.white.withValues(alpha: 0.06),
                               borderRadius: BorderRadius.circular(10),
-                              border: Border.all(color: AppTheme.warningOrange.withOpacity(0.2)),
+                              border: Border.all(color: AppTheme.warningOrange.withValues(alpha: 0.2)),
                             ),
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -844,9 +844,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                             height: 34,
                             padding: const EdgeInsets.symmetric(horizontal: 12),
                             decoration: BoxDecoration(
-                              color: AppTheme.dangerRed.withOpacity(0.15),
+                              color: AppTheme.dangerRed.withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(10),
-                              border: Border.all(color: AppTheme.dangerRed.withOpacity(0.3)),
+                              border: Border.all(color: AppTheme.dangerRed.withValues(alpha: 0.3)),
                             ),
                             child: const Row(
                               children: [
@@ -934,7 +934,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
       decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.08))),
+        border: Border(bottom: BorderSide(color: Colors.white.withValues(alpha: 0.08))),
       ),
       child: Row(
         children: [
@@ -953,13 +953,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
       borderRadius: 14,
       opacity: 0.12,
-      borderColor: color.withOpacity(0.35),
+      borderColor: color.withValues(alpha: 0.35),
       child: Row(
         children: [
           Container(
             padding: const EdgeInsets.all(4),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.15),
+              color: color.withValues(alpha: 0.15),
               shape: BoxShape.circle,
             ),
             child: Icon(icon, color: color, size: 16),
@@ -1085,7 +1085,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
           padding: const EdgeInsets.all(16),
           borderRadius: 20,
           opacity: 0.08,
-          borderColor: status == 'غياب' ? AppTheme.dangerRed.withOpacity(0.3) : AppTheme.warningOrange.withOpacity(0.3),
+          borderColor: status == 'غياب' ? AppTheme.dangerRed.withValues(alpha: 0.3) : AppTheme.warningOrange.withValues(alpha: 0.3),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1099,9 +1099,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: status == 'غياب' ? AppTheme.dangerRed.withOpacity(0.15) : AppTheme.warningOrange.withOpacity(0.15),
+                      color: status == 'غياب' ? AppTheme.dangerRed.withValues(alpha: 0.15) : AppTheme.warningOrange.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: status == 'غياب' ? AppTheme.dangerRed.withOpacity(0.3) : AppTheme.warningOrange.withOpacity(0.3)),
+                      border: Border.all(color: status == 'غياب' ? AppTheme.dangerRed.withValues(alpha: 0.3) : AppTheme.warningOrange.withValues(alpha: 0.3)),
                     ),
                     child: Text(
                       status,
@@ -1136,7 +1136,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                         hintText: 'مبلغ الخصم (د.ع)',
                         hintStyle: const TextStyle(color: Colors.white38),
                         filled: true,
-                        fillColor: Colors.white.withOpacity(0.05),
+                        fillColor: Colors.white.withValues(alpha: 0.05),
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
                         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                       ),
@@ -1152,7 +1152,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                         hintText: 'سبب الخصم...',
                         hintStyle: const TextStyle(color: Colors.white38),
                         filled: true,
-                        fillColor: Colors.white.withOpacity(0.05),
+                        fillColor: Colors.white.withValues(alpha: 0.05),
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
                         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                       ),
@@ -1227,7 +1227,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
           padding: const EdgeInsets.all(16),
           borderRadius: 20,
           opacity: 0.08,
-          borderColor: AppTheme.neonCyan.withOpacity(0.25),
+          borderColor: AppTheme.neonCyan.withValues(alpha: 0.25),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1241,9 +1241,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: AppTheme.neonCyan.withOpacity(0.15),
+                      color: AppTheme.neonCyan.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: AppTheme.neonCyan.withOpacity(0.3)),
+                      border: Border.all(color: AppTheme.neonCyan.withValues(alpha: 0.3)),
                     ),
                     child: Text(
                       _getLeaveTypeText(leaveType),
@@ -1320,7 +1320,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
           padding: const EdgeInsets.all(16),
           borderRadius: 20,
           opacity: 0.08,
-          borderColor: AppTheme.cyberPurple.withOpacity(0.25),
+          borderColor: AppTheme.cyberPurple.withValues(alpha: 0.25),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1405,7 +1405,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
           padding: const EdgeInsets.all(16),
           borderRadius: 20,
           opacity: 0.08,
-          borderColor: AppTheme.neonPink.withOpacity(0.25),
+          borderColor: AppTheme.neonPink.withValues(alpha: 0.25),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1479,10 +1479,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
           padding: const EdgeInsets.all(16),
           borderRadius: 20,
           opacity: 0.12,
-          borderColor: AppTheme.dangerRed.withOpacity(0.35),
+          borderColor: AppTheme.dangerRed.withValues(alpha: 0.35),
           boxShadow: [
             BoxShadow(
-              color: AppTheme.dangerRed.withOpacity(0.12),
+              color: AppTheme.dangerRed.withValues(alpha: 0.12),
               blurRadius: 10,
             )
           ],
@@ -1499,9 +1499,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: AppTheme.dangerRed.withOpacity(0.15),
+                      color: AppTheme.dangerRed.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: AppTheme.dangerRed.withOpacity(0.3)),
+                      border: Border.all(color: AppTheme.dangerRed.withValues(alpha: 0.3)),
                     ),
                     child: const Text(
                       'خطر أمني ⚠️',

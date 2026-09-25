@@ -339,10 +339,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
               padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
               borderRadius: 24,
               opacity: 0.1,
-              borderColor: AppTheme.neonCyan.withOpacity(0.2),
+              borderColor: AppTheme.neonCyan.withValues(alpha: 0.2),
               boxShadow: [
                 BoxShadow(
-                  color: AppTheme.neonCyan.withOpacity(0.04),
+                  color: AppTheme.neonCyan.withValues(alpha: 0.04),
                   blurRadius: 20,
                 )
               ],
@@ -357,7 +357,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           border: Border.all(color: AppTheme.neonCyan, width: 3),
                           boxShadow: [
                             BoxShadow(
-                              color: AppTheme.neonCyan.withOpacity(0.3),
+                              color: AppTheme.neonCyan.withValues(alpha: 0.3),
                               blurRadius: 16,
                               spreadRadius: 1,
                             )
@@ -365,7 +365,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                         child: CircleAvatar(
                           radius: 50,
-                          backgroundColor: Colors.white.withOpacity(0.04),
+                          backgroundColor: Colors.white.withValues(alpha: 0.04),
                           backgroundImage: _avatarUrl.isNotEmpty ? NetworkImage(_avatarUrl) : null,
                           child: _avatarUrl.isEmpty
                               ? const Icon(Icons.person, size: 50, color: AppTheme.neonCyan)
@@ -406,9 +406,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: AppTheme.neonCyan.withOpacity(0.15),
+                      color: AppTheme.neonCyan.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: AppTheme.neonCyan.withOpacity(0.3), width: 1),
+                      border: Border.all(color: AppTheme.neonCyan.withValues(alpha: 0.3), width: 1),
                     ),
                     child: Text(
                       _employeeCode,
@@ -433,10 +433,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
               padding: const EdgeInsets.all(20),
               borderRadius: 24,
               opacity: 0.1,
-              borderColor: AppTheme.warningOrange.withOpacity(0.2),
+              borderColor: AppTheme.warningOrange.withValues(alpha: 0.2),
               boxShadow: [
                 BoxShadow(
-                  color: AppTheme.warningOrange.withOpacity(0.04),
+                  color: AppTheme.warningOrange.withValues(alpha: 0.04),
                   blurRadius: 20,
                 )
               ],
@@ -481,7 +481,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               padding: const EdgeInsets.all(20),
               borderRadius: 24,
               opacity: 0.1,
-              borderColor: AppTheme.neonCyan.withOpacity(0.2),
+              borderColor: AppTheme.neonCyan.withValues(alpha: 0.2),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -507,13 +507,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
                       color: _notificationPermissionGranted
-                          ? AppTheme.successGreen.withOpacity(0.1)
-                          : AppTheme.dangerRed.withOpacity(0.1),
+                          ? AppTheme.successGreen.withValues(alpha: 0.1)
+                          : AppTheme.dangerRed.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
                         color: _notificationPermissionGranted
-                            ? AppTheme.successGreen.withOpacity(0.3)
-                            : AppTheme.dangerRed.withOpacity(0.3),
+                            ? AppTheme.successGreen.withValues(alpha: 0.3)
+                            : AppTheme.dangerRed.withValues(alpha: 0.3),
                       ),
                     ),
                     child: Row(
@@ -578,7 +578,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               padding: const EdgeInsets.all(20),
               borderRadius: 24,
               opacity: 0.1,
-              borderColor: Colors.blueAccent.withOpacity(0.2),
+              borderColor: Colors.blueAccent.withValues(alpha: 0.2),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -631,7 +631,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               height: 60,
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: Colors.blueAccent.withOpacity(0.3)),
+                                border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.3)),
                                 image: DecorationImage(
                                   image: NetworkImage(url),
                                   fit: BoxFit.cover,
@@ -667,7 +667,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               padding: const EdgeInsets.all(20),
               borderRadius: 24,
               opacity: 0.1,
-              borderColor: AppTheme.neonCyan.withOpacity(0.2),
+              borderColor: AppTheme.neonCyan.withValues(alpha: 0.2),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -695,9 +695,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 13),
                     ),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.neonCyan.withOpacity(0.2),
+                      backgroundColor: AppTheme.neonCyan.withValues(alpha: 0.2),
                       foregroundColor: AppTheme.neonCyan,
-                      side: BorderSide(color: AppTheme.neonCyan.withOpacity(0.4)),
+                      side: BorderSide(color: AppTheme.neonCyan.withValues(alpha: 0.4)),
                       minimumSize: const Size(double.infinity, 48),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
@@ -715,7 +715,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
-                    color: AppTheme.neonPink.withOpacity(0.3),
+                    color: AppTheme.neonPink.withValues(alpha: 0.3),
                     blurRadius: 16,
                     spreadRadius: 1,
                   )

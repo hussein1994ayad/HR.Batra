@@ -88,10 +88,10 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                  color: isDark ? AppTheme.darkSurfaceHigh : Colors.white,
                   boxShadow: [
                     BoxShadow(
-                      color: AppTheme.warningOrange.withOpacity(0.3),
+                      color: AppTheme.warningOrange.withValues(alpha: 0.3),
                       blurRadius: 24,
                       spreadRadius: 4,
                     )
@@ -201,10 +201,10 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                             },
                           ),
                           filled: true,
-                          fillColor: isDark ? Colors.white.withOpacity(0.04) : Colors.black.withOpacity(0.02),
+                          fillColor: isDark ? Colors.white.withValues(alpha: 0.04) : Colors.black.withValues(alpha: 0.02),
                           enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(16),
-                            borderSide: BorderSide(color: isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.08)),
+                            borderSide: BorderSide(color: isDark ? Colors.white.withValues(alpha: 0.1) : Colors.black.withValues(alpha: 0.08)),
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(16),
@@ -260,10 +260,10 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                             },
                           ),
                           filled: true,
-                          fillColor: isDark ? Colors.white.withOpacity(0.04) : Colors.black.withOpacity(0.02),
+                          fillColor: isDark ? Colors.white.withValues(alpha: 0.04) : Colors.black.withValues(alpha: 0.02),
                           enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(16),
-                            borderSide: BorderSide(color: isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.08)),
+                            borderSide: BorderSide(color: isDark ? Colors.white.withValues(alpha: 0.1) : Colors.black.withValues(alpha: 0.08)),
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(16),
@@ -289,7 +289,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                           boxShadow: [
                             if (!_isLoading)
                               BoxShadow(
-                                color: AppTheme.warningOrange.withOpacity(0.3),
+                                color: AppTheme.warningOrange.withValues(alpha: 0.3),
                                 blurRadius: 12,
                                 offset: const Offset(0, 4),
                               )

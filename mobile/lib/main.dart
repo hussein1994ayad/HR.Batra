@@ -3,6 +3,7 @@
 // =========================================================================
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/routes/app_router.dart';
@@ -14,6 +15,18 @@ import 'core/theme/app_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Draw edge-to-edge behind transparent system bars (Android 15+ enforces
+  // this; earlier versions and iOS look the same).
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    statusBarIconBrightness: Brightness.light,
+    statusBarBrightness: Brightness.dark,
+    systemNavigationBarColor: Colors.transparent,
+    systemNavigationBarIconBrightness: Brightness.light,
+    systemNavigationBarContrastEnforced: false,
+  ));
 
   // 1. تهيئة Supabase
   await SupabaseService.init();
@@ -55,8 +68,24 @@ class HRProApp extends StatelessWidget {
       ],
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
+      // The screens are designed for the dark palette.
       themeMode: ThemeMode.dark,
+      themeAnimationDuration: Duration.zero,
       routerConfig: appRouter,
+      builder: (context, child) {
+        // Respect the user's font size setting but keep it within a range
+        // the layouts are designed for, from small phones to large tablets.
+        final media = MediaQuery.of(context);
+        return MediaQuery(
+          data: media.copyWith(
+            textScaler: media.textScaler.clamp(
+              minScaleFactor: 0.85,
+              maxScaleFactor: 1.2,
+            ),
+          ),
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
     );
   }
 }

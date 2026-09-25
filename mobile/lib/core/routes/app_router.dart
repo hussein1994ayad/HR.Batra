@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../services/supabase_service.dart';
 import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
+import '../../presentation/shared/widgets/app_widgets.dart';
 import '../../presentation/auth/login_screen.dart';
 import '../../presentation/auth/change_password_screen.dart';
 import '../../presentation/employee/main_layout.dart';
@@ -208,7 +209,7 @@ final GoRouter appRouter = GoRouter(
   ],
 );
 
-// شاشة البداية الذكية والمتحركة (Splash Screen Component)
+// Splash screen: shown only while the saved session is checked.
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -220,12 +221,12 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    _checkAuth();
+    // Navigate after the first frame; there is no artificial delay, the
+    // native launch screen already covers start-up.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkAuth());
   }
 
   Future<void> _checkAuth() async {
-    // محاكاة تأخير بسيط لإظهار شعار الشركة الأنيق وتجهيز الاتصال بـ Supabase
-    await Future.delayed(const Duration(seconds: 2));
     if (!mounted) return;
 
     if (SupabaseService.isAuthenticated) {
@@ -245,69 +246,46 @@ class _SplashScreenState extends State<SplashScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     return Scaffold(
-      body: Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: isDark
-                ? [const Color(0xFF0F172A), const Color(0xFF1E293B)]
-                : [const Color(0xFFF8FAFC), const Color(0xFFE2E8F0)],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
+      backgroundColor: AppTheme.darkBg,
+      body: Center(
+        child: TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0, end: 1),
+          duration: const Duration(milliseconds: 500),
+          curve: Curves.easeOutCubic,
+          builder: (context, t, child) => Opacity(
+            opacity: t,
+            child: Transform.scale(scale: 0.92 + 0.08 * t, child: child),
           ),
-        ),
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+          child: const Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: isDark ? const Color(0xFF1E293B) : Colors.white,
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppTheme.primaryTeal.withAlpha(50),
-                      blurRadius: 24,
-                      spreadRadius: 4,
-                    )
-                  ],
-                ),
-                child: const Icon(Icons.business_center, size: 72, color: AppTheme.primaryTeal),
-              ),
-              const SizedBox(height: 24),
-              const Text(
-                'HR Pro v6.0',
+              BrandMark(size: 84),
+              SizedBox(height: 22),
+              Text(
+                'HR Pro',
                 style: TextStyle(
-                  fontSize: 26, 
-                  fontWeight: FontWeight.w900, 
-                  color: AppTheme.primaryTeal,
-                  fontFamily: 'Cairo',
-                  letterSpacing: 1.1,
+                  fontFamily: AppTheme.fontFamily,
+                  fontSize: 28,
+                  fontWeight: FontWeight.w900,
+                  color: AppTheme.darkTextPrimary,
                 ),
               ),
-              const SizedBox(height: 8),
-              const Text(
-                'نظام الموارد البشرية وإدارة الدوام المتقدم',
+              SizedBox(height: 4),
+              Text(
+                'نظام الموارد البشرية وإدارة الدوام',
                 style: TextStyle(
-                  fontSize: 12, 
-                  color: Colors.grey,
-                  fontFamily: 'Cairo',
+                  fontFamily: AppTheme.fontFamily,
+                  fontSize: 13,
                   fontWeight: FontWeight.w500,
+                  color: AppTheme.darkTextSecondary,
                 ),
               ),
-              const SizedBox(height: 48),
-              const SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(
-                  color: AppTheme.primaryTeal,
-                  strokeWidth: 3,
-                ),
+              SizedBox(height: 36),
+              SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(strokeWidth: 2.5),
               ),
             ],
           ),

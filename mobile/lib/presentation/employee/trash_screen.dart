@@ -2,7 +2,6 @@
 // نظام HR Pro v6.0 - شاشة سلة المحذوفات للملفات (Trash / Recycle Bin Screen)
 // =========================================================================
 
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../core/services/supabase_service.dart';
 import '../../core/theme/app_theme.dart';
@@ -172,7 +171,7 @@ class _TrashScreenState extends State<TrashScreen> {
           label,
           style: TextStyle(
             fontSize: 10,
-            color: Colors.white.withOpacity(0.4),
+            color: Colors.white.withValues(alpha: 0.4),
             fontFamily: 'Cairo',
           ),
         ),
@@ -193,19 +192,17 @@ class _TrashScreenState extends State<TrashScreen> {
   void _showDeleteConfirmationDialog(BuildContext context, Map<String, dynamic> file) {
     showDialog(
       context: context,
-      barrierColor: Colors.black.withOpacity(0.6),
-      builder: (context) => BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-        child: Dialog(
+      barrierColor: Colors.black.withValues(alpha: 0.6),
+      builder: (context) => Dialog(
           backgroundColor: Colors.transparent,
           child: GlassContainer(
             padding: const EdgeInsets.all(24),
             borderRadius: 24,
             opacity: 0.16,
-            borderColor: AppTheme.dangerRed.withOpacity(0.4),
+            borderColor: AppTheme.dangerRed.withValues(alpha: 0.4),
             boxShadow: [
               BoxShadow(
-                color: AppTheme.dangerRed.withOpacity(0.12),
+                color: AppTheme.dangerRed.withValues(alpha: 0.12),
                 blurRadius: 24,
               )
             ],
@@ -215,15 +212,15 @@ class _TrashScreenState extends State<TrashScreen> {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: AppTheme.dangerRed.withOpacity(0.15),
+                    color: AppTheme.dangerRed.withValues(alpha: 0.15),
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: AppTheme.dangerRed.withOpacity(0.35),
+                      color: AppTheme.dangerRed.withValues(alpha: 0.35),
                       width: 1.5,
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: AppTheme.dangerRed.withOpacity(0.2),
+                        color: AppTheme.dangerRed.withValues(alpha: 0.2),
                         blurRadius: 10,
                       )
                     ],
@@ -251,7 +248,7 @@ class _TrashScreenState extends State<TrashScreen> {
                   style: TextStyle(
                     fontFamily: 'Cairo',
                     fontSize: 13,
-                    color: Colors.white.withOpacity(0.8),
+                    color: Colors.white.withValues(alpha: 0.8),
                     height: 1.5,
                   ),
                 ),
@@ -263,7 +260,7 @@ class _TrashScreenState extends State<TrashScreen> {
                         onPressed: () => Navigator.of(context).pop(),
                         style: OutlinedButton.styleFrom(
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          side: BorderSide(color: Colors.white.withOpacity(0.2)),
+                          side: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
                           padding: const EdgeInsets.symmetric(vertical: 12),
                         ),
                         child: const Text(
@@ -283,7 +280,7 @@ class _TrashScreenState extends State<TrashScreen> {
                           borderRadius: BorderRadius.circular(12),
                           boxShadow: [
                             BoxShadow(
-                              color: AppTheme.dangerRed.withOpacity(0.25),
+                              color: AppTheme.dangerRed.withValues(alpha: 0.25),
                               blurRadius: 8,
                               offset: const Offset(0, 3),
                             )
@@ -318,7 +315,6 @@ class _TrashScreenState extends State<TrashScreen> {
             ),
           ),
         ),
-      ),
     );
   }
 
@@ -368,7 +364,7 @@ class _TrashScreenState extends State<TrashScreen> {
                           Icon(
                             Icons.delete_outline_rounded,
                             size: 64,
-                            color: Colors.white.withOpacity(0.4),
+                            color: Colors.white.withValues(alpha: 0.4),
                           ),
                           const SizedBox(height: 16),
                           const Text(
@@ -387,7 +383,7 @@ class _TrashScreenState extends State<TrashScreen> {
                             style: TextStyle(
                               fontFamily: 'Cairo',
                               fontSize: 12,
-                              color: Colors.white.withOpacity(0.5),
+                              color: Colors.white.withValues(alpha: 0.5),
                             ),
                           ),
                         ],
@@ -410,10 +406,10 @@ class _TrashScreenState extends State<TrashScreen> {
                         margin: const EdgeInsets.only(bottom: 16),
                         borderRadius: 20,
                         opacity: 0.1,
-                        borderColor: warningColor.withOpacity(0.4),
+                        borderColor: warningColor.withValues(alpha: 0.4),
                         boxShadow: [
                           BoxShadow(
-                            color: warningColor.withOpacity(0.06),
+                            color: warningColor.withValues(alpha: 0.06),
                             blurRadius: 12,
                             offset: const Offset(0, 4),
                           )
@@ -427,15 +423,15 @@ class _TrashScreenState extends State<TrashScreen> {
                                 Container(
                                   padding: const EdgeInsets.all(10),
                                   decoration: BoxDecoration(
-                                    color: AppTheme.neonCyan.withOpacity(0.15),
+                                    color: AppTheme.neonCyan.withValues(alpha: 0.15),
                                     shape: BoxShape.circle,
                                     border: Border.all(
-                                      color: AppTheme.neonCyan.withOpacity(0.35),
+                                      color: AppTheme.neonCyan.withValues(alpha: 0.35),
                                       width: 1.5,
                                     ),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: AppTheme.neonCyan.withOpacity(0.2),
+                                        color: AppTheme.neonCyan.withValues(alpha: 0.2),
                                         blurRadius: 8,
                                       )
                                     ],
@@ -463,7 +459,7 @@ class _TrashScreenState extends State<TrashScreen> {
                                         'النوع: ${_getFileTypeName(file['file_type'])}',
                                         style: TextStyle(
                                           fontSize: 11,
-                                          color: Colors.white.withOpacity(0.5),
+                                          color: Colors.white.withValues(alpha: 0.5),
                                           fontFamily: 'Cairo',
                                         ),
                                       ),
@@ -473,10 +469,10 @@ class _TrashScreenState extends State<TrashScreen> {
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                   decoration: BoxDecoration(
-                                    color: warningColor.withOpacity(0.15),
+                                    color: warningColor.withValues(alpha: 0.15),
                                     borderRadius: BorderRadius.circular(10),
                                     border: Border.all(
-                                      color: warningColor.withOpacity(0.4),
+                                      color: warningColor.withValues(alpha: 0.4),
                                       width: 1,
                                     ),
                                   ),
@@ -495,7 +491,7 @@ class _TrashScreenState extends State<TrashScreen> {
                             const SizedBox(height: 12),
                             Container(
                               height: 1,
-                              color: Colors.white.withOpacity(0.08),
+                              color: Colors.white.withValues(alpha: 0.08),
                             ),
                             const SizedBox(height: 12),
                             
@@ -519,7 +515,7 @@ class _TrashScreenState extends State<TrashScreen> {
                                       borderRadius: BorderRadius.circular(12),
                                       boxShadow: [
                                         BoxShadow(
-                                          color: AppTheme.successGreen.withOpacity(0.2),
+                                          color: AppTheme.successGreen.withValues(alpha: 0.2),
                                           blurRadius: 8,
                                           offset: const Offset(0, 3),
                                         )
@@ -565,7 +561,7 @@ class _TrashScreenState extends State<TrashScreen> {
                                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                       side: const BorderSide(color: AppTheme.dangerRed, width: 1.2),
                                       padding: const EdgeInsets.symmetric(vertical: 12),
-                                      backgroundColor: AppTheme.dangerRed.withOpacity(0.04),
+                                      backgroundColor: AppTheme.dangerRed.withValues(alpha: 0.04),
                                     ),
                                   ),
                                 ),

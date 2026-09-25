@@ -156,7 +156,7 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
           data: ThemeData.dark().copyWith(
             colorScheme: const ColorScheme.dark(
               primary: AppTheme.neonCyan,
-              surface: Color(0xFF1A1F3A),
+              surface: AppTheme.darkSurfaceHigh,
             ),
           ),
           child: child!,
@@ -223,7 +223,7 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
         return StatefulBuilder(
           builder: (context, setStateDialog) {
             return AlertDialog(
-              backgroundColor: const Color(0xFF1E293B),
+              backgroundColor: AppTheme.darkSurfaceHigh,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               title: Text('تعديل وقت الحضور: ${record['employee_name']}', style: const TextStyle(color: Colors.white, fontFamily: 'Cairo', fontSize: 14)),
               content: Column(
@@ -333,16 +333,16 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
                       height: 38,
                       padding: const EdgeInsets.symmetric(horizontal: 10),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.06),
+                        color: Colors.white.withValues(alpha: 0.06),
                         borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: AppTheme.neonCyan.withOpacity(0.2)),
+                        border: Border.all(color: AppTheme.neonCyan.withValues(alpha: 0.2)),
                       ),
                       child: DropdownButtonHideUnderline(
                         child: DropdownButton<String>(
                           value: _selectedBranchId,
                           hint: const Text('جميع الفروع', style: TextStyle(fontFamily: 'Cairo', color: Colors.white, fontSize: 11)),
                           isExpanded: true,
-                          dropdownColor: const Color(0xFF1A1F3A),
+                          dropdownColor: AppTheme.darkSurfaceHigh,
                           icon: const Icon(Icons.arrow_drop_down_rounded, color: AppTheme.neonCyan),
                           style: const TextStyle(fontFamily: 'Cairo', color: Colors.white, fontSize: 11),
                           items: [
@@ -372,16 +372,16 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
                       height: 38,
                       padding: const EdgeInsets.symmetric(horizontal: 10),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.06),
+                        color: Colors.white.withValues(alpha: 0.06),
                         borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: AppTheme.successGreen.withOpacity(0.2)),
+                        border: Border.all(color: AppTheme.successGreen.withValues(alpha: 0.2)),
                       ),
                       child: DropdownButtonHideUnderline(
                         child: DropdownButton<String>(
                           value: _selectedEmployeeId,
                           hint: const Text('جميع الموظفين', style: TextStyle(fontFamily: 'Cairo', color: Colors.white, fontSize: 11)),
                           isExpanded: true,
-                          dropdownColor: const Color(0xFF1A1F3A),
+                          dropdownColor: AppTheme.darkSurfaceHigh,
                           icon: const Icon(Icons.arrow_drop_down_rounded, color: AppTheme.successGreen),
                           style: const TextStyle(fontFamily: 'Cairo', color: Colors.white, fontSize: 11),
                           items: [
@@ -418,9 +418,9 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
                         height: 42,
                         padding: const EdgeInsets.symmetric(horizontal: 12),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.06),
+                          color: Colors.white.withValues(alpha: 0.06),
                           borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: AppTheme.warningOrange.withOpacity(0.2)),
+                          border: Border.all(color: AppTheme.warningOrange.withValues(alpha: 0.2)),
                         ),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -470,12 +470,12 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
                               padding: const EdgeInsets.all(12),
                               borderRadius: 14,
                               opacity: 0.05,
-                              borderColor: isAbsent ? AppTheme.dangerRed.withOpacity(0.2) : AppTheme.successGreen.withOpacity(0.2),
+                              borderColor: isAbsent ? AppTheme.dangerRed.withValues(alpha: 0.2) : AppTheme.successGreen.withValues(alpha: 0.2),
                               child: Row(
                                 children: [
                                   CircleAvatar(
                                     radius: 20,
-                                    backgroundColor: (isAbsent ? AppTheme.dangerRed : AppTheme.successGreen).withOpacity(0.15),
+                                    backgroundColor: (isAbsent ? AppTheme.dangerRed : AppTheme.successGreen).withValues(alpha: 0.15),
                                     child: Icon(
                                       isAbsent ? Icons.person_off_rounded : Icons.how_to_reg_rounded,
                                       color: isAbsent ? AppTheme.dangerRed : AppTheme.successGreen,
@@ -548,7 +548,7 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
                                   else
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                      decoration: BoxDecoration(color: AppTheme.dangerRed.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                                      decoration: BoxDecoration(color: AppTheme.dangerRed.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
                                       child: const Text('غائب', style: TextStyle(color: AppTheme.dangerRed, fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 11)),
                                     ),
                                 ],
@@ -567,9 +567,9 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.15),
+        color: color.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

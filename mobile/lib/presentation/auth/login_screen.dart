@@ -9,6 +9,7 @@ import '../../core/services/auth_service.dart';
 import '../../core/services/notification_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../shared/widgets/glass_background.dart';
+import '../shared/widgets/app_widgets.dart';
 import '../shared/widgets/glass_container.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -35,10 +36,10 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     super.initState();
     _animController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1200),
+      duration: const Duration(milliseconds: 600),
     );
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _animController, curve: Curves.easeOut),
+      CurvedAnimation(parent: _animController, curve: Curves.easeOutCubic),
     );
     _animController.forward();
   }
@@ -101,271 +102,233 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
 
     return GlassBackground(
-      child: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0),
-          child: FadeTransition(
-            opacity: _fadeAnimation,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                // شعار الشركة أو شعار النظام المضيء
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: isDark ? const Color(0xFF1E293B) : Colors.white,
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppTheme.neonCyan.withOpacity(0.3),
-                        blurRadius: 24,
-                        spreadRadius: 4,
-                      )
-                    ],
-                  ),
-                  child: const Icon(
-                    Icons.business_center_rounded,
-                    size: 64,
-                    color: AppTheme.neonCyan,
+      child: LayoutBuilder(
+        builder: (context, constraints) => SingleChildScrollView(
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          padding: EdgeInsets.fromLTRB(20, 24, 20, 24 + bottomInset),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: constraints.maxHeight - 48),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 440),
+                child: FadeTransition(
+                  opacity: _fadeAnimation,
+                  child: SlideTransition(
+                    position: Tween<Offset>(
+                      begin: const Offset(0, 0.04),
+                      end: Offset.zero,
+                    ).animate(_fadeAnimation),
+                    child: _buildContent(),
                   ),
                 ),
-                const SizedBox(height: 24),
-                
-                // عنوان الواجهة
-                const Text(
-                  'HR Pro v6.0',
-                  style: TextStyle(
-                    fontFamily: 'Cairo',
-                    fontWeight: FontWeight.w900,
-                    fontSize: 28,
-                    color: AppTheme.neonCyan,
-                    letterSpacing: 1.2,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'مرحباً بك مجدداً، يرجى تسجيل الدخول لمتابعة الدوام والطلبات',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextSecondary,
-                    fontSize: 13,
-                    fontFamily: 'Cairo',
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 32),
-
-                // بطاقة تسجيل الدخول بتقنية الزجاج البلوري
-                GlassContainer(
-                  padding: const EdgeInsets.all(28),
-                  child: Form(
-                    key: _formKey,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        // رسالة الخطأ إن وجدت
-                        if (_errorMessage != null) ...[
-                          Container(
-                            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                            decoration: BoxDecoration(
-                              color: AppTheme.dangerRed.withAlpha(40),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: AppTheme.dangerRed.withAlpha(100)),
-                            ),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.error_outline_rounded, color: AppTheme.dangerRed),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Text(
-                                    _errorMessage!,
-                                    style: const TextStyle(
-                                      color: AppTheme.dangerRed,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
-                                      fontFamily: 'Cairo',
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 18),
-                        ],
-
-                        // حقل البريد الإلكتروني
-                        Text(
-                          'البريد الإلكتروني للعمل',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13,
-                            fontFamily: 'Cairo',
-                            color: isDark ? Colors.white70 : Colors.black87,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        TextFormField(
-                          controller: _emailController,
-                          keyboardType: TextInputType.emailAddress,
-                          textAlign: TextAlign.left,
-                          style: TextStyle(color: isDark ? Colors.white : Colors.black, fontFamily: 'Cairo', fontSize: 14),
-                          decoration: InputDecoration(
-                            hintText: 'name@company.com',
-                            prefixIcon: const Icon(Icons.email_outlined, color: AppTheme.neonCyan),
-                            filled: true,
-                            fillColor: isDark ? Colors.white.withOpacity(0.04) : Colors.black.withOpacity(0.02),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(16),
-                              borderSide: BorderSide(color: isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.08)),
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(16),
-                              borderSide: const BorderSide(color: AppTheme.neonCyan, width: 1.5),
-                            ),
-                          ),
-                          validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return 'يرجى إدخال البريد الإلكتروني';
-                            }
-                            if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value.trim())) {
-                              return 'صيغة البريد الإلكتروني غير صحيحة';
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 20),
-
-                        // حقل كلمة المرور
-                        Text(
-                          'كلمة المرور',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13,
-                            fontFamily: 'Cairo',
-                            color: isDark ? Colors.white70 : Colors.black87,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        TextFormField(
-                          controller: _passwordController,
-                          obscureText: !_isPasswordVisible,
-                          textAlign: TextAlign.left,
-                          style: TextStyle(color: isDark ? Colors.white : Colors.black, fontFamily: 'Cairo', fontSize: 14),
-                          decoration: InputDecoration(
-                            hintText: '••••••••',
-                            prefixIcon: const Icon(Icons.lock_outline_rounded, color: AppTheme.neonCyan),
-                            suffixIcon: IconButton(
-                              icon: Icon(
-                                _isPasswordVisible 
-                                    ? Icons.visibility_off_outlined 
-                                    : Icons.visibility_outlined,
-                                color: AppTheme.neonCyan,
-                              ),
-                              onPressed: () {
-                                setState(() {
-                                  _isPasswordVisible = !_isPasswordVisible;
-                                });
-                              },
-                            ),
-                            filled: true,
-                            fillColor: isDark ? Colors.white.withOpacity(0.04) : Colors.black.withOpacity(0.02),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(16),
-                              borderSide: BorderSide(color: isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.08)),
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(16),
-                              borderSide: const BorderSide(color: AppTheme.neonCyan, width: 1.5),
-                            ),
-                          ),
-                          validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return 'يرجى إدخال كلمة المرور';
-                            }
-                            if (value.length < 6) {
-                              return 'يجب أن تكون كلمة المرور 6 خانات على الأقل';
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 32),
-
-                        // زر تسجيل الدخول التفاعلي بنمط النيون
-                        Container(
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(16),
-                            boxShadow: [
-                              if (!_isLoading)
-                                BoxShadow(
-                                  color: AppTheme.neonCyan.withOpacity(0.3),
-                                  blurRadius: 12,
-                                  offset: const Offset(0, 4),
-                                )
-                            ],
-                          ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(16),
-                            child: ElevatedButton(
-                              onPressed: _isLoading ? null : _handleLogin,
-                              style: ElevatedButton.styleFrom(
-                                padding: EdgeInsets.zero,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                elevation: 0,
-                                shadowColor: Colors.transparent,
-                                backgroundColor: Colors.transparent,
-                              ),
-                              child: Ink(
-                                decoration: const BoxDecoration(
-                                  gradient: AppTheme.cyberGradient,
-                                ),
-                                child: Container(
-                                  constraints: const BoxConstraints(minHeight: 52.0),
-                                  alignment: Alignment.center,
-                                  child: _isLoading
-                                      ? const SizedBox(
-                                          height: 20,
-                                          width: 20,
-                                          child: CircularProgressIndicator(
-                                            color: Colors.white,
-                                            strokeWidth: 2.5,
-                                          ),
-                                        )
-                                      : const Text(
-                                          'تسجيل الدخول للنظام',
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            fontFamily: 'Cairo',
-                                            fontSize: 15,
-                                            color: Colors.white,
-                                          ),
-                                        ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 40),
-
-                // ذيل الصفحة
-                Text(
-                  '© 2026 HR Pro - جميع الحقوق محفوظة لشركتكم الموقرة',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontFamily: 'Cairo',
-                    color: isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextSecondary,
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildContent() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Center(child: BrandMark(size: 76)),
+        const SizedBox(height: 22),
+        const Text(
+          'أهلاً بعودتك',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontFamily: AppTheme.fontFamily,
+            fontWeight: FontWeight.w900,
+            fontSize: 26,
+            color: AppTheme.darkTextPrimary,
+          ),
+        ),
+        const SizedBox(height: 6),
+        const Text(
+          'سجّل دخولك لمتابعة الدوام والإجازات والسلف',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontFamily: AppTheme.fontFamily,
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: AppTheme.darkTextSecondary,
+          ),
+        ),
+        const SizedBox(height: 28),
+        GlassContainer(
+          padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
+          borderRadius: AppTheme.radiusXl,
+          child: AutofillGroup(
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  AnimatedSize(
+                    duration: const Duration(milliseconds: 250),
+                    curve: Curves.easeOut,
+                    child: _errorMessage == null
+                        ? const SizedBox(width: double.infinity)
+                        : Padding(
+                            padding: const EdgeInsets.only(bottom: 18),
+                            child: _ErrorBanner(message: _errorMessage!),
+                          ),
+                  ),
+                  const _FieldLabel('البريد الإلكتروني'),
+                  TextFormField(
+                    controller: _emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    textInputAction: TextInputAction.next,
+                    autofillHints: const [AutofillHints.email, AutofillHints.username],
+                    autocorrect: false,
+                    textDirection: TextDirection.ltr,
+                    textAlign: TextAlign.left,
+                    decoration: const InputDecoration(
+                      hintText: 'name@company.com',
+                      prefixIcon: Icon(Icons.alternate_email_rounded),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'يرجى إدخال البريد الإلكتروني';
+                      }
+                      if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value.trim())) {
+                        return 'صيغة البريد الإلكتروني غير صحيحة';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 18),
+                  const _FieldLabel('كلمة المرور'),
+                  TextFormField(
+                    controller: _passwordController,
+                    obscureText: !_isPasswordVisible,
+                    textInputAction: TextInputAction.done,
+                    autofillHints: const [AutofillHints.password],
+                    textDirection: TextDirection.ltr,
+                    textAlign: TextAlign.left,
+                    onFieldSubmitted: (_) => _isLoading ? null : _handleLogin(),
+                    decoration: InputDecoration(
+                      hintText: '••••••••',
+                      prefixIcon: const Icon(Icons.lock_outline_rounded),
+                      suffixIcon: IconButton(
+                        tooltip: _isPasswordVisible ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور',
+                        icon: Icon(
+                          _isPasswordVisible
+                              ? Icons.visibility_off_outlined
+                              : Icons.visibility_outlined,
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            _isPasswordVisible = !_isPasswordVisible;
+                          });
+                        },
+                      ),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'يرجى إدخال كلمة المرور';
+                      }
+                      if (value.length < 6) {
+                        return 'يجب أن تكون كلمة المرور 6 خانات على الأقل';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 26),
+                  GradientButton(
+                    label: 'تسجيل الدخول',
+                    icon: Icons.login_rounded,
+                    loading: _isLoading,
+                    onPressed: _handleLogin,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 20),
+        const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.verified_user_outlined, size: 16, color: AppTheme.darkTextMuted),
+            SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                'اتصال آمن ومشفّر • HR Pro',
+                style: TextStyle(
+                  fontFamily: AppTheme.fontFamily,
+                  fontSize: 12,
+                  color: AppTheme.darkTextMuted,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _FieldLabel extends StatelessWidget {
+  final String text;
+
+  const _FieldLabel(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8, right: 2),
+      child: Text(
+        text,
+        style: const TextStyle(
+          fontFamily: AppTheme.fontFamily,
+          fontWeight: FontWeight.w700,
+          fontSize: 13,
+          color: AppTheme.darkTextSecondary,
+        ),
+      ),
+    );
+  }
+}
+
+class _ErrorBanner extends StatelessWidget {
+  final String message;
+
+  const _ErrorBanner({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+      decoration: BoxDecoration(
+        color: AppTheme.dangerRed.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+        border: Border.all(color: AppTheme.dangerRed.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.error_outline_rounded, color: AppTheme.dangerLight, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: const TextStyle(
+                fontFamily: AppTheme.fontFamily,
+                color: AppTheme.dangerLight,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                height: 1.5,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

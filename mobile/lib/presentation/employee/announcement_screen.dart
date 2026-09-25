@@ -162,7 +162,7 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
                         labelText: 'عنوان التعميم (مثال: هام وعاجل)',
                         labelStyle: const TextStyle(fontFamily: 'Cairo', color: Colors.white54, fontSize: 12),
                         filled: true,
-                        fillColor: Colors.white.withOpacity(0.05),
+                        fillColor: Colors.white.withValues(alpha: 0.05),
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
                         focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: AppTheme.neonCyan)),
                       ),
@@ -176,7 +176,7 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
                         labelText: 'نص التعميم التفصيلي...',
                         labelStyle: const TextStyle(fontFamily: 'Cairo', color: Colors.white54, fontSize: 12),
                         filled: true,
-                        fillColor: Colors.white.withOpacity(0.05),
+                        fillColor: Colors.white.withValues(alpha: 0.05),
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
                         focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: AppTheme.neonCyan)),
                       ),
@@ -214,7 +214,7 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.05),
+                          color: Colors.white.withValues(alpha: 0.05),
                           borderRadius: BorderRadius.circular(14),
                         ),
                         child: DropdownButtonHideUnderline(
@@ -222,7 +222,7 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
                             value: _selectedBranchId,
                             hint: const Text('اختر الفرع...', style: TextStyle(fontFamily: 'Cairo', color: Colors.white54, fontSize: 12)),
                             isExpanded: true,
-                            dropdownColor: const Color(0xFF1A1F3A),
+                            dropdownColor: AppTheme.darkSurfaceHigh,
                             style: const TextStyle(fontFamily: 'Cairo', color: Colors.white, fontSize: 14),
                             items: _branches.map((b) {
                               return DropdownMenuItem<String>(
@@ -244,7 +244,7 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
                           icon: const Icon(Icons.person_search_rounded, color: AppTheme.neonCyan),
                           label: Text(_selectedEmployeeIds.isEmpty ? 'اختر الموظفين' : 'تم تحديد ${_selectedEmployeeIds.length} موظف', style: const TextStyle(fontFamily: 'Cairo', color: Colors.white)),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.white.withOpacity(0.05),
+                            backgroundColor: Colors.white.withValues(alpha: 0.05),
                             padding: const EdgeInsets.symmetric(vertical: 14),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                           ),
@@ -292,7 +292,7 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(vertical: 14),
         decoration: BoxDecoration(
-          color: isSelected ? AppTheme.neonCyan.withOpacity(0.2) : Colors.white.withOpacity(0.05),
+          color: isSelected ? AppTheme.neonCyan.withValues(alpha: 0.2) : Colors.white.withValues(alpha: 0.05),
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: isSelected ? AppTheme.neonCyan : Colors.white10),
         ),
@@ -322,7 +322,7 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              backgroundColor: const Color(0xFF1A1F3A),
+              backgroundColor: AppTheme.darkSurfaceHigh,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
               title: const Text('اختيار الموظفين', style: TextStyle(fontFamily: 'Cairo', color: Colors.white)),
               content: SizedBox(
