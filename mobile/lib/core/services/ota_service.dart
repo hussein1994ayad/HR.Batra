@@ -85,7 +85,7 @@ class OtaService {
               borderRadius: BorderRadius.circular(24),
             ),
             elevation: 16,
-            backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+            backgroundColor: isDark ? AppTheme.darkSurfaceHigh : Colors.white,
             child: Padding(
               padding: const EdgeInsets.all(24.0),
               child: Column(
@@ -141,7 +141,7 @@ class OtaService {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: isDark ? const Color(0xFF0F172A) : Colors.grey[100],
+                      color: isDark ? AppTheme.darkBg : Colors.grey[100],
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Column(

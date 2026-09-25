@@ -227,14 +227,14 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
       ),
       collapsedShape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
-        side: BorderSide(color: AppTheme.neonCyan.withOpacity(0.2)),
+        side: BorderSide(color: AppTheme.neonCyan.withValues(alpha: 0.2)),
       ),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
         side: const BorderSide(color: AppTheme.neonCyan),
       ),
-      backgroundColor: const Color(0xFF1E293B).withOpacity(0.35),
-      collapsedBackgroundColor: const Color(0xFF1E293B).withOpacity(0.15),
+      backgroundColor: AppTheme.darkSurfaceHigh,
+      collapsedBackgroundColor: AppTheme.darkSurface,
       iconColor: AppTheme.neonCyan,
       collapsedIconColor: Colors.white70,
       onExpansionChanged: (expanded) {

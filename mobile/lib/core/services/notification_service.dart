@@ -33,7 +33,7 @@ class NotificationService {
 
       // 2. إعداد Flutter Local Notifications للإشعارات أثناء فتح التطبيق (Foreground)
       await _localNotifications.initialize(
-        const InitializationSettings(
+        settings: const InitializationSettings(
           android: AndroidInitializationSettings('@mipmap/ic_launcher'),
           iOS: DarwinInitializationSettings(),
         ),
@@ -60,10 +60,10 @@ class NotificationService {
         
         if (message.notification != null) {
           _localNotifications.show(
-            message.hashCode,
-            message.notification!.title,
-            message.notification!.body,
-            const NotificationDetails(
+            id: message.hashCode,
+            title: message.notification!.title,
+            body: message.notification!.body,
+            notificationDetails: const NotificationDetails(
               android: AndroidNotificationDetails(
                 channelId,
                 channelName,

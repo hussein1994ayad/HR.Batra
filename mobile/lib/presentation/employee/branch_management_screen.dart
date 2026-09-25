@@ -69,9 +69,9 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
             return Container(
               height: MediaQuery.of(context).size.height * 0.9,
               decoration: BoxDecoration(
-                color: const Color(0xFF1A1F3A),
+                color: AppTheme.darkSurfaceHigh,
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-                border: Border.all(color: AppTheme.neonCyan.withOpacity(0.2)),
+                border: Border.all(color: AppTheme.neonCyan.withValues(alpha: 0.2)),
               ),
               child: isSaving 
                   ? const Center(child: CircularProgressIndicator(color: AppTheme.neonCyan))
@@ -93,7 +93,7 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
                         Container(
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
-                            color: AppTheme.neonCyan.withOpacity(0.15),
+                            color: AppTheme.neonCyan.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Icon(branch == null ? Icons.add_location_alt_rounded : Icons.edit_location_alt_rounded, color: AppTheme.neonCyan, size: 22),
@@ -121,7 +121,7 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
                           height: 250,
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: AppTheme.neonCyan.withOpacity(0.3)),
+                            border: Border.all(color: AppTheme.neonCyan.withValues(alpha: 0.3)),
                           ),
                           clipBehavior: Clip.antiAlias,
                           child: FlutterMap(
@@ -144,7 +144,7 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
                                 circles: [
                                   CircleMarker(
                                     point: selectedLocation,
-                                    color: AppTheme.neonCyan.withOpacity(0.3),
+                                    color: AppTheme.neonCyan.withValues(alpha: 0.3),
                                     borderStrokeWidth: 2,
                                     borderColor: AppTheme.neonCyan,
                                     useRadiusInMeter: true,
@@ -241,7 +241,7 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
         labelStyle: const TextStyle(fontFamily: 'Cairo', color: Colors.white54, fontSize: 12),
         prefixIcon: Icon(icon, color: AppTheme.neonCyan, size: 20),
         filled: true,
-        fillColor: Colors.white.withOpacity(0.05),
+        fillColor: Colors.white.withValues(alpha: 0.05),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
         focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: AppTheme.neonCyan)),
       ),
@@ -252,7 +252,7 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1A1F3A),
+        backgroundColor: AppTheme.darkSurfaceHigh,
         title: const Text('حذف الفرع', style: TextStyle(fontFamily: 'Cairo', color: Colors.white)),
         content: const Text('هل أنت متأكد من حذف هذا الفرع؟', style: TextStyle(fontFamily: 'Cairo', color: Colors.white70)),
         actions: [
@@ -326,7 +326,7 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
                             Container(
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
-                                color: AppTheme.neonCyan.withOpacity(0.15),
+                                color: AppTheme.neonCyan.withValues(alpha: 0.15),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: const Icon(Icons.business_rounded, color: AppTheme.neonCyan, size: 24),

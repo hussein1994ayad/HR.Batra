@@ -12,6 +12,7 @@ import 'package:flutter/services.dart';
 import 'package:audioplayers/audioplayers.dart';
 import '../../core/services/location_service.dart';
 import '../../core/services/ota_service.dart';
+import '../shared/widgets/app_widgets.dart';
 import '../shared/widgets/glass_container.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -91,11 +92,17 @@ class _HomeScreenState extends State<HomeScreen> {
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text(
-                    '${data['title'] ?? 'تنبيه جديد 🔔'}\n${data['body'] ?? ''}',
-                    style: const TextStyle(fontFamily: 'Cairo'),
+                  content: Row(
+                    children: [
+                      const Icon(Icons.notifications_active_rounded, color: AppTheme.brandLight),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          '${data['title'] ?? 'تنبيه جديد'}\n${data['body'] ?? ''}',
+                        ),
+                      ),
+                    ],
                   ),
-                  backgroundColor: AppTheme.successGreen,
                   duration: const Duration(seconds: 4),
                 ),
               );
@@ -122,7 +129,10 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _loadDashboardData() async {
     setState(() => _isLoading = true);
     final user = SupabaseService.currentUser;
-    if (user == null) return;
+    if (user == null) {
+      setState(() => _isLoading = false);
+      return;
+    }
 
     try {
       // 1. جلب بيانات الموظف والقسم
@@ -131,6 +141,7 @@ class _HomeScreenState extends State<HomeScreen> {
           .select()
           .eq('id', user.id)
           .maybeSingle();
+      if (!mounted) return;
 
       if (empData != null) {
         setState(() {
@@ -186,6 +197,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final announcementsData = results[1] as List<dynamic>;
       final attendanceData = results[2];
       final unreadRes = results[3] as List<dynamic>;
+      if (!mounted) return;
 
       setState(() {
         if (schedData != null) {
@@ -209,193 +221,44 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: RefreshIndicator(
         onRefresh: _loadDashboardData,
-        color: AppTheme.neonCyan,
+        edgeOffset: 8,
         child: CustomScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
+          physics: const AlwaysScrollableScrollPhysics(
+            parent: BouncingScrollPhysics(),
+          ),
           slivers: [
-            // 1. شريط التطبيق العلوي الإبداعي (Premium Custom SliverAppBar)
-            SliverAppBar(
-              expandedHeight: 120.0,
-              floating: false,
-              pinned: true,
-              backgroundColor: Colors.transparent,
-              elevation: 0,
-              actions: [
-                Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.notifications_active_outlined, color: AppTheme.neonCyan),
-                      onPressed: () async {
-                        await context.push(AppRoutes.employeeNotifications);
-                        _loadDashboardData();
-                      },
-                    ),
-                    if (_unreadNotificationsCount > 0)
-                      Positioned(
-                        right: 8,
-                        top: 8,
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: const BoxDecoration(
-                            color: AppTheme.dangerRed,
-                            shape: BoxShape.circle,
-                          ),
-                          constraints: const BoxConstraints(
-                            minWidth: 16,
-                            minHeight: 16,
-                          ),
-                          child: Text(
-                            '$_unreadNotificationsCount',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 9,
-                              fontWeight: FontWeight.bold,
-                              fontFamily: 'Cairo',
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ],
-              title: const Text(
-                'HR Pro v6.0',
-                style: TextStyle(
-                  fontFamily: 'Cairo',
-                  fontWeight: FontWeight.w900,
-                  fontSize: 20,
-                  color: AppTheme.neonCyan,
-                  shadows: [
-                    Shadow(
-                      color: AppTheme.neonCyan,
-                      blurRadius: 10,
-                    ),
-                  ],
-                ),
-              ),
-              centerTitle: false,
-              flexibleSpace: FlexibleSpaceBar(
-                background: Padding(
-                  padding: const EdgeInsets.only(top: 80.0, right: 16.0, left: 16.0),
-                  child: Row(
-                    children: [
-                      // الصورة الشخصية للموظف مع تذهيب
-                      Container(
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(color: AppTheme.neonCyan, width: 2),
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppTheme.neonCyan.withOpacity(0.3),
-                              blurRadius: 8,
-                            ),
-                          ],
-                        ),
-                        child: CircleAvatar(
-                          radius: 24,
-                          backgroundColor: AppTheme.neonCyan.withAlpha(30),
-                          backgroundImage: _avatarUrl.isNotEmpty ? NetworkImage(_avatarUrl) : null,
-                          child: _avatarUrl.isEmpty
-                              ? const Icon(Icons.person, color: AppTheme.neonCyan)
-                              : null,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            'أهلاً بك، $_employeeName',
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                              fontFamily: 'Cairo',
-                            ),
-                          ),
-                          Text(
-                            _departmentName,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextSecondary,
-                              fontFamily: 'Cairo',
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              sliver: SliverToBoxAdapter(child: _buildHeader()),
             ),
-
-            // 2. محتوى الصفحة الرئيسي
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (_workSchedule != null) _buildWorkScheduleCard(isDark),
-                    if (_workSchedule != null) const SizedBox(height: 16),
-                    // بطاقة حالة الحضور والانصراف اليومية
-                    _buildAttendanceStatusCard(isDark),
-                    const SizedBox(height: 24),
-
-                    if (_userRole == 'admin' || _userRole == 'manager') ...[
-                      _buildAdminDashboardCard(isDark),
-                      const SizedBox(height: 24),
-                    ],
-
-                    // عنوان شبكة الخدمات السريعة
-                    const Text(
-                      'الخدمات السريعة',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        fontFamily: 'Cairo',
-                        color: Colors.white,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-
-                    // شبكة الخدمات 2x2
-                    _buildQuickActionsGrid(context),
-                    const SizedBox(height: 28),
-
-                    // إعلانات وتعاميم الإدارة
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'تعاميم لوحة الإعلانات 📢',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            fontFamily: 'Cairo',
-                            color: Colors.white,
-                          ),
-                        ),
-                        if (_announcements.isNotEmpty)
-                          TextButton(
-                            onPressed: () => context.push(AppRoutes.employeeNotifications),
-                            child: const Text('عرض الكل', style: TextStyle(color: AppTheme.neonCyan, fontSize: 12, fontFamily: 'Cairo')),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    _buildAnnouncementsSection(isDark),
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
+              sliver: SliverList.list(
+                children: [
+                  _buildAttendanceHeroCard(),
+                  if (_userRole == 'admin' || _userRole == 'manager') ...[
+                    const SizedBox(height: 14),
+                    _buildAdminDashboardCard(),
                   ],
-                ),
+                  const SizedBox(height: 26),
+                  const SectionHeader(
+                    title: 'الخدمات السريعة',
+                    icon: Icons.bolt_rounded,
+                  ),
+                  _buildQuickActionsGrid(context),
+                  const SizedBox(height: 26),
+                  SectionHeader(
+                    title: 'الإعلانات والتعاميم',
+                    icon: Icons.campaign_rounded,
+                    actionLabel: _announcements.isNotEmpty ? 'عرض الكل' : null,
+                    onAction: () => context.push(AppRoutes.employeeNotifications),
+                  ),
+                  _buildAnnouncementsSection(),
+                ],
               ),
             ),
           ],
@@ -404,50 +267,239 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // بطاقة أوقات العمل للفرع
-  Widget _buildWorkScheduleCard(bool isDark) {
-    if (_workSchedule == null) return const SizedBox.shrink();
-    
-    final checkIn = _formatTimeStr(_workSchedule!['check_in_time']?.toString());
-    final checkOut = _formatTimeStr(_workSchedule!['check_out_time']?.toString());
-    final grace = _workSchedule!['grace_period_minutes'] ?? 15;
+  String _greeting() {
+    final hour = DateTime.now().hour;
+    if (hour < 12) return 'صباح الخير';
+    if (hour < 18) return 'مساء الخير';
+    return 'مساء النور';
+  }
 
-    return GlassContainer(
-      padding: const EdgeInsets.all(16),
-      borderRadius: 16,
-      opacity: 0.1,
-      borderColor: AppTheme.neonPink.withOpacity(0.3),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: AppTheme.neonPink.withOpacity(0.15),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.access_time_filled_rounded, color: AppTheme.neonPink, size: 24),
+  // الترويسة: صورة الموظف، التحية، والإشعارات
+  Widget _buildHeader() {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(2.5),
+          decoration: const BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: AppTheme.primaryGradient,
           ),
-          const SizedBox(width: 16),
-          Expanded(
+          child: CircleAvatar(
+            radius: 24,
+            backgroundColor: AppTheme.darkSurfaceHigh,
+            foregroundImage: _avatarUrl.isNotEmpty ? NetworkImage(_avatarUrl) : null,
+            child: Text(
+              _employeeName.trim().isNotEmpty ? _employeeName.trim()[0] : '؟',
+              style: const TextStyle(
+                fontFamily: AppTheme.fontFamily,
+                fontWeight: FontWeight.w800,
+                fontSize: 18,
+                color: AppTheme.brandLight,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '${_greeting()} 👋',
+                style: const TextStyle(
+                  fontFamily: AppTheme.fontFamily,
+                  fontSize: 13,
+                  color: AppTheme.darkTextSecondary,
+                ),
+              ),
+              _isLoading && _employeeName == 'موظف متميز'
+                  ? const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 4),
+                      child: SkeletonBox(width: 140, height: 18),
+                    )
+                  : Text(
+                      _employeeName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontFamily: AppTheme.fontFamily,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: AppTheme.darkTextPrimary,
+                        height: 1.3,
+                      ),
+                    ),
+              Text(
+                _departmentName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontFamily: AppTheme.fontFamily,
+                  fontSize: 12,
+                  color: AppTheme.darkTextMuted,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        IconButton.filledTonal(
+          tooltip: 'الإشعارات',
+          onPressed: () async {
+            await context.push(AppRoutes.employeeNotifications);
+            _loadDashboardData();
+          },
+          icon: Badge(
+            isLabelVisible: _unreadNotificationsCount > 0,
+            label: Text(
+              _unreadNotificationsCount > 99 ? '99+' : '$_unreadNotificationsCount',
+            ),
+            child: const Icon(Icons.notifications_none_rounded),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // بطاقة الدوام الرئيسية: الحالة، الوقت، وأوقات الفرع
+  Widget _buildAttendanceHeroCard() {
+    final hasCheckIn = _todayAttendance != null && _todayAttendance!['check_in_time'] != null;
+    final hasCheckOut = _todayAttendance != null && _todayAttendance!['check_out_time'] != null;
+
+    final String status;
+    final IconData statusIcon;
+    if (hasCheckOut) {
+      status = 'اكتمل دوامك لليوم';
+      statusIcon = Icons.task_alt_rounded;
+    } else if (hasCheckIn) {
+      status = 'أنت في الدوام الآن';
+      statusIcon = Icons.timelapse_rounded;
+    } else {
+      status = 'لم تسجّل حضورك بعد';
+      statusIcon = Icons.schedule_rounded;
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        gradient: AppTheme.primaryGradient,
+        borderRadius: BorderRadius.circular(AppTheme.radiusXl),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.brand.withValues(alpha: 0.3),
+            blurRadius: 28,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      child: Stack(
+        children: [
+          // زخرفة خفيفة
+          PositionedDirectional(
+            top: -40,
+            end: -30,
+            child: Container(
+              width: 150,
+              height: 150,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withValues(alpha: 0.08),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'أوقات الدوام المعتمدة لفرعك',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                    fontFamily: 'Cairo',
-                  ),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.16),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.calendar_today_rounded, size: 13, color: Colors.white),
+                          const SizedBox(width: 6),
+                          Text(
+                            _getFormattedTodayDate(),
+                            style: const TextStyle(
+                              fontFamily: AppTheme.fontFamily,
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Icon(statusIcon, color: Colors.white, size: 26),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        status,
+                        style: const TextStyle(
+                          fontFamily: AppTheme.fontFamily,
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'الدخول: $checkIn  |  الخروج: $checkOut\nفترة السماح (تأخير): $grace دقيقة',
-                  style: const TextStyle(
-                    color: AppTheme.lightTextSecondary,
-                    fontSize: 12,
-                    fontFamily: 'Cairo',
+                  hasCheckIn
+                      ? 'الحضور: ${_formatTime(_todayAttendance!['check_in_time'])}'
+                          '${hasCheckOut ? '   •   الانصراف: ${_formatTime(_todayAttendance!['check_out_time'])}' : ''}'
+                      : 'سجّل حضورك فور وصولك إلى الفرع.',
+                  style: TextStyle(
+                    fontFamily: AppTheme.fontFamily,
+                    color: Colors.white.withValues(alpha: 0.85),
+                    fontSize: 13,
+                  ),
+                ),
+                if (_workSchedule != null) ...[
+                  const SizedBox(height: 16),
+                  _buildScheduleStrip(),
+                ],
+                const SizedBox(height: 18),
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: FilledButton.icon(
+                    onPressed: () => widget.onTabChange(1),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: AppTheme.brandDeep,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                      ),
+                    ),
+                    icon: Icon(
+                      hasCheckOut
+                          ? Icons.history_rounded
+                          : (hasCheckIn ? Icons.logout_rounded : Icons.fingerprint_rounded),
+                    ),
+                    label: Text(
+                      hasCheckOut
+                          ? 'عرض سجل الدوام'
+                          : (hasCheckIn ? 'تسجيل الانصراف' : 'تسجيل الحضور'),
+                      style: const TextStyle(
+                        fontFamily: AppTheme.fontFamily,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 15,
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -458,175 +510,102 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // بطاقة الحضور والانصراف اليومية
-  Widget _buildAttendanceStatusCard(bool isDark) {
-    final hasCheckIn = _todayAttendance != null && _todayAttendance!['check_in_time'] != null;
-    final hasCheckOut = _todayAttendance != null && _todayAttendance!['check_out_time'] != null;
+  // شريط أوقات الدوام المعتمدة للفرع
+  Widget _buildScheduleStrip() {
+    final checkIn = _formatTimeStr(_workSchedule!['check_in_time']?.toString());
+    final checkOut = _formatTimeStr(_workSchedule!['check_out_time']?.toString());
+    final grace = _workSchedule!['grace_period_minutes'] ?? 15;
 
-    return GlassContainer(
-      padding: const EdgeInsets.all(20),
-      borderRadius: 20,
-      opacity: 0.12,
-      borderColor: AppTheme.neonCyan.withOpacity(0.3),
-      boxShadow: [
-        BoxShadow(
-          color: AppTheme.neonCyan.withOpacity(0.08),
-          blurRadius: 20,
-          spreadRadius: 2,
-        ),
-      ],
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    Widget cell(String label, String value) => Expanded(
+          child: Column(
             children: [
-              const Text(
-                'بصمة الدوام اليومية',
+              Text(
+                label,
                 style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                  fontFamily: 'Cairo',
+                  fontFamily: AppTheme.fontFamily,
+                  fontSize: 11,
+                  color: Colors.white.withValues(alpha: 0.75),
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: AppTheme.neonCyan.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppTheme.neonCyan.withOpacity(0.3)),
-                ),
+              const SizedBox(height: 2),
+              FittedBox(
+                fit: BoxFit.scaleDown,
                 child: Text(
-                  _getFormattedTodayDate(),
-                  style: const TextStyle(color: AppTheme.neonCyan, fontSize: 11, fontWeight: FontWeight.bold, fontFamily: 'Cairo'),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 18),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      hasCheckOut 
-                          ? 'مكتمل الدوام اليومي 🟢' 
-                          : (hasCheckIn ? 'أنت في فترة الدوام حالياً 🟡' : 'لم تسجل الحضور اليوم 🔴'),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        fontFamily: 'Cairo',
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      hasCheckIn 
-                          ? 'تسجيل الحضور: ${_formatTime(_todayAttendance!['check_in_time'])}'
-                          : 'يرجى تسجيل حضورك فور الوصول للفرع.',
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 11,
-                        fontFamily: 'Cairo',
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(14),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppTheme.neonCyan.withOpacity(0.3),
-                      blurRadius: 8,
-                    ),
-                  ],
-                ),
-                child: ElevatedButton(
-                  onPressed: () => widget.onTabChange(1), // الانتقال لتبويب الحضور
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.transparent,
-                    foregroundColor: Colors.white,
-                    shadowColor: Colors.transparent,
-                    padding: EdgeInsets.zero,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  ),
-                  child: Ink(
-                    decoration: const BoxDecoration(
-                      gradient: AppTheme.cyberGradient,
-                      borderRadius: BorderRadius.all(Radius.circular(14)),
-                    ),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                      alignment: Alignment.center,
-                      child: Text(
-                        hasCheckIn ? 'تسجيل الانصراف' : 'ابدأ الدوام',
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, fontFamily: 'Cairo', color: Colors.white),
-                      ),
-                    ),
+                  value,
+                  textDirection: TextDirection.ltr,
+                  style: const TextStyle(
+                    fontFamily: AppTheme.fontFamily,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white,
                   ),
                 ),
               ),
             ],
           ),
+        );
+
+    Widget divider() => Container(
+          width: 1,
+          height: 28,
+          color: Colors.white.withValues(alpha: 0.2),
+        );
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+      ),
+      child: Row(
+        children: [
+          cell('بداية الدوام', checkIn),
+          divider(),
+          cell('نهاية الدوام', checkOut),
+          divider(),
+          cell('فترة السماح', '$grace د'),
         ],
       ),
     );
   }
 
-  // شبكة الخدمات السريعة 3x2
+  // شبكة الخدمات السريعة (3 أعمدة على الهاتف و6 على الشاشات العريضة)
   Widget _buildQuickActionsGrid(BuildContext context) {
-    return GridView.count(
-      crossAxisCount: 3,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      crossAxisSpacing: 12,
-      mainAxisSpacing: 12,
-      childAspectRatio: 1.05,
-      children: [
-        _buildActionCard(
-          icon: Icons.calendar_today_rounded,
-          title: 'تقديم إجازة',
-          color: AppTheme.neonCyan,
-          onTap: () => widget.onTabChange(2),
-        ),
-        _buildActionCard(
-          icon: Icons.monetization_on_rounded,
-          title: 'طلب سلفة',
-          color: AppTheme.neonPink,
-          onTap: () => widget.onTabChange(3),
-        ),
-        _buildActionCard(
-          icon: Icons.receipt_long_rounded,
-          title: 'كشف الراتب',
-          color: AppTheme.cyberPurple,
-          onTap: () => context.push(AppRoutes.employeePayslips),
-        ),
-        _buildActionCard(
-          icon: Icons.fingerprint_rounded,
-          title: 'بصمة الدوام',
-          color: AppTheme.warningOrange,
-          onTap: () => widget.onTabChange(1),
-        ),
-        _buildActionCard(
-          icon: Icons.people_alt_rounded,
-          title: 'دليل الموظفين',
-          color: AppTheme.successGreen,
-          onTap: () => context.push(AppRoutes.employeeDirectory),
-        ),
-        _buildActionCard(
-          icon: Icons.settings_rounded,
-          title: 'الإعدادات',
-          color: Colors.blueAccent,
-          onTap: () => widget.onTabChange(4),
-        ),
-      ],
+    final actions = [
+      (icon: Icons.event_note_rounded, title: 'طلب إجازة', color: AppTheme.sky, onTap: () => widget.onTabChange(2)),
+      (icon: Icons.account_balance_wallet_rounded, title: 'طلب سلفة', color: AppTheme.pink, onTap: () => widget.onTabChange(3)),
+      (icon: Icons.receipt_long_rounded, title: 'كشف الراتب', color: AppTheme.violetLight, onTap: () => context.push(AppRoutes.employeePayslips)),
+      (icon: Icons.fingerprint_rounded, title: 'بصمة الدوام', color: AppTheme.warningLight, onTap: () => widget.onTabChange(1)),
+      (icon: Icons.groups_rounded, title: 'دليل الموظفين', color: AppTheme.successLight, onTap: () => context.push(AppRoutes.employeeDirectory)),
+      (icon: Icons.tune_rounded, title: 'الإعدادات', color: AppTheme.brandLight, onTap: () => widget.onTabChange(4)),
+    ];
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = constraints.maxWidth >= 560 ? 6 : 3;
+        final textScale = MediaQuery.textScalerOf(context).scale(1);
+        return GridView.builder(
+          shrinkWrap: true,
+          padding: EdgeInsets.zero,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: actions.length,
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: columns,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+            mainAxisExtent: 96 + 18 * textScale,
+          ),
+          itemBuilder: (context, index) {
+            final a = actions[index];
+            return _buildActionCard(
+              icon: a.icon,
+              title: a.title,
+              color: a.color,
+              onTap: a.onTap,
+            );
+          },
+        );
+      },
     );
   }
 
@@ -638,37 +617,44 @@ class _HomeScreenState extends State<HomeScreen> {
   }) {
     return GlassContainer(
       padding: EdgeInsets.zero,
-      borderRadius: 16,
-      opacity: 0.08,
-      borderColor: color.withOpacity(0.25),
+      borderRadius: AppTheme.radiusLg,
       child: Material(
-        color: Colors.transparent,
+        type: MaterialType.transparency,
         child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(16),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.15),
-                  shape: BoxShape.circle,
-                  border: Border.all(color: color.withOpacity(0.3)),
+          onTap: () {
+            HapticFeedback.selectionClick();
+            onTap();
+          },
+          borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 12),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                  ),
+                  child: Icon(icon, color: color, size: 24),
                 ),
-                child: Icon(icon, color: color, size: 24),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                  fontFamily: 'Cairo',
-                  color: Colors.white,
+                const SizedBox(height: 10),
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                    fontFamily: AppTheme.fontFamily,
+                    color: AppTheme.darkTextPrimary,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -676,86 +662,113 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // قسم الإعلانات والتعاميم
-  Widget _buildAnnouncementsSection(bool isDark) {
-    if (_isLoading) {
-      return const Center(child: Padding(
-        padding: EdgeInsets.all(20.0),
-        child: CircularProgressIndicator(color: AppTheme.neonCyan),
-      ));
-    }
-
-    if (_announcements.isEmpty) {
-      return const GlassContainer(
-        width: double.infinity,
-        padding: EdgeInsets.all(24),
-        borderRadius: 16,
-        child: Center(
-          child: Text(
-            'لا توجد تعاميم أو إعلانات جديدة حالياً ✨',
-            style: TextStyle(fontSize: 12, color: Colors.grey, fontFamily: 'Cairo'),
+  Widget _buildAnnouncementsSection() {
+    if (_isLoading && _announcements.isEmpty) {
+      return Column(
+        children: List.generate(
+          2,
+          (_) => const Padding(
+            padding: EdgeInsets.only(bottom: 12),
+            child: SkeletonBox(height: 84, radius: AppTheme.radiusLg),
           ),
         ),
       );
     }
 
-    return ListView.separated(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: _announcements.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 12),
-      itemBuilder: (context, index) {
-        final announcement = _announcements[index];
-        final isPinned = announcement['is_pinned'] ?? false;
-        final cardColor = isPinned ? AppTheme.warningOrange : AppTheme.neonCyan;
+    if (_announcements.isEmpty) {
+      return const GlassContainer(
+        width: double.infinity,
+        child: EmptyState(
+          icon: Icons.campaign_outlined,
+          title: 'لا توجد إعلانات جديدة',
+          message: 'ستظهر هنا تعاميم الإدارة فور نشرها.',
+        ),
+      );
+    }
 
-        return GlassContainer(
-          padding: const EdgeInsets.all(16),
-          borderRadius: 16,
-          opacity: isPinned ? 0.12 : 0.08,
-          borderColor: cardColor.withOpacity(0.3),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      if (isPinned) ...[
-                        const Icon(Icons.push_pin_rounded, color: AppTheme.warningOrange, size: 16),
-                        const SizedBox(width: 6),
-                      ],
-                      Text(
+    return Column(
+      children: [
+        for (final announcement in _announcements)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: _buildAnnouncementCard(announcement),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildAnnouncementCard(Map<String, dynamic> announcement) {
+    final isPinned = announcement['is_pinned'] == true;
+    final accent = isPinned ? AppTheme.warningLight : AppTheme.brandLight;
+
+    return GlassContainer(
+      padding: const EdgeInsets.all(16),
+      opacity: isPinned ? 0.12 : 0.05,
+      borderColor: isPinned ? AppTheme.warningOrange.withValues(alpha: 0.35) : null,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: accent.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+            ),
+            child: Icon(
+              isPinned ? Icons.push_pin_rounded : Icons.campaign_rounded,
+              color: accent,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
                         announcement['title'] ?? 'إعلان إداري',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
-                          fontFamily: 'Cairo',
-                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 14,
+                          fontFamily: AppTheme.fontFamily,
+                          color: AppTheme.darkTextPrimary,
                         ),
                       ),
-                    ],
-                  ),
-                  Text(
-                    _formatAnnounceDate(announcement['created_at']),
-                    style: const TextStyle(fontSize: 10, color: Colors.grey, fontFamily: 'Cairo'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                announcement['content'] ?? '',
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: Colors.white70,
-                  fontFamily: 'Cairo',
-                  height: 1.5,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      _formatAnnounceDate(announcement['created_at']),
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: AppTheme.darkTextMuted,
+                        fontFamily: AppTheme.fontFamily,
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-            ],
+                const SizedBox(height: 4),
+                Text(
+                  announcement['content'] ?? '',
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: AppTheme.darkTextSecondary,
+                    fontFamily: AppTheme.fontFamily,
+                    height: 1.6,
+                  ),
+                ),
+              ],
+            ),
           ),
-        );
-      },
+        ],
+      ),
     );
   }
 
@@ -792,78 +805,65 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Widget _buildAdminDashboardCard(bool isDark) {
+  Widget _buildAdminDashboardCard() {
     return GlassContainer(
       padding: EdgeInsets.zero,
-      borderRadius: 20,
-      opacity: 0.15,
-      borderColor: AppTheme.cyberPurple.withOpacity(0.3),
-      boxShadow: [
-        BoxShadow(
-          color: AppTheme.cyberPurple.withOpacity(0.08),
-          blurRadius: 20,
-          spreadRadius: 2,
-        ),
-      ],
+      opacity: 0.12,
+      borderColor: AppTheme.violetLight.withValues(alpha: 0.3),
       child: Material(
-        color: Colors.transparent,
+        type: MaterialType.transparency,
         child: InkWell(
           onTap: () => context.push(AppRoutes.adminDashboard),
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(AppTheme.radiusLg),
           child: Padding(
-            padding: const EdgeInsets.all(20.0),
+            padding: const EdgeInsets.all(16),
             child: Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.all(12),
+                  width: 48,
+                  height: 48,
                   decoration: BoxDecoration(
-                    color: AppTheme.cyberPurple.withOpacity(0.2),
-                    shape: BoxShape.circle,
-                    border: Border.all(color: AppTheme.cyberPurple.withOpacity(0.4)),
+                    gradient: AppTheme.accentGradient,
+                    borderRadius: BorderRadius.circular(AppTheme.radiusMd),
                   ),
                   child: const Icon(
                     Icons.admin_panel_settings_rounded,
-                    color: AppTheme.cyberPurple,
-                    size: 32,
+                    color: Colors.white,
+                    size: 26,
                   ),
                 ),
-                const SizedBox(width: 16),
-                Expanded(
+                const SizedBox(width: 14),
+                const Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'بوابة الإدارة والمدراء 👑',
+                      Text(
+                        'بوابة الإدارة',
                         style: TextStyle(
                           fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                          fontFamily: 'Cairo',
-                          color: AppTheme.cyberPurple,
-                          shadows: [
-                            Shadow(
-                              color: AppTheme.cyberPurple,
-                              blurRadius: 8,
-                            ),
-                          ],
+                          fontWeight: FontWeight.w800,
+                          fontFamily: AppTheme.fontFamily,
+                          color: AppTheme.darkTextPrimary,
                         ),
                       ),
-                      const SizedBox(height: 4),
+                      SizedBox(height: 2),
                       Text(
-                        'إدارة الإجازات، السلف، الأجهزة المقفلة، ومراقبة خروقات الأمان والـ GPS.',
+                        'الإجازات، السلف، الأجهزة، ومراقبة الحضور والـ GPS',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          fontSize: 11,
-                          color: isDark ? Colors.white70 : Colors.black87,
-                          fontFamily: 'Cairo',
-                          height: 1.4,
+                          fontSize: 12,
+                          color: AppTheme.darkTextSecondary,
+                          fontFamily: AppTheme.fontFamily,
+                          height: 1.5,
                         ),
                       ),
                     ],
                   ),
                 ),
                 const Icon(
-                  Icons.arrow_forward_ios_rounded,
-                  color: AppTheme.cyberPurple,
-                  size: 16,
+                  Icons.chevron_left_rounded,
+                  color: AppTheme.darkTextSecondary,
                 ),
               ],
             ),

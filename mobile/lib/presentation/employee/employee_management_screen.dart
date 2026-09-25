@@ -5,8 +5,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:flutter_image_compress/flutter_image_compress.dart';
-import 'package:path_provider/path_provider.dart';
 import '../../core/services/supabase_service.dart';
 import '../../core/services/image_compression_service.dart';
 import '../../core/theme/app_theme.dart';
@@ -150,9 +148,9 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
             return Container(
               height: MediaQuery.of(context).size.height * 0.9,
               decoration: BoxDecoration(
-                color: const Color(0xFF1A1F3A),
+                color: AppTheme.darkSurfaceHigh,
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-                border: Border.all(color: AppTheme.neonCyan.withOpacity(0.2)),
+                border: Border.all(color: AppTheme.neonCyan.withValues(alpha: 0.2)),
               ),
               child: isSaving 
                   ? const Center(child: CircularProgressIndicator(color: AppTheme.neonCyan))
@@ -174,7 +172,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                         Container(
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
-                            color: AppTheme.neonCyan.withOpacity(0.15),
+                            color: AppTheme.neonCyan.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: const Icon(Icons.person_add_rounded, color: AppTheme.neonCyan, size: 22),
@@ -253,9 +251,9 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                                 width: 60,
                                 height: 60,
                                 decoration: BoxDecoration(
-                                  border: Border.all(color: AppTheme.neonCyan.withOpacity(0.5), style: BorderStyle.solid),
+                                  border: Border.all(color: AppTheme.neonCyan.withValues(alpha: 0.5), style: BorderStyle.solid),
                                   borderRadius: BorderRadius.circular(12),
-                                  color: AppTheme.neonCyan.withOpacity(0.1),
+                                  color: AppTheme.neonCyan.withValues(alpha: 0.1),
                                 ),
                                 child: const Icon(Icons.add_a_photo_rounded, color: AppTheme.neonCyan),
                               ),
@@ -357,9 +355,9 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
             return Container(
               height: MediaQuery.of(context).size.height * 0.9,
               decoration: BoxDecoration(
-                color: const Color(0xFF1A1F3A),
+                color: AppTheme.darkSurfaceHigh,
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-                border: Border.all(color: AppTheme.neonCyan.withOpacity(0.2)),
+                border: Border.all(color: AppTheme.neonCyan.withValues(alpha: 0.2)),
               ),
               child: isSaving 
                   ? const Center(child: CircularProgressIndicator(color: AppTheme.neonCyan))
@@ -381,7 +379,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                         Container(
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
-                            color: AppTheme.neonCyan.withOpacity(0.15),
+                            color: AppTheme.neonCyan.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: const Icon(Icons.edit_document, color: AppTheme.neonCyan, size: 22),
@@ -459,9 +457,9 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                                 width: 60,
                                 height: 60,
                                 decoration: BoxDecoration(
-                                  border: Border.all(color: AppTheme.neonCyan.withOpacity(0.5), style: BorderStyle.solid),
+                                  border: Border.all(color: AppTheme.neonCyan.withValues(alpha: 0.5), style: BorderStyle.solid),
                                   borderRadius: BorderRadius.circular(12),
-                                  color: AppTheme.neonCyan.withOpacity(0.1),
+                                  color: AppTheme.neonCyan.withValues(alpha: 0.1),
                                 ),
                                 child: const Icon(Icons.add_a_photo_rounded, color: AppTheme.neonCyan),
                               ),
@@ -543,7 +541,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
-          color: isSelected ? AppTheme.neonCyan.withOpacity(0.2) : Colors.white.withOpacity(0.05),
+          color: isSelected ? AppTheme.neonCyan.withValues(alpha: 0.2) : Colors.white.withValues(alpha: 0.05),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: isSelected ? AppTheme.neonCyan : Colors.white10),
         ),
@@ -572,7 +570,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
         labelStyle: const TextStyle(fontFamily: 'Cairo', color: Colors.white54, fontSize: 12),
         prefixIcon: Icon(icon, color: AppTheme.neonCyan, size: 20),
         filled: true,
-        fillColor: Colors.white.withOpacity(0.05),
+        fillColor: Colors.white.withValues(alpha: 0.05),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
         focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: AppTheme.neonCyan)),
       ),
@@ -613,7 +611,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                   hintStyle: const TextStyle(color: Colors.white38, fontFamily: 'Cairo'),
                   prefixIcon: const Icon(Icons.search, color: Colors.white54),
                   filled: true,
-                  fillColor: Colors.white.withOpacity(0.05),
+                  fillColor: Colors.white.withValues(alpha: 0.05),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
                   contentPadding: const EdgeInsets.symmetric(vertical: 0),
                 ),
@@ -638,14 +636,14 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                               padding: const EdgeInsets.all(16),
                               borderRadius: 16,
                               opacity: 0.08,
-                              borderColor: isActive ? AppTheme.neonCyan.withOpacity(0.2) : AppTheme.dangerRed.withOpacity(0.3),
+                              borderColor: isActive ? AppTheme.neonCyan.withValues(alpha: 0.2) : AppTheme.dangerRed.withValues(alpha: 0.3),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Row(
                                     children: [
                                       CircleAvatar(
-                                        backgroundColor: AppTheme.neonCyan.withOpacity(0.2),
+                                        backgroundColor: AppTheme.neonCyan.withValues(alpha: 0.2),
                                         child: Text(emp['full_name']?.substring(0, 1) ?? '?', style: const TextStyle(color: AppTheme.neonCyan, fontWeight: FontWeight.bold)),
                                       ),
                                       const SizedBox(width: 12),
@@ -672,7 +670,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                                       ),
                                       PopupMenuButton<String>(
                                         icon: const Icon(Icons.more_vert, color: Colors.white70),
-                                        color: const Color(0xFF1A1F3A),
+                                        color: AppTheme.darkSurfaceHigh,
                                         onSelected: (value) {
                                           if (value == 'edit') _showEditEmployeeModal(emp);
                                           if (value == 'toggle') _toggleEmployeeStatus(emp['id'], isActive);
@@ -712,9 +710,9 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.15),
+        color: color.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Text(text, style: TextStyle(color: color, fontSize: 8, fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
     );

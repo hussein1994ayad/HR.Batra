@@ -117,10 +117,10 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
                         )
                       : null,
                   filled: true,
-                  fillColor: Colors.white.withOpacity(0.04),
+                  fillColor: Colors.white.withValues(alpha: 0.04),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
+                    borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(16),
@@ -161,10 +161,10 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
                                 padding: const EdgeInsets.all(14),
                                 borderRadius: 20,
                                 opacity: 0.1,
-                                borderColor: AppTheme.neonCyan.withOpacity(0.2),
+                                borderColor: AppTheme.neonCyan.withValues(alpha: 0.2),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: AppTheme.neonCyan.withOpacity(0.04),
+                                    color: AppTheme.neonCyan.withValues(alpha: 0.04),
                                     blurRadius: 16,
                                   )
                                 ],
@@ -178,7 +178,7 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
                                       ),
                                       child: CircleAvatar(
                                         radius: 26,
-                                        backgroundColor: Colors.white.withOpacity(0.04),
+                                        backgroundColor: Colors.white.withValues(alpha: 0.04),
                                         backgroundImage: avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null,
                                         child: avatarUrl.isEmpty
                                             ? const Icon(Icons.person, color: AppTheme.neonCyan)
@@ -202,9 +202,9 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
                                               Container(
                                                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                                 decoration: BoxDecoration(
-                                                  color: AppTheme.neonCyan.withOpacity(0.15),
+                                                  color: AppTheme.neonCyan.withValues(alpha: 0.15),
                                                   borderRadius: BorderRadius.circular(6),
-                                                  border: Border.all(color: AppTheme.neonCyan.withOpacity(0.3), width: 1),
+                                                  border: Border.all(color: AppTheme.neonCyan.withValues(alpha: 0.3), width: 1),
                                                 ),
                                                 child: Text(
                                                   code,

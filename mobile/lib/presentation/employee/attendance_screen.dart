@@ -3,7 +3,6 @@
 // =========================================================================
 
 import 'dart:async';
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -406,13 +405,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
       context: context,
       barrierDismissible: false,
       builder: (BuildContext context) {
-        return BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: AlertDialog(
-            backgroundColor: const Color(0xFF1E293B).withOpacity(0.85),
+        return AlertDialog(
+            backgroundColor: AppTheme.darkSurface,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(24),
-              side: BorderSide(color: AppTheme.successGreen.withOpacity(0.3), width: 1.5),
+              side: BorderSide(color: AppTheme.successGreen.withValues(alpha: 0.3), width: 1.5),
             ),
             content: Column(
               mainAxisSize: MainAxisSize.min,
@@ -422,12 +419,12 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                   duration: const Duration(milliseconds: 500),
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: AppTheme.successGreen.withOpacity(0.2),
+                    color: AppTheme.successGreen.withValues(alpha: 0.2),
                     shape: BoxShape.circle,
                     border: Border.all(color: AppTheme.successGreen, width: 2),
                     boxShadow: [
                       BoxShadow(
-                        color: AppTheme.successGreen.withOpacity(0.3),
+                        color: AppTheme.successGreen.withValues(alpha: 0.3),
                         blurRadius: 16,
                       ),
                     ],
@@ -474,8 +471,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                 ),
               ],
             ),
-          ),
-        );
+          );
       },
     );
   }
@@ -525,7 +521,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                 circles: [
                   CircleMarker(
                     point: LatLng(_branchLat, _branchLng),
-                    color: AppTheme.neonCyan.withOpacity(0.15),
+                    color: AppTheme.neonCyan.withValues(alpha: 0.15),
                     borderStrokeWidth: 2,
                     borderColor: AppTheme.neonCyan,
                     useRadiusInMeter: true,
@@ -549,7 +545,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                             decoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.65),
+                              color: Colors.black.withValues(alpha: 0.65),
                               borderRadius: BorderRadius.circular(6),
                               border: Border.all(color: AppTheme.neonCyan, width: 1),
                             ),
@@ -588,10 +584,10 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
               padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
               borderRadius: 28,
               opacity: 0.15,
-              borderColor: AppTheme.neonCyan.withOpacity(0.3),
+              borderColor: AppTheme.neonCyan.withValues(alpha: 0.3),
               boxShadow: [
                 BoxShadow(
-                  color: AppTheme.neonCyan.withOpacity(0.08),
+                  color: AppTheme.neonCyan.withValues(alpha: 0.08),
                   blurRadius: 24,
                   spreadRadius: 2,
                 )
@@ -666,9 +662,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                         padding: const EdgeInsets.all(12),
                         margin: const EdgeInsets.only(bottom: 16),
                         decoration: BoxDecoration(
-                          color: AppTheme.neonPink.withOpacity(0.1),
+                          color: AppTheme.neonPink.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: AppTheme.neonPink.withOpacity(0.3)),
+                          border: Border.all(color: AppTheme.neonPink.withValues(alpha: 0.3)),
                         ),
                         child: Row(
                           children: [
@@ -750,9 +746,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                             decoration: BoxDecoration(
-                              color: AppTheme.successGreen.withOpacity(0.15),
+                              color: AppTheme.successGreen.withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: AppTheme.successGreen.withOpacity(0.3)),
+                              border: Border.all(color: AppTheme.successGreen.withValues(alpha: 0.3)),
                             ),
                             child: Row(
                               children: [
@@ -788,7 +784,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                                   : AppTheme.cyberGradient,
                               boxShadow: [
                                 BoxShadow(
-                                  color: (_selectedPunchType == 'check_out' ? AppTheme.neonPink : AppTheme.neonCyan).withOpacity(0.4),
+                                  color: (_selectedPunchType == 'check_out' ? AppTheme.neonPink : AppTheme.neonCyan).withValues(alpha: 0.4),
                                   blurRadius: 20,
                                   spreadRadius: 2,
                                 )
@@ -812,9 +808,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                         width: double.infinity,
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         decoration: BoxDecoration(
-                          color: AppTheme.successGreen.withOpacity(0.15),
+                          color: AppTheme.successGreen.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: AppTheme.successGreen.withOpacity(0.3)),
+                          border: Border.all(color: AppTheme.successGreen.withValues(alpha: 0.3)),
                         ),
                         child: const Center(
                           child: Text(
@@ -845,9 +841,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
       margin: const EdgeInsets.only(bottom: 20),
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
+        color: Colors.white.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.1)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
       ),
       child: Row(
         children: [
@@ -865,11 +861,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(12),
                   color: _selectedPunchType == 'check_in'
-                      ? AppTheme.neonCyan.withOpacity(0.2)
+                      ? AppTheme.neonCyan.withValues(alpha: 0.2)
                       : Colors.transparent,
                   border: Border.all(
                     color: _selectedPunchType == 'check_in'
-                        ? AppTheme.neonCyan.withOpacity(0.5)
+                        ? AppTheme.neonCyan.withValues(alpha: 0.5)
                         : Colors.transparent,
                     width: 1,
                   ),
@@ -915,11 +911,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(12),
                   color: _selectedPunchType == 'check_out'
-                      ? AppTheme.neonPink.withOpacity(0.2)
+                      ? AppTheme.neonPink.withValues(alpha: 0.2)
                       : Colors.transparent,
                   border: Border.all(
                     color: _selectedPunchType == 'check_out'
-                        ? AppTheme.neonPink.withOpacity(0.5)
+                        ? AppTheme.neonPink.withValues(alpha: 0.5)
                         : Colors.transparent,
                     width: 1,
                   ),
