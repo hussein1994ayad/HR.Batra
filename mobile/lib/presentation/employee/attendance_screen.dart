@@ -1,5 +1,5 @@
 // =========================================================================
-// نظام HR Pro v6.0 - شاشة بصمة الدوام والخرائط الجغرافية (Attendance Map & Verification Screen)
+// HR Pro — بصمة الدوام: الخريطة، النطاق الجغرافي، وتسجيل الحضور/الانصراف
 // =========================================================================
 
 import 'dart:async';
@@ -10,14 +10,12 @@ import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 
-import '../../core/design/design.dart';
 import '../../core/services/attendance_sync_service.dart';
 import '../../core/services/location_service.dart';
 import '../../core/services/notification_service.dart';
 import '../../core/services/schedule_service.dart';
 import '../../core/services/supabase_service.dart';
-import '../../core/theme/app_theme.dart';
-import '../shared/widgets/glass_container.dart';
+import '../shared/ui/ui.dart';
 
 class AttendanceScreen extends StatefulWidget {
   const AttendanceScreen({super.key});
@@ -26,7 +24,7 @@ class AttendanceScreen extends StatefulWidget {
   State<AttendanceScreen> createState() => _AttendanceScreenState();
 }
 
-class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerProviderStateMixin {
+class _AttendanceScreenState extends State<AttendanceScreen> {
   // إحداثيات افتراضية للفرع في حال لم يتم تحميل فرع الموظف بعد
   double _branchLat = 33.3152; // بغداد، العراق كافتراضي
   double _branchLng = 44.3661;
@@ -45,30 +43,17 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
   Map<String, dynamic>? _workSchedule;
 
   final MapController _mapController = MapController();
-  late AnimationController _pulseController;
-  late Animation<double> _pulseAnimation;
   StreamSubscription<Position>? _positionStreamSubscription;
 
   @override
   void initState() {
     super.initState();
-    // إعداد حركة النبض لزر البصمة المضيء
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 2),
-    )..repeat(reverse: true);
-    
-    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.15).animate(
-      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
-    );
-
     _initLocationAndBranch();
   }
 
   @override
   void dispose() {
     _positionStreamSubscription?.cancel();
-    _pulseController.dispose();
     super.dispose();
   }
 
@@ -110,14 +95,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
   // إعادة تحديث الموقع الجغرافي يدوياً أو تلقائياً بسرعة فائقة
   Future<void> _refreshGpsLocation({bool userInitiated = false}) async {
     if (userInitiated) {
-      ScaffoldMessenger.of(context).hideCurrentSnackBar();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('جاري جلب إحداثيات الـ GPS الفورية بأعلى دقة... 📍', style: TextStyle(fontFamily: 'Cairo')),
-          duration: Duration(seconds: 1),
-          backgroundColor: AppColors.brandStrong,
-        ),
-      );
+      AppSnack.info(context, 'جاري تحديث موقعك...');
     }
 
     try {
@@ -174,7 +152,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
       // 1. قراءة البيانات من الكاش المحلي أولاً للرسم الفوري للواجهة بدون انتظار الإنترنت
       final cached = await AttendanceSyncService.getCachedData();
       if (cached != null && cached['branch'] != null) {
-        final branch = cached['branch'];
+        final branch = Map<String, dynamic>.from(cached['branch'] as Map);
         _branchId = branch['id'] as String?;
         _branchName = (branch['name'] ?? 'فرع الشركة') as String;
         _branchLat = (branch['latitude'] as num).toDouble();
@@ -253,11 +231,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
         ];
 
         final results = await Future.wait(parallelQueries);
-        final empData = results[0];
+        final empData = results[0] as Map<String, dynamic>?;
         final attendanceData = results[1];
 
         if (empData != null && empData['branches'] != null) {
-          final branch = empData['branches'];
+          final branch = Map<String, dynamic>.from(empData['branches'] as Map);
           _branchId = branch['id'] as String?;
           _branchName = (branch['name'] ?? 'فرع الشركة') as String;
           _branchLat = (branch['latitude'] as num).toDouble();
@@ -270,7 +248,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
 
           // تحديث الكاش المحلي
           await AttendanceSyncService.cacheBranchAndSchedule(
-            branchData: Map<String, dynamic>.from(branch as Map<dynamic, dynamic>),
+            branchData: branch,
             scheduleData: schedData,
           );
         }
@@ -421,665 +399,323 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
     }
   }
 
+
   void _showSuccessDialog(bool isCheckIn, bool isSynced) {
-    showDialog<dynamic>(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          backgroundColor: AppColors.surface2,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
-            side: BorderSide(color: (isSynced ? AppColors.success : AppColors.warning).withValues(alpha: 0.3), width: 1.5),
-          ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const SizedBox(height: 10),
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 500),
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: (isSynced ? AppColors.success : AppColors.warning).withValues(alpha: 0.2),
-                    shape: BoxShape.circle,
-                    border: Border.all(color: isSynced ? AppColors.success : AppColors.warning, width: 2),
-                    boxShadow: [
-                      BoxShadow(
-                        color: (isSynced ? AppColors.success : AppColors.warning).withValues(alpha: 0.3),
-                        blurRadius: 16,
-                      ),
-                    ],
-                  ),
-                  child: Icon(
-                    isSynced ? Icons.check_circle_outline_rounded : Icons.cloud_off_rounded,
-                    color: isSynced ? AppColors.success : AppColors.warning,
-                    size: 64,
-                  ),
-                ),
-                const SizedBox(height: 24),
-                Text(
-                  isCheckIn ? 'تم تسجيل حضورك اليوم بنجاح!' : 'تم تسجيل انصرافك بنجاح!',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, fontFamily: 'Cairo', color: AppColors.textPrimary),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  isSynced
-                      ? 'نتمنى لك يوماً رائعاً ودواماً موفقاً مع عائلة شركتكم الموقرة.'
-                      : 'تم حفظ بصمتك محلياً بنجاح (بسبب انقطاع الإنترنت). سيتم رفعها تلقائياً فور عودة الاتصال.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 12, 
-                    color: isSynced ? AppColors.textSecondary : AppColors.warning, 
-                    fontWeight: isSynced ? FontWeight.normal : FontWeight.bold,
-                    fontFamily: 'Cairo'
-                  ),
-                ),
-                const SizedBox(height: 24),
-                ElevatedButton(
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.transparent,
-                    shadowColor: Colors.transparent,
-                    padding: EdgeInsets.zero,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  ),
-                  child: Ink(
-                    decoration: BoxDecoration(
-                      gradient: isSynced 
-                          ? AppTheme.primaryGradient 
-                          : const LinearGradient(colors: [AppColors.warning, AppColors.warning]),
-                      borderRadius: const BorderRadius.all(Radius.circular(14)),
-                    ),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
-                      child: const Text('موافق', style: TextStyle(color: AppColors.textPrimary, fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          );
-        },
-      );
+    if (isSynced) {
+      AppHaptics.success();
+    } else {
+      AppHaptics.submit();
     }
+    final tone = isSynced ? AppTone.success : AppTone.warning;
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        contentPadding: const EdgeInsets.fromLTRB(AppSpace.xxl, AppSpace.xxl, AppSpace.xxl, AppSpace.lg),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ToneIcon(isSynced ? Icons.check_rounded : Icons.cloud_off_rounded, tone: tone, size: 72),
+            const SizedBox(height: AppSpace.xl),
+            Text(isCheckIn ? 'تم تسجيل حضورك' : 'تم تسجيل انصرافك', style: AppText.title, textAlign: TextAlign.center),
+            const SizedBox(height: AppSpace.sm),
+            Text(
+              isSynced
+                  ? '${Fmt.time(DateTime.now())} — ${isCheckIn ? 'دوام موفق' : 'شكراً على يومك'}'
+                  : 'انقطع الإنترنت، فحفظنا البصمة بالجهاز وسنرسلها تلقائياً عند عودة الاتصال.',
+              style: AppText.bodySm,
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+        actions: [AppButton(label: 'تم', expand: true, onPressed: () => Navigator.of(ctx).pop())],
+      ),
+    );
+  }
+
+  bool get _hasCheckIn => _todayAttendance?['check_in_time'] != null;
+  bool get _hasCheckOut => _todayAttendance?['check_out_time'] != null;
+  bool get _inRange => _distanceToBranch != null && _distanceToBranch! <= _branchRadius;
 
   @override
   Widget build(BuildContext context) {
-    final hasCheckIn = _todayAttendance != null && _todayAttendance!['check_in_time'] != null;
-    final hasCheckOut = _todayAttendance != null && _todayAttendance!['check_out_time'] != null;
+    final size = MediaQuery.sizeOf(context);
+    final landscapeWide = size.width >= AppBreakpoints.medium && size.width > size.height;
+    final map = ClipRRect(
+      borderRadius: landscapeWide ? AppRadius.card : BorderRadius.zero,
+      child: RepaintBoundary(child: _buildMap()),
+    );
+    final panel = _buildPanel();
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: AppColors.bg,
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        title: const Text(
-          'تسجيل الدوام الجغرافي',
-          style: TextStyle(
-            fontFamily: 'Cairo',
-            fontWeight: FontWeight.bold,
-            color: AppColors.textPrimary,
-          ),
-        ),
+        title: const Text('بصمة الدوام'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.my_location_rounded, color: AppColors.brand),
-            onPressed: _initLocationAndBranch,
+            tooltip: 'تحديث الموقع',
+            icon: const Icon(Icons.my_location_rounded),
+            onPressed: () => _refreshGpsLocation(userInitiated: true),
           ),
+          const SizedBox(width: AppSpace.xs),
         ],
       ),
-      body: Stack(
-        children: [
-          // 1. خريطة الفرع والموظف التفاعلية (Leaflet / OSM Map)
-          FlutterMap(
-            mapController: _mapController,
-            options: MapOptions(
-              initialCenter: LatLng(_branchLat, _branchLng),
-              initialZoom: 15.0,
-            ),
-            children: [
-              TileLayer(
-                urlTemplate: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
-                subdomains: const ['a', 'b', 'c', 'd'],
-                userAgentPackageName: 'com.hrpro.app',
-              ),
-              // سياج الفرع الجغرافي (Geofence Circle)
-              CircleLayer(
-                circles: [
-                  CircleMarker(
-                    point: LatLng(_branchLat, _branchLng),
-                    color: AppColors.brand.withValues(alpha: 0.15),
-                    borderStrokeWidth: 2,
-                    borderColor: AppColors.brand,
-                    useRadiusInMeter: true,
-                    radius: _branchRadius,
-                  ),
-                ],
-              ),
-              // علامات الموقع (الموظف + الفرع)
-              MarkerLayer(
-                markers: [
-                  // علامة الفرع المعتمد
-                  Marker(
-                    point: LatLng(_branchLat, _branchLng),
-                    width: 60,
-                    height: 60,
-                    child: Tooltip(
-                      message: _branchName,
-                      child: Column(
-                        children: [
-                          const Icon(Icons.business_center, color: AppColors.brand, size: 36),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: AppColors.onStatus.withValues(alpha: 0.65),
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(color: AppColors.brand),
-                            ),
-                            child: Text(
-                              _branchName.length > 10 ? '${_branchName.substring(0, 9)}..' : _branchName,
-                              style: const TextStyle(fontSize: 8, color: AppColors.textPrimary, fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  // علامة الموظف الجغرافية
-                  if (_currentPosition != null)
-                    Marker(
-                      point: LatLng(_currentPosition!.latitude, _currentPosition!.longitude),
-                      width: 50,
-                      height: 50,
-                      child: const Icon(
-                        Icons.person_pin_circle_rounded,
-                        color: AppColors.accent,
-                        size: 42,
-                      ),
-                    ),
-                ],
-              ),
-            ],
-          ),
-
-          // 1.5 لافتة معلوماتية بحدود زجاجية جذابة لتوضيح تتبع الموقع للموظف
-          Positioned(
-            top: 16,
-            left: 16,
-            right: 16,
-            child: GlassContainer(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              borderRadius: 16,
-              borderColor: AppColors.brand.withValues(alpha: 0.4),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.onStatus.withValues(alpha: 0.3),
-                  blurRadius: 10,
-                )
-              ],
+      body: landscapeWide
+          ? Padding(
+              padding: const EdgeInsets.fromLTRB(AppSpace.lg, 0, AppSpace.lg, AppSpace.lg),
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Icon(Icons.info_outline_rounded, color: AppColors.brand, size: 20),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      'يتم استخدام الموقع لتأكيد التواجد ضمن الفروع المعتمدة ولأغراض إثبات الحضور والانصراف الذكي تلقائياً أثناء ساعات العمل الرسمية فقط.',
-                      style: TextStyle(
-                        color: AppColors.textPrimary.withValues(alpha: 0.9),
-                        fontSize: 10.5,
-                        fontFamily: 'Cairo',
-                        fontWeight: FontWeight.w600,
-                        height: 1.4,
-                      ),
+                  Expanded(child: map),
+                  const SizedBox(width: AppSpace.lg),
+                  SizedBox(width: 400, child: SingleChildScrollView(child: panel)),
+                ],
+              ),
+            )
+          : RefreshIndicator.adaptive(
+              onRefresh: _initLocationAndBranch,
+              child: ListView(
+                padding: EdgeInsets.zero,
+                children: [
+                  SizedBox(height: (size.height * 0.34).clamp(200.0, 380.0), child: map),
+                  ContentWidth(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(AppSpace.page, AppSpace.lg, AppSpace.page, AppSpace.x3),
+                      child: panel,
                     ),
                   ),
                 ],
               ),
             ),
-          ),
-
-          // (تم دمج زر تحديث الموقع داخل اللوحة السفلية)
-          // 2. لوحة التحكم السفلية المتميزة بتقنية الزجاج
-          Positioned(
-            bottom: 16,
-            left: 16,
-            right: 16,
-            child: GlassContainer(
-              padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
-              borderRadius: 28,
-              borderColor: AppColors.brand.withValues(alpha: 0.3),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.brand.withValues(alpha: 0.08),
-                  blurRadius: 24,
-                  spreadRadius: 2,
-                )
-              ],
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxHeight: MediaQuery.of(context).size.height * 0.60,
-                ),
-                child: SingleChildScrollView(
-                  physics: const ClampingScrollPhysics(),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (_isLocating) ...[
-                    const CircularProgressIndicator(color: AppColors.brand),
-                    const SizedBox(height: 12),
-                    const Text(
-                      'جاري التحقق من الموقع الجغرافي والإحداثيات الفورية...',
-                      style: TextStyle(fontSize: 12, color: AppColors.textSecondary, fontFamily: 'Cairo'),
-                    ),
-                  ] else ...[
-                    // إظهار رسالة الخطأ أو التحذير إن وجد مع زر إعادة المحاولة
-                    if (_errorMessage != null) ...[
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: AppColors.danger.withAlpha(20),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: AppColors.danger.withAlpha(50)),
-                        ),
-                        child: Column(
-                          children: [
-                            Row(
-                              children: [
-                                const Icon(Icons.warning_amber_rounded, color: AppColors.danger, size: 28),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Text(
-                                    _errorMessage!,
-                                    style: const TextStyle(
-                                      color: AppColors.danger, 
-                                      fontSize: 11.5, 
-                                      fontWeight: FontWeight.bold,
-                                      fontFamily: 'Cairo',
-                                      height: 1.4,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton.icon(
-                                onPressed: _initLocationAndBranch,
-                                icon: const Icon(Icons.refresh_rounded, size: 18),
-                                label: const Text(
-                                  'إعادة محاولة جلب الموقع', 
-                                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, fontFamily: 'Cairo')
-                                ),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppColors.danger,
-                                  foregroundColor: AppColors.textPrimary,
-                                  elevation: 0,
-                                  padding: const EdgeInsets.symmetric(vertical: 10),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                    ],
-
-                    if (_workSchedule != null) ...[
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        margin: const EdgeInsets.only(bottom: 16),
-                        decoration: BoxDecoration(
-                          color: AppColors.accent.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: AppColors.accent.withValues(alpha: 0.3)),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.access_time_filled_rounded, color: AppColors.accent, size: 24),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text(
-                                    'أوقات الدوام المعتمدة للفرع',
-                                    style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 13, fontFamily: 'Cairo'),
-                                  ),
-                                  Text(
-                                    'الدخول: ${_formatTimeString12Hr(_workSchedule!['check_in_time']?.toString())} | الخروج: ${_formatTimeString12Hr(_workSchedule!['check_out_time']?.toString())}',
-                                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 11, fontFamily: 'Cairo'),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-
-                    // ── بطاقة الحالة + تحديث الموقع ──────────────────────────
-                    Container(
-                      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-                      decoration: BoxDecoration(
-                        color: AppColors.textPrimary.withValues(alpha: 0.05),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: AppColors.textPrimary.withValues(alpha: 0.09)),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // سطر: الحالة + شارة وقت الدخول
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  hasCheckOut ? 'الحالة: مكتمل 🟢' : (hasCheckIn ? 'الحالة: دوام نشط 🟡' : 'الحالة: لم تبصم بعد 🔴'),
-                                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textPrimary, fontFamily: 'Cairo'),
-                                ),
-                              ),
-                              if (hasCheckIn)
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.success.withValues(alpha: 0.15),
-                                    borderRadius: BorderRadius.circular(10),
-                                    border: Border.all(color: AppColors.success.withValues(alpha: 0.4)),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      const Icon(Icons.check_circle, color: AppColors.success, size: 13),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        _formatTime(_todayAttendance?['check_in_time'] as String?),
-                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: AppColors.success, fontFamily: 'Cairo'),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                            ],
-                          ),
-                          const SizedBox(height: 5),
-                          // اسم الفرع
-                          Text(
-                            'الموقع المعتمد: $_branchName',
-                            style: const TextStyle(fontSize: 11, color: AppColors.textSecondary, fontFamily: 'Cairo'),
-                          ),
-                          // المسافة عن الفرع
-                          if (_currentPosition != null) ...[
-                            const SizedBox(height: 4),
-                            Row(
-                              children: [
-                                Icon(
-                                  Icons.my_location_rounded,
-                                  size: 12,
-                                  color: _distanceToBranch != null && _distanceToBranch! <= _branchRadius
-                                      ? AppColors.success
-                                      : AppColors.accent,
-                                ),
-                                const SizedBox(width: 4),
-                                Expanded(
-                                  child: Text(
-                                    _distanceToBranch != null
-                                        ? 'تبعد عن الفرع: ${_distanceToBranch!.toStringAsFixed(1)} م  •  دقة: ${_currentPosition!.accuracy.toStringAsFixed(1)} م'
-                                        : 'دقة الموقع: ${_currentPosition!.accuracy.toStringAsFixed(1)} م',
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
-                                      fontFamily: 'Cairo',
-                                      color: _distanceToBranch != null && _distanceToBranch! <= _branchRadius
-                                          ? AppColors.success
-                                          : AppColors.accent,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                          const SizedBox(height: 10),
-                          // زر تحديث الموقع مدمج
-                          SizedBox(
-                            width: double.infinity,
-                            child: OutlinedButton.icon(
-                              onPressed: () => _refreshGpsLocation(userInitiated: true),
-                              icon: const Icon(Icons.my_location_rounded, size: 15, color: AppColors.brand),
-                              label: const Text(
-                                'تحديث الموقع الآن',
-                                style: TextStyle(fontFamily: 'Cairo', fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.brand),
-                              ),
-                              style: OutlinedButton.styleFrom(
-                                side: BorderSide(color: AppColors.brand.withValues(alpha: 0.5)),
-                                backgroundColor: AppColors.brand.withValues(alpha: 0.07),
-                                padding: const EdgeInsets.symmetric(vertical: 8),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    if (!hasCheckOut)
-                      _buildPunchTypeSwitch(),
-
-                    // زر التبصيم الفخم بلمسات مضيئة في الوسط
-                    if (!hasCheckOut)
-                      GestureDetector(
-                        onTap: _isSubmitting || _mockDetected ? null : _handleAttendanceSubmit,
-                        child: ScaleTransition(
-                          scale: _pulseAnimation,
-                          child: Container(
-                            width: 88,
-                            height: 88,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              gradient: _selectedPunchType == 'check_out' 
-                                  ? const LinearGradient(colors: [AppColors.accent, AppColors.danger])
-                                  : AppTheme.primaryGradient,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: (_selectedPunchType == 'check_out' ? AppColors.accent : AppColors.brand).withValues(alpha: 0.4),
-                                  blurRadius: 20,
-                                  spreadRadius: 2,
-                                )
-                              ],
-                            ),
-                            child: Center(
-                              child: _isSubmitting
-                                  ? const CircularProgressIndicator(color: AppColors.textPrimary)
-                                  : Icon(
-                                      _selectedPunchType == 'check_out' ? Icons.exit_to_app_rounded : Icons.fingerprint_rounded,
-                                      color: AppColors.textPrimary,
-                                      size: 40,
-                                    ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    
-                    if (hasCheckOut)
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        decoration: BoxDecoration(
-                          color: AppColors.success.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
-                        ),
-                        child: const Center(
-                          child: Text(
-                            'لقد أتممت بصمة حضور وانصراف هذا اليوم. دوام موفق! 🎉',
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.success, fontFamily: 'Cairo'),
-                          ),
-                        ),
-                      ),
-                    
-                    const SizedBox(height: 12),
-                    if (!hasCheckOut)
-                      Text(
-                        _selectedPunchType == 'check_out' ? 'اضغط لتسجيل بصمة الانصراف 🔴' : 'اضغط لتسجيل بصمة الحضور 🟢',
-                        style: const TextStyle(fontSize: 11, color: AppColors.textSecondary, fontWeight: FontWeight.w600, fontFamily: 'Cairo'),
-                      ),
-                  ],
-                ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 
-  Widget _buildPunchTypeSwitch() {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 20),
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: AppColors.textPrimary.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.textPrimary.withValues(alpha: 0.1)),
-      ),
+  Widget _buildMap() {
+    return FlutterMap(
+      mapController: _mapController,
+      options: MapOptions(initialCenter: LatLng(_branchLat, _branchLng), initialZoom: 15.0, backgroundColor: AppColors.surface1),
+      children: [
+        TileLayer(
+          urlTemplate: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
+          subdomains: const ['a', 'b', 'c', 'd'],
+          userAgentPackageName: 'com.hrpro.app',
+        ),
+        CircleLayer(
+          circles: [
+            CircleMarker(
+              point: LatLng(_branchLat, _branchLng),
+              color: AppColors.brand.withValues(alpha: 0.14),
+              borderStrokeWidth: 2,
+              borderColor: AppColors.brand,
+              useRadiusInMeter: true,
+              radius: _branchRadius,
+            ),
+          ],
+        ),
+        MarkerLayer(
+          markers: [
+            Marker(
+              point: LatLng(_branchLat, _branchLng),
+              width: 44,
+              height: 44,
+              child: Semantics(
+                label: 'موقع $_branchName',
+                child: Container(
+                  decoration: BoxDecoration(color: AppColors.brand, shape: BoxShape.circle, border: Border.all(color: AppColors.bg, width: 3)),
+                  child: const Icon(Icons.business_rounded, color: AppColors.onBrand, size: 20),
+                ),
+              ),
+            ),
+            if (_currentPosition != null)
+              Marker(
+                point: LatLng(_currentPosition!.latitude, _currentPosition!.longitude),
+                width: 28,
+                height: 28,
+                child: Semantics(
+                  label: 'موقعك الحالي',
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: AppColors.info,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: AppColors.textPrimary, width: 3),
+                      boxShadow: AppElevation.low,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPanel() {
+    if (_isLocating) {
+      return const Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Skeleton(height: 96, radius: AppRadius.md),
+          SizedBox(height: AppSpace.lg),
+          Skeleton(height: 56, radius: AppRadius.sm),
+          SizedBox(height: AppSpace.md),
+          Center(child: Text('نحدد موقعك...', style: AppText.caption)),
+        ],
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildLocationCard(),
+        if (_errorMessage != null) ...[
+          const SizedBox(height: AppSpace.md),
+          AppCard(
+            tone: AppTone.danger,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.error_outline_rounded, color: AppColors.danger),
+                    const SizedBox(width: AppSpace.md),
+                    Expanded(child: Text(_errorMessage!.trim(), style: AppText.bodySm.copyWith(color: AppColors.textPrimary))),
+                  ],
+                ),
+                const SizedBox(height: AppSpace.md),
+                Align(
+                  alignment: AlignmentDirectional.centerEnd,
+                  child: AppButton.secondary(label: 'إعادة المحاولة', icon: Icons.refresh_rounded, size: AppButtonSize.small, onPressed: _initLocationAndBranch),
+                ),
+              ],
+            ),
+          ),
+        ],
+        const SizedBox(height: AppSpace.lg),
+        if (_hasCheckOut)
+          const AppCard(
+            tone: AppTone.success,
+            child: Row(
+              children: [
+                ToneIcon(Icons.task_alt_rounded, tone: AppTone.success),
+                SizedBox(width: AppSpace.md),
+                Expanded(child: Text('سجّلت حضورك وانصرافك لهذا اليوم. يومك مكتمل.', style: AppText.subtitle)),
+              ],
+            ),
+          )
+        else ...[
+          SegmentedButton<String>(
+            segments: const [
+              ButtonSegment(value: 'check_in', label: Text('حضور'), icon: Icon(Icons.login_rounded)),
+              ButtonSegment(value: 'check_out', label: Text('انصراف'), icon: Icon(Icons.logout_rounded)),
+            ],
+            selected: {_selectedPunchType},
+            showSelectedIcon: false,
+            onSelectionChanged: (s) {
+              AppHaptics.select();
+              setState(() => _selectedPunchType = s.first);
+            },
+          ),
+          const SizedBox(height: AppSpace.md),
+          AppButton(
+            label: _selectedPunchType == 'check_out' ? 'بصمة الانصراف' : 'بصمة الحضور',
+            icon: Icons.fingerprint_rounded,
+            variant: _selectedPunchType == 'check_out' ? AppButtonVariant.warning : AppButtonVariant.primary,
+            size: AppButtonSize.large,
+            expand: true,
+            loading: _isSubmitting,
+            haptic: false,
+            onPressed: _mockDetected || _currentPosition == null ? null : _handleAttendanceSubmit,
+          ),
+          const SizedBox(height: AppSpace.sm),
+          Text(
+            _mockDetected
+                ? 'البصمة موقوفة لأن الجهاز يستعمل موقعاً مزيّفاً.'
+X                    ? 'أنت داخل نطاق الفرع، تقدر تبصم الآن.'
+                    : 'اقترب من الفرع حتى تدخل ضمن النطاق المسموح.',
+            style: AppText.caption.copyWith(color: _mockDetected ? AppColors.danger : null),
+            textAlign: TextAlign.center,
+          ),
+        ],
+        const SizedBox(height: AppSpace.lg),
+        _buildTodayCard(),
+        const SizedBox(height: AppSpace.lg),
+        const Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.privacy_tip_outlined, size: 16, color: AppColors.textMuted),
+            SizedBox(width: AppSpace.sm),
+            Expanded(
+              child: Text(
+                'نستعمل موقعك فقط لتأكيد وجودك في الفرع أثناء ساعات الدوام الرسمية.',
+                style: AppText.caption,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLocationCard() {
+    final tone = _mockDetected
+        ? AppTone.danger
+        : _currentPosition == null
+            ? AppTone.neutral
+            : _inRange
+                ? AppTone.success
+                : AppTone.warning;
+    final label = _mockDetected
+        ? 'موقع مزيّف'
+        : _currentPosition == null
+            ? 'بلا موقع'
+            : _inRange
+                ? 'داخل النطاق'
+                : 'خارج النطاق';
+    final distanceText = _distanceToBranch == null
+        ? 'بانتظار إشارة GPS'
+        : _inRange
+            ? 'تبعد ${_distanceToBranch!.round()} م عن الفرع'
+            : 'باقي ${(_distanceToBranch! - _branchRadius).round()} م للدخول بالنطاق';
+    return AppCard(
       child: Row(
         children: [
-          // حضور tab
+          ToneIcon(_inRange ? Icons.where_to_vote_rounded : Icons.location_searching_rounded, tone: tone, size: 48),
+          const SizedBox(width: AppSpace.md),
           Expanded(
-            child: GestureDetector(
-              onTap: () {
-                setState(() {
-                  _selectedPunchType = 'check_in';
-                });
-              },
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  color: _selectedPunchType == 'check_in'
-                      ? AppColors.brand.withValues(alpha: 0.2)
-                      : Colors.transparent,
-                  border: Border.all(
-                    color: _selectedPunchType == 'check_in'
-                        ? AppColors.brand.withValues(alpha: 0.5)
-                        : Colors.transparent,
-                  ),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.login_rounded,
-                      size: 16,
-                      color: _selectedPunchType == 'check_in'
-                          ? AppColors.brand
-                          : AppColors.textSecondary,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      'تسجيل حضور',
-                      style: TextStyle(
-                        fontFamily: 'Cairo',
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: _selectedPunchType == 'check_in'
-                            ? AppColors.textPrimary
-                            : AppColors.textSecondary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(_branchName, style: AppText.subtitle, maxLines: 1, overflow: TextOverflow.ellipsis),
+                Text(distanceText, style: AppText.bodySm),
+                if (_currentPosition != null)
+                  Text('دقة GPS: ${_currentPosition!.accuracy.round()} م · النطاق ${_branchRadius.round()} م', style: AppText.caption),
+              ],
             ),
           ),
-          // انصراف tab
-          Expanded(
-            child: GestureDetector(
-              onTap: () {
-                setState(() {
-                  _selectedPunchType = 'check_out';
-                });
-              },
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  color: _selectedPunchType == 'check_out'
-                      ? AppColors.accent.withValues(alpha: 0.2)
-                      : Colors.transparent,
-                  border: Border.all(
-                    color: _selectedPunchType == 'check_out'
-                        ? AppColors.accent.withValues(alpha: 0.5)
-                        : Colors.transparent,
-                  ),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.logout_rounded,
-                      size: 16,
-                      color: _selectedPunchType == 'check_out'
-                          ? AppColors.accent
-                          : AppColors.textSecondary,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      'تسجيل انصراف',
-                      style: TextStyle(
-                        fontFamily: 'Cairo',
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: _selectedPunchType == 'check_out'
-                            ? AppColors.textPrimary
-                            : AppColors.textSecondary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
+          const SizedBox(width: AppSpace.sm),
+          StatusBadge(label, tone: tone, dot: true),
         ],
       ),
     );
   }
 
-  String _formatTime(String? timeStr) {
-    if (timeStr == null) return '--:--';
-    try {
-      final dateTime = DateTime.parse(timeStr).toLocal();
-      final hour = dateTime.hour > 12 ? dateTime.hour - 12 : (dateTime.hour == 0 ? 12 : dateTime.hour);
-      final amPm = dateTime.hour >= 12 ? 'PM' : 'AM';
-      final minute = dateTime.minute.toString().padLeft(2, '0');
-      return '$hour:$minute $amPm';
-    } catch (e) {
-      return '--:--';
-    }
-  }
-
-  String _formatTimeString12Hr(String? timeStr) {
-    if (timeStr == null || timeStr.isEmpty) return '--:--';
-    try {
-      final parts = timeStr.split(':');
-      int hour = int.parse(parts[0]);
-      final minute = parts[1];
-      final amPm = hour >= 12 ? 'PM' : 'AM';
-      if (hour > 12) hour -= 12;
-      if (hour == 0) hour = 12;
-      return '$hour:$minute $amPm';
-    } catch (e) {
-      return timeStr.length > 5 ? timeStr.substring(0, 5) : timeStr;
-    }
+  Widget _buildTodayCard() {
+    DateTime? parse(Object? v) => v == null ? null : DateTime.tryParse(v.toString())?.toLocal();
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('اليوم · ${Fmt.dateWithDay(DateTime.now())}', style: AppText.label),
+          const SizedBox(height: AppSpace.sm),
+          KeyValueRow('الحضور', _hasCheckIn ? Fmt.time(parse(_todayAttendance!['check_in_time'])) : '--:--', icon: Icons.login_rounded),
+          KeyValueRow('الانصراف', _hasCheckOut ? Fmt.time(parse(_todayAttendance!['check_out_time'])) : '--:--', icon: Icons.logout_rounded),
+          if (_workSchedule != null)
+            KeyValueRow(
+              'الدوام المعتمد',
+              '${Fmt.timeOfDay(_workSchedule!['check_in_time']?.toString())} - ${Fmt.timeOfDay(_workSchedule!['check_out_time']?.toString())}',
+              icon: Icons.schedule_rounded,
+            ),
+        ],
+      ),
+    );
   }
 }
-
