@@ -47,6 +47,9 @@ jobs:
       - name: Type check
         working-directory: ./web
         run: npx tsc --noEmit
+      - name: Unit tests
+        working-directory: ./web
+        run: npm test
 
   database:
     runs-on: ubuntu-latest
