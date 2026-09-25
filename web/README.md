@@ -1,36 +1,48 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# HR Pro — Web Dashboard
 
-## Getting Started
+Admin dashboard for HR Pro (Next.js 16, static export, Supabase). It is deployed as static files to
+[hrpro-batra.surge.sh](https://hrpro-batra.surge.sh/dashboard).
 
-First, run the development server:
+## Development
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm ci
+npm run dev          # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Checks
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Command              | What it does                                                        |
+| -------------------- | ------------------------------------------------------------------- |
+| `npm run lint`       | ESLint (Next.js + TypeScript rules)                                 |
+| `npm run typecheck`  | TypeScript type check                                               |
+| `npm run test:unit`  | Vitest unit tests for payroll, attendance, geo and format helpers   |
+| `npm run build`      | Static export to `out/`                                             |
+| `npm run test:e2e`   | Playwright tests against `out/` with a mocked Supabase API          |
+| `npm run check`      | lint + typecheck + unit tests                                       |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+End-to-end tests need a build first (`npm run build`) and a Chromium browser
+(`npx playwright install chromium`). To reuse an existing Chromium binary set
+`PW_CHROMIUM_PATH=/path/to/chrome`.
 
-## Learn More
+## Project layout
 
-To learn more about Next.js, take a look at the following resources:
+- `src/app/dashboard/*` — dashboard pages
+- `src/components/ui.tsx` — shared UI kit (cards, buttons, form fields, tables, modals…)
+- `src/components/confirm.tsx` — promise-based confirmation dialog (`useConfirm`)
+- `src/lib/payroll.ts`, `src/lib/attendance.ts` — pure salary/attendance calculations (unit tested)
+- `src/lib/useQuery.ts` — small data-fetching hook with cache-first rendering
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Deployment
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+The `Web Dashboard` GitHub Actions workflow (`.github/workflows/web.yml`) runs lint, type check,
+unit tests, the build and the e2e tests on every pull request. On pushes to `main` it also
+publishes `out/` to `hrpro-batra.surge.sh` when the repository secret `SURGE_TOKEN` is set
+(generate one locally with `npx surge token`).
 
-## Deploy on Vercel
+Manual deploy:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+npm run build
+npx surge ./out hrpro-batra.surge.sh
+```

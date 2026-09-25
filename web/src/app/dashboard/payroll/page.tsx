@@ -1,1631 +1,744 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
-import { 
-  Banknote, 
-  Search, 
-  Building, 
-  Calendar as CalendarIcon, 
-  Plus, 
-  TrendingUp, 
-  TrendingDown, 
-  CheckCircle,
-  FileText,
+import React, { useMemo, useState } from 'react';
+import toast from 'react-hot-toast';
+import {
+  Banknote,
+  Building,
+  Plus,
+  TrendingUp,
+  TrendingDown,
+  CheckCircle2,
   Printer,
-  Loader2,
   CalendarRange,
   Info,
   Clock,
-  X
+  Undo2,
+  Wallet,
+  Users,
+  AlertTriangle,
+  RotateCcw,
+  Check,
 } from 'lucide-react';
-import confetti from 'canvas-confetti';
-import toast from 'react-hot-toast';
+import { supabase } from '@/lib/supabase';
+import { confetti } from '@/lib/lazy';
+import { useQuery } from '@/lib/useQuery';
+import { formatLateDurationArabic } from '@/lib/attendance';
+import { computePayrollRow, getCycleDates, type DayTone, type PayrollField, type PayrollOverrides, type PayrollRow } from '@/lib/payroll';
+import { MONTHS_AR, errorMessage, formatIQD } from '@/lib/format';
+import type { Attendance, BonusDeduction, Branch, Employee, LeaveRequest, LoanInstallment, SalarySlip, WorkSchedule } from '@/lib/types';
+import { useConfirm } from '@/components/confirm';
+import {
+  AmountInput,
+  Avatar,
+  Badge,
+  Button,
+  Card,
+  DataTable,
+  EmptyState,
+  Field,
+  FilterSelect,
+  IconButton,
+  InfoNote,
+  Input,
+  Modal,
+  ModalFooter,
+  PageHeader,
+  PageSkeleton,
+  SearchInput,
+  SegmentedTabs,
+  StatTile,
+  TableEmpty,
+  cn,
+  type Tone,
+} from '@/components/ui';
 
-const getCycleDates = (monthStr: string, startDay: number = 25, endDay: number = 24) => {
-  if (!monthStr) return { start: '', end: '' };
-  const [year, month] = monthStr.split('-').map(Number);
+interface PayrollData {
+  month: string;
+  startDate: string;
+  endDate: string;
+  branches: Pick<Branch, 'id' | 'name'>[];
+  employees: Employee[];
+  bonuses: BonusDeduction[];
+  installments: LoanInstallment[];
+  attendance: Attendance[];
+  leaves: LeaveRequest[];
+  schedules: WorkSchedule[];
+  slips: SalarySlip[];
+}
 
-  // Get last day of selected month
-  const lastDaySelected = new Date(year, month, 0).getDate();
+async function fetchPayroll(month: string): Promise<PayrollData> {
+  const { data: policy } = await supabase.from('system_settings').select('*').eq('key', 'payroll_policy').maybeSingle();
+  const { start, end } = getCycleDates(month, policy?.value?.cycle_start_day || 25, policy?.value?.cycle_end_day || 24);
 
-  if (startDay <= endDay) {
-    // Same calendar month cycle (e.g. 1st to 30th/31st)
-    const actualStartDay = Math.min(startDay, lastDaySelected);
-    const actualEndDay = Math.min(endDay, lastDaySelected);
+  const [brs, emps, bds, loans, att, lvs, scheds, slips] = await Promise.all([
+    supabase.from('branches').select('id, name'),
+    supabase
+      .from('employees')
+      .select('id, full_name, monthly_salary_iqd, future_salary_iqd, future_salary_month, branch_id, department_id, branches(name)')
+      .eq('is_active', true)
+      .order('full_name'),
+    supabase.from('bonuses_deductions').select('*').gte('issue_date', start).lte('issue_date', end),
+    supabase.from('loan_installments').select('*, loans!inner(employee_id)').gte('due_date', start).lte('due_date', end).eq('is_paid', false),
+    supabase.from('attendance').select('*').gte('work_date', start).lte('work_date', end),
+    supabase.from('leave_requests').select('*').in('status', ['approved', 'pending']).lte('start_date', end).gte('end_date', start),
+    supabase.from('work_schedules').select('*'),
+    supabase.from('salary_slips').select('*').eq('work_month', month),
+  ]);
+  if (emps.error) throw emps.error;
 
-    const start = `${year}-${month.toString().padStart(2, '0')}-${actualStartDay.toString().padStart(2, '0')}`;
-    const end = `${year}-${month.toString().padStart(2, '0')}-${actualEndDay.toString().padStart(2, '0')}`;
-    return { start, end };
-  } else {
-    // Cross-month cycle (starts in previous month, ends in selected month, e.g. 25th to 24th)
-    const prevMonthDate = new Date(year, month - 2, 1);
-    const prevYear = prevMonthDate.getFullYear();
-    const prevMonthNum = prevMonthDate.getMonth() + 1;
-    const lastDayPrev = new Date(prevYear, prevMonthNum, 0).getDate();
+  return {
+    month,
+    startDate: start,
+    endDate: end,
+    branches: (brs.data ?? []) as PayrollData['branches'],
+    employees: (emps.data ?? []) as unknown as Employee[],
+    bonuses: (bds.data ?? []) as BonusDeduction[],
+    installments: (loans.data ?? []) as LoanInstallment[],
+    attendance: (att.data ?? []) as Attendance[],
+    leaves: (lvs.data ?? []) as LeaveRequest[],
+    schedules: (scheds.data ?? []) as WorkSchedule[],
+    slips: (slips.data ?? []) as SalarySlip[],
+  };
+}
 
-    const actualStartDay = Math.min(startDay, lastDayPrev);
-    const actualEndDay = Math.min(endDay, lastDaySelected);
+/**
+ * Publishes a salary slip for one employee and records the audit trail:
+ * paid loan installments, manual adjustments and automatic attendance deductions.
+ */
+async function issueSlip(row: PayrollRow, month: string, start: string, end: string): Promise<void> {
+  const { error } = await supabase.from('salary_slips').insert({
+    employee_id: row.id,
+    work_month: month,
+    basic_salary: row.basic,
+    allowances: row.totalBonuses,
+    deductions: row.totalDeductions,
+    loans_deduction: row.loanDeduction,
+    net_salary: row.netSalary,
+    status: 'published',
+  });
+  if (error) throw error;
 
-    const start = `${prevYear}-${prevMonthNum.toString().padStart(2, '0')}-${actualStartDay.toString().padStart(2, '0')}`;
-    const end = `${year}-${month.toString().padStart(2, '0')}-${actualEndDay.toString().padStart(2, '0')}`;
-    return { start, end };
+  if (row.loanInstallmentIds.length > 0) {
+    await supabase.from('loan_installments').update({ is_paid: true, paid_at: new Date().toISOString() }).in('id', row.loanInstallmentIds);
   }
+
+  const insertAdjustment = (type: 'bonus' | 'deduction', amount: number, reason: string) =>
+    supabase.from('bonuses_deductions').insert({ employee_id: row.id, type, amount, reason, issue_date: end });
+
+  if (row.isBonusesOverridden) {
+    const diff = row.totalBonuses - row.computedBonuses;
+    if (diff > 0) await insertAdjustment('bonus', diff, `تسوية زيادة مكافآت يدوياً لشهر ${month}`);
+    else if (diff < 0) await insertAdjustment('deduction', -diff, `تسوية تخفيض مكافآت يدوياً لشهر ${month}`);
+  }
+
+  if (row.isOtherDeductionsOverridden) {
+    const diff = row.totalDeductions - row.totalAttendanceDeductions - row.computedOtherDeductions;
+    if (diff > 0) await insertAdjustment('deduction', diff, `تسوية زيادة خصومات يدوياً لشهر ${month}`);
+    else if (diff < 0) await insertAdjustment('bonus', -diff, `تسوية تخفيض خصومات يدوياً لشهر ${month}`);
+  }
+
+  const period = `للفترة من ${start} إلى ${end}`;
+  if (row.isAttendanceDeductionsOverridden) {
+    if (row.totalAttendanceDeductions > 0) {
+      await insertAdjustment('deduction', row.totalAttendanceDeductions, `خصم غياب وحضور معدل يدوياً ${period}`);
+    }
+  } else if (row.totalAttendanceDeductions > 0) {
+    const addOnce = async (amount: number, reason: string) => {
+      if (amount <= 0) return;
+      const { data: existing } = await supabase
+        .from('bonuses_deductions')
+        .select('id')
+        .eq('employee_id', row.id)
+        .eq('type', 'deduction')
+        .eq('reason', reason)
+        .maybeSingle();
+      if (!existing) await insertAdjustment('deduction', amount, reason);
+    };
+    await addOnce(row.absenceDeduction, `خصم غياب غير مبرر (${row.absencesCount} يوم) ${period}`);
+    await addOnce(row.halfDayDeduction, `خصم نصف يوم (${row.halfDaysCount} يوم) ${period}`);
+    await addOnce(row.latenessDeduction, `خصم تأخير الحضور (${formatLateDurationArabic(row.totalLateMinutes)}) ${period}`);
+    await addOnce(row.earlyExitDeduction, `خصم خروج مبكر (${formatLateDurationArabic(row.totalEarlyExitMinutes)}) ${period}`);
+  }
+
+  await supabase.from('notifications').insert({
+    employee_id: row.id,
+    title: 'اعتماد كشف الراتب 💸',
+    body: `تم اعتماد وصرف كشف راتبك لشهر (${month}) بصافي مستلم قدره (${row.netSalary.toLocaleString()} د.ع).`,
+    type: 'salary',
+  });
+}
+
+const DAY_TONE: Record<DayTone, Tone> = {
+  present: 'emerald',
+  excused: 'teal',
+  absent: 'rose',
+  leave: 'sky',
+  warning: 'amber',
+  late: 'orange',
+  future: 'slate',
 };
 
-const formatLateDurationArabic = (minutes: number) => {
-  if (minutes <= 0) return '0 دقيقة';
-  const hrs = Math.floor(minutes / 60);
-  const mins = minutes % 60;
-
-  let hrsStr = '';
-  if (hrs > 0) {
-    if (hrs === 1) hrsStr = 'ساعة';
-    else if (hrs === 2) hrsStr = 'ساعتين';
-    else if (hrs >= 3 && hrs <= 10) hrsStr = `${hrs} ساعات`;
-    else hrsStr = `${hrs} ساعة`;
-  }
-
-  let minsStr = '';
-  if (mins > 0) {
-    if (mins === 1) minsStr = 'دقيقة واحدة';
-    else if (mins === 2) minsStr = 'دقيقتين';
-    else if (mins >= 3 && mins <= 10) minsStr = `${mins} دقائق`;
-    else minsStr = `${mins} دقيقة`;
-  }
-
-  if (hrsStr && minsStr) {
-    return `${hrsStr} و ${minsStr}`;
-  } else if (hrsStr) {
-    return hrsStr;
-  } else {
-    return minsStr;
-  }
-};
+function currentMonth(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}`;
+}
 
 export default function PayrollPage() {
-  const [loading, setLoading] = useState(true);
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
-  
-  // Data States
-  const [employees, setEmployees] = useState<any[]>([]);
-  const [branches, setBranches] = useState<any[]>([]);
-  const [bonusesAndDeductions, setBonusesAndDeductions] = useState<any[]>([]);
-  const [loanInstallments, setLoanInstallments] = useState<any[]>([]);
-  const [attendanceLogs, setAttendanceLogs] = useState<any[]>([]);
-  const [leaveRequests, setLeaveRequests] = useState<any[]>([]);
-  const [workSchedules, setWorkSchedules] = useState<any[]>([]);
-  const [existingSlips, setExistingSlips] = useState<any[]>([]);
-  
-  // Filter States
-  const [selectedMonth, setSelectedMonth] = useState(() => {
-    const d = new Date();
-    const m = (d.getMonth() + 1).toString().padStart(2, '0');
-    return `${d.getFullYear()}-${m}`;
-  });
-  const [startDate, setStartDate] = useState(() => {
-    const d = new Date();
-    const m = (d.getMonth() + 1).toString().padStart(2, '0');
-    return getCycleDates(`${d.getFullYear()}-${m}`).start;
-  });
-  const [endDate, setEndDate] = useState(() => {
-    const d = new Date();
-    const m = (d.getMonth() + 1).toString().padStart(2, '0');
-    return getCycleDates(`${d.getFullYear()}-${m}`).end;
-  });
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedBranch, setSelectedBranch] = useState('all');
+  const confirm = useConfirm();
+  const [month, setMonth] = useState(currentMonth);
+  const query = useQuery(`payroll:${month}`, () => fetchPayroll(month));
+  const [search, setSearch] = useState('');
+  const [branchId, setBranchId] = useState('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'issued'>('all');
+  const [overrides, setOverrides] = useState<Record<string, PayrollOverrides>>({});
+  const [excused, setExcused] = useState<Record<string, string[]>>({});
+  const [editing, setEditing] = useState<{ id: string; field: PayrollField } | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [adjustFor, setAdjustFor] = useState<PayrollRow | null>(null);
+  const [breakdownId, setBreakdownId] = useState<string | null>(null);
+  const [bulkOpen, setBulkOpen] = useState(false);
 
-  // Overrides State: Record<employeeId, { bonuses?: number, attendanceDeductions?: number, otherDeductions?: number }>
-  const [payrollOverrides, setPayrollOverrides] = useState<Record<string, { bonuses?: number, attendanceDeductions?: number, otherDeductions?: number }>>({});
-  const [editingCell, setEditingCell] = useState<{ employeeId: string, field: 'bonuses' | 'attendanceDeductions' | 'otherDeductions', currentValue: number } | null>(null);
+  const data = query.data && query.data.month === month ? query.data : undefined;
 
-  // Modal States
-  const [showAddBDModal, setShowAddBDModal] = useState(false);
-  const [selectedEmpForBD, setSelectedEmpForBD] = useState<any>(null);
-  const [bdType, setBdType] = useState<'bonus' | 'deduction'>('bonus');
-  const [bdAmount, setBdAmount] = useState<number>(0);
-  const [bdReason, setBdReason] = useState('');
+  const rows = useMemo(() => {
+    if (!data) return [];
+    return data.employees.map((emp) =>
+      computePayrollRow(emp, {
+        selectedMonth: data.month,
+        startDate: data.startDate,
+        endDate: data.endDate,
+        schedules: data.schedules,
+        attendance: data.attendance,
+        leaves: data.leaves,
+        bonusesAndDeductions: data.bonuses,
+        installments: data.installments,
+        slips: data.slips,
+        overrides: overrides[emp.id] ?? {},
+        excusedDays: excused[emp.id] ?? [],
+      }),
+    );
+  }, [data, overrides, excused]);
 
-  // Attendance Breakdown Modal State (Stores the selected employee's ID)
-  const [selectedEmpIdForBreakdown, setSelectedEmpIdForBreakdown] = useState<string | null>(null);
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return rows.filter(
+      (r) =>
+        (branchId === 'all' || r.branch_id === branchId) &&
+        (statusFilter === 'all' || (statusFilter === 'issued') === r.isIssued) &&
+        (!q || (r.full_name || '').toLowerCase().includes(q)),
+    );
+  }, [rows, search, branchId, statusFilter]);
 
-  // Excused days state: Record<employeeId, array of excused dates (YYYY-MM-DD)>
-  const [excusedDays, setExcusedDays] = useState<Record<string, string[]>>({});
-  const [showBulkModal, setShowBulkModal] = useState(false);
-  const [cycleStartDay, setCycleStartDay] = useState(25);
-  const [cycleEndDay, setCycleEndDay] = useState(24);
+  if (!data) {
+    if (query.error) {
+      return <EmptyState icon={AlertTriangle} tone="rose" title="تعذر تحميل بيانات الرواتب" description={errorMessage(query.error)} action={<Button size="sm" variant="secondary" onClick={query.reload}>إعادة المحاولة</Button>} />;
+    }
+    return <PageSkeleton rows={8} />;
+  }
 
-  useEffect(() => {
-    fetchPayrollData();
-  }, [startDate, endDate]);
+  const totalNet = filtered.reduce((s, r) => s + r.netSalary, 0);
+  const totalBase = filtered.reduce((s, r) => s + r.basic, 0);
+  const totalDeductions = filtered.reduce((s, r) => s + r.totalDeductions + r.loanDeduction, 0);
+  const issuedCount = filtered.filter((r) => r.isIssued).length;
+  const pendingRows = filtered.filter((r) => !r.isIssued);
+  const breakdown = rows.find((r) => r.id === breakdownId) ?? null;
+  const branchName = data.branches.find((b) => b.id === branchId)?.name ?? 'جميع الفروع';
+  const [year, monthNum] = month.split('-');
 
-  const saveOverride = (employeeId: string, field: 'bonuses' | 'attendanceDeductions' | 'otherDeductions', value: number) => {
-    setPayrollOverrides(prev => {
-      const empOverrides = prev[employeeId] || {};
-      return {
-        ...prev,
-        [employeeId]: {
-          ...empOverrides,
-          [field]: value
-        }
-      };
+  const setOverride = (id: string, field: PayrollField, value: number | undefined) => {
+    setOverrides((prev) => {
+      const next = { ...(prev[id] ?? {}) };
+      if (value === undefined) delete next[field];
+      else next[field] = value;
+      return { ...prev, [id]: next };
     });
-    setEditingCell(null);
-    toast.success('تم تعديل القيمة وتحديث صافي الراتب! 💸');
+    setEditing(null);
   };
 
-  const clearOverride = (employeeId: string, field: 'bonuses' | 'attendanceDeductions' | 'otherDeductions') => {
-    setPayrollOverrides(prev => {
-      const empOverrides = { ...prev[employeeId] };
-      delete empOverrides[field];
-      const updated = { ...prev };
-      if (Object.keys(empOverrides).length === 0) {
-        delete updated[employeeId];
-      } else {
-        updated[employeeId] = empOverrides;
+  const approveOne = async (row: PayrollRow) => {
+    if (row.isNetNegative) {
+      const ok = await confirm({ title: 'الراتب الصافي سالب', message: 'هل تريد اعتماد الراتب رغم أن صافيه سالب؟', confirmLabel: 'اعتماد', tone: 'warning' });
+      if (!ok) return;
+    }
+    setBusy(`slip_${row.id}`);
+    try {
+      await issueSlip(row, data.month, data.startDate, data.endDate);
+      confetti({ particleCount: 90, spread: 60, colors: ['#10B981', '#059669'] });
+      toast.success(`تم اعتماد راتب ${row.full_name}`);
+      query.reload();
+    } catch (err) {
+      toast.error(`فشل اعتماد الراتب: ${errorMessage(err)}`);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const approveBulk = async () => {
+    setBusy('bulk');
+    let ok = 0;
+    for (const row of pendingRows) {
+      try {
+        await issueSlip(row, data.month, data.startDate, data.endDate);
+        ok++;
+      } catch (err) {
+        console.error(`Error generating slip for ${row.full_name}:`, err);
       }
-      return updated;
-    });
-    setEditingCell(null);
-    toast.success('تمت استعادة القيمة التلقائية المحتسبة! 🔄');
+    }
+    setBusy(null);
+    setBulkOpen(false);
+    confetti({ particleCount: 150, spread: 80, colors: ['#10B981', '#818CF8'] });
+    if (ok === pendingRows.length) toast.success(`تم اعتماد رواتب ${ok} موظف`);
+    else toast.error(`تم اعتماد ${ok} من ${pendingRows.length}، راجع السجلات المتبقية`);
+    query.reload();
   };
 
-  const renderEditableCell = (emp: any, field: 'bonuses' | 'attendanceDeductions' | 'otherDeductions', displayValue: number, colorClass: string, prefixSign: string = '') => {
-    const isEditing = editingCell && editingCell.employeeId === emp.id && editingCell.field === field;
-    const empOverrides = payrollOverrides[emp.id] || {};
-    const isOverridden = empOverrides[field] !== undefined;
+  const revert = async (row: PayrollRow) => {
+    const ok = await confirm({
+      title: 'إلغاء اعتماد الراتب؟',
+      message: 'سيتم حذف كشف الراتب وقيود الخصم التلقائية لهذه الدورة وإرجاع أقساط السلف إلى غير مدفوعة.',
+      confirmLabel: 'إلغاء الاعتماد',
+      tone: 'warning',
+    });
+    if (!ok) return;
+    const slip = data.slips.find((s) => s.employee_id === row.id);
+    if (!slip) return;
+    setBusy(`revert_${row.id}`);
+    try {
+      const { error } = await supabase.from('salary_slips').delete().eq('id', slip.id);
+      if (error) throw error;
+      await supabase
+        .from('bonuses_deductions')
+        .delete()
+        .eq('employee_id', row.id)
+        .eq('issue_date', data.endDate)
+        .or(`reason.like.%للفترة من ${data.startDate} إلى ${data.endDate}%,reason.like.%لشهر ${data.month}%`);
+      const { data: loans } = await supabase.from('loans').select('id').eq('employee_id', row.id);
+      if (loans && loans.length > 0) {
+        await supabase
+          .from('loan_installments')
+          .update({ is_paid: false, paid_at: null })
+          .in('loan_id', loans.map((l) => l.id))
+          .gte('due_date', data.startDate)
+          .lte('due_date', data.endDate)
+          .eq('is_paid', true);
+      }
+      toast.success('تم التراجع عن اعتماد الراتب');
+      query.reload();
+    } catch (err) {
+      toast.error(`فشل التراجع عن الاعتماد: ${errorMessage(err)}`);
+    } finally {
+      setBusy(null);
+    }
+  };
 
+  const toggleExcuse = (employeeId: string, date: string) =>
+    setExcused((prev) => {
+      const list = prev[employeeId] ?? [];
+      return { ...prev, [employeeId]: list.includes(date) ? list.filter((d) => d !== date) : [...list, date] };
+    });
+
+  const editableCell = (row: PayrollRow, field: PayrollField, value: number, tone: string, sign: string) => {
+    const isOpen = editing?.id === row.id && editing.field === field;
+    const overridden = overrides[row.id]?.[field] !== undefined;
     return (
       <div className="relative inline-block">
         <button
-          onClick={() => {
-            if (emp.isIssued) {
-              toast.error('الراتب معتمد ومقفل ولا يمكن تعديله 🔒');
-              return;
-            }
-            setEditingCell({
-              employeeId: emp.id,
-              field: field,
-              currentValue: displayValue
-            });
-          }}
-          className={`font-bold border-b border-dashed border-slate-700 hover:border-teal-500 hover:text-teal-300 transition-colors cursor-pointer outline-none select-none ${colorClass} ${isOverridden ? 'bg-amber-500/10 px-2 py-1 rounded-xl border-amber-500/30 hover:border-amber-400' : ''}`}
-          title="اضغط لتعديل القيمة يدوياً"
+          type="button"
+          onClick={() => (row.isIssued ? toast.error('الراتب معتمد ولا يمكن تعديله') : setEditing({ id: row.id, field }))}
+          className={cn(
+            'font-bold whitespace-nowrap border-b border-dashed transition-colors cursor-pointer',
+            tone,
+            overridden ? 'border-amber-400/70 bg-amber-400/10 px-1.5 rounded-md' : 'border-slate-700 hover:border-indigo-400',
+            row.isIssued && 'cursor-default border-transparent',
+          )}
+          title={row.isIssued ? undefined : 'اضغط للتعديل يدوياً'}
         >
-          {displayValue > 0 ? `${prefixSign}${displayValue.toLocaleString()} د.ع` : '-'}
-          {isOverridden && <span className="text-[9px] text-amber-400 font-black mr-1" title="معدل يدوياً">*</span>}
+          {value > 0 ? `${sign}${value.toLocaleString('en-US')}` : '—'}
+          {overridden && <span className="text-amber-300 mr-0.5">*</span>}
         </button>
-
-        {isEditing && (
-          <div className="absolute z-50 bottom-full mb-2 right-1/2 translate-x-1/2 bg-slate-900 border border-slate-800 rounded-3xl p-4 shadow-2xl w-48 text-right space-y-3 animate-glass font-sans">
-            <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-teal-500 to-indigo-500 rounded-t-3xl"></div>
-            
-            <h5 className="text-[10px] font-bold text-slate-400">
-              {field === 'bonuses' ? 'تعديل المكافآت يدوياً' : 
-               field === 'attendanceDeductions' ? 'تعديل خصومات الدوام والغياب' : 
-               'تعديل الخصومات الأخرى'}
-            </h5>
-            
-            <input 
-              type="number" 
-              defaultValue={displayValue}
-              className="w-full bg-slate-950 border border-slate-800 focus:border-teal-500 rounded-xl p-2 text-xs text-white outline-none font-bold text-left"
-              dir="ltr"
-              autoFocus
-              id="inline-edit-input"
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  saveOverride(emp.id, field, Number((e.target as HTMLInputElement).value));
-                }
-                if (e.key === 'Escape') {
-                  setEditingCell(null);
-                }
-              }}
-            />
-            
-            <div className="flex gap-1.5 justify-end">
-              {isOverridden && (
-                <button 
-                  type="button" 
-                  onClick={() => clearOverride(emp.id, field)}
-                  className="text-[9px] text-amber-500 hover:text-amber-400 font-bold ml-auto"
-                >
-                  تلقائي 🔄
-                </button>
-              )}
-              <button 
-                type="button" 
-                onClick={() => setEditingCell(null)}
-                className="px-2 py-1 text-[10px] text-slate-400 hover:text-white"
-              >
-                إلغاء
-              </button>
-              <button 
-                type="button"
-                onClick={() => {
-                  const input = document.getElementById('inline-edit-input') as HTMLInputElement;
-                  if (input) {
-                    saveOverride(emp.id, field, Number(input.value));
-                  }
-                }}
-                className="px-3 py-1 bg-teal-650 hover:bg-teal-600 text-white rounded-xl text-[10px] font-bold shadow-md cursor-pointer active:scale-95 transition-all"
-              >
-                حفظ
-              </button>
-            </div>
-          </div>
+        {isOpen && (
+          <InlineAmountEditor
+            initial={value}
+            overridden={overridden}
+            onSave={(v) => setOverride(row.id, field, v)}
+            onReset={() => setOverride(row.id, field, undefined)}
+            onCancel={() => setEditing(null)}
+          />
         )}
       </div>
     );
   };
 
-  const handleMonthChange = (monthVal: string) => {
-    setSelectedMonth(monthVal);
-    const { start, end } = getCycleDates(monthVal, cycleStartDay, cycleEndDay);
-    setStartDate(start);
-    setEndDate(end);
-  };
-
-  const fetchPayrollData = async () => {
-    if (!startDate || !endDate) return;
-    setLoading(true);
-    try {
-      // 0. Get Payroll Policy settings to dynamically check start/end days
-      const { data: pp } = await supabase
-        .from('system_settings')
-        .select('*')
-        .eq('key', 'payroll_policy')
-        .maybeSingle();
-
-      let currentStartDay = 25;
-      let currentEndDay = 24;
-      if (pp && pp.value) {
-        currentStartDay = pp.value.cycle_start_day || 25;
-        currentEndDay = pp.value.cycle_end_day || 24;
-        setCycleStartDay(currentStartDay);
-        setCycleEndDay(currentEndDay);
-        
-        // If current startDate or endDate doesn't match policy, update them
-        const expectedDates = getCycleDates(selectedMonth, currentStartDay, currentEndDay);
-        if (startDate !== expectedDates.start || endDate !== expectedDates.end) {
-          setStartDate(expectedDates.start);
-          setEndDate(expectedDates.end);
-          return; // Let useEffect trigger fetch with correct dates
-        }
-      }
-
-      // 1. Fetch all datasets concurrently using Promise.all
-      const [
-        resBrs,
-        resEmps,
-        resBds,
-        resLoans,
-        resAtt,
-        resLvs,
-        resScheds,
-        resSlips
-      ] = await Promise.all([
-        supabase.from('branches').select('id, name'),
-        supabase.from('employees')
-          .select('id, full_name, monthly_salary_iqd, future_salary_iqd, future_salary_month, branch_id, department_id, branches(name)')
-          .eq('is_active', true)
-          .order('full_name'),
-        supabase.from('bonuses_deductions')
-          .select('*')
-          .gte('issue_date', startDate)
-          .lte('issue_date', endDate),
-        supabase.from('loan_installments')
-          .select('*, loans!inner(employee_id)')
-          .gte('due_date', startDate)
-          .lte('due_date', endDate)
-          .eq('is_paid', false),
-        supabase.from('attendance')
-          .select('*')
-          .gte('work_date', startDate)
-          .lte('work_date', endDate),
-        supabase.from('leave_requests')
-          .select('*')
-          .in('status', ['approved', 'pending'])
-          .lte('start_date', endDate)
-          .gte('end_date', startDate),
-        supabase.from('work_schedules')
-          .select('*'),
-        supabase.from('salary_slips')
-          .select('*')
-          .eq('work_month', selectedMonth)
-      ]);
-
-      if (resBrs.data) setBranches(resBrs.data);
-      if (resEmps.data) setEmployees(resEmps.data);
-      if (resBds.data) setBonusesAndDeductions(resBds.data);
-      if (resLoans.data) setLoanInstallments(resLoans.data);
-      if (resAtt.data) setAttendanceLogs(resAtt.data);
-      if (resLvs.data) setLeaveRequests(resLvs.data);
-      if (resScheds.data) setWorkSchedules(resScheds.data);
-      if (resSlips.data) setExistingSlips(resSlips.data);
-
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleAddBonusDeduction = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedEmpForBD || bdAmount <= 0) return;
-    
-    setActionLoading('add_bd');
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      const { error } = await supabase.from('bonuses_deductions').insert({
-        employee_id: selectedEmpForBD.id,
-        type: bdType,
-        amount: bdAmount,
-        reason: bdReason,
-        issue_date: new Date().toISOString().split('T')[0], // current date
-        created_by: user?.id
-      });
-
-      if (error) throw error;
-
-      setShowAddBDModal(false);
-      setBdAmount(0);
-      setBdReason('');
-      
-      confetti({ particleCount: 50, spread: 40 });
-      toast.success('تم إضافة السجل بنجاح! ✅');
-      
-      fetchPayrollData();
-    } catch (err) {
-      toast.error('حدث خطأ أثناء الإضافة');
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  const handleGenerateSlip = async (empData: any) => {
-    setActionLoading(`slip_${empData.id}`);
-    try {
-      // Create a salary slip record (status is published according to CHECK constraint)
-      const { error } = await supabase.from('salary_slips').insert({
-        employee_id: empData.id,
-        work_month: selectedMonth,
-        basic_salary: empData.basic,
-        allowances: empData.totalBonuses,
-        deductions: empData.totalDeductions,
-        loans_deduction: empData.loanDeduction,
-        net_salary: empData.netSalary,
-        status: 'published'
-      });
-      
-      if (error) throw error;
-
-      // Mark loan installments as paid if any were deducted
-      if (empData.loanInstallmentIds && empData.loanInstallmentIds.length > 0) {
-        await supabase
-          .from('loan_installments')
-          .update({ is_paid: true, paid_at: new Date().toISOString() })
-          .in('id', empData.loanInstallmentIds);
-      }
-
-      // Record override adjustments for bonuses, attendance deductions, and other deductions
-      if (empData.isBonusesOverridden) {
-        const diff = empData.totalBonuses - empData.computedBonuses;
-        if (diff > 0) {
-          await supabase.from('bonuses_deductions').insert({
-            employee_id: empData.id,
-            type: 'bonus',
-            amount: diff,
-            reason: `تسوية زيادة مكافآت يدوياً لشهر ${selectedMonth}`,
-            issue_date: endDate
-          });
-        } else if (diff < 0) {
-          await supabase.from('bonuses_deductions').insert({
-            employee_id: empData.id,
-            type: 'deduction',
-            amount: Math.abs(diff),
-            reason: `تسوية تخفيض مكافآت يدوياً لشهر ${selectedMonth}`,
-            issue_date: endDate
-          });
-        }
-      }
-
-      if (empData.isOtherDeductionsOverridden) {
-        const diff = (empData.totalDeductions - empData.totalAttendanceDeductions) - empData.computedOtherDeductions;
-        if (diff > 0) {
-          await supabase.from('bonuses_deductions').insert({
-            employee_id: empData.id,
-            type: 'deduction',
-            amount: diff,
-            reason: `تسوية زيادة خصومات يدوياً لشهر ${selectedMonth}`,
-            issue_date: endDate
-          });
-        } else if (diff < 0) {
-          await supabase.from('bonuses_deductions').insert({
-            employee_id: empData.id,
-            type: 'bonus',
-            amount: Math.abs(diff),
-            reason: `تسوية تخفيض خصومات يدوياً لشهر ${selectedMonth}`,
-            issue_date: endDate
-          });
-        }
-      }
-
-      if (empData.isAttendanceDeductionsOverridden) {
-        if (empData.totalAttendanceDeductions > 0) {
-          await supabase.from('bonuses_deductions').insert({
-            employee_id: empData.id,
-            type: 'deduction',
-            amount: empData.totalAttendanceDeductions,
-            reason: `خصم غياب وحضور معدل يدوياً للفترة من ${startDate} إلى ${endDate}`,
-            issue_date: endDate
-          });
-        }
-      } else if (empData.totalAttendanceDeductions > 0) {
-        // Add detailed deduction log entries for the automatic attendance deductions for auditability
-        const insertBDIfNotExist = async (amount: number, reason: string) => {
-          if (amount <= 0) return;
-          const { data: existingBD } = await supabase
-            .from('bonuses_deductions')
-            .select('id')
-            .eq('employee_id', empData.id)
-            .eq('type', 'deduction')
-            .eq('reason', reason)
-            .maybeSingle();
-
-          if (!existingBD) {
-            await supabase.from('bonuses_deductions').insert({
-              employee_id: empData.id,
-              type: 'deduction',
-              amount: amount,
-              reason: reason,
-              issue_date: endDate
-            });
-          }
-        };
-
-        await insertBDIfNotExist(empData.absenceDeduction, `خصم غياب غير مبرر (${empData.absencesCount} يوم) للفترة من ${startDate} إلى ${endDate}`);
-        await insertBDIfNotExist(empData.halfDayDeduction, `خصم نصف يوم (${empData.halfDaysCount} يوم) للفترة من ${startDate} إلى ${endDate}`);
-        await insertBDIfNotExist(empData.latenessDeduction, `خصم تأخير الحضور (${formatLateDurationArabic(empData.totalLateMinutes)}) للفترة من ${startDate} إلى ${endDate}`);
-        await insertBDIfNotExist(empData.earlyExitDeduction, `خصم خروج مبكر (${formatLateDurationArabic(empData.totalEarlyExitMinutes)}) للفترة من ${startDate} إلى ${endDate}`);
-      }
-
-      // Send notification to employee
-      await supabase.from('notifications').insert({
-        employee_id: empData.id,
-        title: 'اعتماد كشف الراتب 💸',
-        body: `تم اعتماد وصرف كشف راتبك لشهر (${selectedMonth}) بصافي مستلم قدره (${empData.netSalary.toLocaleString()} د.ع).`,
-        type: 'salary'
-      });
-
-      confetti({ particleCount: 100, spread: 60, colors: ['#10B981', '#059669'] });
-      toast.success('تم اعتماد راتب الموظف بنجاح! 💸');
-      fetchPayrollData();
-    } catch (err: any) {
-      toast.error(`فشل اعتماد الراتب: ${err.message || err}`);
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  const handleBulkGenerateSlips = async (empsToProcess: any[]) => {
-    setActionLoading('bulk_generate');
-    try {
-      let successCount = 0;
-      for (const empData of empsToProcess) {
-        // Create a salary slip record
-        const { error } = await supabase.from('salary_slips').insert({
-          employee_id: empData.id,
-          work_month: selectedMonth,
-          basic_salary: empData.basic,
-          allowances: empData.totalBonuses,
-          deductions: empData.totalDeductions,
-          loans_deduction: empData.loanDeduction,
-          net_salary: empData.netSalary,
-          status: 'published'
-        });
-        
-        if (error) {
-          console.error(`Error generating slip for ${empData.full_name}:`, error);
-          continue;
-        }
-
-        successCount++;
-
-        // Mark loan installments as paid if any were deducted
-        if (empData.loanInstallmentIds && empData.loanInstallmentIds.length > 0) {
-          await supabase
-            .from('loan_installments')
-            .update({ is_paid: true, paid_at: new Date().toISOString() })
-            .in('id', empData.loanInstallmentIds);
-        }
-
-        // Record override adjustments for bonuses, attendance deductions, and other deductions
-        if (empData.isBonusesOverridden) {
-          const diff = empData.totalBonuses - empData.computedBonuses;
-          if (diff > 0) {
-            await supabase.from('bonuses_deductions').insert({
-              employee_id: empData.id,
-              type: 'bonus',
-              amount: diff,
-              reason: `تسوية زيادة مكافآت يدوياً لشهر ${selectedMonth}`,
-              issue_date: endDate
-            });
-          } else if (diff < 0) {
-            await supabase.from('bonuses_deductions').insert({
-              employee_id: empData.id,
-              type: 'deduction',
-              amount: Math.abs(diff),
-              reason: `تسوية تخفيض مكافآت يدوياً لشهر ${selectedMonth}`,
-              issue_date: endDate
-            });
-          }
-        }
-
-        if (empData.isOtherDeductionsOverridden) {
-          const diff = (empData.totalDeductions - empData.totalAttendanceDeductions) - empData.computedOtherDeductions;
-          if (diff > 0) {
-            await supabase.from('bonuses_deductions').insert({
-              employee_id: empData.id,
-              type: 'deduction',
-              amount: diff,
-              reason: `تسوية زيادة خصومات يدوياً لشهر ${selectedMonth}`,
-              issue_date: endDate
-            });
-          } else if (diff < 0) {
-            await supabase.from('bonuses_deductions').insert({
-              employee_id: empData.id,
-              type: 'bonus',
-              amount: Math.abs(diff),
-              reason: `تسوية تخفيض خصومات يدوياً لشهر ${selectedMonth}`,
-              issue_date: endDate
-            });
-          }
-        }
-
-        if (empData.isAttendanceDeductionsOverridden) {
-          if (empData.totalAttendanceDeductions > 0) {
-            await supabase.from('bonuses_deductions').insert({
-              employee_id: empData.id,
-              type: 'deduction',
-              amount: empData.totalAttendanceDeductions,
-              reason: `خصم غياب وحضور معدل يدوياً للفترة من ${startDate} إلى ${endDate}`,
-              issue_date: endDate
-            });
-          }
-        } else if (empData.totalAttendanceDeductions > 0) {
-          // Add detailed deduction log entries for the automatic attendance deductions for auditability
-          const insertBDIfNotExist = async (amount: number, reason: string) => {
-            if (amount <= 0) return;
-            const { data: existingBD } = await supabase
-              .from('bonuses_deductions')
-              .select('id')
-              .eq('employee_id', empData.id)
-              .eq('type', 'deduction')
-              .eq('reason', reason)
-              .maybeSingle();
-
-            if (!existingBD) {
-              await supabase.from('bonuses_deductions').insert({
-                employee_id: empData.id,
-                type: 'deduction',
-                amount: amount,
-                reason: reason,
-                issue_date: endDate
-              });
-            }
-          };
-
-          await insertBDIfNotExist(empData.absenceDeduction, `خصم غياب غير مبرر (${empData.absencesCount} يوم) للفترة من ${startDate} إلى ${endDate}`);
-          await insertBDIfNotExist(empData.halfDayDeduction, `خصم نصف يوم (${empData.halfDaysCount} يوم) للفترة من ${startDate} إلى ${endDate}`);
-          await insertBDIfNotExist(empData.latenessDeduction, `خصم تأخير الحضور (${formatLateDurationArabic(empData.totalLateMinutes)}) للفترة من ${startDate} إلى ${endDate}`);
-          await insertBDIfNotExist(empData.earlyExitDeduction, `خصم خروج مبكر (${formatLateDurationArabic(empData.totalEarlyExitMinutes)}) للفترة من ${startDate} إلى ${endDate}`);
-        }
-
-        // Send notification to employee
-        await supabase.from('notifications').insert({
-          employee_id: empData.id,
-          title: 'اعتماد كشف الراتب 💸',
-          body: `تم اعتماد وصرف كشف راتبك لشهر (${selectedMonth}) بصافي مستلم قدره (${empData.netSalary.toLocaleString()} د.ع).`,
-          type: 'salary'
-        });
-      }
-
-      confetti({ particleCount: 150, spread: 80, colors: ['#10B981', '#3B82F6'] });
-      toast(`تم اعتماد رواتب (${successCount}) موظف بنجاح! 💸`);
-      setShowBulkModal(false);
-      fetchPayrollData();
-    } catch (err: any) {
-      toast.error(`فشل اعتماد الرواتب: ${err.message || err}`);
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  const handleRevertSlip = async (empData: any) => {
-    // Check if the slip exists in existingSlips
-    const slip = existingSlips.find(s => s.employee_id === empData.id);
-    if (!slip) return;
-
-    setActionLoading(`revert_${empData.id}`);
-    try {
-      // 1. Delete the slip
-      const { error: delErr } = await supabase.from('salary_slips').delete().eq('id', slip.id);
-      if (delErr) throw delErr;
-
-      // 2. Delete auto-generated bonuses_deductions and adjustments
-      await supabase.from('bonuses_deductions')
-        .delete()
-        .eq('employee_id', empData.id)
-        .eq('issue_date', endDate)
-        .or(`reason.like.%للفترة من ${startDate} إلى ${endDate}%,reason.like.%لشهر ${selectedMonth}%`);
-
-      // 3. Mark loan installments back to unpaid
-      const { data: userLoans } = await supabase.from('loans').select('id').eq('employee_id', empData.id);
-      if (userLoans && userLoans.length > 0) {
-        const loanIds = userLoans.map((l: any) => l.id);
-        await supabase.from('loan_installments')
-          .update({ is_paid: false, paid_at: null })
-          .in('loan_id', loanIds)
-          .gte('due_date', startDate)
-          .lte('due_date', endDate)
-          .eq('is_paid', true);
-      }
-
-      toast.success('تم التراجع عن اعتماد الراتب بنجاح! 🔄');
-      fetchPayrollData();
-    } catch (err: any) {
-      toast.error(`فشل في التراجع عن الاعتماد: ${err.message || err}`);
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  const toggleExcuseDay = (employeeId: string, dateStr: string) => {
-    setExcusedDays(prev => {
-      const currentList = prev[employeeId] || [];
-      const updatedList = currentList.includes(dateStr)
-        ? currentList.filter(d => d !== dateStr)
-        : [...currentList, dateStr];
-      
-      return {
-        ...prev,
-        [employeeId]: updatedList
-      };
-    });
-  };
-
-  // Compile processed payroll data with smart attendance & absence calculation
-  const processedPayroll = employees.map(emp => {
-    let basic = emp.monthly_salary_iqd || 0;
-    
-    if (emp.future_salary_iqd && emp.future_salary_month) {
-      const futureMonthStr = emp.future_salary_month.substring(0, 7);
-      if (selectedMonth >= futureMonthStr) {
-        basic = emp.future_salary_iqd;
-      }
-    }
-    
-    // Dynamic Attendance Calculations
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    
-    // Define the limit day (if selectedRange is current month, calculate up to today)
-    const today = new Date();
-    const todayNormalized = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-
-    // Get work schedules for the employee (employee-specific -> department -> default)
-    // Default working schedule in Iraq is Saturday(6) to Thursday(4)
-    const empSched = workSchedules.find(s => s.employee_id === emp.id) || 
-                     workSchedules.find(s => s.department_id === emp.department_id && !s.employee_id) ||
-                     workSchedules.find(s => s.branch_id === emp.branch_id && !s.employee_id && !s.department_id);
-    const workDays = empSched ? empSched.work_days : [6, 0, 1, 2, 3, 4];
-
-    let presentsCount = 0;
-    let latesCount = 0;
-    let totalLateMinutes = 0;
-    let earlyExitsCount = 0;
-    let totalEarlyExitMinutes = 0;
-    let halfDaysCount = 0;
-    let absencesCount = 0;
-    let paidLeavesCount = 0;
-    let scheduledWorkDays = 0;
-    let unconfirmedAbsencesCount = 0;
-
-    const detailLogs: any[] = [];
-    const empExcuses = excusedDays[emp.id] || [];
-
-    let loopDate = new Date(start);
-    while (loopDate <= end) {
-      const year = loopDate.getFullYear();
-      const month = loopDate.getMonth() + 1;
-      const day = loopDate.getDate();
-      const dateStr = `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
-      
-      const weekday = loopDate.getDay(); // JS getDay: 0 is Sunday, 1 is Monday... 6 is Saturday
-      const isWorkingDay = workDays.includes(weekday);
-      
-      if (isWorkingDay) {
-        const isPastOrToday = loopDate <= todayNormalized;
-        if (isPastOrToday) {
-          scheduledWorkDays++;
-        }
-
-        const isExcused = empExcuses.includes(dateStr);
-        
-        // Check attendance records
-        const attRecord = attendanceLogs.find(log => log.employee_id === emp.id && log.work_date === dateStr);
-        
-        // Check approved leaves
-        const isDateWithinRange = (date: Date, startStr: string, endStr: string) => {
-          const d = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
-          const s = new Date(new Date(startStr).getFullYear(), new Date(startStr).getMonth(), new Date(startStr).getDate()).getTime();
-          const e = new Date(new Date(endStr).getFullYear(), new Date(endStr).getMonth(), new Date(endStr).getDate()).getTime();
-          return d >= s && d <= e;
-        };
-        
-        const leaveRecord = leaveRequests.find(l => l.employee_id === emp.id && l.status === 'approved' && isDateWithinRange(loopDate, l.start_date, l.end_date));
-
-        if (attRecord) {
-          const status = attRecord.status;
-          const isApplied = attRecord.deduction_status === 'applied';
-          const isIgnored = attRecord.deduction_status === 'ignored';
-
-          let earlyExitMins = 0;
-          if (attRecord.check_out_time) {
-            const schedCheckOut = empSched ? empSched.check_out_time : '17:00:00';
-            const checkOut = new Date(attRecord.check_out_time);
-            const [h, m, s] = schedCheckOut.split(':').map(Number);
-            const sched = new Date(checkOut);
-            sched.setHours(h, m, s || 0, 0);
-            const diffMs = sched.getTime() - checkOut.getTime();
-            if (diffMs > 0) {
-              earlyExitMins = Math.floor(diffMs / (1000 * 60));
-            }
-          }
-
-          if (isPastOrToday) {
-            if (status === 'present') presentsCount++;
-            else if (status === 'late') {
-              presentsCount++;
-              if (isApplied) {
-                latesCount++;
-                // Calculate late minutes
-                const schedCheckIn = empSched ? empSched.check_in_time : '09:00:00';
-                const checkIn = new Date(attRecord.check_in_time);
-                const [h, m, s] = schedCheckIn.split(':').map(Number);
-                const sched = new Date(checkIn);
-                sched.setHours(h, m, s || 0, 0);
-                const diffMs = checkIn.getTime() - sched.getTime();
-                const lateMins = diffMs > 0 ? Math.floor(diffMs / (1000 * 60)) : 0;
-                totalLateMinutes += lateMins;
-              }
-            }
-            else if (status === 'half_day') halfDaysCount++;
-            else if (status === 'absent') {
-              if (isApplied) absencesCount++;
-            }
-
-            // Early exit check
-            if (earlyExitMins > 0 && isApplied) {
-              earlyExitsCount++;
-              totalEarlyExitMinutes += earlyExitMins;
-            }
-          }
-          
-          let statusAr = 'حاضر ✅';
-          let noteParts = [];
-          if (status === 'late') {
-            statusAr = isApplied ? 'متأخر (تم تطبيق الخصم) ⚠️' : (isIgnored ? 'متأخر (تم تجاهل الخصم) 🟢' : 'متأخر (معلق) ⏳');
-            // Calculate late minutes for display
-            const schedCheckIn = empSched ? empSched.check_in_time : '09:00:00';
-            const checkIn = new Date(attRecord.check_in_time);
-            const [h, m, s] = schedCheckIn.split(':').map(Number);
-            const sched = new Date(checkIn);
-            sched.setHours(h, m, s || 0, 0);
-            const diffMs = checkIn.getTime() - sched.getTime();
-            const lateMins = diffMs > 0 ? Math.floor(diffMs / (1000 * 60)) : 0;
-            noteParts.push(`تأخير: ${formatLateDurationArabic(lateMins)}`);
-          } else if (status === 'half_day') {
-            statusAr = 'نصف يوم 🌓';
-            noteParts.push('دوام غير مكتمل');
-          } else if (status === 'absent') {
-            statusAr = isApplied ? 'غياب (تم تطبيق الخصم) ❌' : 'غياب (تم تجاهل الخصم) 🟢';
-            noteParts.push(attRecord.deduction_reason || 'غياب غير مبرر');
-          }
-
-          if (earlyExitMins > 0) {
-            noteParts.push(`خروج مبكر: ${formatLateDurationArabic(earlyExitMins)}`);
-            if (status === 'present') {
-              statusAr = isApplied ? 'خروج مبكر (خصم) ⚠️' : 'خروج مبكر (تجاهل الخصم) 🟢';
-            }
-          }
-
-          const noteAr = noteParts.length > 0 ? noteParts.join(' | ') : 'بصمة دوام اعتيادية';
-
-          detailLogs.push({
-            date: dateStr,
-            status: statusAr,
-            time: attRecord.check_in_time ? new Date(attRecord.check_in_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : '-',
-            note: noteAr,
-            isAbsenceDay: false
-          });
-        } else if (leaveRecord) {
-          if (isPastOrToday) {
-            if (leaveRecord.is_paid) {
-              paidLeavesCount++;
-            } else {
-              absencesCount++;
-            }
-          }
-          detailLogs.push({
-            date: dateStr,
-            status: leaveRecord.is_paid ? 'إجازة معتمدة 🌴' : 'إجازة بدون راتب ❌',
-            time: '-',
-            note: leaveRecord.reason ? `سبب الإجازة: ${leaveRecord.reason}` : 'إجازة إدارية معتمدة',
-            isAbsenceDay: false
-          });
-        } else {
-          // No attendance record and no leave
-          const isPast = loopDate < todayNormalized || (loopDate.getTime() === todayNormalized.getTime() && today.getHours() >= 17);
-          if (isPast) {
-            if (isExcused) {
-              if (isPastOrToday) {
-                presentsCount++; // Treated as present (excused)
-              }
-              detailLogs.push({
-                date: dateStr,
-                status: 'معفى (عذر إداري) 🟢',
-                time: '-',
-                note: 'غياب تم إعفاؤه إدارياً بواسطة المدير المباشر',
-                isAbsenceDay: true,
-                isExcused: true
-              });
-            } else {
-              // Not excused, no attendance, no leave -> Unconfirmed absence (no auto-deduction)
-              // We do not increment absencesCount automatically anymore.
-              // Absences must be manually applied from the tracking/attendance decisions screen.
-              if (isPastOrToday) {
-                unconfirmedAbsencesCount++;
-              }
-              detailLogs.push({
-                date: dateStr,
-                status: 'يوم بدون حضور ⚠️',
-                time: '-',
-                note: 'لم يتم تسجيل حضور، ولم يتم تطبيق خصم غياب من قبل الإدارة بعد',
-                isAbsenceDay: false,
-                isExcused: false
-              });
-            }
-          } else {
-            detailLogs.push({
-              date: dateStr,
-              status: 'لم يحن بعد ⏳',
-              time: '-',
-              note: loopDate.getTime() === todayNormalized.getTime() ? 'قيد الانتظار لموعد الدوام اليوم' : 'يوم عمل مجدول مستقبلي',
-              isAbsenceDay: false
-            });
-          }
-        }
-      }
-
-      // Advance loopDate by 1 day
-      loopDate.setDate(loopDate.getDate() + 1);
-    }
-
-    // Salary deductions calculation
-    let workdayMinutes = 480; // Default fallback: 8 hours (480 mins)
-    if (empSched && empSched.check_in_time && empSched.check_out_time) {
-      const [inH, inM] = empSched.check_in_time.split(':').map(Number);
-      const [outH, outM] = empSched.check_out_time.split(':').map(Number);
-      const inMinutes = inH * 60 + inM;
-      const outMinutes = outH * 60 + outM;
-      if (outMinutes > inMinutes) {
-        workdayMinutes = outMinutes - inMinutes;
-      }
-    }
-
-    const dailyWage = basic / 30;
-    const absenceDeduction = Math.round(absencesCount * dailyWage);
-    const halfDayDeduction = Math.round(halfDaysCount * dailyWage * 0.5);
-    const latenessDeduction = Math.round(totalLateMinutes * (dailyWage / workdayMinutes));
-    const earlyExitDeduction = Math.round(totalEarlyExitMinutes * (dailyWage / workdayMinutes));
-
-    // Apply overrides
-    const empOverrides = payrollOverrides[emp.id] || {};
-
-    const computedAttendanceDeductions = absenceDeduction + halfDayDeduction + latenessDeduction + earlyExitDeduction;
-    const finalAttendanceDeductions = empOverrides.attendanceDeductions !== undefined 
-      ? empOverrides.attendanceDeductions 
-      : computedAttendanceDeductions;
-
-    const empBDs = bonusesAndDeductions.filter(bd => bd.employee_id === emp.id);
-    
-    const computedBonuses = empBDs.filter(bd => bd.type === 'bonus').reduce((sum, bd) => sum + Number(bd.amount), 0);
-    const finalBonuses = empOverrides.bonuses !== undefined 
-      ? empOverrides.bonuses 
-      : computedBonuses;
-
-    const computedOtherDeductions = empBDs.filter(bd => bd.type === 'deduction').reduce((sum, bd) => sum + Number(bd.amount), 0);
-    const finalOtherDeductions = empOverrides.otherDeductions !== undefined 
-      ? empOverrides.otherDeductions 
-      : computedOtherDeductions;
-
-    const finalDeductions = finalOtherDeductions + finalAttendanceDeductions;
-    
-    const empLoans = loanInstallments.filter(l => l.loans?.employee_id === emp.id);
-    const loanDeduction = empLoans.reduce((sum, l) => sum + Number(l.amount), 0);
-    const loanInstallmentIds = empLoans.map(l => l.id);
-
-    const netSalary = basic + finalBonuses - finalDeductions - loanDeduction;
-    const isIssued = existingSlips.some(slip => slip.employee_id === emp.id);
-
-    let displayBasic = basic;
-    let displayBonuses = finalBonuses;
-    let displayAttendanceDeductions = finalAttendanceDeductions;
-    let displayDeductions = finalDeductions;
-    let displayLoanDeduction = loanDeduction;
-    let displayNetSalary = netSalary;
-
-    const issuedSlip = existingSlips.find(slip => slip.employee_id === emp.id);
-    if (issuedSlip) {
-      displayBasic = Number(issuedSlip.basic_salary);
-      displayBonuses = Number(issuedSlip.allowances);
-      displayLoanDeduction = Number(issuedSlip.loans_deduction);
-      displayDeductions = Number(issuedSlip.deductions);
-      displayNetSalary = Number(issuedSlip.net_salary);
-      displayAttendanceDeductions = Math.min(displayDeductions, finalAttendanceDeductions);
-    }
-
-    return {
-      ...emp,
-      basic: displayBasic,
-      scheduledWorkDays,
-      presentsCount,
-      latesCount,
-      totalLateMinutes,
-      latenessDeduction,
-      earlyExitsCount,
-      totalEarlyExitMinutes,
-      earlyExitDeduction,
-      halfDaysCount,
-      absencesCount,
-      paidLeavesCount,
-      absenceDeduction,
-      halfDayDeduction,
-      totalAttendanceDeductions: displayAttendanceDeductions,
-      totalBonuses: displayBonuses,
-      totalDeductions: displayDeductions,
-      loanDeduction: displayLoanDeduction,
-      loanInstallmentIds,
-      netSalary: displayNetSalary,
-      isIssued,
-      detailLogs,
-      
-      // Smart Validation Flags
-      isNetNegative: !isIssued && displayNetSalary < 0,
-      isAttendanceMissing: !isIssued && scheduledWorkDays > 0 && presentsCount === 0 && absencesCount === 0 && halfDaysCount === 0 && paidLeavesCount === 0,
-      hasPendingLeave: !isIssued && leaveRequests.some(l => l.employee_id === emp.id && l.status === 'pending'),
-      unconfirmedAbsencesCount: isIssued ? 0 : unconfirmedAbsencesCount,
-
-      // Overridden flags for styling and database adjustments
-      isBonusesOverridden: empOverrides.bonuses !== undefined,
-      isAttendanceDeductionsOverridden: empOverrides.attendanceDeductions !== undefined,
-      isOtherDeductionsOverridden: empOverrides.otherDeductions !== undefined,
-      computedAttendanceDeductions,
-      computedBonuses,
-      computedOtherDeductions
-    };
-  });
-
-  const filteredPayroll = processedPayroll.filter(emp => {
-    const matchesSearch = (emp.full_name || '').toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesBranch = selectedBranch === 'all' || emp.branch_id === selectedBranch;
-    return matchesSearch && matchesBranch;
-  });
-
-  const totalNetSalaries = filteredPayroll.reduce((sum, emp) => sum + emp.netSalary, 0);
-
-  // Branch bulk calculation helpers
-  const selectedBranchObj = branches.find(b => b.id === selectedBranch);
-  const branchName = selectedBranchObj ? selectedBranchObj.name : '';
-  const pendingBranchEmps = filteredPayroll.filter(emp => !emp.isIssued);
-  const totalBranchNet = pendingBranchEmps.reduce((sum, emp) => sum + emp.netSalary, 0);
-  const totalBranchBase = pendingBranchEmps.reduce((sum, emp) => sum + emp.basic, 0);
-  const totalBranchBonuses = pendingBranchEmps.reduce((sum, emp) => sum + emp.totalBonuses, 0);
-  const totalBranchDeductions = pendingBranchEmps.reduce((sum, emp) => sum + emp.totalDeductions, 0);
-  const totalBranchLoans = pendingBranchEmps.reduce((sum, emp) => sum + emp.loanDeduction, 0);
-
-  // Retrieve the selected employee for breakdown dynamically from the processed list
-  const selectedEmpForBreakdown = processedPayroll.find(emp => emp.id === selectedEmpIdForBreakdown);
-
-  const monthParts = selectedMonth ? selectedMonth.split('-') : [];
-  const currentYearVal = monthParts[0] || new Date().getFullYear().toString();
-  const currentMonthVal = monthParts[1] || (new Date().getMonth() + 1).toString().padStart(2, '0');
-
-  if (loading) {
-    return (
-      <div className="flex-grow flex items-center justify-center">
-        <Loader2 className="w-10 h-10 text-teal-400 animate-spin" />
-      </div>
-    );
-  }
-
   return (
-    <div className="space-y-8 pb-12">
-      {/* Header & Stats */}
-      <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-800/80 rounded-3xl p-6 shadow-xl flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
-        <div>
-          <h3 className="text-xl font-extrabold text-white flex items-center gap-2 mb-2">
-            <Banknote className="w-6 h-6 text-teal-400" />
-            <span>نظام الرواتب والدوام الذكي (Payroll Hub)</span>
-          </h3>
-          <p className="text-xs text-slate-400">احتساب فوري للأجور والخصومات التلقائية للغيابات وأنصاف الأيام بناءً على البصمة الجغرافية</p>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3 bg-slate-950/50 p-2 rounded-2xl border border-slate-800/50">
-          {/* Select Month Dropdown */}
-          <div className="flex flex-col gap-1 px-2">
-            <span className="text-[9px] text-slate-400 font-bold">الشهر</span>
-            <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 hover:border-teal-500/50 transition-colors">
-              <CalendarIcon className="w-3.5 h-3.5 text-teal-400" />
+    <div className="space-y-6 pb-12">
+      <PageHeader
+        icon={Banknote}
+        tone="emerald"
+        title="الرواتب والمكافآت"
+        description={
+          <span className="inline-flex flex-wrap items-center gap-1.5">
+            الدورة المالية
+            <span className="font-mono font-bold text-slate-200" dir="ltr">{data.startDate}</span>←
+            <span className="font-mono font-bold text-slate-200" dir="ltr">{data.endDate}</span>
+            {query.refreshing && <span className="text-indigo-300">· جاري التحديث...</span>}
+          </span>
+        }
+        actions={
+          <>
+            <div className="flex items-center gap-1 h-9 rounded-xl bg-slate-950/70 border border-slate-800 px-1">
               <select
-                value={currentMonthVal}
-                onChange={(e) => {
-                  const newMonth = e.target.value;
-                  handleMonthChange(`${currentYearVal}-${newMonth}`);
-                }}
-                className="bg-transparent border-none text-white text-[11px] outline-none cursor-pointer font-bold select-none pr-1 focus:ring-0"
+                aria-label="الشهر"
+                value={monthNum}
+                onChange={(e) => setMonth(`${year}-${e.target.value}`)}
+                className="h-7 bg-transparent text-xs font-bold text-white outline-none cursor-pointer px-1"
               >
-                <option value="01" className="bg-slate-900 text-white">1 - كانون الثاني (يناير)</option>
-                <option value="02" className="bg-slate-900 text-white">2 - شباط (فبراير)</option>
-                <option value="03" className="bg-slate-900 text-white">3 - آذار (مارس)</option>
-                <option value="04" className="bg-slate-900 text-white">4 - نيسان (أبريل)</option>
-                <option value="05" className="bg-slate-900 text-white">5 - أيار (مايو)</option>
-                <option value="06" className="bg-slate-900 text-white">6 - حزيران (يونيو)</option>
-                <option value="07" className="bg-slate-900 text-white">7 - تموز (يوليو)</option>
-                <option value="08" className="bg-slate-900 text-white">8 - آب (أغسطس)</option>
-                <option value="09" className="bg-slate-900 text-white">9 - أيلول (سبتمبر)</option>
-                <option value="10" className="bg-slate-900 text-white">10 - تشرين الأول (أكتوبر)</option>
-                <option value="11" className="bg-slate-900 text-white">11 - تشرين الثاني (نوفمبر)</option>
-                <option value="12" className="bg-slate-900 text-white">12 - كانون الأول (ديسمبر)</option>
+                {MONTHS_AR.map((name, i) => (
+                  <option key={name} value={(i + 1).toString().padStart(2, '0')}>
+                    {name}
+                  </option>
+                ))}
               </select>
-            </div>
-          </div>
-
-          {/* Select Year Dropdown */}
-          <div className="flex flex-col gap-1 px-2 border-r border-slate-800/80">
-            <span className="text-[9px] text-slate-400 font-bold">السنة</span>
-            <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 hover:border-teal-500/50 transition-colors">
-              <CalendarIcon className="w-3.5 h-3.5 text-teal-400" />
               <select
-                value={currentYearVal}
-                onChange={(e) => {
-                  const newYear = e.target.value;
-                  handleMonthChange(`${newYear}-${currentMonthVal}`);
-                }}
-                className="bg-transparent border-none text-white text-[11px] outline-none cursor-pointer font-bold select-none focus:ring-0"
+                aria-label="السنة"
+                value={year}
+                onChange={(e) => setMonth(`${e.target.value}-${monthNum}`)}
+                className="h-7 bg-transparent text-xs font-bold text-white outline-none cursor-pointer px-1 font-mono"
               >
-                {Array.from({ length: 9 }, (_, i) => 2024 + i).map(year => (
-                  <option key={year} value={year.toString()} className="bg-slate-900 text-white">
-                    {year}
+                {Array.from({ length: 9 }, (_, i) => 2024 + i).map((y) => (
+                  <option key={y} value={y}>
+                    {y}
                   </option>
                 ))}
               </select>
             </div>
-          </div>
+            <Button size="sm" variant="secondary" icon={Printer} onClick={() => window.print()} className="print:hidden">
+              طباعة
+            </Button>
+          </>
+        }
+      />
 
-          {/* Calculated Date Range (Read-Only Info Badge) */}
-          <div className="flex flex-col gap-1 px-3 border-r border-slate-800/80 justify-center">
-            <span className="text-[9px] text-slate-400 font-bold">الفترة المالية المحتسبة تلقائياً</span>
-            <div className="text-[11px] text-teal-300 font-extrabold font-mono bg-teal-950/20 border border-teal-500/15 px-3 py-1.5 rounded-xl flex items-center gap-1.5 select-none">
-              <Clock className="w-3 h-3 text-teal-400" />
-              <span>{startDate}</span>
-              <span className="text-slate-500">←</span>
-              <span>{endDate}</span>
-            </div>
-          </div>
-
-          <div className="flex flex-col items-end px-4 py-1 border-r border-slate-800/80">
-            <span className="text-[9px] text-slate-400 font-bold">صافي تكلفة الرواتب المرصودة</span>
-            <span className="text-md font-black text-emerald-400">{totalNetSalaries.toLocaleString()} <span className="text-[10px] font-bold text-slate-400">د.ع</span></span>
-          </div>
-        </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatTile label="صافي الرواتب" value={formatIQD(totalNet)} icon={Wallet} tone="emerald" hint={branchName} />
+        <StatTile label="الرواتب الأساسية" value={formatIQD(totalBase)} icon={Banknote} tone="indigo" />
+        <StatTile label="الخصومات والسلف" value={formatIQD(totalDeductions)} icon={TrendingDown} tone="rose" />
+        <StatTile label="الرواتب المعتمدة" value={`${issuedCount} / ${filtered.length}`} icon={CheckCircle2} tone={issuedCount === filtered.length && filtered.length > 0 ? 'emerald' : 'amber'} />
       </div>
 
-      {/* Main Table Area */}
-      <div className="bg-slate-900/40 backdrop-blur-xl border border-slate-800/80 rounded-3xl p-6 shadow-xl">
-        <div className="flex flex-col md:flex-row justify-between gap-4 mb-6">
-          <div className="flex items-center gap-3">
-            <div className="relative">
-              <input
-                type="text"
-                placeholder="ابحث باسم الموظف..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full sm:w-64 bg-slate-950/80 border border-slate-800 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 rounded-2xl py-2 px-4 pr-10 text-xs text-white placeholder-slate-500 outline-none transition-all"
-              />
-              <Search className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-            </div>
-            
-            <div className="flex items-center gap-2 bg-slate-950/80 border border-slate-800 rounded-2xl px-3 py-2">
-              <Building className="w-4 h-4 text-teal-400" />
-              <select 
-                value={selectedBranch}
-                onChange={(e) => setSelectedBranch(e.target.value)}
-                className="bg-transparent border-none text-white text-xs outline-none cursor-pointer"
-              >
-                <option value="all" className="bg-slate-900">جميع الفروع</option>
-                {branches.map(b => (
-                  <option key={b.id} value={b.id} className="bg-slate-900">{b.name}</option>
-                ))}
-              </select>
-            </div>
+      <Card>
+        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3 mb-5 print:hidden">
+          <div className="flex flex-col sm:flex-row gap-2">
+            <SearchInput value={search} onChange={setSearch} placeholder="ابحث باسم الموظف..." className="w-full sm:w-60" />
+            <FilterSelect icon={Building} value={branchId} onChange={setBranchId} className="sm:w-44">
+              <option value="all">جميع الفروع</option>
+              {data.branches.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
+            </FilterSelect>
+            <SegmentedTabs
+              value={statusFilter}
+              onChange={setStatusFilter}
+              options={[
+                { value: 'all', label: 'الكل' },
+                { value: 'pending', label: 'غير معتمد' },
+                { value: 'issued', label: 'معتمد' },
+              ]}
+            />
           </div>
-          
-          <div className="flex items-center gap-3 print:hidden">
-            {selectedBranch !== 'all' && (
-              <button
-                onClick={() => setShowBulkModal(true)}
-                className="flex items-center justify-center gap-2 py-2 px-4 bg-teal-650 hover:bg-teal-600 text-white rounded-2xl text-xs font-bold transition-all cursor-pointer active:scale-95"
-              >
-                <CheckCircle className="w-4 h-4" />
-                <span>اعتماد رواتب الفرع لشهر {selectedMonth}</span>
-              </button>
-            )}
-
-            <button 
-              onClick={() => window.print()}
-              className="flex items-center justify-center gap-2 py-2 px-4 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white rounded-2xl text-xs font-bold transition-all cursor-pointer"
-            >
-              <Printer className="w-4 h-4" />
-              <span>طباعة مسودة كشف الرواتب</span>
-            </button>
-          </div>
+          <Button variant="success" icon={CheckCircle2} disabled={pendingRows.length === 0} onClick={() => setBulkOpen(true)}>
+            اعتماد رواتب {branchId === 'all' ? 'الكل' : 'الفرع'} ({pendingRows.length})
+          </Button>
         </div>
 
-        <div className="overflow-x-auto rounded-2xl border border-slate-800/60 print:border-none print:shadow-none">
-          <table className="w-full text-right border-collapse">
-            <thead>
-              <tr className="bg-slate-950/80 text-slate-300 text-xs font-bold border-b border-slate-800/80">
-                <th className="p-4">اسم الموظف</th>
-                <th className="p-4">الفرع</th>
-                <th className="p-4 text-slate-200">الراتب الأساسي</th>
-                <th className="p-4 text-emerald-400">مكافآت (+)</th>
-                <th className="p-4 text-amber-500">خصم غيابات الدوام (-)</th>
-                <th className="p-4 text-rose-400">خصومات أخرى (-)</th>
-                <th className="p-4 text-orange-400">السلف (-)</th>
-                <th className="p-4 text-teal-300 text-lg">الراتب الصافي (Net)</th>
-                <th className="p-4 text-left print:hidden">الإجراءات</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredPayroll.length === 0 ? (
-                <tr>
-                  <td colSpan={9} className="p-8 text-center text-slate-500 text-xs">
-                    لا توجد بيانات موظفين مطابقة للشروط
-                  </td>
-                </tr>
-              ) : (
-                filteredPayroll.map(emp => (
-                  <tr key={emp.id} className="border-b border-slate-800/40 hover:bg-slate-900/30 text-xs transition-colors">
-                    <td className="p-4">
-                      <div className="flex flex-col">
-                        <span className="font-bold text-white text-xs">{emp.full_name}</span>
-                        
-                        {/* Smart Validation Badges */}
-                        <div className="flex flex-wrap gap-1 mt-1 justify-start">
-                          {emp.isNetNegative && (
-                            <span className="px-2 py-0.5 bg-rose-500/15 border border-rose-500/30 text-rose-400 rounded-lg text-[9px] font-bold flex items-center gap-1 select-none">
-                              <span>الراتب الصافي سالب</span>
-                              <span>⚠️</span>
-                            </span>
-                          )}
-                          {emp.isAttendanceMissing && (
-                            <span className="px-2 py-0.5 bg-amber-500/15 border border-amber-500/30 text-amber-400 rounded-lg text-[9px] font-bold flex items-center gap-1 select-none">
-                              <span>لا توجد بصمات حضور</span>
-                              <span>⚠️</span>
-                            </span>
-                          )}
-                          {emp.hasPendingLeave && (
-                            <span className="px-2 py-0.5 bg-sky-500/15 border border-sky-500/30 text-sky-400 rounded-lg text-[9px] font-bold flex items-center gap-1 select-none">
-                              <span>طلب إجازة معلق</span>
-                              <span>⏳</span>
-                            </span>
-                          )}
-                          {emp.unconfirmedAbsencesCount > 0 && (
-                            <span className="px-2 py-0.5 bg-orange-500/15 border border-orange-500/30 text-orange-400 rounded-lg text-[9px] font-bold flex items-center gap-1 select-none">
-                              <span>غياب غير مثبت ({emp.unconfirmedAbsencesCount} أيام)</span>
-                              <span>⚠️</span>
-                            </span>
-                          )}
+        <DataTable>
+          <thead>
+            <tr>
+              <th>الموظف</th>
+              <th>الأساسي</th>
+              <th className="!text-emerald-300">مكافآت +</th>
+              <th className="!text-amber-300">خصم الدوام −</th>
+              <th className="!text-rose-300">خصومات أخرى −</th>
+              <th className="!text-orange-300">السلف −</th>
+              <th className="!text-white">الصافي</th>
+              <th className="!text-left print:hidden">الإجراءات</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.length === 0 ? (
+              <TableEmpty colSpan={8}>لا توجد بيانات مطابقة</TableEmpty>
+            ) : (
+              filtered.map((row) => (
+                <tr key={row.id} className={cn(row.isIssued && 'bg-emerald-500/[0.03]')}>
+                  <td>
+                    <div className="flex items-start gap-2.5 min-w-[200px]">
+                      <Avatar name={row.full_name} size="sm" />
+                      <div className="min-w-0">
+                        <p className="font-bold text-white truncate">{row.full_name}</p>
+                        <p className="text-[10px] text-slate-500">{row.branches?.name || 'بدون فرع'}</p>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {row.isNetNegative && <Badge tone="rose">صافي سالب</Badge>}
+                          {row.isAttendanceMissing && <Badge tone="amber">لا بصمات</Badge>}
+                          {row.hasPendingLeave && <Badge tone="sky">إجازة معلقة</Badge>}
+                          {row.unconfirmedAbsencesCount > 0 && <Badge tone="orange">غياب غير مثبت ({row.unconfirmedAbsencesCount})</Badge>}
                         </div>
-                        <button 
-                          onClick={() => setSelectedEmpIdForBreakdown(emp.id)}
-                          className="text-[10px] text-teal-400 hover:text-teal-300 font-bold mt-1 text-right flex items-center gap-1 cursor-pointer"
-                        >
-                          <Info className="w-3.5 h-3.5" />
-                          <span>عرض تفاصيل الحضور والخصومات</span>
-                        </button>
-                      </div>
-                    </td>
-                    <td className="p-4 text-slate-400 font-bold">{emp.branches?.name || '-'}</td>
-                    <td className="p-4 font-bold text-slate-200">{emp.basic.toLocaleString()} د.ع</td>
-                    <td className="p-4 font-bold text-emerald-400">
-                      {renderEditableCell(emp, 'bonuses', emp.totalBonuses, 'text-emerald-400', '+ ')}
-                    </td>
-                    <td className="p-4 font-bold text-amber-500">
-                      {renderEditableCell(emp, 'attendanceDeductions', emp.totalAttendanceDeductions, 'text-amber-500', '- ')}
-                      {!emp.isAttendanceDeductionsOverridden && emp.totalAttendanceDeductions > 0 && (
-                        <span className="block text-[9px] opacity-75 text-right mt-1">
-                          ({emp.absencesCount} غياب ، {emp.halfDaysCount} نصف يوم)
-                        </span>
-                      )}
-                    </td>
-                    <td className="p-4 font-bold text-rose-400">
-                      {renderEditableCell(emp, 'otherDeductions', (emp.totalDeductions - emp.totalAttendanceDeductions), 'text-rose-400', '- ')}
-                    </td>
-                    <td className="p-4 font-bold text-orange-400">
-                      {emp.loanDeduction > 0 ? `- ${emp.loanDeduction.toLocaleString()} د.ع` : '-'}
-                    </td>
-                    <td className="p-4 font-black text-teal-300 text-sm bg-teal-900/10">
-                      {emp.netSalary.toLocaleString()} د.ع
-                    </td>
-                    <td className="p-4 text-left print:hidden">
-                      <div className="flex items-center justify-end gap-2">
                         <button
-                          onClick={() => {
-                            setSelectedEmpForBD(emp);
-                            setShowAddBDModal(true);
-                          }}
-                          className="p-2 bg-slate-800 border border-slate-700 text-slate-300 hover:text-white hover:bg-slate-700 rounded-xl transition-all cursor-pointer"
-                          title="إضافة تسوية مالية (مكافأة أو خصم)"
+                          type="button"
+                          onClick={() => setBreakdownId(row.id)}
+                          className="mt-1 inline-flex items-center gap-1 text-[10px] font-bold text-indigo-300 hover:text-indigo-200 cursor-pointer print:hidden"
                         >
-                          <Plus className="w-4 h-4" />
+                          <Info className="w-3 h-3" /> تفاصيل الحضور والخصم
                         </button>
-                        
-                        {emp.isIssued ? (
-                          <div className="flex items-center gap-2">
-                            <span className="flex items-center gap-1.5 px-3 py-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-xl font-bold text-[10px]">
-                              <CheckCircle className="w-3.5 h-3.5" />
-                              <span>تم الاعتماد</span>
-                            </span>
-                            <button
-                              disabled={actionLoading === `revert_${emp.id}`}
-                              onClick={() => {
-                                if(window.confirm('هل أنت متأكد من رغبتك في إلغاء اعتماد هذا الراتب؟ سيتم مسح قيود الخصم الأوتوماتيكية وإرجاع السلف إلى حالة غير مدفوعة.')) {
-                                  handleRevertSlip(emp);
-                                }
-                              }}
-                              className="p-2 bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-500 hover:text-white rounded-xl transition-all cursor-pointer"
-                              title="إلغاء الاعتماد والتعديل"
-                            >
-                              {actionLoading === `revert_${emp.id}` ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                              ) : (
-                                <X className="w-4 h-4" />
-                              )}
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            disabled={actionLoading === `slip_${emp.id}`}
-                            onClick={() => handleGenerateSlip(emp)}
-                            className="flex items-center gap-1.5 px-3 py-2 bg-teal-650/20 hover:bg-teal-600/40 border border-teal-500/30 text-teal-400 rounded-xl transition-all cursor-pointer font-bold text-[10px]"
-                          >
-                            {actionLoading === `slip_${emp.id}` ? (
-                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            ) : (
-                              <>
-                                <CheckCircle className="w-3.5 h-3.5" />
-                                <span>اعتماد الراتب</span>
-                              </>
-                            )}
-                          </button>
-                        )}
                       </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Add Bonus / Deduction Modal */}
-      {showAddBDModal && selectedEmpForBD && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md">
-          <div className="relative w-full max-w-md bg-slate-900/90 border border-slate-800 rounded-3xl shadow-2xl p-6 animate-glass text-right">
-            <div className={`absolute top-0 inset-x-0 h-1 bg-gradient-to-r ${bdType === 'bonus' ? 'from-emerald-500 to-teal-500' : 'from-rose-500 to-red-500'}`}></div>
-            
-            <h3 className="text-lg font-bold text-white mb-6">إضافة تسوية مالية يدوية: {selectedEmpForBD.full_name}</h3>
-            
-            <form onSubmit={handleAddBonusDeduction} className="space-y-4">
-              <div className="flex gap-4">
-                <label className={`flex-1 flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border-2 cursor-pointer transition-all ${bdType === 'bonus' ? 'border-emerald-500 bg-emerald-500/10' : 'border-slate-800 bg-slate-950/50'}`}>
-                  <input type="radio" className="hidden" checked={bdType === 'bonus'} onChange={() => setBdType('bonus')} />
-                  <TrendingUp className={`w-6 h-6 ${bdType === 'bonus' ? 'text-emerald-400' : 'text-slate-500'}`} />
-                  <span className={`text-xs font-bold ${bdType === 'bonus' ? 'text-emerald-400' : 'text-slate-400'}`}>مكافأة (+)</span>
-                </label>
-                <label className={`flex-1 flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border-2 cursor-pointer transition-all ${bdType === 'deduction' ? 'border-rose-500 bg-rose-500/10' : 'border-slate-800 bg-slate-950/50'}`}>
-                  <input type="radio" className="hidden" checked={bdType === 'deduction'} onChange={() => setBdType('deduction')} />
-                  <TrendingDown className={`w-6 h-6 ${bdType === 'deduction' ? 'text-rose-400' : 'text-slate-500'}`} />
-                  <span className={`text-xs font-bold ${bdType === 'deduction' ? 'text-rose-400' : 'text-slate-400'}`}>خصم يدوي (-)</span>
-                </label>
-              </div>
-
-              <div>
-                <label className="block text-xs text-slate-400 mb-1">المبلغ (د.ع)</label>
-                <input
-                  type="text"
-                  required
-                  value={bdAmount || ''}
-                  onChange={(e) => setBdAmount(Number(e.target.value.replace(/\D/g, '')))}
-                  className="w-full bg-slate-950 border border-slate-800 focus:border-teal-500 rounded-xl p-3 text-sm text-white font-bold outline-none text-left"
-                  dir="ltr"
-                  placeholder="مثال: 25000"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs text-slate-400 mb-1">السبب / البيان</label>
-                <input
-                  type="text"
-                  required
-                  value={bdReason}
-                  onChange={(e) => setBdReason(e.target.value)}
-                  placeholder="مثال: تسوية ساعات إضافية، عقوبة إدارية..."
-                  className="w-full bg-slate-950 border border-slate-800 focus:border-teal-500 rounded-xl p-3 text-xs text-white outline-none"
-                />
-              </div>
-
-              <div className="flex justify-end gap-3 pt-4 mt-2 border-t border-slate-800">
-                <button type="button" onClick={() => setShowAddBDModal(false)} className="px-4 py-2 text-xs text-slate-400">إلغاء</button>
-                <button
-                  type="submit"
-                  disabled={actionLoading === 'add_bd'}
-                  className={`px-6 py-2 text-white rounded-xl text-xs font-bold shadow-lg flex items-center gap-2 ${bdType === 'bonus' ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-rose-600 hover:bg-rose-500'}`}
-                >
-                  {actionLoading === 'add_bd' ? <Loader2 className="w-4 h-4 animate-spin" /> : <span>تأكيد وحفظ</span>}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Attendance Breakdown details modal */}
-      {selectedEmpIdForBreakdown && selectedEmpForBreakdown && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md overflow-y-auto">
-          <div className="relative w-full max-w-2xl bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl p-6 text-right animate-glass my-8">
-            <button 
-              onClick={() => setSelectedEmpIdForBreakdown(null)}
-              className="absolute top-4 left-4 p-2 text-slate-400 hover:text-white bg-slate-950/40 rounded-xl hover:bg-slate-950 transition-colors cursor-pointer"
-            >
-              <X className="w-4 h-4" />
-            </button>
-
-            <h3 className="text-md font-extrabold text-white flex items-center gap-2 mb-2 border-b border-slate-800 pb-4">
-              <CalendarRange className="w-5 h-5 text-teal-400" />
-              <span>كشف حضور وخصومات الموظف: {selectedEmpForBreakdown.full_name}</span>
-            </h3>
-
-            {/* Attendance Stats Cards */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-              <div className="bg-slate-950/40 border border-slate-850 p-3 rounded-2xl text-center">
-                <span className="text-[10px] text-slate-500 block mb-1">أيام العمل المجدولة</span>
-                <span className="text-sm font-black text-white">{selectedEmpForBreakdown.scheduledWorkDays} يوم</span>
-              </div>
-              <div className="bg-slate-950/40 border border-slate-850 p-3 rounded-2xl text-center">
-                <span className="text-[10px] text-emerald-400 block mb-1">الحضور والالتزام</span>
-                <span className="text-sm font-black text-emerald-400">
-                  {selectedEmpForBreakdown.presentsCount} حضور 
-                  {selectedEmpForBreakdown.latesCount > 0 && ` (${selectedEmpForBreakdown.latesCount} متأخر)`}
-                  {selectedEmpForBreakdown.earlyExitsCount > 0 && ` (${selectedEmpForBreakdown.earlyExitsCount} خروج مبكر)`}
-                </span>
-              </div>
-              <div className="bg-slate-950/40 border border-slate-850 p-3 rounded-2xl text-center">
-                <span className="text-[10px] text-amber-500 block mb-1">إجمالي غيابات الخصم</span>
-                <span className="text-sm font-black text-amber-500">{selectedEmpForBreakdown.absencesCount} يوم</span>
-              </div>
-              <div className="bg-slate-950/40 border border-slate-850 p-3 rounded-2xl text-center">
-                <span className="text-[10px] text-blue-400 block mb-1">إجازات معتمدة</span>
-                <span className="text-sm font-black text-blue-400">{selectedEmpForBreakdown.paidLeavesCount} يوم</span>
-              </div>
-            </div>
-
-            {/* Calculations logic breakdown card */}
-            <div className="p-4 bg-teal-950/15 border border-teal-500/20 rounded-2xl space-y-2 mb-6">
-              <span className="text-xs font-bold text-white flex items-center gap-1.5 mb-2">
-                <Info className="w-4 h-4 text-teal-400" />
-                <span>تفاصيل الاحتساب الجاري للخصم المعتمد:</span>
-              </span>
-              <div className="text-xs text-slate-350 space-y-1.5 leading-relaxed font-medium">
-                <p>• أجرة اليوم الواحد = الراتب الأساسي ({selectedEmpForBreakdown.basic.toLocaleString()} د.ع) ÷ 30 = <span className="font-mono text-teal-400 font-bold">{Math.round(selectedEmpForBreakdown.basic / 30).toLocaleString()} د.ع/يوم</span></p>
-                {selectedEmpForBreakdown.absencesCount > 0 && (
-                  <p>• خصم الغياب المطبق = {selectedEmpForBreakdown.absencesCount} أيام غياب × أجرة اليوم الكامل = <span className="font-mono text-amber-400 font-bold">{selectedEmpForBreakdown.absenceDeduction.toLocaleString()} د.ع</span></p>
-                )}
-                {selectedEmpForBreakdown.halfDaysCount > 0 && (
-                  <p>• خصم أنصاف الأيام = {selectedEmpForBreakdown.halfDaysCount} أيام × نصف أجرة يوم = <span className="font-mono text-amber-400 font-bold">{selectedEmpForBreakdown.halfDayDeduction.toLocaleString()} د.ع</span></p>
-                )}
-                {selectedEmpForBreakdown.totalLateMinutes > 0 && (
-                  <p>• خصم التأخير المطبق = {selectedEmpForBreakdown.totalLateMinutes} دقيقة تأخر × (أجرة اليوم ÷ 480 دقيقة) = <span className="font-mono text-amber-400 font-bold">{selectedEmpForBreakdown.latenessDeduction.toLocaleString()} د.ع</span></p>
-                )}
-                {selectedEmpForBreakdown.totalEarlyExitMinutes > 0 && (
-                  <p>• خصم الخروج المبكر المطبق = {selectedEmpForBreakdown.totalEarlyExitMinutes} دقيقة خروج مبكر × (أجرة اليوم ÷ 480 دقيقة) = <span className="font-mono text-amber-400 font-bold">{selectedEmpForBreakdown.earlyExitDeduction.toLocaleString()} د.ع</span></p>
-                )}
-                <p className="border-t border-slate-800 pt-2 font-bold text-white">
-                  • إجمالي خصومات الدوام والغياب المطبقة = <span className="font-mono text-teal-300 text-sm font-black">{selectedEmpForBreakdown.totalAttendanceDeductions.toLocaleString()} د.ع</span>
-                </p>
-              </div>
-            </div>
-
-            {/* Calendar logs list */}
-            <h4 className="text-xs font-bold text-slate-400 mb-3 flex items-center justify-between">
-              <span className="flex items-center gap-1">
-                <Clock className="w-4 h-4" />
-                <span>يوميات وسجلات الدورة المالية بالتفصيل (من {startDate} إلى {endDate}):</span>
-              </span>
-              <span className="text-[10px] text-amber-400 font-medium">
-                * يمكنك الضغط على زر الإعفاء لإلغاء خصم غياب الموظف أو احتسابه يدوياً
-              </span>
-            </h4>
-            
-            <div className="overflow-y-auto max-h-[250px] border border-slate-800 rounded-2xl bg-slate-950/20 divide-y divide-slate-800/80">
-              {selectedEmpForBreakdown.detailLogs.map((log: any, idx: number) => (
-                <div key={idx} className="p-3 flex items-center justify-between text-xs hover:bg-slate-900/40 transition-colors">
-                  <div className="flex items-center gap-3">
-                    <span className="font-mono text-slate-400 font-semibold">{log.date}</span>
-                    <span className={`px-2 py-0.5 rounded-md font-bold text-[9px] ${
-                      log.status.includes('حاضر') || log.status.includes('معفى') ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/15' :
-                      log.status.includes('غياب') ? 'bg-rose-500/10 text-rose-400 border border-rose-500/15' :
-                      log.status.includes('إجازة') ? 'bg-blue-500/10 text-blue-400 border border-blue-500/15' :
-                      'bg-slate-800 text-slate-400'
-                    }`}>
-                      {log.status}
-                    </span>
-                  </div>
-                  
-                  <div className="flex items-center gap-6">
-                    <span className="text-slate-400">
-                      {log.time !== '-' ? `وقت البصمة: ${log.time}` : ''}
-                    </span>
-                    
-                    {log.isAbsenceDay ? (
-                      <button
-                        onClick={() => toggleExcuseDay(selectedEmpIdForBreakdown, log.date)}
-                        className={`px-3 py-1 rounded-xl font-bold text-[10px] transition-all cursor-pointer ${
-                          log.isExcused 
-                            ? 'bg-rose-550/20 hover:bg-rose-550/30 text-rose-400 border border-rose-500/30' 
-                            : 'bg-emerald-550/20 hover:bg-emerald-550/30 text-emerald-400 border border-emerald-500/30'
-                        }`}
-                      >
-                        {log.isExcused ? 'إلغاء الإعفاء (احتساب غياب)' : 'إعفاء (إلغاء الخصم)'}
-                      </button>
-                    ) : (
-                      <span className="text-slate-500 text-[11px] font-medium min-w-[200px] text-left">
-                        {log.note}
+                    </div>
+                  </td>
+                  <td className="font-bold text-slate-200 whitespace-nowrap">{row.basic.toLocaleString('en-US')}</td>
+                  <td>{editableCell(row, 'bonuses', row.totalBonuses, 'text-emerald-300', '+')}</td>
+                  <td>
+                    {editableCell(row, 'attendanceDeductions', row.totalAttendanceDeductions, 'text-amber-300', '−')}
+                    {!row.isAttendanceDeductionsOverridden && row.totalAttendanceDeductions > 0 && (
+                      <span className="block text-[10px] text-slate-500 mt-0.5">
+                        {row.absencesCount} غياب · {row.halfDaysCount} نصف يوم
                       </span>
                     )}
-                  </div>
-                </div>
-              ))}
-            </div>
+                  </td>
+                  <td>{editableCell(row, 'otherDeductions', row.totalDeductions - row.totalAttendanceDeductions, 'text-rose-300', '−')}</td>
+                  <td className="font-bold text-orange-300 whitespace-nowrap">{row.loanDeduction > 0 ? `−${row.loanDeduction.toLocaleString('en-US')}` : '—'}</td>
+                  <td className="whitespace-nowrap">
+                    <span className={cn('text-sm font-extrabold', row.netSalary < 0 ? 'text-rose-300' : 'text-white')}>{formatIQD(row.netSalary)}</span>
+                  </td>
+                  <td className="!text-left print:hidden">
+                    <div className="flex items-center justify-end gap-1.5">
+                      <IconButton icon={Plus} label="إضافة مكافأة أو خصم" tone="slate" onClick={() => setAdjustFor(row)} />
+                      {row.isIssued ? (
+                        <>
+                          <Badge tone="emerald" dot>معتمد</Badge>
+                          <IconButton icon={Undo2} label="إلغاء الاعتماد" tone="amber" loading={busy === `revert_${row.id}`} onClick={() => revert(row)} />
+                        </>
+                      ) : (
+                        <Button size="xs" variant="soft-success" icon={Check} loading={busy === `slip_${row.id}`} disabled={busy === 'bulk'} onClick={() => approveOne(row)}>
+                          اعتماد
+                        </Button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </DataTable>
+      </Card>
 
-            <div className="flex justify-end pt-6 mt-6 border-t border-slate-800">
-              <button 
-                onClick={() => setSelectedEmpIdForBreakdown(null)}
-                className="px-6 py-2.5 bg-slate-950 hover:bg-slate-900 text-white rounded-xl text-xs font-bold transition-all border border-slate-800 cursor-pointer"
-              >
-                موافق وإغلاق
-              </button>
-            </div>
-          </div>
-        </div>
+      {adjustFor && (
+        <AdjustmentModal
+          row={adjustFor}
+          onClose={() => setAdjustFor(null)}
+          onSaved={() => {
+            setAdjustFor(null);
+            query.reload();
+          }}
+        />
       )}
 
-      {/* Bulk Branch Calculation Modal */}
-      {showBulkModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
-          <div className="relative w-full max-w-lg bg-slate-900/90 border border-slate-800 rounded-3xl shadow-2xl p-6 animate-glass text-right">
-            <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-teal-500 to-cyan-500"></div>
-            
-            <button 
-              onClick={() => setShowBulkModal(false)}
-              className="absolute top-4 left-4 p-2 text-slate-400 hover:text-white bg-slate-950/40 rounded-xl hover:bg-slate-950 transition-colors cursor-pointer"
-            >
-              <X className="w-4 h-4" />
-            </button>
-
-            <h3 className="text-lg font-extrabold text-white flex items-center gap-2 mb-2 border-b border-slate-800 pb-4">
-              <Banknote className="w-5 h-5 text-teal-400" />
-              <span>احتساب واعتماد رواتب فرع: {branchName}</span>
-            </h3>
-            
-            <div className="py-4 space-y-4">
-              <p className="text-xs text-slate-400">
-                تقوم هذه العملية باحتساب رواتب جميع موظفي الفرع المحدّد للفترة المالية الحالية (<span className="text-white font-bold">{startDate}</span> إلى <span className="text-white font-bold">{endDate}</span>) واعتماد كشوف رواتبهم بشكل نهائي دفعة واحدة.
-              </p>
-
-              {pendingBranchEmps.length === 0 ? (
-                <div className="p-6 bg-emerald-950/10 border border-emerald-500/20 rounded-2xl text-center space-y-2">
-                  <CheckCircle className="w-8 h-8 text-emerald-400 mx-auto" />
-                  <p className="text-sm font-bold text-white">كل رواتب الموظفين معتمدة! ✅</p>
-                  <p className="text-xs text-slate-400">تم بالفعل اعتماد كشوف الرواتب لجميع موظفي هذا الفرع لشهر {selectedMonth}.</p>
-                </div>
-              ) : (
-                <>
-                  {/* Summary Stats Grid */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800/80">
-                      <span className="text-[10px] text-slate-500 block">عدد الموظفين المعلقين</span>
-                      <span className="text-md font-bold text-white">{pendingBranchEmps.length} موظف</span>
-                    </div>
-                    <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800/80">
-                      <span className="text-[10px] text-slate-500 block">إجمالي الرواتب الأساسية</span>
-                      <span className="text-md font-bold text-slate-200">{totalBranchBase.toLocaleString()} د.ع</span>
-                    </div>
-                    <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800/80">
-                      <span className="text-[10px] text-emerald-500 block">إجمالي المكافآت (+)</span>
-                      <span className="text-md font-bold text-emerald-400">+{totalBranchBonuses.toLocaleString()} د.ع</span>
-                    </div>
-                    <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800/80">
-                      <span className="text-[10px] text-amber-500 block">إجمالي الخصومات والغياب (-)</span>
-                      <span className="text-md font-bold text-amber-500">-{totalBranchDeductions.toLocaleString()} د.ع</span>
-                    </div>
-                    <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800/80">
-                      <span className="text-[10px] text-orange-400 block">إجمالي خصومات السلف (-)</span>
-                      <span className="text-md font-bold text-orange-400">-{totalBranchLoans.toLocaleString()} د.ع</span>
-                    </div>
-                    <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800/80 col-span-2 bg-teal-950/10 border-teal-500/20">
-                      <span className="text-[10px] text-teal-400 block font-bold font-sans">إجمالي صافي الرواتب المستحق صرفها (Net)</span>
-                      <span className="text-xl font-black text-teal-300">{totalBranchNet.toLocaleString()} د.ع</span>
-                    </div>
-                  </div>
-
-                  <div className="p-3 bg-amber-950/10 border border-amber-500/20 rounded-xl text-xs text-amber-400 flex items-start gap-2">
-                    <Info className="w-4 h-4 shrink-0 mt-0.5" />
-                    <span>
-                      تنبيّه: بعد تأكيد الاعتماد، سيتم إرسال إشعارات فورية لجميع الموظفين البالغ عددهم ({pendingBranchEmps.length}) بكشوف رواتبهم الجديدة وتحديث حالة السلف والخصومات تلقائياً.
-                    </span>
-                  </div>
-                </>
-              )}
-            </div>
-
-            <div className="flex justify-end gap-3 pt-6 border-t border-slate-800">
-              <button 
-                type="button" 
-                onClick={() => setShowBulkModal(false)} 
-                className="px-4 py-2 text-slate-400 hover:text-white"
-              >
-                إلغاء
-              </button>
-              {pendingBranchEmps.length > 0 && (
-                <button
-                  type="button"
-                  disabled={actionLoading === 'bulk_generate'}
-                  onClick={() => handleBulkGenerateSlips(pendingBranchEmps)}
-                  className="px-6 py-2.5 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer active:scale-95"
-                >
-                  {actionLoading === 'bulk_generate' ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <>
-                      <CheckCircle className="w-4 h-4" />
-                      <span>اعتماد وصرف رواتب الفرع بالكامل</span>
-                    </>
-                  )}
-                </button>
-              )}
-            </div>
+      {breakdown && (
+        <Modal title="تفاصيل الحضور والخصومات" subtitle={`${breakdown.full_name} · ${data.startDate} ← ${data.endDate}`} icon={CalendarRange} tone="indigo" size="lg" onClose={() => setBreakdownId(null)}>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+            <StatTile label="أيام العمل" value={breakdown.scheduledWorkDays} tone="slate" className="!p-3" />
+            <StatTile
+              label="الحضور"
+              value={breakdown.presentsCount}
+              tone="emerald"
+              className="!p-3"
+              hint={[breakdown.latesCount > 0 && `${breakdown.latesCount} تأخير`, breakdown.earlyExitsCount > 0 && `${breakdown.earlyExitsCount} خروج مبكر`].filter(Boolean).join(' · ') || undefined}
+            />
+            <StatTile label="غيابات بخصم" value={breakdown.absencesCount} tone="rose" className="!p-3" />
+            <StatTile label="إجازات مدفوعة" value={breakdown.paidLeavesCount} tone="sky" className="!p-3" />
           </div>
-        </div>
+
+          <InfoNote tone="indigo" icon={Info} className="mb-5">
+            <p>أجرة اليوم = {formatIQD(breakdown.basic)} ÷ 30 = <b>{formatIQD(breakdown.basic / 30)}</b></p>
+            {breakdown.absencesCount > 0 && <p>خصم الغياب = {breakdown.absencesCount} يوم × أجرة اليوم = <b>{formatIQD(breakdown.absenceDeduction)}</b></p>}
+            {breakdown.halfDaysCount > 0 && <p>خصم أنصاف الأيام = {breakdown.halfDaysCount} × نصف أجرة يوم = <b>{formatIQD(breakdown.halfDayDeduction)}</b></p>}
+            {breakdown.totalLateMinutes > 0 && (
+              <p>خصم التأخير = {breakdown.totalLateMinutes} دقيقة × (أجرة اليوم ÷ {breakdown.workdayMinutes} دقيقة) = <b>{formatIQD(breakdown.latenessDeduction)}</b></p>
+            )}
+            {breakdown.totalEarlyExitMinutes > 0 && (
+              <p>خصم الخروج المبكر = {breakdown.totalEarlyExitMinutes} دقيقة = <b>{formatIQD(breakdown.earlyExitDeduction)}</b></p>
+            )}
+            <p className="mt-1 pt-1 border-t border-indigo-500/20">إجمالي خصومات الدوام = <b className="text-white">{formatIQD(breakdown.totalAttendanceDeductions)}</b></p>
+          </InfoNote>
+
+          <p className="text-[11px] text-slate-400 mb-2 flex items-center gap-1.5">
+            <Clock className="w-3.5 h-3.5" /> يوميات الدورة — يمكنك إعفاء أيام الغياب المعفاة إدارياً
+          </p>
+          <div className="max-h-[300px] overflow-y-auto rounded-2xl border border-slate-800/80 divide-y divide-slate-800/70">
+            {breakdown.detailLogs.map((log) => (
+              <div key={log.date} className="p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                <div className="flex items-center gap-2.5">
+                  <span className="font-mono text-slate-400" dir="ltr">{log.date}</span>
+                  <Badge tone={DAY_TONE[log.tone]}>{log.status}</Badge>
+                  {log.time !== '-' && <span className="text-slate-500 font-mono" dir="ltr">{log.time}</span>}
+                </div>
+                {log.isAbsenceDay ? (
+                  <Button size="xs" variant={log.isExcused ? 'soft-danger' : 'soft-success'} icon={RotateCcw} disabled={breakdown.isIssued} onClick={() => toggleExcuse(breakdown.id, log.date)}>
+                    {log.isExcused ? 'إلغاء الإعفاء' : 'إعفاء'}
+                  </Button>
+                ) : (
+                  <span className="text-[11px] text-slate-500 sm:text-left">{log.note}</span>
+                )}
+              </div>
+            ))}
+          </div>
+        </Modal>
+      )}
+
+      {bulkOpen && (
+        <Modal title="اعتماد الرواتب دفعة واحدة" subtitle={`${branchName} · ${MONTHS_AR[Number(monthNum) - 1]} ${year}`} icon={Users} tone="emerald" onClose={() => setBulkOpen(false)}>
+          <div className="grid grid-cols-2 gap-3 mb-4">
+            <StatTile label="عدد الموظفين" value={pendingRows.length} tone="slate" className="!p-3" />
+            <StatTile label="الرواتب الأساسية" value={formatIQD(pendingRows.reduce((s, r) => s + r.basic, 0))} tone="indigo" className="!p-3" />
+            <StatTile label="المكافآت" value={formatIQD(pendingRows.reduce((s, r) => s + r.totalBonuses, 0))} tone="emerald" className="!p-3" />
+            <StatTile label="الخصومات والسلف" value={formatIQD(pendingRows.reduce((s, r) => s + r.totalDeductions + r.loanDeduction, 0))} tone="rose" className="!p-3" />
+          </div>
+          <div className="rounded-2xl bg-emerald-500/5 border border-emerald-500/20 p-4 text-center mb-4">
+            <p className="text-[11px] text-slate-400 mb-1">إجمالي الصافي المستحق</p>
+            <p className="text-2xl font-extrabold text-emerald-300">{formatIQD(pendingRows.reduce((s, r) => s + r.netSalary, 0))}</p>
+          </div>
+          {pendingRows.some((r) => r.isNetNegative || r.unconfirmedAbsencesCount > 0) && (
+            <InfoNote tone="amber" icon={AlertTriangle} className="mb-2">
+              بعض الموظفين لديهم تنبيهات (صافي سالب أو غياب غير مثبت). راجعهم قبل الاعتماد.
+            </InfoNote>
+          )}
+          <InfoNote tone="slate" icon={Info}>
+            سيُرسل إشعار لكل موظف بكشف راتبه وتُحدَّث أقساط السلف والخصومات تلقائياً.
+          </InfoNote>
+          <ModalFooter onCancel={() => setBulkOpen(false)} onSubmit={approveBulk} loading={busy === 'bulk'} loadingLabel="جاري الاعتماد..." submitLabel={`اعتماد ${pendingRows.length} راتب`} variant="success" submitIcon={CheckCircle2} />
+        </Modal>
       )}
     </div>
+  );
+}
+
+function InlineAmountEditor({
+  initial,
+  overridden,
+  onSave,
+  onReset,
+  onCancel,
+}: {
+  initial: number;
+  overridden: boolean;
+  onSave: (value: number) => void;
+  onReset: () => void;
+  onCancel: () => void;
+}) {
+  const [value, setValue] = useState(initial);
+  return (
+    <div
+      className="absolute z-30 top-full mt-2 right-1/2 translate-x-1/2 w-52 surface-solid rounded-2xl p-3 space-y-2.5 animate-glass text-right"
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          onSave(value);
+        } else if (e.key === 'Escape') {
+          e.stopPropagation();
+          onCancel();
+        }
+      }}
+    >
+      <p className="text-[10px] font-bold text-slate-400">تعديل القيمة يدوياً (د.ع)</p>
+      <AmountInput autoFocus value={value} onValueChange={setValue} className="h-9" />
+      <div className="flex items-center gap-1.5">
+        {overridden && (
+          <Button size="xs" variant="ghost" icon={RotateCcw} onClick={onReset} className="ml-auto">
+            تلقائي
+          </Button>
+        )}
+        <Button size="xs" variant="ghost" onClick={onCancel} className={overridden ? '' : 'mr-auto'}>
+          إلغاء
+        </Button>
+        <Button size="xs" onClick={() => onSave(value)}>
+          حفظ
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function AdjustmentModal({ row, onClose, onSaved }: { row: PayrollRow; onClose: () => void; onSaved: () => void }) {
+  const [type, setType] = useState<'bonus' | 'deduction'>('bonus');
+  const [amount, setAmount] = useState(0);
+  const [reason, setReason] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (amount <= 0) {
+      toast.error('أدخل مبلغاً أكبر من صفر');
+      return;
+    }
+    setSaving(true);
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      const now = new Date();
+      const issueDate = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`;
+      const { error } = await supabase.from('bonuses_deductions').insert({
+        employee_id: row.id,
+        type,
+        amount,
+        reason,
+        issue_date: issueDate,
+        created_by: user?.id,
+      });
+      if (error) throw error;
+      toast.success(type === 'bonus' ? 'تمت إضافة المكافأة' : 'تمت إضافة الخصم');
+      onSaved();
+    } catch (err) {
+      toast.error(`حدث خطأ أثناء الإضافة: ${errorMessage(err)}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal title="تسوية مالية يدوية" subtitle={row.full_name} icon={type === 'bonus' ? TrendingUp : TrendingDown} tone={type === 'bonus' ? 'emerald' : 'rose'} size="sm" onClose={onClose}>
+      <form onSubmit={submit} className="space-y-4">
+        <div className="grid grid-cols-2 gap-2">
+          {(['bonus', 'deduction'] as const).map((t) => {
+            const active = type === t;
+            const Icon = t === 'bonus' ? TrendingUp : TrendingDown;
+            return (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setType(t)}
+                className={cn(
+                  'flex flex-col items-center gap-1.5 py-3 rounded-2xl border text-xs font-bold transition-colors cursor-pointer',
+                  active
+                    ? t === 'bonus'
+                      ? 'border-emerald-400/50 bg-emerald-500/10 text-emerald-300'
+                      : 'border-rose-400/50 bg-rose-500/10 text-rose-300'
+                    : 'border-slate-800 bg-slate-950/50 text-slate-400 hover:text-slate-200',
+                )}
+              >
+                <Icon className="w-5 h-5" />
+                {t === 'bonus' ? 'مكافأة (+)' : 'خصم (−)'}
+              </button>
+            );
+          })}
+        </div>
+        <Field label="المبلغ (د.ع)">
+          <AmountInput required autoFocus value={amount} onValueChange={setAmount} placeholder="25,000" />
+        </Field>
+        <Field label="السبب">
+          <Input required value={reason} onChange={(e) => setReason(e.target.value)} placeholder="مثال: ساعات إضافية، عقوبة إدارية..." />
+        </Field>
+        <ModalFooter onCancel={onClose} loading={saving} submitLabel="حفظ" variant={type === 'bonus' ? 'success' : 'danger'} />
+      </form>
+    </Modal>
   );
 }

@@ -1,1102 +1,641 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
-import { 
-  Settings, 
-  Building, 
-  ShieldAlert, 
-  Save, 
-  Loader2, 
-  MapPin, 
-  Phone, 
-  Mail, 
-  Globe, 
+import React, { useState } from 'react';
+import toast from 'react-hot-toast';
+import {
+  Settings,
+  Building,
+  ShieldAlert,
+  Save,
+  Phone,
+  Mail,
+  Globe,
   CreditCard,
   Clock,
-  HardDrive,
   CalendarRange,
   Trash2,
   Plus,
   Megaphone,
-  Trash
+  Banknote,
+  CalendarClock,
+  Pin,
+  AlertTriangle,
+  Image as ImageIcon,
+  MapPin,
 } from 'lucide-react';
-import confetti from 'canvas-confetti';
-import toast from 'react-hot-toast';
+import { supabase } from '@/lib/supabase';
+import { confetti } from '@/lib/lazy';
+import { useQuery } from '@/lib/useQuery';
+import { getCycleDates } from '@/lib/payroll';
+import { DEFAULT_WORK_DAYS } from '@/lib/attendance';
+import { WEEKDAYS_AR, errorMessage, formatDateTime, formatTime12h } from '@/lib/format';
+import type { Announcement, Branch, Department, Employee, LeaveTypeOption, WorkSchedule } from '@/lib/types';
+import { useConfirm } from '@/components/confirm';
+import {
+  Badge,
+  Button,
+  Card,
+  CardHeader,
+  DataTable,
+  EmptyState,
+  Field,
+  IconButton,
+  InfoNote,
+  Input,
+  PageHeader,
+  PageSkeleton,
+  SegmentedTabs,
+  Select,
+  TableEmpty,
+  cn,
+} from '@/components/ui';
+
+interface CompanySettings {
+  name?: string | null;
+  address?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  website?: string | null;
+  tax_number?: string | null;
+  logo_url?: string | null;
+}
+
+interface SettingsData {
+  company: CompanySettings | null;
+  trackingDays: number;
+  cycleStartDay: number;
+  cycleEndDay: number;
+  defaultAnnual: number;
+  defaultSick: number;
+  leaveTypes: LeaveTypeOption[];
+  announcements: Announcement[];
+  schedules: WorkSchedule[];
+  branches: Pick<Branch, 'id' | 'name'>[];
+  departments: Department[];
+  employees: Pick<Employee, 'id' | 'full_name'>[];
+}
+
+const DEFAULT_LEAVE_TYPES: LeaveTypeOption[] = [
+  { id: 'annual', name: 'إجازة سنوية' },
+  { id: 'sick', name: 'إجازة مرضية' },
+  { id: 'emergency', name: 'إجازة طارئة' },
+  { id: 'maternity', name: 'إجازة أمومة' },
+  { id: 'other', name: 'إجازة أخرى' },
+];
+const PROTECTED_LEAVE_TYPES = ['annual', 'sick'];
+// Saturday first, matching the Iraqi working week.
+const WEEK_ORDER = [6, 0, 1, 2, 3, 4, 5];
+
+async function fetchSettings(): Promise<SettingsData> {
+  const [comp, archive, payroll, leave, ann, ws, br, dep, emp] = await Promise.all([
+    supabase.from('company_settings').select('*').maybeSingle(),
+    supabase.from('system_settings').select('*').eq('key', 'archive_policy').maybeSingle(),
+    supabase.from('system_settings').select('*').eq('key', 'payroll_policy').maybeSingle(),
+    supabase.from('system_settings').select('*').eq('key', 'leave_policy').maybeSingle(),
+    supabase.from('announcements').select('*').order('created_at', { ascending: false }),
+    supabase.from('work_schedules').select('*'),
+    supabase.from('branches').select('id, name'),
+    supabase.from('departments').select('id, name'),
+    supabase.from('employees').select('id, full_name').eq('is_active', true).order('full_name'),
+  ]);
+  const lp = leave.data?.value;
+  return {
+    company: (comp.data as CompanySettings | null) ?? null,
+    trackingDays: archive.data?.value?.tracking_archive_days || 180,
+    cycleStartDay: payroll.data?.value?.cycle_start_day || 25,
+    cycleEndDay: payroll.data?.value?.cycle_end_day || 24,
+    defaultAnnual: lp?.default_annual || 21,
+    defaultSick: lp?.default_sick || 15,
+    leaveTypes: lp?.active_types?.length ? lp.active_types : DEFAULT_LEAVE_TYPES,
+    announcements: (ann.data ?? []) as Announcement[],
+    schedules: (ws.data ?? []) as WorkSchedule[],
+    branches: (br.data ?? []) as SettingsData['branches'],
+    departments: (dep.data ?? []) as Department[],
+    employees: (emp.data ?? []) as SettingsData['employees'],
+  };
+}
 
 export default function SettingsPage() {
-  const [loading, setLoading] = useState(true);
+  const query = useQuery('settings', fetchSettings);
+  const [section, setSection] = useState<'general' | 'schedules' | 'announcements'>('general');
+
+  if (!query.data) {
+    if (query.error) {
+      return <EmptyState icon={AlertTriangle} tone="rose" title="تعذر تحميل الإعدادات" description={errorMessage(query.error)} action={<Button size="sm" variant="secondary" onClick={query.reload}>إعادة المحاولة</Button>} />;
+    }
+    return <PageSkeleton />;
+  }
+
+  return (
+    <div className="space-y-6 pb-12">
+      <PageHeader
+        icon={Settings}
+        title="الإعدادات"
+        description="بيانات الشركة، سياسات الإجازات والرواتب، جداول الدوام، والتعاميم"
+        actions={
+          <SegmentedTabs
+            value={section}
+            onChange={setSection}
+            options={[
+              { value: 'general', label: 'عام', icon: Building },
+              { value: 'schedules', label: 'جداول الدوام', icon: CalendarClock, count: query.data.schedules.length },
+              { value: 'announcements', label: 'التعاميم', icon: Megaphone, count: query.data.announcements.length },
+            ]}
+          />
+        }
+      />
+
+      {section === 'general' && <GeneralSettings initial={query.data} onSaved={query.reload} />}
+      {section === 'schedules' && <SchedulesSection data={query.data} onChanged={query.reload} />}
+      {section === 'announcements' && (
+        <AnnouncementsSection
+          announcements={query.data.announcements}
+          onRemoved={(ids) => query.mutate((d) => ({ ...d, announcements: d.announcements.filter((a) => !ids.includes(a.id)) }))}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------ General ------------------------------ */
+
+function GeneralSettings({ initial, onSaved }: { initial: SettingsData; onSaved: () => void }) {
+  const c = initial.company;
+  const [company, setCompany] = useState({
+    name: c?.name ?? '',
+    address: c?.address ?? '',
+    phone: c?.phone ?? '',
+    email: c?.email ?? '',
+    website: c?.website ?? '',
+    tax_number: c?.tax_number ?? '',
+    logo_url: c?.logo_url ?? '',
+  });
+  const [trackingDays, setTrackingDays] = useState(initial.trackingDays);
+  const [cycleStart, setCycleStart] = useState(initial.cycleStartDay);
+  const [cycleEnd, setCycleEnd] = useState(initial.cycleEndDay);
+  const [defaultAnnual, setDefaultAnnual] = useState(initial.defaultAnnual);
+  const [defaultSick, setDefaultSick] = useState(initial.defaultSick);
+  const [leaveTypes, setLeaveTypes] = useState<LeaveTypeOption[]>(initial.leaveTypes);
+  const [newTypeName, setNewTypeName] = useState('');
+  const [newTypeId, setNewTypeId] = useState('');
   const [saving, setSaving] = useState(false);
 
-  // Company Settings
-  const [companyName, setCompanyName] = useState('مكتب بغداد الرئيسي للخرسانة');
-  const [address, setAddress] = useState('العراق، بغداد، شارع الكرادة');
-  const [phone, setPhone] = useState('+9647700000000');
-  const [email, setEmail] = useState('info@batra-concrete.com');
-  const [website, setWebsite] = useState('www.batra-concrete.com');
-  const [taxNumber, setTaxNumber] = useState('100-244-555');
-  const [logoUrl, setLogoUrl] = useState('');
+  const now = new Date();
+  const currentMonth = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}`;
+  const cyclePreview = getCycleDates(currentMonth, cycleStart, cycleEnd);
 
-  // System Settings
-  const [trackingDays, setTrackingDays] = useState(180); // Default: 180 days
-  const [cycleStartDay, setCycleStartDay] = useState(25);
-  const [cycleEndDay, setCycleEndDay] = useState(24);
-
-  // Leave Policy Settings
-  const [defaultAnnual, setDefaultAnnual] = useState(21);
-  const [defaultSick, setDefaultSick] = useState(15);
-  const [leaveTypes, setLeaveTypes] = useState<any[]>([]);
-  const [newLeaveTypeId, setNewLeaveTypeId] = useState('');
-  const [newLeaveTypeName, setNewLeaveTypeName] = useState('');
-
-  // Announcements Management Settings
-  const [announcements, setAnnouncements] = useState<any[]>([]);
-  const [loadingAnnouncements, setLoadingAnnouncements] = useState(false);
-
-  // Work Schedules Settings
-  const [workSchedules, setWorkSchedules] = useState<any[]>([]);
-  const [branchesList, setBranchesList] = useState<any[]>([]);
-  const [departmentsList, setDepartmentsList] = useState<any[]>([]);
-  const [employeesList, setEmployeesList] = useState<any[]>([]);
-
-  // Work Schedule form states
-  const [schedName, setSchedName] = useState('');
-  const [schedScope, setSchedScope] = useState<'branch' | 'department' | 'employee'>('branch');
-  const [schedTargetId, setSchedTargetId] = useState('');
-  const [schedCheckIn, setSchedCheckIn] = useState('09:00');
-  const [schedCheckOut, setSchedCheckOut] = useState('17:00');
-  const [schedGrace, setSchedGrace] = useState(15);
-  const [schedWorkDays, setSchedWorkDays] = useState<number[]>([6, 0, 1, 2, 3, 4]); // Saturday to Thursday
-  const [addingSchedule, setAddingSchedule] = useState(false);
-
-  useEffect(() => {
-    fetchSettings();
-  }, []);
-
-  const fetchAnnouncements = async () => {
-    setLoadingAnnouncements(true);
-    try {
-      const { data, error } = await supabase
-        .from('announcements')
-        .select('*')
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      if (data) setAnnouncements(data);
-    } catch (err) {
-      console.error('Error fetching announcements:', err);
-    } finally {
-      setLoadingAnnouncements(false);
-    }
-  };
-
-  const fetchSettings = async () => {
-    setLoading(true);
-    try {
-      // Fetch all system settings, company info, announcements, branches, departments, work schedules, and active employees concurrently
-      const [
-        { data: comp },
-        { data: sys },
-        { data: pp },
-        { data: lp },
-        { data: ann },
-        { data: wsData },
-        { data: bData },
-        { data: dData },
-        { data: eData }
-      ] = await Promise.all([
-        supabase.from('company_settings').select('*').maybeSingle(),
-        supabase.from('system_settings').select('*').eq('key', 'archive_policy').maybeSingle(),
-        supabase.from('system_settings').select('*').eq('key', 'payroll_policy').maybeSingle(),
-        supabase.from('system_settings').select('*').eq('key', 'leave_policy').maybeSingle(),
-        supabase.from('announcements').select('*').order('created_at', { ascending: false }),
-        supabase.from('work_schedules').select('*'),
-        supabase.from('branches').select('id, name'),
-        supabase.from('departments').select('id, name'),
-        supabase.from('employees').select('id, full_name').eq('is_active', true).order('full_name')
-      ]);
-
-      if (comp) {
-        setCompanyName(comp.name || '');
-        setAddress(comp.address || '');
-        setPhone(comp.phone || '');
-        setEmail(comp.email || '');
-        setWebsite(comp.website || '');
-        setTaxNumber(comp.tax_number || '');
-        setLogoUrl(comp.logo_url || '');
-      }
-
-      if (sys && sys.value) {
-        setTrackingDays(sys.value.tracking_archive_days || 180);
-      }
-
-      if (pp && pp.value) {
-        setCycleStartDay(pp.value.cycle_start_day || 25);
-        setCycleEndDay(pp.value.cycle_end_day || 24);
-      }
-
-      if (lp && lp.value) {
-        setDefaultAnnual(lp.value.default_annual || 21);
-        setDefaultSick(lp.value.default_sick || 15);
-        setLeaveTypes(lp.value.active_types || []);
-      } else {
-        // Fallback default leave types
-        setLeaveTypes([
-          { id: 'annual', name: 'إجازة سنوية' },
-          { id: 'sick', name: 'إجازة مرضية' },
-          { id: 'emergency', name: 'إجازة طارئة' },
-          { id: 'maternity', name: 'إجازة أمومة' },
-          { id: 'other', name: 'إجازة أخرى' }
-        ]);
-      }
-
-      if (ann) {
-        setAnnouncements(ann);
-      }
-
-      if (wsData) setWorkSchedules(wsData);
-      if (bData) setBranchesList(bData || []);
-      if (dData) setDepartmentsList(dData || []);
-      if (eData) setEmployeesList(eData || []);
-
-    } catch (err) {
-      console.error('Error fetching settings:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleAddLeaveType = (e: React.MouseEvent) => {
-    e.preventDefault();
-    if (!newLeaveTypeId.trim() || !newLeaveTypeName.trim()) {
-      toast.error('يرجى كتابة رمز ونوع الإجازة');
+  const addLeaveType = () => {
+    const id = newTypeId.trim().toLowerCase().replace(/\s+/g, '_');
+    if (!id || !newTypeName.trim()) {
+      toast.error('يرجى كتابة اسم ورمز نوع الإجازة');
       return;
     }
-    const cleanId = newLeaveTypeId.trim().toLowerCase().replace(/\s+/g, '_');
-    if (leaveTypes.some(t => t.id === cleanId)) {
-      toast('رمز الإجازة هذا موجود بالفعل');
+    if (leaveTypes.some((t) => t.id === id)) {
+      toast.error('رمز الإجازة هذا موجود بالفعل');
       return;
     }
-    setLeaveTypes([...leaveTypes, { id: cleanId, name: newLeaveTypeName.trim() }]);
-    setNewLeaveTypeId('');
-    setNewLeaveTypeName('');
+    setLeaveTypes([...leaveTypes, { id, name: newTypeName.trim() }]);
+    setNewTypeId('');
+    setNewTypeName('');
   };
 
-  const handleRemoveLeaveType = (idToRemove: string) => {
-    if (['annual', 'sick'].includes(idToRemove)) {
-      toast.error('لا يمكن حذف الإجازة السنوية أو المرضية الافتراضية لأنها مرتبطة بنظام الرواتب والأرصدة');
-      return;
-    }
-    setLeaveTypes(leaveTypes.filter(t => t.id !== idToRemove));
-  };
-
-  const handleDeleteAnnouncement = async (id: string) => {
-    if (!confirm('هل أنت متأكد من رغبتك في حذف هذا التعميم نهائياً من أرشيف لوحة الإعلانات؟ 🗑️')) return;
-    try {
-      const { error } = await supabase
-        .from('announcements')
-        .delete()
-        .eq('id', id);
-      if (error) throw error;
-      
-      toast.success('تم حذف التعميم بنجاح! ✅');
-      fetchAnnouncements();
-    } catch (err: any) {
-      toast.error(`فشل حذف التعميم: ${err.message}`);
-    }
-  };
-
-  const handlePurgeAnnouncements = async () => {
-    if (!confirm('تحذير: هل أنت متأكد من رغبتك في مسح وإخلاء كافة التعميمات من الأرشيف؟ ⚠️ لا يمكن التراجع عن هذا الإجراء!')) return;
-    try {
-      const { error } = await supabase
-        .from('announcements')
-        .delete()
-        .gt('created_at', '1970-01-01');
-      if (error) throw error;
-      
-      toast.success('تم إخلاء أرشيف التعميمات بنجاح! 🧹');
-      fetchAnnouncements();
-    } catch (err: any) {
-      toast.error(`فشل إخلاء الأرشيف: ${err.message}`);
-    }
-  };
-
-  const handleSaveSettings = async (e: React.FormEvent) => {
+  const save = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
     try {
-      // 1. Get or create company settings row
-      const { data: existingComp } = await supabase
-        .from('company_settings')
-        .select('id')
-        .maybeSingle();
+      const companyData = { ...company, updated_at: new Date().toISOString() };
+      const { data: existing } = await supabase.from('company_settings').select('id').maybeSingle();
+      const { error: compErr } = existing
+        ? await supabase.from('company_settings').update(companyData).eq('id', existing.id)
+        : await supabase.from('company_settings').insert(companyData);
+      if (compErr) throw compErr;
 
-      const companyData = {
-        name: companyName,
-        address,
-        phone,
-        email,
-        website,
-        tax_number: taxNumber,
-        logo_url: logoUrl,
-        updated_at: new Date().toISOString()
-      };
-
-      if (existingComp) {
-        const { error } = await supabase
-          .from('company_settings')
-          .update(companyData)
-          .eq('id', existingComp.id);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from('company_settings')
-          .insert(companyData);
-        if (error) throw error;
-      }
-
-      // 2. Save system settings (archive_policy)
-      const { data: existingSys } = await supabase
-        .from('system_settings')
-        .select('key')
-        .eq('key', 'archive_policy')
-        .maybeSingle();
-
-      const systemData = {
-        key: 'archive_policy',
-        value: { tracking_archive_days: Number(trackingDays) },
-        description: 'إعدادات أرشفة بيانات تتبع الحضور والمواقع وسلة المحذوفات تلقائياً'
-      };
-
-      if (existingSys) {
-        const { error } = await supabase
-          .from('system_settings')
-          .update(systemData)
-          .eq('key', 'archive_policy');
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from('system_settings')
-          .insert(systemData);
-        if (error) throw error;
-      }
-
-      // 3. Save system settings (leave_policy)
-      const { data: existingLP } = await supabase
-        .from('system_settings')
-        .select('key')
-        .eq('key', 'leave_policy')
-        .maybeSingle();
-
-      const leavePolicyData = {
-        key: 'leave_policy',
-        value: { 
-          default_annual: Number(defaultAnnual), 
-          default_sick: Number(defaultSick), 
-          active_types: leaveTypes 
+      const { error: sysErr } = await supabase.from('system_settings').upsert([
+        {
+          key: 'archive_policy',
+          value: { tracking_archive_days: Number(trackingDays) },
+          description: 'إعدادات أرشفة بيانات تتبع الحضور والمواقع وسلة المحذوفات تلقائياً',
         },
-        description: 'سياسة الإجازات العامة وأنواعها المتاحة بالشركة'
-      };
-
-      if (existingLP) {
-        const { error } = await supabase
-          .from('system_settings')
-          .update(leavePolicyData)
-          .eq('key', 'leave_policy');
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from('system_settings')
-          .insert(leavePolicyData);
-        if (error) throw error;
-      }
-
-      // 4. Save system settings (payroll_policy)
-      const { data: existingPP } = await supabase
-        .from('system_settings')
-        .select('key')
-        .eq('key', 'payroll_policy')
-        .maybeSingle();
-
-      const payrollPolicyData = {
-        key: 'payroll_policy',
-        value: { 
-          cycle_start_day: Number(cycleStartDay), 
-          cycle_end_day: Number(cycleEndDay) 
+        {
+          key: 'leave_policy',
+          value: { default_annual: Number(defaultAnnual), default_sick: Number(defaultSick), active_types: leaveTypes },
+          description: 'سياسة الإجازات العامة وأنواعها المتاحة بالشركة',
         },
-        description: 'إعدادات تحديد دورة الحسابات المالية والرواتب الشهرية'
-      };
+        {
+          key: 'payroll_policy',
+          value: { cycle_start_day: Number(cycleStart), cycle_end_day: Number(cycleEnd) },
+          description: 'إعدادات تحديد دورة الحسابات المالية والرواتب الشهرية',
+        },
+      ]);
+      if (sysErr) throw sysErr;
 
-      if (existingPP) {
-        const { error } = await supabase
-          .from('system_settings')
-          .update(payrollPolicyData)
-          .eq('key', 'payroll_policy');
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from('system_settings')
-          .insert(payrollPolicyData);
-        if (error) throw error;
-      }
-
-      confetti({
-        particleCount: 80,
-        spread: 60,
-        colors: ['#0D9488', '#10B981']
-      });
-      toast.success('تم حفظ وتحديث إعدادات النظام والشركة بنجاح! ✅');
-      
-      // Update app state
-      fetchSettings();
-    } catch (err: any) {
-      toast.error(`فشل حفظ الإعدادات: ${err.message}`);
+      confetti({ particleCount: 80, spread: 60, colors: ['#818CF8', '#10B981'] });
+      toast.success('تم حفظ الإعدادات');
+      onSaved();
+    } catch (err) {
+      toast.error(`فشل حفظ الإعدادات: ${errorMessage(err)}`);
     } finally {
       setSaving(false);
     }
   };
 
-  const getDayNameAr = (dayNum: number) => {
-    const days: Record<number, string> = {
-      0: 'الأحد',
-      1: 'الاثنين',
-      2: 'الثلاثاء',
-      3: 'الأربعاء',
-      4: 'الخميس',
-      5: 'الجمعة',
-      6: 'السبت'
-    };
-    return days[dayNum] || '';
-  };
-
-  const getScheduleTargetName = (sched: any) => {
-    if (sched.employee_id) {
-      const emp = employeesList.find(e => e.id === sched.employee_id);
-      return `👤 موظف: ${emp ? emp.full_name : 'غير معروف'}`;
-    }
-    if (sched.department_id) {
-      const dept = departmentsList.find(d => d.id === sched.department_id);
-      return `🏢 قسم: ${dept ? dept.name : 'غير معروف'}`;
-    }
-    if (sched.branch_id) {
-      const branch = branchesList.find(b => b.id === sched.branch_id);
-      return `📍 فرع: ${branch ? branch.name : 'غير معروف'}`;
-    }
-    return 'عام';
-  };
-
-  const handleAddSchedule = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!schedName.trim()) {
-      toast.error('يرجى إدخال اسم لجدول الدوام');
-      return;
-    }
-    if (!schedTargetId) {
-      toast.error('يرجى تحديد الجهة المستهدفة (الفرع/القسم/الموظف)');
-      return;
-    }
-    setAddingSchedule(true);
-    try {
-      const scheduleData: any = {
-        name: schedName.trim(),
-        check_in_time: schedCheckIn + ':00',
-        check_out_time: schedCheckOut + ':00',
-        grace_period_minutes: Number(schedGrace),
-        work_days: schedWorkDays,
-      };
-
-      if (schedScope === 'branch') {
-        scheduleData.branch_id = schedTargetId;
-      } else if (schedScope === 'department') {
-        scheduleData.department_id = schedTargetId;
-      } else if (schedScope === 'employee') {
-        scheduleData.employee_id = schedTargetId;
-      }
-
-      const { error } = await supabase.from('work_schedules').insert(scheduleData);
-      if (error) throw error;
-
-      toast.success('تم إضافة جدول الدوام بنجاح! 📅');
-      setSchedName('');
-      setSchedTargetId('');
-      setSchedCheckIn('09:00');
-      setSchedCheckOut('17:00');
-      setSchedGrace(15);
-      setSchedWorkDays([6, 0, 1, 2, 3, 4]);
-
-      // Refresh settings
-      fetchSettings();
-    } catch (err: any) {
-      toast.error(`فشل إضافة الجدول: ${err.message}`);
-    } finally {
-      setAddingSchedule(false);
-    }
-  };
-
-  const handleDeleteSchedule = async (id: string) => {
-    if (!confirm('هل أنت متأكد من رغبتك في حذف جدول الدوام هذا؟ 🗑️')) return;
-    try {
-      const { error } = await supabase
-        .from('work_schedules')
-        .delete()
-        .eq('id', id);
-      if (error) throw error;
-
-      toast.success('تم حذف جدول الدوام بنجاح! ✅');
-      fetchSettings();
-    } catch (err: any) {
-      toast.error(`فشل حذف الجدول: ${err.message}`);
-    }
-  };
-
-  const handleDayToggle = (day: number) => {
-    if (schedWorkDays.includes(day)) {
-      setSchedWorkDays(schedWorkDays.filter(d => d !== day));
-    } else {
-      setSchedWorkDays([...schedWorkDays, day].sort());
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="flex-grow flex items-center justify-center">
-        <Loader2 className="w-10 h-10 text-teal-400 animate-spin" />
-      </div>
-    );
-  }
+  const setCompanyField = (key: keyof typeof company) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    setCompany((prev) => ({ ...prev, [key]: e.target.value }));
 
   return (
-    <div className="space-y-8 pb-12">
-      {/* Header */}
-      <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-800/80 rounded-3xl p-6 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div>
-          <h3 className="text-xl font-extrabold text-white flex items-center gap-2 mb-2">
-            <Settings className="w-6 h-6 text-teal-400 animate-spin-slow" />
-            <span>إعدادات النظام والشركة العامة</span>
-          </h3>
-          <p className="text-xs text-slate-400">تحديث وتعديل بيانات ومحددات الشركة، وسياسات أرشفة التتبع والملفات</p>
-        </div>
-      </div>
-
-      <form onSubmit={handleSaveSettings} className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
-        {/* Left Side: Company Profile info */}
-        <div className="lg:col-span-2 space-y-6">
-          <div className="bg-slate-900/40 backdrop-blur-xl border border-slate-800/80 rounded-3xl p-6 shadow-xl space-y-6">
-            <div className="flex items-center gap-2 text-teal-400 pb-3 border-b border-slate-850">
-              <Building className="w-5 h-5" />
-              <h4 className="text-sm font-extrabold text-white">بيانات الشركة الرسمية والترويجية</h4>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-xs text-slate-400 mb-1 flex items-center gap-1">
-                  <span>اسم الشركة / المؤسسة الرسمي</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={companyName}
-                  onChange={(e) => setCompanyName(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 focus:border-teal-500 rounded-xl p-3 text-xs text-white outline-none"
-                />
+    <form onSubmit={save} className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="lg:col-span-2 space-y-6">
+        <Card>
+          <CardHeader icon={Building} title="بيانات الشركة" description="تظهر في كشوف الرواتب وتطبيق الموظفين" />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Field label="اسم الشركة">
+              <Input required value={company.name} onChange={setCompanyField('name')} />
+            </Field>
+            <Field label="العنوان">
+              <div className="relative">
+                <MapPin className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" />
+                <Input value={company.address} onChange={setCompanyField('address')} className="pr-9" />
               </div>
-
-              <div>
-                <label className="block text-xs text-slate-400 mb-1 flex items-center gap-1">
-                  <span>العنوان والفرع الرئيسي للشركة</span>
-                </label>
-                <input
-                  type="text"
-                  value={address}
-                  onChange={(e) => setAddress(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 focus:border-teal-500 rounded-xl p-3 text-xs text-white outline-none"
-                />
+            </Field>
+            <Field label="رقم الهاتف">
+              <div className="relative">
+                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" />
+                <Input type="tel" value={company.phone} onChange={setCompanyField('phone')} dir="ltr" className="text-left pl-9" />
               </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-xs text-slate-400 mb-1 flex items-center gap-1 font-mono">
-                  <Phone className="w-3.5 h-3.5" />
-                  <span>رقم الهاتف المعتمد</span>
-                </label>
-                <input
-                  type="tel"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 focus:border-teal-500 rounded-xl p-3 text-xs text-white outline-none text-left"
-                  dir="ltr"
-                />
+            </Field>
+            <Field label="البريد الإلكتروني">
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" />
+                <Input type="email" value={company.email} onChange={setCompanyField('email')} dir="ltr" className="text-left pl-9" />
               </div>
-
-              <div>
-                <label className="block text-xs text-slate-400 mb-1 flex items-center gap-1 font-mono">
-                  <Mail className="w-3.5 h-3.5" />
-                  <span>البريد الإلكتروني المعتمد للشركة</span>
-                </label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 focus:border-teal-500 rounded-xl p-3 text-xs text-white outline-none text-left"
-                  dir="ltr"
-                />
+            </Field>
+            <Field label="الموقع الإلكتروني">
+              <div className="relative">
+                <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" />
+                <Input value={company.website} onChange={setCompanyField('website')} dir="ltr" className="text-left pl-9" />
               </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-xs text-slate-400 mb-1 flex items-center gap-1 font-mono">
-                  <Globe className="w-3.5 h-3.5" />
-                  <span>الموقع الإلكتروني الرسمي (إن وجد)</span>
-                </label>
-                <input
-                  type="text"
-                  value={website}
-                  onChange={(e) => setWebsite(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 focus:border-teal-500 rounded-xl p-3 text-xs text-white outline-none text-left"
-                  dir="ltr"
-                />
+            </Field>
+            <Field label="الرقم الضريبي (اختياري)">
+              <div className="relative">
+                <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" />
+                <Input value={company.tax_number} onChange={setCompanyField('tax_number')} dir="ltr" className="text-left pl-9" />
               </div>
-
-              <div>
-                <label className="block text-xs text-slate-400 mb-1 flex items-center gap-1">
-                  <CreditCard className="w-3.5 h-3.5" />
-                  <span>الرقم أو الملف الضريبي (اختياري)</span>
-                </label>
-                <input
-                  type="text"
-                  value={taxNumber}
-                  onChange={(e) => setTaxNumber(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 focus:border-teal-500 rounded-xl p-3 text-xs text-white outline-none text-left"
-                  dir="ltr"
-                />
+            </Field>
+            <Field label="رابط شعار الشركة" className="md:col-span-2">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 shrink-0 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center overflow-hidden">
+                  {company.logo_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element -- arbitrary external logo URL
+                    <img src={company.logo_url} alt="" className="w-full h-full object-contain" />
+                  ) : (
+                    <ImageIcon className="w-4 h-4 text-slate-600" />
+                  )}
+                </div>
+                <Input value={company.logo_url} onChange={setCompanyField('logo_url')} placeholder="https://example.com/logo.png" dir="ltr" className="text-left font-mono" />
               </div>
-            </div>
-
-            <div>
-              <label className="block text-xs text-slate-400 mb-1">شعار الشركة (رابط الصورة / Logo URL)</label>
-              <input
-                type="text"
-                placeholder="https://example.com/logo.png"
-                value={logoUrl}
-                onChange={(e) => setLogoUrl(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 focus:border-teal-500 rounded-xl p-3 text-xs text-white outline-none text-left font-mono"
-                dir="ltr"
-              />
-            </div>
+            </Field>
           </div>
+        </Card>
 
-          {/* Leave Policy Settings Card */}
-          <div className="bg-slate-900/40 backdrop-blur-xl border border-slate-800/80 rounded-3xl p-6 shadow-xl space-y-6">
-            <div className="flex items-center gap-2 text-teal-400 pb-3 border-b border-slate-850">
-              <CalendarRange className="w-5 h-5" />
-              <h4 className="text-sm font-extrabold text-white">إعدادات سياسات وأرصدة الإجازات العامة</h4>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-xs text-slate-400 mb-1 font-bold">
-                  <span>رصيد الإجازات السنوية الافتراضي (للموظفين الجدد)</span>
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="number"
-                    required
-                    value={defaultAnnual}
-                    onChange={(e) => setDefaultAnnual(Number(e.target.value))}
-                    className="w-full bg-slate-950 border border-slate-800 focus:border-teal-500 rounded-xl p-3 text-sm text-white font-bold outline-none text-left"
-                    dir="ltr"
-                  />
-                  <span className="bg-slate-800 border border-slate-700 px-4 py-3 rounded-xl text-xs text-slate-300 font-bold flex items-center">يوم/سنة</span>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs text-slate-400 mb-1 font-bold">
-                  <span>رصيد الإجازات المرضية الافتراضي (للموظفين الجدد)</span>
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="number"
-                    required
-                    value={defaultSick}
-                    onChange={(e) => setDefaultSick(Number(e.target.value))}
-                    className="w-full bg-slate-950 border border-slate-800 focus:border-teal-500 rounded-xl p-3 text-sm text-white font-bold outline-none text-left"
-                    dir="ltr"
-                  />
-                  <span className="bg-slate-800 border border-slate-700 px-4 py-3 rounded-xl text-xs text-slate-300 font-bold flex items-center">يوم/سنة</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <h5 className="text-xs font-bold text-slate-300">أنواع الإجازات المتاحة وتصنيفاتها:</h5>
-              
-              <div className="flex flex-wrap gap-2.5 p-4 bg-slate-950/40 border border-slate-850 rounded-2xl">
-                {leaveTypes.length === 0 ? (
-                  <span className="text-xs text-slate-500">لا توجد أنواع إجازات مضافة</span>
+        <Card>
+          <CardHeader icon={CalendarRange} tone="amber" title="سياسة الإجازات" description="الأرصدة الافتراضية للموظفين الجدد وأنواع الإجازات المتاحة" />
+          <div className="grid grid-cols-2 gap-4 mb-5">
+            <Field label="رصيد الإجازة السنوية (يوم/سنة)">
+              <Input type="number" min={0} required value={defaultAnnual} onChange={(e) => setDefaultAnnual(Number(e.target.value))} dir="ltr" className="text-left" />
+            </Field>
+            <Field label="رصيد الإجازة المرضية (يوم/سنة)">
+              <Input type="number" min={0} required value={defaultSick} onChange={(e) => setDefaultSick(Number(e.target.value))} dir="ltr" className="text-left" />
+            </Field>
+          </div>
+          <p className="text-[11px] font-bold text-slate-400 mb-2">أنواع الإجازات</p>
+          <div className="flex flex-wrap gap-2 mb-4">
+            {leaveTypes.map((t) => (
+              <span key={t.id} className="inline-flex items-center gap-1.5 pr-3 pl-1.5 h-8 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-200">
+                <span className="font-bold">{t.name}</span>
+                <span className="text-[10px] text-slate-500 font-mono">{t.id}</span>
+                {PROTECTED_LEAVE_TYPES.includes(t.id) ? (
+                  <span className="w-5" />
                 ) : (
-                  leaveTypes.map((type) => (
-                    <div 
-                      key={type.id} 
-                      className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 border border-slate-800 hover:border-slate-700 text-xs text-slate-200 rounded-xl transition-all"
-                    >
-                      <span className="font-bold">{type.name}</span>
-                      <span className="text-[10px] text-slate-500 font-mono">({type.id})</span>
-                      {!['annual', 'sick'].includes(type.id) && (
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveLeaveType(type.id)}
-                          className="text-slate-500 hover:text-rose-400 transition-colors p-0.5 rounded cursor-pointer"
-                          title="حذف هذا النوع"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </div>
-                  ))
-                )}
-              </div>
-
-              {/* Add leave type form */}
-              <div className="bg-slate-950/20 border border-slate-850 p-4 rounded-2xl space-y-4">
-                <span className="text-[11px] font-bold text-slate-400 block">إضافة نوع إجازة مخصص جديد:</span>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-                  <div>
-                    <label className="block text-[10px] text-slate-400 mb-1">اسم الإجازة بالعربية</label>
-                    <input
-                      type="text"
-                      placeholder="مثال: إجازة زواج"
-                      value={newLeaveTypeName}
-                      onChange={(e) => setNewLeaveTypeName(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 focus:border-teal-500 rounded-xl p-2.5 text-xs text-white outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] text-slate-400 mb-1">رمز فريد للإجازة (بالإنجليزي)</label>
-                    <input
-                      type="text"
-                      placeholder="مثال: marriage_leave"
-                      value={newLeaveTypeId}
-                      onChange={(e) => setNewLeaveTypeId(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 focus:border-teal-500 rounded-xl p-2.5 text-xs text-white outline-none text-left font-mono"
-                      dir="ltr"
-                    />
-                  </div>
                   <button
                     type="button"
-                    onClick={handleAddLeaveType}
-                    className="flex items-center justify-center gap-1.5 py-2.5 px-4 bg-teal-650/20 hover:bg-teal-650/40 border border-teal-500/30 text-teal-400 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                    onClick={() => setLeaveTypes(leaveTypes.filter((x) => x.id !== t.id))}
+                    className="p-1 rounded-md text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 cursor-pointer"
+                    aria-label={`حذف ${t.name}`}
                   >
-                    <Plus className="w-4 h-4" />
-                    <span>أضف للقائمة</span>
+                    <Trash2 className="w-3 h-3" />
                   </button>
-                </div>
-              </div>
-            </div>
+                )}
+              </span>
+            ))}
           </div>
-        </div>
-
-        {/* Right Side: System Settings and Policy */}
-        <div className="space-y-6">
-          <div className="bg-slate-900/40 backdrop-blur-xl border border-slate-800/80 rounded-3xl p-6 shadow-xl space-y-6">
-            <div className="flex items-center gap-2 text-amber-400 pb-3 border-b border-slate-850">
-              <ShieldAlert className="w-5 h-5" />
-              <h4 className="text-sm font-extrabold text-white">سياسة الأرشفة والتتبع الجغرافي</h4>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs text-slate-400 mb-1 flex items-center gap-1 font-bold">
-                  <Clock className="w-4 h-4 text-amber-400" />
-                  <span>فترة الاحتفاظ ببيانات التتبع والموقع</span>
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    required
-                    value={trackingDays}
-                    onChange={(e) => setTrackingDays(Number(e.target.value.replace(/\D/g, '')))}
-                    className="w-full bg-slate-950 border border-slate-800 focus:border-teal-500 rounded-xl p-3 text-sm text-white font-bold outline-none text-left"
-                    dir="ltr"
-                  />
-                  <span className="bg-slate-800 border border-slate-700 px-4 py-3 rounded-xl text-xs text-slate-300 font-bold whitespace-nowrap flex items-center">يوم</span>
-                </div>
-                <p className="text-[10px] text-slate-500 mt-2 leading-relaxed">
-                  سيقوم النظام أوتوماتيكياً بمسح وتصفية إحداثيات ومواقع تتبع الموظفين ومخالفات السياج الجغرافي القديمة التي تتخطى هذه الفترة لضمان سرعة السيرفرات وتنظيف المساحة.
-                </p>
-              </div>
-
-              <div className="p-4 bg-teal-950/10 border border-teal-500/20 rounded-2xl space-y-2">
-                <div className="flex items-center gap-1 text-[10px] text-teal-400 font-bold">
-                  <HardDrive className="w-3.5 h-3.5" />
-                  <span>سلة المحذوفات للمستندات</span>
-                </div>
-                <p className="text-[9px] text-slate-400 leading-relaxed">
-                  نظام الأمان والملفات يضمن حفظ مستندات الموظفين وسجلات وتعهدات السلف المحذوفة لمدة **30 يوماً** تلقائياً في سلة المحذوفات قبل تصفيتها بشكل نهائي.
-                </p>
-              </div>
-            </div>
+          <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2 items-end">
+            <Field label="اسم نوع جديد">
+              <Input value={newTypeName} onChange={(e) => setNewTypeName(e.target.value)} placeholder="مثال: إجازة زواج" />
+            </Field>
+            <Field label="الرمز (بالإنجليزية)">
+              <Input value={newTypeId} onChange={(e) => setNewTypeId(e.target.value)} placeholder="marriage" dir="ltr" className="text-left font-mono" />
+            </Field>
+            <Button variant="soft" icon={Plus} onClick={addLeaveType}>
+              إضافة
+            </Button>
           </div>
-
-          {/* Payroll Policy Settings Card */}
-          <div className="bg-slate-900/40 backdrop-blur-xl border border-slate-800/80 rounded-3xl p-6 shadow-xl space-y-6">
-            <div className="flex items-center gap-2 text-teal-400 pb-3 border-b border-slate-850">
-              <CalendarRange className="w-5 h-5 text-teal-400" />
-              <h4 className="text-sm font-extrabold text-white">إعدادات الدورة المالية للرواتب 💸</h4>
-            </div>
-
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[10px] text-slate-400 mb-1 font-bold">
-                    يوم بداية الدورة
-                  </label>
-                  <input
-                    type="number"
-                    required
-                    min={1}
-                    max={31}
-                    value={cycleStartDay}
-                    onChange={(e) => setCycleStartDay(Number(e.target.value))}
-                    className="w-full bg-slate-950 border border-slate-800 focus:border-teal-500 rounded-xl p-2.5 text-xs text-white text-center font-bold outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] text-slate-400 mb-1 font-bold">
-                    يوم نهاية الدورة
-                  </label>
-                  <input
-                    type="number"
-                    required
-                    min={1}
-                    max={31}
-                    value={cycleEndDay}
-                    onChange={(e) => setCycleEndDay(Number(e.target.value))}
-                    className="w-full bg-slate-950 border border-slate-800 focus:border-teal-500 rounded-xl p-2.5 text-xs text-white text-center font-bold outline-none"
-                  />
-                </div>
-              </div>
-              <p className="text-[10px] text-slate-505 leading-relaxed text-slate-500">
-                حدد يوم البداية ويوم النهاية للشهر المالي. افتراضياً، تبدأ الدورة يوم 25 من الشهر السابق وتنتهي يوم 24 من الشهر الجاري.
-              </p>
-            </div>
-          </div>
-
-          {/* Submit button card */}
-          <div className="bg-slate-900/40 backdrop-blur-xl border border-slate-800/80 rounded-3xl p-6 shadow-xl">
-            <button
-              type="submit"
-              disabled={saving}
-              className="w-full flex items-center justify-center gap-2 py-3.5 px-4 bg-gradient-to-l from-teal-650 to-teal-500 hover:from-teal-600 hover:to-teal-400 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-teal-500/10 active:scale-95 cursor-pointer"
-            >
-              {saving ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>جاري التحديث والحفظ...</span>
-                </>
-              ) : (
-                <>
-                  <Save className="w-4 h-4" />
-                  <span>حفظ إعدادات النظام والشركة 💾</span>
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-
-      </form>
-
-      {/* Work Schedules Management Section */}
-      <div className="bg-slate-900/40 backdrop-blur-xl border border-slate-800/80 rounded-3xl p-6 shadow-xl space-y-6 mt-8">
-        <div className="flex items-center gap-2 text-teal-400 pb-3 border-b border-slate-850 font-bold">
-          <Clock className="w-5 h-5 text-teal-400" />
-          <h4 className="text-sm font-extrabold text-white">إدارة جداول وأوقات العمل بالفروع والأقسام والموظفين 📅</h4>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Add Work Schedule Form */}
-          <div className="lg:col-span-1 bg-slate-950/40 border border-slate-850 p-6 rounded-2xl space-y-4 text-right" dir="rtl">
-            <h5 className="text-xs font-bold text-teal-400 mb-2">إضافة جدول دوام جديد:</h5>
-            <form onSubmit={handleAddSchedule} className="space-y-4">
-              <div>
-                <label className="block text-[10px] text-slate-400 mb-1">اسم جدول الدوام</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="مثال: دوام فرع بغداد المعتاد"
-                  value={schedName}
-                  onChange={(e) => setSchedName(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 focus:border-teal-500 rounded-xl p-2.5 text-xs text-white outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[10px] text-slate-400 mb-1">نطاق تطبيق الجدول</label>
-                <select
-                  value={schedScope}
-                  onChange={(e) => {
-                    setSchedScope(e.target.value as any);
-                    setSchedTargetId('');
-                  }}
-                  className="w-full bg-slate-950 border border-slate-800 focus:border-teal-500 rounded-xl p-2.5 text-xs text-white outline-none"
-                >
-                  <option value="branch">🏢 تحديد حسب الفرع الجغرافي</option>
-                  <option value="department">📂 تحديد حسب القسم الإداري</option>
-                  <option value="employee">👤 تحديد لموظف معين بشكل مخصص</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-[10px] text-slate-400 mb-1 font-bold">الجهة المستهدفة بالفرع أو القسم</label>
-                <select
-                  required
-                  value={schedTargetId}
-                  onChange={(e) => setSchedTargetId(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 focus:border-teal-500 rounded-xl p-2.5 text-xs text-white outline-none font-bold"
-                >
-                  <option value="">-- اختر الجهة المحددة --</option>
-                  {schedScope === 'branch' && branchesList.map(b => (
-                    <option key={b.id} value={b.id}>{b.name}</option>
-                  ))}
-                  {schedScope === 'department' && departmentsList.map(d => (
-                    <option key={d.id} value={d.id}>{d.name}</option>
-                  ))}
-                  {schedScope === 'employee' && employeesList.map(e => (
-                    <option key={e.id} value={e.id}>{e.full_name}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[10px] text-slate-400 mb-1">وقت الدخول المعتمد</label>
-                  <input
-                    type="time"
-                    required
-                    value={schedCheckIn}
-                    onChange={(e) => setSchedCheckIn(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 focus:border-teal-500 rounded-xl p-2.5 text-xs text-white outline-none text-left font-mono"
-                    dir="ltr"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] text-slate-400 mb-1">وقت الخروج المعتمد</label>
-                  <input
-                    type="time"
-                    required
-                    value={schedCheckOut}
-                    onChange={(e) => setSchedCheckOut(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 focus:border-teal-500 rounded-xl p-2.5 text-xs text-white outline-none text-left font-mono"
-                    dir="ltr"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[10px] text-slate-400 mb-1">فترة السماح للتأخير بالدقائق</label>
-                <input
-                  type="number"
-                  required
-                  min={0}
-                  value={schedGrace}
-                  onChange={(e) => setSchedGrace(Number(e.target.value))}
-                  className="w-full bg-slate-950 border border-slate-800 focus:border-teal-500 rounded-xl p-2.5 text-xs text-white outline-none text-left font-mono font-bold"
-                  dir="ltr"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[10px] text-slate-400 mb-2 font-bold">أيام العمل الأسبوعية النشطة</label>
-                <div className="grid grid-cols-3 gap-2 text-right">
-                  {[
-                    { value: 6, label: 'السبت' },
-                    { value: 0, label: 'الأحد' },
-                    { value: 1, label: 'الاثنين' },
-                    { value: 2, label: 'الثلاثاء' },
-                    { value: 3, label: 'الأربعاء' },
-                    { value: 4, label: 'الخميس' },
-                    { value: 5, label: 'الجمعة' }
-                  ].map(day => {
-                    const isChecked = schedWorkDays.includes(day.value);
-                    return (
-                      <label key={day.value} className="flex items-center gap-1.5 text-[10px] text-slate-300 cursor-pointer hover:text-white transition-colors">
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={() => handleDayToggle(day.value)}
-                          className="rounded border-slate-850 text-teal-600 focus:ring-teal-500 w-3.5 h-3.5"
-                        />
-                        <span>{day.label}</span>
-                      </label>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={addingSchedule}
-                className="w-full flex items-center justify-center gap-1.5 py-2.5 px-4 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-teal-500/10 cursor-pointer"
-              >
-                {addingSchedule ? <Loader2 className="w-4 h-4 animate-spin" /> : <span>حفظ جدول الدوام 💾</span>}
-              </button>
-            </form>
-          </div>
-
-          {/* Active Work Schedules List */}
-          <div className="lg:col-span-2 space-y-4 text-right">
-            <h5 className="text-xs font-bold text-slate-300 mb-2">جداول الدوام المسجلة بالنظام:</h5>
-            {workSchedules.length === 0 ? (
-              <div className="text-center p-8 bg-slate-950/20 border border-slate-850 rounded-2xl text-slate-500 text-xs">
-                لا توجد أي جداول دوام مضافة بالنظام حالياً. سيقوم النظام باعتماد الدوام المعتاد (السبت-الخميس من 9ص إلى 5م).
-              </div>
-            ) : (
-              <div className="overflow-x-auto rounded-2xl border border-slate-800/60">
-                <table className="w-full text-right border-collapse">
-                  <thead>
-                    <tr className="bg-slate-950/80 text-slate-300 text-[10px] font-bold border-b border-slate-800/80">
-                      <th className="p-3">اسم الجدول</th>
-                      <th className="p-3">الجهة المطبقة</th>
-                      <th className="p-3">الأوقات المعتمدة</th>
-                      <th className="p-3">أيام الدوام</th>
-                      <th className="p-3 text-left">الإجراءات</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {workSchedules.map((ws) => (
-                      <tr key={ws.id} className="border-b border-slate-800/40 hover:bg-slate-900/20 text-xs transition-colors">
-                        <td className="p-3 font-bold text-white">{ws.name}</td>
-                        <td className="p-3 text-slate-300 font-medium">
-                          {getScheduleTargetName(ws)}
-                        </td>
-                        <td className="p-3 font-mono text-[10px] text-teal-400">
-                          {formatTime12h(ws.check_in_time)} - {formatTime12h(ws.check_out_time)}
-                          <span className="text-slate-500 text-[9px] block">سماح: {ws.grace_period_minutes} دقيقة</span>
-                        </td>
-                        <td className="p-3 max-w-[150px] truncate" title={(ws.work_days || []).map((d: number) => getDayNameAr(d)).join('، ')}>
-                          <span className="text-[10px] text-slate-450">
-                            {(ws.work_days || []).map((d: number) => getDayNameAr(d)).join('، ')}
-                          </span>
-                        </td>
-                        <td className="p-3 text-left">
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteSchedule(ws.id)}
-                            className="p-2 bg-slate-850 hover:bg-rose-500/10 hover:text-rose-400 border border-slate-800 hover:border-rose-500/20 text-slate-400 rounded-xl transition-all cursor-pointer"
-                            title="حذف الجدول"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </div>
+        </Card>
       </div>
 
-      {/* Announcements Management Section */}
-      <div className="bg-slate-900/40 backdrop-blur-xl border border-slate-800/80 rounded-3xl p-6 shadow-xl space-y-6 mt-8">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-3 border-b border-slate-850">
-          <div className="flex items-center gap-2 text-teal-400">
-            <Megaphone className="w-5 h-5" />
-            <h4 className="text-sm font-extrabold text-white">أرشيف وإدارة التعاميم والإعلانات الإدارية</h4>
+      <div className="space-y-6">
+        <Card>
+          <CardHeader icon={Banknote} tone="emerald" title="الدورة المالية للرواتب" />
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="يوم البداية">
+              <Input type="number" min={1} max={31} required value={cycleStart} onChange={(e) => setCycleStart(Number(e.target.value))} className="text-center" />
+            </Field>
+            <Field label="يوم النهاية">
+              <Input type="number" min={1} max={31} required value={cycleEnd} onChange={(e) => setCycleEnd(Number(e.target.value))} className="text-center" />
+            </Field>
           </div>
-          
-          {announcements.length > 0 && (
-            <button
-              type="button"
-              onClick={handlePurgeAnnouncements}
-              className="flex items-center justify-center gap-1.5 py-2 px-4 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-rose-450 rounded-xl text-xs font-bold transition-all cursor-pointer"
-            >
-              <Trash className="w-4 h-4" />
-              <span>إخلاء الأرشيف بالكامل 🧹</span>
-            </button>
-          )}
-        </div>
+          <InfoNote tone="emerald" icon={CalendarRange} className="mt-4">
+            دورة الشهر الحالي: <span className="font-mono font-bold" dir="ltr">{cyclePreview.start}</span> ← <span className="font-mono font-bold" dir="ltr">{cyclePreview.end}</span>
+          </InfoNote>
+        </Card>
 
-        {loadingAnnouncements ? (
-          <div className="flex justify-center p-6">
-            <Loader2 className="w-6 h-6 text-teal-400 animate-spin" />
+        <Card>
+          <CardHeader icon={ShieldAlert} tone="amber" title="الأرشفة والتتبع" />
+          <Field label="الاحتفاظ ببيانات التتبع (يوم)" hint="تُحذف إحداثيات التتبع ومخالفات السياج الأقدم من هذه المدة تلقائياً.">
+            <Input type="number" min={1} required value={trackingDays} onChange={(e) => setTrackingDays(Number(e.target.value))} dir="ltr" className="text-left" />
+          </Field>
+          <InfoNote tone="slate" icon={Trash2} className="mt-4">
+            تُحفظ المستندات المحذوفة 30 يوماً في سلة المحذوفات قبل إتلافها نهائياً.
+          </InfoNote>
+        </Card>
+
+        <div className="lg:sticky lg:top-4">
+          <Button type="submit" icon={Save} loading={saving} block size="lg">
+            {saving ? 'جاري الحفظ...' : 'حفظ الإعدادات'}
+          </Button>
+        </div>
+      </div>
+    </form>
+  );
+}
+
+/* ------------------------------ Work schedules ------------------------------ */
+
+function SchedulesSection({ data, onChanged }: { data: SettingsData; onChanged: () => void }) {
+  const confirm = useConfirm();
+  const [name, setName] = useState('');
+  const [scope, setScope] = useState<'branch' | 'department' | 'employee'>('branch');
+  const [targetId, setTargetId] = useState('');
+  const [checkIn, setCheckIn] = useState('09:00');
+  const [checkOut, setCheckOut] = useState('17:00');
+  const [grace, setGrace] = useState(15);
+  const [workDays, setWorkDays] = useState<number[]>(DEFAULT_WORK_DAYS);
+  const [saving, setSaving] = useState(false);
+
+  const targets = scope === 'branch' ? data.branches : scope === 'department' ? data.departments : data.employees.map((e) => ({ id: e.id, name: e.full_name }));
+
+  const targetName = (s: WorkSchedule) => {
+    if (s.employee_id) return { label: 'موظف', name: data.employees.find((e) => e.id === s.employee_id)?.full_name };
+    if (s.department_id) return { label: 'قسم', name: data.departments.find((d) => d.id === s.department_id)?.name };
+    if (s.branch_id) return { label: 'فرع', name: data.branches.find((b) => b.id === s.branch_id)?.name };
+    return { label: 'عام', name: '' };
+  };
+
+  const add = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!targetId) {
+      toast.error('يرجى تحديد الجهة المستهدفة');
+      return;
+    }
+    if (workDays.length === 0) {
+      toast.error('اختر يوم عمل واحداً على الأقل');
+      return;
+    }
+    setSaving(true);
+    try {
+      const { error } = await supabase.from('work_schedules').insert({
+        name: name.trim(),
+        check_in_time: `${checkIn}:00`,
+        check_out_time: `${checkOut}:00`,
+        grace_period_minutes: Number(grace),
+        work_days: [...workDays].sort((a, b) => a - b),
+        [`${scope}_id`]: targetId,
+      });
+      if (error) throw error;
+      toast.success('تم إضافة جدول الدوام');
+      setName('');
+      setTargetId('');
+      onChanged();
+    } catch (err) {
+      toast.error(`فشل إضافة الجدول: ${errorMessage(err)}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const remove = async (s: WorkSchedule) => {
+    const ok = await confirm({ title: `حذف جدول «${s.name}»؟`, message: 'سيعود الموظفون المشمولون إلى الجدول الأعم التالي أو الدوام الافتراضي.', confirmLabel: 'حذف' });
+    if (!ok) return;
+    const { error } = await supabase.from('work_schedules').delete().eq('id', s.id);
+    if (error) {
+      toast.error(`فشل حذف الجدول: ${errorMessage(error)}`);
+      return;
+    }
+    toast.success('تم حذف جدول الدوام');
+    onChanged();
+  };
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <Card>
+        <CardHeader icon={Plus} title="جدول دوام جديد" description="يُطبّق حسب الأولوية: الموظف ثم القسم ثم الفرع" />
+        <form onSubmit={add} className="space-y-4">
+          <Field label="اسم الجدول">
+            <Input required value={name} onChange={(e) => setName(e.target.value)} placeholder="مثال: دوام فرع بغداد" />
+          </Field>
+          <Field label="نطاق التطبيق">
+            <SegmentedTabs
+              value={scope}
+              onChange={(v) => {
+                setScope(v);
+                setTargetId('');
+              }}
+              className="w-full"
+              options={[
+                { value: 'branch', label: 'فرع' },
+                { value: 'department', label: 'قسم' },
+                { value: 'employee', label: 'موظف' },
+              ]}
+            />
+          </Field>
+          <Field label="الجهة المستهدفة">
+            <Select required value={targetId} onChange={(e) => setTargetId(e.target.value)}>
+              <option value="">اختر...</option>
+              {targets.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="الدخول">
+              <Input type="time" required value={checkIn} onChange={(e) => setCheckIn(e.target.value)} dir="ltr" />
+            </Field>
+            <Field label="الخروج">
+              <Input type="time" required value={checkOut} onChange={(e) => setCheckOut(e.target.value)} dir="ltr" />
+            </Field>
           </div>
-        ) : announcements.length === 0 ? (
-          <div className="text-center p-8 text-slate-500 text-xs">
-            لا توجد أي تعاميم إدارية في الأرشيف حالياً
-          </div>
-        ) : (
-          <div className="overflow-x-auto rounded-2xl border border-slate-800/60">
-            <table className="w-full text-right border-collapse">
-              <thead>
-                <tr className="bg-slate-950/80 text-slate-300 text-xs font-bold border-b border-slate-800/80">
-                  <th className="p-3">تاريخ النشر</th>
-                  <th className="p-3">عنوان الإعلان</th>
-                  <th className="p-3">محتوى التعميم</th>
-                  <th className="p-3 text-left">الإجراءات</th>
-                </tr>
-              </thead>
-              <tbody>
-                {announcements.map((ann) => (
-                  <tr key={ann.id} className="border-b border-slate-800/40 hover:bg-slate-900/20 text-xs transition-colors">
-                    <td className="p-3 text-slate-400 font-mono">
-                      {new Date(ann.created_at).toLocaleDateString('ar-IQ', {
-                        year: 'numeric',
-                        month: 'short',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })}
+          <Field label="فترة السماح للتأخير (دقيقة)">
+            <Input type="number" min={0} required value={grace} onChange={(e) => setGrace(Number(e.target.value))} dir="ltr" className="text-left" />
+          </Field>
+          <Field label="أيام العمل">
+            <div className="grid grid-cols-4 gap-1.5">
+              {WEEK_ORDER.map((d) => {
+                const on = workDays.includes(d);
+                return (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() => setWorkDays(on ? workDays.filter((x) => x !== d) : [...workDays, d])}
+                    className={cn(
+                      'h-9 rounded-lg text-[11px] font-bold border transition-colors cursor-pointer',
+                      on ? 'bg-indigo-500/15 border-indigo-400/40 text-indigo-200' : 'bg-slate-950/60 border-slate-800 text-slate-500 hover:text-slate-300',
+                    )}
+                  >
+                    {WEEKDAYS_AR[d]}
+                  </button>
+                );
+              })}
+            </div>
+          </Field>
+          <Button type="submit" icon={Save} loading={saving} block>
+            حفظ الجدول
+          </Button>
+        </form>
+      </Card>
+
+      <Card className="lg:col-span-2">
+        <CardHeader icon={CalendarClock} tone="sky" title="جداول الدوام المسجلة" description="بدون جدول يُعتمد الدوام الافتراضي: السبت–الخميس من 9 ص إلى 5 م" />
+        <DataTable>
+          <thead>
+            <tr>
+              <th>الجدول</th>
+              <th>يطبق على</th>
+              <th>الأوقات</th>
+              <th>أيام الدوام</th>
+              <th className="!text-left" />
+            </tr>
+          </thead>
+          <tbody>
+            {data.schedules.length === 0 ? (
+              <TableEmpty colSpan={5}>لا توجد جداول دوام مضافة</TableEmpty>
+            ) : (
+              data.schedules.map((s) => {
+                const t = targetName(s);
+                return (
+                  <tr key={s.id}>
+                    <td className="font-bold text-white">{s.name}</td>
+                    <td>
+                      <Badge tone="slate">{t.label}</Badge> <span className="text-slate-300">{t.name || 'غير معروف'}</span>
                     </td>
-                    <td className="p-3 font-bold text-white">
-                      <div className="flex items-center gap-1.5">
-                        <span>{ann.title}</span>
-                        {ann.is_pinned && (
-                          <span className="px-1.5 py-0.5 bg-teal-500/10 text-teal-400 border border-teal-500/15 rounded text-[8px] font-bold">مثبت</span>
-                        )}
+                    <td className="whitespace-nowrap">
+                      <span className="font-mono text-indigo-200" dir="ltr">{formatTime12h(s.check_in_time)} – {formatTime12h(s.check_out_time)}</span>
+                      <span className="block text-[10px] text-slate-500">سماح {s.grace_period_minutes} دقيقة</span>
+                    </td>
+                    <td>
+                      <div className="flex flex-wrap gap-1 max-w-[260px]">
+                        {WEEK_ORDER.filter((d) => (s.work_days || []).includes(d)).map((d) => (
+                          <span key={d} className="px-1.5 py-0.5 rounded-md bg-slate-800/80 text-[10px] text-slate-300">{WEEKDAYS_AR[d]}</span>
+                        ))}
                       </div>
                     </td>
-                    <td className="p-3 text-slate-350 max-w-sm truncate" title={ann.content}>
-                      {ann.content}
-                    </td>
-                    <td className="p-3 text-left">
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteAnnouncement(ann.id)}
-                        className="p-2 bg-slate-850 hover:bg-rose-500/10 hover:text-rose-400 border border-slate-800 hover:border-rose-500/20 text-slate-400 rounded-xl transition-all cursor-pointer"
-                        title="حذف التعميم نهائياً"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                    <td className="!text-left">
+                      <IconButton icon={Trash2} label="حذف الجدول" tone="rose" onClick={() => remove(s)} />
                     </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+                );
+              })
+            )}
+          </tbody>
+        </DataTable>
+      </Card>
     </div>
   );
 }
 
-const formatTime12h = (timeStr: string | null | undefined): string => {
-  if (!timeStr) return '--:--';
-  try {
-    const parts = timeStr.split(':');
-    if (parts.length < 2) return timeStr;
-    let hour = parseInt(parts[0], 10);
-    const minute = parseInt(parts[1], 10);
-    const period = hour >= 12 ? 'PM' : 'AM';
-    hour = hour % 12;
-    if (hour === 0) hour = 12;
-    const minuteStr = minute.toString().padStart(2, '0');
-    return `${hour}:${minuteStr} ${period}`;
-  } catch (e) {
-    return timeStr;
-  }
-};
+/* ------------------------------ Announcements ------------------------------ */
+
+function AnnouncementsSection({ announcements, onRemoved }: { announcements: Announcement[]; onRemoved: (ids: string[]) => void }) {
+  const confirm = useConfirm();
+  const [busy, setBusy] = useState<string | null>(null);
+
+  const remove = async (a: Announcement) => {
+    const ok = await confirm({ title: 'حذف التعميم؟', message: a.content, confirmLabel: 'حذف' });
+    if (!ok) return;
+    setBusy(a.id);
+    const { error } = await supabase.from('announcements').delete().eq('id', a.id);
+    setBusy(null);
+    if (error) {
+      toast.error(`فشل حذف التعميم: ${errorMessage(error)}`);
+      return;
+    }
+    onRemoved([a.id]);
+    toast.success('تم حذف التعميم');
+  };
+
+  const purge = async () => {
+    const ok = await confirm({ title: 'إخلاء أرشيف التعاميم بالكامل؟', message: 'سيتم حذف كل التعاميم نهائياً ولا يمكن التراجع.', confirmLabel: 'إخلاء الأرشيف' });
+    if (!ok) return;
+    setBusy('purge');
+    const { error } = await supabase.from('announcements').delete().gt('created_at', '1970-01-01');
+    setBusy(null);
+    if (error) {
+      toast.error(`فشل إخلاء الأرشيف: ${errorMessage(error)}`);
+      return;
+    }
+    onRemoved(announcements.map((a) => a.id));
+    toast.success('تم إخلاء أرشيف التعاميم');
+  };
+
+  return (
+    <Card>
+      <CardHeader
+        icon={Megaphone}
+        tone="violet"
+        title="أرشيف التعاميم"
+        description="التعاميم المرسلة للموظفين من لوحة المؤشرات"
+        actions={
+          announcements.length > 0 && (
+            <Button size="sm" variant="soft-danger" icon={Trash2} loading={busy === 'purge'} onClick={purge}>
+              إخلاء الأرشيف
+            </Button>
+          )
+        }
+      />
+      {announcements.length === 0 ? (
+        <EmptyState icon={Megaphone} title="لا توجد تعاميم" description="التعاميم المرسلة من لوحة المؤشرات ستظهر هنا." />
+      ) : (
+        <div className="space-y-2">
+          {announcements.map((a) => (
+            <div key={a.id} className="flex items-start gap-3 p-4 rounded-2xl bg-slate-900/50 border border-slate-800/80">
+              <div className="w-9 h-9 shrink-0 rounded-xl bg-violet-500/10 border border-violet-500/20 text-violet-300 flex items-center justify-center">
+                <Megaphone className="w-4 h-4" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex flex-wrap items-center gap-2 mb-1">
+                  <h4 className="text-[13px] font-bold text-white">{a.title}</h4>
+                  {a.is_pinned && <Badge tone="violet"><Pin className="w-3 h-3" /> مثبت</Badge>}
+                  <span className="text-[10px] text-slate-500 flex items-center gap-1" dir="ltr">
+                    <Clock className="w-3 h-3" /> {formatDateTime(a.created_at)}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400 leading-relaxed whitespace-pre-line">{a.content}</p>
+              </div>
+              <IconButton icon={Trash2} label="حذف التعميم" tone="rose" loading={busy === a.id} onClick={() => remove(a)} />
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+}

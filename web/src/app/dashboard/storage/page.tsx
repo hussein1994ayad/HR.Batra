@@ -1,282 +1,175 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
-import { 
-  HardDrive, 
-  AlertTriangle, 
-  RotateCcw, 
-  Trash2, 
-  RefreshCw,
-  Loader2,
-  PieChart,
-  Server
-} from 'lucide-react';
-import confetti from 'canvas-confetti';
+import React, { useState } from 'react';
+import Link from 'next/link';
 import toast from 'react-hot-toast';
+import { HardDrive, AlertTriangle, Trash2, RefreshCw, ShieldCheck, ArrowUpLeft } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
+import { confetti } from '@/lib/lazy';
+import { useQuery } from '@/lib/useQuery';
+import { bucketFor } from '@/lib/storage';
+import { errorMessage, formatBytes } from '@/lib/format';
+import type { DeletedFile, StorageStat } from '@/lib/types';
+import { useConfirm } from '@/components/confirm';
+import { Button, Card, CardHeader, InfoNote, PageHeader, PageSkeleton, cn } from '@/components/ui';
+
+// Supabase free tier storage quota.
+const MAX_CAPACITY_BYTES = 3 * 1024 * 1024 * 1024;
+
+interface StorageData {
+  avatars: number;
+  documents: number;
+  pledges: number;
+  others: number;
+  trash: number;
+}
+
+async function fetchStorage(): Promise<StorageData> {
+  const [{ data: trashRows }, { data: stats }] = await Promise.all([
+    supabase.from('deleted_files').select('file_size_bytes').is('restored_at', null),
+    supabase.rpc('get_storage_stats'),
+  ]);
+  const result: StorageData = { avatars: 0, documents: 0, pledges: 0, others: 0, trash: 0 };
+  (trashRows ?? []).forEach((r) => (result.trash += Number(r.file_size_bytes) || 0));
+  ((stats ?? []) as StorageStat[]).forEach((s) => {
+    const size = Number(s.total_size) || 0;
+    if (s.bucket_name === 'avatars') result.avatars += size;
+    else if (s.bucket_name === 'employee-documents') result.documents += size;
+    else if (s.bucket_name === 'loan-pledges') result.pledges += size;
+    else result.others += size;
+  });
+  return result;
+}
 
 export default function StoragePage() {
-  const [loading, setLoading] = useState(true);
-  const [trashSizeBytes, setTrashSizeBytes] = useState(0);
-  const [actionLoading, setActionLoading] = useState(false);
+  const confirm = useConfirm();
+  const query = useQuery('storage', fetchStorage);
+  const [emptying, setEmptying] = useState(false);
 
-  const [avatarBytes, setAvatarBytes] = useState(0);
-  const [documentBytes, setDocumentBytes] = useState(0);
-  const [pledgeBytes, setPledgeBytes] = useState(0);
-  const [otherBytes, setOtherBytes] = useState(0);
-  const maxCapacityBytes = 3.0 * 1024 * 1024 * 1024; // Free Tier Limit: 3.0 GB
+  if (!query.data) return <PageSkeleton rows={3} />;
 
-  useEffect(() => {
-    fetchStorageStats();
-  }, []);
-
-  const fetchStorageStats = async () => {
-    setLoading(true);
-    try {
-      const { data } = await supabase
-        .from('deleted_files')
-        .select('file_size_bytes')
-        .is('restored_at', null);
-
-      let totalTrash = 0;
-      if (data) {
-        data.forEach(row => {
-          if (row.file_size_bytes) {
-            totalTrash += Number(row.file_size_bytes);
-          }
-        });
-      }
-      setTrashSizeBytes(totalTrash);
-
-      // Fetch actual storage buckets size
-      const { data: statsData } = await supabase.rpc('get_storage_stats');
-      
-      let avatars = 0;
-      let documents = 0;
-      let pledges = 0;
-      let others = 0;
-
-      if (statsData) {
-        statsData.forEach((stat: any) => {
-          const bucket = stat.bucket_name;
-          const size = Number(stat.total_size || 0);
-          if (bucket === 'avatars') avatars += size;
-          else if (bucket === 'employee-documents') documents += size;
-          else if (bucket === 'loan-pledges') pledges += size;
-          else others += size;
-        });
-      }
-
-      setAvatarBytes(avatars);
-      setDocumentBytes(documents);
-      setPledgeBytes(pledges);
-      setOtherBytes(others);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleEmptyTrash = async () => {
-    if (!confirm('تحذير شديد! هل أنت متأكد من رغبتك في إفراغ سلة المحذوفات بالكامل وتطهير السحابة؟ سيتم مسح كافة الملفات الموجودة نهائياً ولن تتمكن من استعادتها أبداً.')) return;
-    
-    setActionLoading(true);
-    try {
-      // 1. Fetch all trash files to delete them from storage
-      const { data: files } = await supabase
-        .from('deleted_files')
-        .select('*')
-        .is('restored_at', null);
-
-      if (files && files.length > 0) {
-        for (const file of files) {
-          const bucket = getBucketName(file.file_type);
-          await supabase.storage.from(bucket).remove([file.file_path]);
-        }
-      }
-
-      // 2. Delete all records from db
-      const { error } = await supabase
-        .from('deleted_files')
-        .delete()
-        .is('restored_at', null);
-
-      if (error) throw error;
-
-      setTrashSizeBytes(0);
-      confetti({
-        particleCount: 100,
-        spread: 70,
-        colors: ['#EF4444', '#F87171']
-      });
-      toast('تم إفراغ سلة المحذوفات بالكامل وتطهير المساحة السحابية! 🗑️');
-    } catch (err: any) {
-      toast.error(`فشل إفراغ السلة: ${err.message}`);
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const getBucketName = (fileType: string) => {
-    switch (fileType) {
-      case 'avatar': return 'avatars';
-      case 'document': return 'employee-documents';
-      case 'pledge': return 'loan-pledges';
-      case 'logo': return 'company-logos';
-      default: return 'employee-documents';
-    }
-  };
-
-  const formatBytes = (bytes: number) => {
-    if (bytes < 1024) return `${bytes.toFixed(0)} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-    return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
-  };
-
-  const totalUsedBytes = avatarBytes + documentBytes + pledgeBytes + otherBytes + trashSizeBytes;
-  const usageRatio = totalUsedBytes / maxCapacityBytes;
-  const usagePercentage = usageRatio * 100;
-  const isWarning = usageRatio >= 0.8;
-
+  const s = query.data;
+  const total = s.avatars + s.documents + s.pledges + s.others + s.trash;
+  const ratio = total / MAX_CAPACITY_BYTES;
+  const isWarning = ratio >= 0.8;
   const categories = [
-    { name: 'المستندات والوثائق الرسمية', size: documentBytes, color: 'bg-teal-500', percentage: (documentBytes / totalUsedBytes) * 100 },
-    { name: 'تعهدات السلف خطية الموقعة', size: pledgeBytes, color: 'bg-blue-500', percentage: (pledgeBytes / totalUsedBytes) * 100 },
-    { name: 'الصور الشخصية (Avatars)', size: avatarBytes, color: 'bg-purple-500', percentage: (avatarBytes / totalUsedBytes) * 100 },
-    { name: 'سلة المحذوفات مؤقتاً', size: trashSizeBytes, color: 'bg-rose-500', percentage: (trashSizeBytes / totalUsedBytes) * 100 },
-    { name: 'أخرى والنسخ الاحتياطية للشركة', size: otherBytes, color: 'bg-amber-500', percentage: (otherBytes / totalUsedBytes) * 100 },
+    { name: 'المستندات والوثائق', size: s.documents, color: 'bg-indigo-400' },
+    { name: 'تعهدات السلف', size: s.pledges, color: 'bg-sky-400' },
+    { name: 'الصور الشخصية', size: s.avatars, color: 'bg-violet-400' },
+    { name: 'سلة المحذوفات', size: s.trash, color: 'bg-rose-400' },
+    { name: 'ملفات أخرى', size: s.others, color: 'bg-amber-400' },
   ];
 
-  if (loading) {
-    return (
-      <div className="flex-grow flex items-center justify-center">
-        <Loader2 className="w-10 h-10 text-teal-400 animate-spin" />
-      </div>
-    );
-  }
+  const handleEmptyTrash = async () => {
+    const ok = await confirm({
+      title: 'إفراغ سلة المحذوفات بالكامل؟',
+      message: 'سيتم حذف كل الملفات الموجودة في السلة من الخادم نهائياً ولن تتمكن من استعادتها.',
+      confirmLabel: 'إفراغ السلة',
+    });
+    if (!ok) return;
+
+    setEmptying(true);
+    try {
+      const { data: files } = await supabase.from('deleted_files').select('*').is('restored_at', null);
+      for (const file of (files ?? []) as DeletedFile[]) {
+        await supabase.storage.from(bucketFor(file.file_type)).remove([file.file_path]);
+      }
+      const { error } = await supabase.from('deleted_files').delete().is('restored_at', null);
+      if (error) throw error;
+      query.mutate((prev) => ({ ...prev, trash: 0 }));
+      confetti({ particleCount: 100, spread: 70, colors: ['#F43F5E', '#FB7185'] });
+      toast.success('تم إفراغ سلة المحذوفات وتحرير المساحة');
+    } catch (err) {
+      toast.error(`فشل إفراغ السلة: ${errorMessage(err)}`);
+    } finally {
+      setEmptying(false);
+    }
+  };
 
   return (
-    <div className="space-y-8 pb-12">
-      
-      {/* Visual Analytics Box */}
-      <div className="bg-slate-900/40 backdrop-blur-xl border border-slate-800/80 rounded-3xl p-8 shadow-xl">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
+    <div className="space-y-6 pb-12">
+      <PageHeader
+        icon={HardDrive}
+        tone="sky"
+        title="التخزين"
+        description="المساحة المستهلكة من باقة Supabase Storage موزعة حسب نوع الملفات"
+        actions={
+          <Button variant="secondary" size="sm" icon={RefreshCw} loading={query.refreshing} onClick={query.reload}>
+            تحديث
+          </Button>
+        }
+      />
+
+      <Card>
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-6">
           <div>
-            <h3 className="text-lg font-extrabold text-white flex items-center gap-2">
-              <HardDrive className="w-5 h-5 text-teal-400" />
-              <span>تحليلات ومساحات التخزين السحابي للمؤسسة</span>
-            </h3>
-            <p className="text-[11px] text-slate-400">إحصائيات المساحات المستهلكة من الباقة المجانية على خوادم Supabase Storage</p>
-          </div>
-
-          <button
-            onClick={fetchStorageStats}
-            className="flex items-center gap-2 py-2.5 px-4 bg-slate-800 hover:bg-slate-750 text-white rounded-xl text-xs font-bold transition-all border border-slate-700/60 cursor-pointer"
-          >
-            <RefreshCw className="w-4 h-4" />
-            <span>تحديث المساحة المباشرة</span>
-          </button>
-        </div>
-
-        {/* Big visual progress circle / bar */}
-        <div className="space-y-6">
-          <div className="flex justify-between items-end">
-            <div>
-              <span className="text-xs text-slate-400 block mb-1">المساحة الإجمالية المستهلكة</span>
-              <span className={`text-4xl font-black ${isWarning ? 'text-rose-500' : 'text-teal-400'}`}>
-                {formatBytes(totalUsedBytes)}
-              </span>
-              <span className="text-slate-500 text-xs font-medium mr-2">
-                من أصل {formatBytes(maxCapacityBytes)} المتاحة
-              </span>
-            </div>
-            <div className="text-right">
-              <span className={`text-xl font-extrabold block ${isWarning ? 'text-rose-400' : 'text-teal-300'}`}>
-                {usagePercentage.toFixed(1)}% مستهلك
-              </span>
-              <span className="text-[10px] text-slate-500 font-bold block mt-1">
-                المتبقي: {formatBytes(maxCapacityBytes - totalUsedBytes)}
-              </span>
-            </div>
-          </div>
-
-          {/* Progress bar */}
-          <div className="w-full h-4 bg-slate-950 rounded-full overflow-hidden flex">
-            {categories.map((cat, i) => (
-              <div 
-                key={i} 
-                className={`${cat.color} h-full transition-all duration-500`}
-                style={{ width: `${(cat.size / maxCapacityBytes) * 100}%` }}
-                title={`${cat.name}: ${formatBytes(cat.size)}`}
-              />
-            ))}
-          </div>
-
-          {/* Category distribution directory */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-6 border-t border-slate-900">
-            {categories.map((cat, i) => (
-              <div 
-                key={i} 
-                className="bg-slate-950/30 border border-slate-850 hover:border-slate-800 rounded-2xl p-4 flex items-center gap-4 transition-all"
-              >
-                <div className={`w-3.5 h-3.5 rounded-full shrink-0 ${cat.color}`} />
-                <div className="flex-1 min-w-0">
-                  <span className="text-xs font-bold text-white block truncate mb-1">{cat.name}</span>
-                  <div className="flex justify-between items-center text-[10px] text-slate-400 font-bold">
-                    <span>{formatBytes(cat.size)}</span>
-                    <span className="font-mono">{cat.percentage.toFixed(1)}%</span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Warnings & Action control */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
-        {/* Storage space warning */}
-        <div className="lg:col-span-2 bg-slate-900/40 backdrop-blur-xl border border-slate-850 rounded-3xl p-6 flex items-start gap-4 shadow-xl">
-          <div className={`p-3 rounded-2xl border shrink-0 ${isWarning ? 'bg-rose-500/10 border-rose-500/20 text-rose-400' : 'bg-teal-500/10 border-teal-500/20 text-teal-400'}`}>
-            <AlertTriangle className="w-6 h-6 shrink-0" />
-          </div>
-          <div>
-            <h4 className="font-extrabold text-sm text-white mb-2">
-              {isWarning ? 'تحذير أمني: التخزين يوشك على الامتلاء! ⚠️' : 'حالة استقرار التخزين السحابي ممتازة ✅'}
-            </h4>
-            <p className="text-xs text-slate-400 leading-relaxed font-medium">
-              {isWarning 
-                ? 'لقد تجاوزت نسبة استهلاك المساحة السحابية 80%. يرجى إفراغ سلة المحذوفات أو تقليص أحجام الملفات وصور الهويات الشخصية لتفادي توقف استقبال وثائق وعقود وسلف الموظفين.'
-                : 'مساحة تخزين خوادمك مستقرة وفي الحدود الآمنة تماماً. يوصى بإجراء مراجعة وتصفية دورية لسلة المحذوفات للحفاظ على أفضل أداء للأنظمة التفاعلية.'}
+            <p className="text-xs text-slate-400 mb-1">المساحة المستهلكة</p>
+            <p className={cn('text-4xl font-extrabold tracking-tight', isWarning ? 'text-rose-400' : 'text-white')} dir="ltr">
+              {formatBytes(total)}
+            </p>
+            <p className="text-xs text-slate-500 mt-1">
+              من أصل <span dir="ltr">{formatBytes(MAX_CAPACITY_BYTES)}</span> · متبقي <span dir="ltr">{formatBytes(Math.max(MAX_CAPACITY_BYTES - total, 0))}</span>
             </p>
           </div>
-        </div>
-
-        {/* Purge panel */}
-        <div className="bg-slate-900/40 backdrop-blur-xl border border-slate-850 rounded-3xl p-6 shadow-xl flex flex-col justify-between">
-          <div>
-            <h4 className="font-extrabold text-sm text-white mb-2">إجراءات تصفية المساحة</h4>
-            <p className="text-xs text-slate-400 mb-6">فك الضغط التخزيني وإتلاف الملفات المحذوفة فوراً</p>
-
-            <button
-              disabled={actionLoading || trashSizeBytes === 0}
-              onClick={handleEmptyTrash}
-              className="w-full flex items-center justify-center gap-2 py-4 px-4 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 border border-rose-500/20 hover:border-rose-500/30 rounded-2xl font-bold transition-all text-xs cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
-            >
-              <Trash2 className="w-4.5 h-4.5" />
-              <span>إفراغ سلة المحذوفات بالكامل 🗑️</span>
-            </button>
+          <div className={cn('text-2xl font-extrabold', isWarning ? 'text-rose-300' : 'text-indigo-200')} dir="ltr">
+            {(ratio * 100).toFixed(1)}%
           </div>
-
-          <span className="text-[10px] text-slate-500 font-bold block mt-6 text-center">
-            تطهير دائم لكافة الـ Buckets السحابية للملفات
-          </span>
         </div>
 
-      </div>
+        <div className="w-full h-3 bg-slate-950 rounded-full overflow-hidden flex border border-slate-800" dir="ltr">
+          {categories.map((cat) => (
+            <div
+              key={cat.name}
+              className={cn(cat.color, 'h-full transition-all duration-700')}
+              style={{ width: `${(cat.size / MAX_CAPACITY_BYTES) * 100}%` }}
+              title={`${cat.name}: ${formatBytes(cat.size)}`}
+            />
+          ))}
+        </div>
 
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mt-6">
+          {categories.map((cat) => (
+            <div key={cat.name} className="rounded-2xl bg-slate-900/50 border border-slate-800/80 p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <span className={cn('w-2.5 h-2.5 rounded-full', cat.color)} />
+                <span className="text-xs font-bold text-slate-200 truncate">{cat.name}</span>
+              </div>
+              <div className="flex items-baseline justify-between">
+                <span className="text-sm font-extrabold text-white" dir="ltr">{formatBytes(cat.size)}</span>
+                <span className="text-[11px] text-slate-500 font-mono" dir="ltr">
+                  {total > 0 ? ((cat.size / total) * 100).toFixed(1) : '0.0'}%
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <Card className="lg:col-span-2">
+          <CardHeader
+            icon={isWarning ? AlertTriangle : ShieldCheck}
+            tone={isWarning ? 'rose' : 'emerald'}
+            title={isWarning ? 'التخزين يوشك على الامتلاء' : 'حالة التخزين مستقرة'}
+            className="mb-3"
+          />
+          <InfoNote tone={isWarning ? 'rose' : 'emerald'}>
+            {isWarning
+              ? 'تجاوز الاستهلاك 80% من المساحة المتاحة. أفرغ سلة المحذوفات أو قلّص أحجام الملفات لتجنب توقف رفع المستندات وتعهدات السلف.'
+              : 'المساحة ضمن الحدود الآمنة. يُنصح بتصفية سلة المحذوفات دورياً للحفاظ على أفضل أداء.'}
+          </InfoNote>
+        </Card>
+
+        <Card>
+          <CardHeader icon={Trash2} tone="rose" title="تحرير المساحة" description="إتلاف كل الملفات الموجودة في سلة المحذوفات" className="mb-4" />
+          <Button variant="soft-danger" icon={Trash2} block size="lg" loading={emptying} disabled={s.trash === 0} onClick={handleEmptyTrash}>
+            إفراغ السلة ({formatBytes(s.trash)})
+          </Button>
+          <Link href="/dashboard/trash" className="mt-3 flex items-center justify-center gap-1 text-[11px] font-semibold text-slate-400 hover:text-white">
+            استعراض محتويات السلة <ArrowUpLeft className="w-3.5 h-3.5" />
+          </Link>
+        </Card>
+      </div>
     </div>
   );
 }

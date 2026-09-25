@@ -12,6 +12,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // One-off local maintenance/experiment scripts, not part of the app.
+    "replace_alerts.js",
+    "test_logic.js",
+    "test_tz.js",
   ]),
 ]);
 
