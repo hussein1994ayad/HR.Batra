@@ -19,7 +19,7 @@ import {
   Clock,
   X
 } from 'lucide-react';
-import confetti from 'canvas-confetti';
+import { confetti } from '@/lib/lazy';
 import toast from 'react-hot-toast';
 
 const getCycleDates = (monthStr: string, startDay: number = 25, endDay: number = 24) => {

@@ -35,13 +35,11 @@ export default function Home() {
   }, [router]);
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-[#090D16] text-white">
-      <div className="relative flex flex-col items-center p-8 bg-slate-900/40 backdrop-blur-xl border border-slate-800 rounded-3xl shadow-2xl">
-        <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-teal-500 to-blue-500 rounded-t-3xl"></div>
-        <Loader2 className="w-12 h-12 text-teal-400 animate-spin mb-4" />
-        <h2 className="text-xl font-bold font-sans tracking-wide">جاري التحويل...</h2>
-        <p className="text-slate-400 text-xs mt-2">تأمين اتصال لوحة التحكم HR Pro</p>
+    <div className="min-h-dvh flex flex-col items-center justify-center bg-dark-bg text-white">
+      <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 via-violet-500 to-fuchsia-500 flex items-center justify-center shadow-lg shadow-indigo-500/30 mb-5 animate-pulse">
+        <Loader2 className="w-6 h-6 text-white animate-spin" />
       </div>
+      <p className="text-sm font-bold text-slate-200">جاري التحميل...</p>
     </div>
   );
 }

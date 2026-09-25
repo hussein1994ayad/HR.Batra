@@ -19,7 +19,6 @@ import {
   Map,
   Download
 } from 'lucide-react';
-import * as XLSX from 'xlsx';
 import toast from 'react-hot-toast';
 
 const formatLateDurationArabic = (minutes: number) => {
@@ -416,7 +415,7 @@ export default function TrackingPage() {
     return `${h}:${m}`;
   };
 
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     try {
       const fullList = [
         ...attendanceLogs,
@@ -439,6 +438,7 @@ export default function TrackingPage() {
         'الحالة': log.is_virtual ? 'غياب' : (log.status === 'late' ? 'تأخير' : 'حضور')
       }));
 
+      const XLSX = await import('xlsx');
       const worksheet = XLSX.utils.json_to_sheet(excelData);
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, "تقرير الحضور");

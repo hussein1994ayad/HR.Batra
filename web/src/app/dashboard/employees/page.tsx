@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import imageCompression from 'browser-image-compression';
+import { imageCompression } from '@/lib/lazy';
 import { 
   Users, 
   Search, 
@@ -25,7 +25,7 @@ import {
   Upload,
   FileImage
 } from 'lucide-react';
-import confetti from 'canvas-confetti';
+import { confetti } from '@/lib/lazy';
 import toast from 'react-hot-toast';
 
 export default function EmployeesPage() {

@@ -5,20 +5,20 @@ import "leaflet/dist/leaflet.css";
 
 const cairo = Cairo({
   subsets: ["arabic", "latin"],
-  weight: ["300", "400", "500", "600", "700", "800", "900"],
+  weight: ["400", "500", "600", "700", "800", "900"],
+  display: "swap",
   variable: "--font-cairo",
 });
 
 export const metadata: Metadata = {
-  title: "HR Pro v6.0 - لوحة التحكم الاحترافية للمدير 👑",
+  title: "HR Pro — لوحة تحكم الموارد البشرية",
   description: "نظام إدارة الموارد البشرية والتحليلات المتقدم والتتبع الجغرافي للموظفين",
 };
 
 export const viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
+  themeColor: "#070B14",
 };
 
 export default function RootLayout({
@@ -32,7 +32,7 @@ export default function RootLayout({
       dir="rtl"
       className={`${cairo.variable} h-full antialiased`}
     >
-      <body className="min-h-full font-sans bg-[#090D16] text-[#F8FAFC] selection:bg-teal-500/30 selection:text-teal-200 overflow-x-hidden">
+      <body className="min-h-full font-sans bg-dark-bg text-slate-50 overflow-x-hidden">
         {children}
       </body>
     </html>

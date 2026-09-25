@@ -13,7 +13,7 @@ import {
   User,
   ShieldCheck
 } from 'lucide-react';
-import confetti from 'canvas-confetti';
+import { confetti } from '@/lib/lazy';
 import toast from 'react-hot-toast';
 
 export default function LeavesPage() {

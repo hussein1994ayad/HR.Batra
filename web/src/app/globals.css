@@ -1,33 +1,173 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: var(--font-cairo), sans-serif;
-  
+  --font-sans: var(--font-cairo), system-ui, sans-serif;
+
+  /* Brand palette */
   --color-primary-indigo: #6366F1;
   --color-primary-lavender: #A5B4FC;
-  --color-dark-surface: #13192B;
-  --color-dark-bg: #0A0E1A;
+  --color-dark-surface: #111729;
+  --color-dark-bg: #070B14;
   --color-slate-border: #1E293B;
+
+  /* Refined cool-neutral scale (re-skins every page consistently) */
+  --color-slate-50: #F8FAFC;
+  --color-slate-100: #EEF2F8;
+  --color-slate-200: #DCE3EE;
+  --color-slate-300: #BAC5D6;
+  --color-slate-400: #8B98AE;
+  --color-slate-500: #647189;
+  --color-slate-600: #465269;
+  --color-slate-700: #2E3850;
+  --color-slate-800: #1C2438;
+  --color-slate-850: #161D2E;
+  --color-slate-900: #0F1524;
+  --color-slate-950: #0A0F1B;
+
+  /* Intermediate shades that were referenced in markup but missing */
+  --color-indigo-650: #5046E5;
+  --color-teal-650: #0B8278;
+
+  /* Motion */
+  --animate-glass: glass-in 0.28s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  /* "backwards" fill so no transform lingers after the animation: a lingering
+     transform would become the containing block for position:fixed modals */
+  --animate-fade: fade-up 0.35s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  --animate-shake: shake 0.4s ease-in-out;
+  --animate-spin-slow: spin 3s linear infinite;
+  --animate-shimmer: shimmer 1.6s ease-in-out infinite;
 }
 
-body {
-  font-family: var(--font-sans);
+@keyframes glass-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-6px); }
+  40%, 80% { transform: translateX(6px); }
+}
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }
 
-/* Glassmorphism scrollbar */
+@layer base {
+  html {
+    color-scheme: dark;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background-color: var(--color-dark-bg);
+    font-feature-settings: "tnum" 1;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Consistent, accessible focus treatment for every control */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgb(99 102 241 / 0.18);
+  }
+  button:focus-visible,
+  a:focus-visible {
+    outline: 2px solid rgb(129 140 248 / 0.7);
+    outline-offset: 2px;
+  }
+
+  input,
+  select,
+  textarea {
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+  }
+
+  select option {
+    background-color: var(--color-slate-900);
+    color: var(--color-slate-100);
+  }
+
+  input[type="checkbox"],
+  input[type="radio"] {
+    accent-color: var(--color-primary-indigo);
+  }
+
+  button:disabled {
+    cursor: not-allowed;
+  }
+
+  ::selection {
+    background: rgb(99 102 241 / 0.35);
+    color: #fff;
+  }
+}
+
+/* Scrollbars */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: rgba(15, 23, 42, 0.05);
+  background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(13, 148, 136, 0.3);
-  border-radius: 4px;
+  background: rgb(100 113 137 / 0.28);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(13, 148, 136, 0.6);
+  background: rgb(129 140 248 / 0.45);
+  background-clip: padding-box;
+}
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(100 113 137 / 0.35) transparent;
+}
+
+@utility scrollbar-thin {
+  scrollbar-width: thin;
+}
+@utility custom-scrollbar {
+  scrollbar-width: thin;
+}
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Skeleton placeholder */
+@utility skeleton {
+  border-radius: 0.75rem;
+  background: linear-gradient(
+    90deg,
+    rgb(28 36 56 / 0.55) 0%,
+    rgb(46 56 80 / 0.55) 50%,
+    rgb(28 36 56 / 0.55) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+
+/* Surface used by cards across the dashboard */
+@utility surface {
+  background: linear-gradient(180deg, rgb(17 23 41 / 0.72), rgb(12 17 31 / 0.72));
+  border: 1px solid rgb(46 56 80 / 0.55);
+  box-shadow: 0 1px 0 0 rgb(255 255 255 / 0.03) inset, 0 12px 32px -16px rgb(0 0 0 / 0.6);
+}
+
+/* Subtle dotted grid for hero areas */
+@utility bg-grid {
+  background-image: radial-gradient(rgb(148 163 184 / 0.08) 1px, transparent 1px);
+  background-size: 22px 22px;
 }
 
 /* Leaflet integration styles */
@@ -36,4 +176,23 @@ body {
   height: 100%;
   border-radius: 1rem;
   background-color: #0F172A !important;
+  font-family: var(--font-sans) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Opaque surface for popovers and dialogs */
+@utility surface-solid {
+  background: linear-gradient(180deg, #131a2d, #0e1424);
+  border: 1px solid rgb(46 56 80 / 0.7);
+  box-shadow: 0 1px 0 0 rgb(255 255 255 / 0.04) inset, 0 24px 60px -12px rgb(0 0 0 / 0.75);
 }
