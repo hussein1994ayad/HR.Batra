@@ -38,27 +38,18 @@ export async function rejectLoan(loanId: string, reason: string) {
   if (error) throw error;
 }
 
-/** يعتمد السلفة بالمبلغ والمدة المعدّلة ويولّد جدول أقساطها. */
+/**
+ * يعتمد السلفة بالمبلغ والمدة المعدّلة ويولّد أقساطها في معاملة واحدة (approve_loan).
+ * نفس قواعد buildInstallmentSchedule، ويتحقق السيرفر من السلفة الجارية وحد 50% من الراتب.
+ */
 export async function approveLoan(draft: ApprovalDraft) {
-  const schedule = buildInstallmentSchedule(draft.amount, draft.months, draft.startDate);
-  const { error } = await supabase
-    .from('loans')
-    .update({
-      status: 'approved',
-      amount: draft.amount,
-      installment_count: draft.months,
-      installment_amount: schedule[0].amount,
-      remaining_amount: draft.amount,
-      approved_by: await currentAdminId(),
-      approved_at: new Date().toISOString(),
-    })
-    .eq('id', draft.loan.id);
+  const { error } = await supabase.rpc('approve_loan', {
+    p_loan_id: draft.loan.id,
+    p_amount: draft.amount,
+    p_months: draft.months,
+    p_first_due: draft.startDate,
+  });
   if (error) throw error;
-
-  const { error: instErr } = await supabase
-    .from('loan_installments')
-    .insert(schedule.map(s => ({ ...s, loan_id: draft.loan.id, is_paid: false })));
-  if (instErr) throw instErr;
 }
 
 /** يعدّل السلفة ويعيد توليد الأقساط غير المدفوعة ابتداءً من الشهر القادم، ثم يُشعر الموظف. */
