@@ -1,14 +1,13 @@
 // =========================================================================
-// HR Pro v6.0 - شاشة إشعارات الموظف (Notifications)
-// إعادة تصميم عصرية: ألوان الثيم بالكامل، skeleton loading، empty state أنيق.
+// HR Pro — الإشعارات مجمّعة حسب اليوم
 // كل منطق التحميل ووضع علامة "مقروء" محفوظ كما هو.
 // =========================================================================
 
 import 'package:flutter/material.dart';
 
-import '../../core/design/design.dart';
+
 import '../../core/services/supabase_service.dart';
-import '../shared/widgets/skeleton_loader.dart';
+import '../shared/ui/ui.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -20,6 +19,7 @@ class NotificationsScreen extends StatefulWidget {
 class _NotificationsScreenState extends State<NotificationsScreen> {
   List<Map<String, dynamic>> _notifications = [];
   bool _isLoading = true;
+  bool _hasError = false;
 
   @override
   void initState() {
@@ -43,6 +43,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       if (!mounted) return;
       setState(() {
         _notifications = List<Map<String, dynamic>>.from(data);
+        _hasError = false;
       });
 
       final unreadIds = _notifications
@@ -57,151 +58,102 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       }
     } catch (e) {
       debugPrint('خطأ في تحميل الإشعارات: $e');
+      if (mounted) setState(() => _hasError = true);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final t = theme.textTheme;
-    final cs = theme.colorScheme;
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('الإشعارات'),
-        centerTitle: true,
-      ),
-      body: RefreshIndicator(
-        onRefresh: _loadNotifications,
-        color: cs.primary,
-        child: _buildBody(isDark, t, cs),
-      ),
-    );
+  /// عنوان مجموعة التاريخ: اليوم، أمس، هذا الأسبوع، أو الشهر.
+  static String _groupOf(DateTime? d) {
+    if (d == null) return 'أقدم';
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final day = DateTime(d.year, d.month, d.day);
+    final diff = today.difference(day).inDays;
+    if (diff <= 0) return 'اليوم';
+    if (diff == 1) return 'أمس';
+    if (diff < 7) return 'هذا الأسبوع';
+    return Fmt.monthYear(d.month, d.year);
   }
 
-  Widget _buildBody(bool isDark, TextTheme t, ColorScheme cs) {
-    if (_isLoading) {
-      return const Padding(
-        padding: EdgeInsets.all(AppSpace.lg),
-        child: SkeletonList(itemCount: 6, itemHeight: 84),
-      );
-    }
-
-    if (_notifications.isEmpty) {
-      return SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpace.xxl),
-          child: Center(
-            child: Container(
-              padding: const EdgeInsets.all(AppSpace.x3),
-              decoration: BoxDecoration(
-                color: cs.surface,
-                borderRadius: BorderRadius.circular(AppRadius.lg),
-                border: Border.all(color: cs.outline),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.notifications_off_rounded,
-                    size: 56,
-                    color: cs.outline,
-                  ),
-                  const SizedBox(height: AppSpace.lg),
-                  Text(
-                    'لا توجد إشعارات حالياً',
-                    style: t.titleMedium?.copyWith(fontWeight: FontWeight.w800),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: AppSpace.sm),
-                  Text(
-                    'ستظهر التنبيهات والإشعارات الجديدة هنا فور وصولها.',
-                    textAlign: TextAlign.center,
-                    style: t.bodySmall?.copyWith(
-                      color: isDark
-                          ? AppColors.textMuted
-                          : AppColors.textMuted,
-                    ),
-                  ),
-                ],
-              ),
+  @override
+  Widget build(BuildContext context) {
+    final List<Widget> content;
+    if (_isLoading && _notifications.isEmpty) {
+      content = const [SkeletonList(count: 6, itemHeight: 84)];
+    } else if (_hasError && _notifications.isEmpty) {
+      content = [ErrorView(onRetry: _loadNotifications)];
+    } else if (_notifications.isEmpty) {
+      content = const [
+        EmptyView(title: 'لا توجد إشعارات', message: 'قرارات الإدارة والتذكيرات تظهر هنا فور وصولها.', icon: Icons.notifications_none_rounded),
+      ];
+    } else {
+      content = [];
+      String? group;
+      var i = 0;
+      for (final n in _notifications) {
+        final created = DateTime.tryParse(n['created_at']?.toString() ?? '')?.toLocal();
+        final g = _groupOf(created);
+        if (g != group) {
+          content.add(SectionHeader(g, padding: EdgeInsets.only(top: group == null ? 0 : AppSpace.lg, bottom: AppSpace.sm)));
+          group = g;
+        }
+        content.add(Padding(
+          padding: const EdgeInsets.only(bottom: AppSpace.sm),
+          child: FadeSlideIn(
+            index: i++,
+            child: _NotificationCard(
+              type: n['type']?.toString() ?? 'system',
+              title: n['title']?.toString() ?? 'تنبيه',
+              body: n['body']?.toString() ?? '',
+              isRead: n['is_read'] as bool? ?? false,
+              createdAt: created,
             ),
           ),
-        ),
-      );
+        ));
+      }
     }
-
-    return ListView.separated(
-      padding: const EdgeInsets.all(AppSpace.lg),
-      itemCount: _notifications.length,
-      separatorBuilder: (_, __) => const SizedBox(height: AppSpace.md),
-      itemBuilder: (context, index) {
-        final n = _notifications[index];
-        return _NotificationCard(
-          type: n['type']?.toString() ?? 'system',
-          title: n['title']?.toString() ?? 'تنبيه النظام',
-          body: n['body']?.toString() ?? '',
-          isRead: n['is_read'] as bool? ?? false,
-          createdAt: n['created_at']?.toString(),
-        );
-      },
+    final unread = _notifications.where((n) => n['is_read'] != true).length;
+    return AppPage(
+      title: 'الإشعارات',
+      subtitle: unread > 0 ? '$unread جديدة' : null,
+      onRefresh: _loadNotifications,
+      slivers: [SliverList.list(children: content)],
     );
   }
 }
 
 class _NotificationCard extends StatelessWidget {
+  const _NotificationCard({required this.type, required this.title, required this.body, required this.isRead, required this.createdAt});
+
   final String type;
   final String title;
   final String body;
   final bool isRead;
-  final String? createdAt;
+  final DateTime? createdAt;
 
-  const _NotificationCard({
-    required this.type,
-    required this.title,
-    required this.body,
-    required this.isRead,
-    required this.createdAt,
-  });
+  (IconData, AppTone) get _style => switch (type) {
+        'leave' => (Icons.event_note_rounded, AppTone.accent),
+        'loan' => (Icons.account_balance_wallet_rounded, AppTone.warning),
+        'attendance' => (Icons.fingerprint_rounded, AppTone.success),
+        'salary' => (Icons.receipt_long_rounded, AppTone.brand),
+        'device' => (Icons.phonelink_lock_rounded, AppTone.danger),
+        'ota' => (Icons.system_update_rounded, AppTone.info),
+        _ => (Icons.notifications_rounded, AppTone.neutral),
+      };
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final cs = theme.colorScheme;
-    final t = theme.textTheme;
-    final accent = _typeColor(type);
-
-    return Container(
-      padding: const EdgeInsets.all(AppSpace.lg),
-      decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(
-          color: isRead
-              ? (isDark
-                  ? AppColors.borderStrong.withValues(alpha: 0.5)
-                  : AppColors.borderStrong)
-              : accent.withValues(alpha: 0.4),
-          width: isRead ? 1 : 1.5,
-        ),
-        boxShadow: isRead ? null : AppElevation.low,
-      ),
+    final (icon, tone) = _style;
+    return AppCard(
+      color: isRead ? AppColors.surface1 : AppColors.surface2,
+      borderColor: isRead ? AppColors.border : tone.color.withValues(alpha: 0.35),
+      semanticLabel: '${isRead ? '' : 'جديد: '}$title',
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.all(AppSpace.md),
-            decoration: BoxDecoration(
-              color: accent.withValues(alpha: 0.14),
-              borderRadius: BorderRadius.circular(AppRadius.md),
-            ),
-            child: Icon(_typeIcon(type), color: accent, size: 22),
-          ),
+          ToneIcon(icon, tone: tone),
           const SizedBox(width: AppSpace.md),
           Expanded(
             child: Column(
@@ -210,116 +162,24 @@ class _NotificationCard extends StatelessWidget {
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: Text(
-                        title,
-                        style: t.titleMedium?.copyWith(
-                          fontWeight:
-                              isRead ? FontWeight.w600 : FontWeight.w800,
-                        ),
-                      ),
-                    ),
+                    Expanded(child: Text(title, style: AppText.subtitle.copyWith(fontWeight: isRead ? FontWeight.w600 : FontWeight.w800))),
                     const SizedBox(width: AppSpace.sm),
-                    Text(
-                      _formatDate(createdAt),
-                      style: t.bodySmall?.copyWith(
-                        color: isDark
-                            ? AppColors.textMuted
-                            : AppColors.textMuted,
-                        fontSize: 11,
-                      ),
-                    ),
+                    Text(Fmt.relative(createdAt), style: AppText.caption),
                     if (!isRead) ...[
-                      const SizedBox(width: AppSpace.sm),
-                      Container(
-                        width: 8,
-                        height: 8,
-                        decoration: BoxDecoration(
-                          color: accent,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
+                      const SizedBox(width: AppSpace.xs),
+                      Container(width: 8, height: 8, margin: const EdgeInsets.only(top: 6), decoration: BoxDecoration(color: tone.color, shape: BoxShape.circle)),
                     ],
                   ],
                 ),
-                const SizedBox(height: AppSpace.sm),
-                Text(
-                  body,
-                  style: t.bodyMedium?.copyWith(
-                    color: isDark
-                        ? AppColors.textSecondary
-                        : AppColors.textSecondary,
-                    height: 1.5,
-                  ),
-                ),
+                if (body.isNotEmpty) ...[
+                  const SizedBox(height: AppSpace.xs),
+                  Text(body, style: AppText.bodySm),
+                ],
               ],
             ),
           ),
         ],
       ),
     );
-  }
-
-  IconData _typeIcon(String type) {
-    switch (type) {
-      case 'leave':
-        return Icons.calendar_month_rounded;
-      case 'loan':
-        return Icons.monetization_on_rounded;
-      case 'attendance':
-        return Icons.fingerprint_rounded;
-      case 'salary':
-        return Icons.receipt_long_rounded;
-      case 'device':
-        return Icons.phonelink_lock_rounded;
-      case 'ota':
-        return Icons.system_update_rounded;
-      default:
-        return Icons.notifications_active_rounded;
-    }
-  }
-
-  Color _typeColor(String type) {
-    switch (type) {
-      case 'leave':
-        return AppColors.accent;
-      case 'loan':
-        return AppColors.warning;
-      case 'attendance':
-        return AppColors.success;
-      case 'salary':
-        return AppColors.brandStrong;
-      case 'device':
-        return AppColors.danger;
-      case 'ota':
-        return AppColors.accent;
-      default:
-        return AppColors.brand;
-    }
-  }
-
-  String _formatDate(String? dateStr) {
-    if (dateStr == null) return '';
-    try {
-      final date = DateTime.parse(dateStr).toLocal();
-      final now = DateTime.now();
-      final diff = now.difference(date);
-      if (diff.inMinutes < 1) return 'الآن';
-      if (diff.inMinutes < 60) return 'قبل ${diff.inMinutes} د';
-      if (diff.inHours < 24) return 'قبل ${diff.inHours} س';
-      if (date.year == now.year &&
-          date.month == now.month &&
-          date.day == now.day) {
-        final minute = date.minute.toString().padLeft(2, '0');
-        final hour = date.hour > 12
-            ? date.hour - 12
-            : (date.hour == 0 ? 12 : date.hour);
-        final amPm = date.hour >= 12 ? 'PM' : 'AM';
-        return '$hour:$minute $amPm';
-      }
-      return '${date.year}/${date.month}/${date.day}';
-    } catch (_) {
-      return '';
-    }
   }
 }

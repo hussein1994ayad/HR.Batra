@@ -13,6 +13,12 @@ String _daysAgo(int d) {
   return '${t.year}-${t.month.toString().padLeft(2, '0')}-${t.day.toString().padLeft(2, '0')}';
 }
 
+String _monthKey(int monthsAgo) {
+  final n = DateTime.now();
+  final d = DateTime(n.year, n.month - monthsAgo);
+  return '${d.year}-${d.month.toString().padLeft(2, '0')}';
+}
+
 String _iso(int daysAgo, int hour, int minute) {
   final t = DateTime.now().subtract(Duration(days: daysAgo));
   return DateTime(t.year, t.month, t.day, hour, minute).toUtc().toIso8601String();
@@ -133,7 +139,19 @@ Map<String, List<Map<String, dynamic>>> buildFixtures({String role = 'admin'}) {
       },
     ],
     'salary_slips': [
-      {'id': 'ss1', 'employee_id': kTestUserId, 'month': DateTime.now().month == 1 ? 12 : DateTime.now().month - 1, 'year': DateTime.now().year, 'basic_salary': 900000, 'bonuses': 50000, 'deductions': 20000, 'loan_deduction': 100000, 'net_salary': 830000, 'status': 'issued', 'created_at': _iso(20, 10, 0)},
+      for (var i = 1; i <= 6; i++)
+        {
+          'id': 'ss$i',
+          'employee_id': kTestUserId,
+          'work_month': _monthKey(i),
+          'basic_salary': 900000,
+          'allowances': i.isEven ? 50000 : 0,
+          'deductions': i == 2 ? 30000 : 0,
+          'loans_deduction': i <= 2 ? 100000 : 0,
+          'net_salary': 900000 + (i.isEven ? 50000 : 0) - (i == 2 ? 30000 : 0) - (i <= 2 ? 100000 : 0),
+          'status': 'published',
+          'created_at': _iso(20 + i * 30, 10, 0),
+        },
     ],
     'bonuses_deductions': [
       {'id': 'bd1', 'employee_id': kTestUserId, 'type': 'bonus', 'amount': 50000, 'reason': 'مكافأة أداء', 'created_at': _iso(20, 10, 0)},
