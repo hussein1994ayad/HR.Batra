@@ -13,7 +13,8 @@ import 'package:syncfusion_flutter_pdf/pdf.dart';
 import '../constants/constants.dart';
 
 class PdfExportService {
-  /// توليد وتصدير كشف راتب شهري مفصل بصيغة PDF مع دعم كامل للغة العربية
+  /// توليد كشف راتب شهري PDF وحفظه في مستندات الجهاز (ونسخة في التنزيلات على Android).
+  /// يرجع مسار الملف.
   static Future<String> generatePayslipPdf({
     required String employeeName,
     required String branchName,
@@ -26,9 +27,54 @@ class PdfExportService {
     List<Map<String, dynamic>>? bonusesList,
     List<Map<String, dynamic>>? deductionsList,
   }) async {
-    // 1. تحميل الخطوط العربية المدمجة (TrueType Fonts) لدعم الحروف العربية
-    final fontData = await rootBundle.load('assets/fonts/arial.ttf');
-    final boldFontData = await rootBundle.load('assets/fonts/arialbd.ttf');
+    final bytes = await buildPayslipPdfBytes(
+      employeeName: employeeName,
+      branchName: branchName,
+      workMonth: workMonth,
+      basicSalary: basicSalary,
+      allowances: allowances,
+      deductions: deductions,
+      loansDeduction: loansDeduction,
+      netSalary: netSalary,
+      bonusesList: bonusesList,
+      deductionsList: deductionsList,
+    );
+
+    final directory = await getApplicationDocumentsDirectory();
+    final cleanName = employeeName.replaceAll(' ', '_').replaceAll('/', '_');
+    final String fileName = 'كشف_راتب_${cleanName}_$workMonth.pdf';
+    final String path = '${directory.path}/$fileName';
+    await File(path).writeAsBytes(bytes, flush: true);
+
+    // نسخة إضافية في مجلد التنزيلات العام على أندرويد لسهولة الوصول المباشر
+    try {
+      if (Platform.isAndroid) {
+        final downloadDir = Directory('/storage/emulated/0/Download');
+        if (downloadDir.existsSync()) {
+          await File('${downloadDir.path}/$fileName').writeAsBytes(bytes, flush: true);
+        }
+      }
+    } catch (_) {}
+
+    return path;
+  }
+
+  /// بناء محتوى كشف الراتب PDF (بدون حفظ) — مفصول لإمكانية اختباره.
+  static Future<List<int>> buildPayslipPdfBytes({
+    required String employeeName,
+    required String branchName,
+    required String workMonth,
+    required double basicSalary,
+    required double allowances,
+    required double deductions,
+    required double loansDeduction,
+    required double netSalary,
+    List<Map<String, dynamic>>? bonusesList,
+    List<Map<String, dynamic>>? deductionsList,
+  }) async {
+    // 1. خط Cairo المضمّن (رخصة OFL حرة) يدعم العربية بالكامل
+    final fontData = await rootBundle.load('assets/google_fonts/Cairo-Regular.ttf');
+    final boldFontData = await rootBundle.load('assets/google_fonts/Cairo-Bold.ttf');
     final fontBytes = fontData.buffer.asUint8List();
     final boldFontBytes = boldFontData.buffer.asUint8List();
 
@@ -306,31 +352,9 @@ class PdfExportService {
       bounds: Rect.fromLTWH(0, currentY, pageSize.width, 0),
     );
 
-    // -------------------------------------------------------------
-    // 3. حفظ الملف في مجلد المستندات وتنزيلات الجهاز
-    // -------------------------------------------------------------
     final List<int> bytes = document.saveSync();
     document.dispose();
-
-    final directory = await getApplicationDocumentsDirectory();
-    final cleanName = employeeName.replaceAll(' ', '_').replaceAll('/', '_');
-    final String fileName = 'كشف_راتب_${cleanName}_$workMonth.pdf';
-    final String path = '${directory.path}/$fileName';
-    final File file = File(path);
-    await file.writeAsBytes(bytes, flush: true);
-
-    // حفظ نسخة إضافية في مجلد التنزيلات العام على أندرويد لسهولة الوصول المباشر
-    try {
-      if (Platform.isAndroid) {
-        final downloadDir = Directory('/storage/emulated/0/Download');
-        if (downloadDir.existsSync()) {
-          final publicFile = File('${downloadDir.path}/$fileName');
-          await publicFile.writeAsBytes(bytes, flush: true);
-        }
-      }
-    } catch (_) {}
-
-    return path;
+    return bytes;
   }
 
   static void _addSummaryGridRow(

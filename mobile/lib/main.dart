@@ -6,9 +6,12 @@ import 'dart:async';
 import 'dart:ui';
 
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import 'core/providers/app_container.dart';
 import 'core/routes/app_router.dart';
@@ -22,6 +25,13 @@ import 'presentation/shared/widgets/offline_banner.dart';
 void main() async {
   // 1. ضمان استقرار المحرك ومعالجة كافة الأخطاء غير الملتقطة لمنع توقف التطبيق نهائياً
   WidgetsFlutterBinding.ensureInitialized();
+
+  // خط Cairo مضمّن في assets/google_fonts — لا تحميل من خوادم Google وقت التشغيل
+  GoogleFonts.config.allowRuntimeFetching = false;
+  LicenseRegistry.addLicense(() async* {
+    final license = await rootBundle.loadString('assets/google_fonts/OFL.txt');
+    yield LicenseEntryWithLineBreaks(['google_fonts', 'Cairo'], license);
+  });
 
   FlutterError.onError = (FlutterErrorDetails details) {
     FlutterError.presentError(details);

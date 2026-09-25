@@ -88,7 +88,29 @@ flutter:
 
   assets:
     - assets/sounds/
-    - assets/fonts/
+    # خط Cairo مضمّن (OFL) — google_fonts يقرأه من هنا بدل تحميله من Google
+    - assets/google_fonts/
+
+  # يجعل fontFamily: 'Cairo' المستعمل في الشاشات يعمل (لم يكن مسجلاً سابقاً)
+  fonts:
+    - family: Cairo
+      fonts:
+        - asset: assets/google_fonts/Cairo-ExtraLight.ttf
+          weight: 200
+        - asset: assets/google_fonts/Cairo-Light.ttf
+          weight: 300
+        - asset: assets/google_fonts/Cairo-Regular.ttf
+          weight: 400
+        - asset: assets/google_fonts/Cairo-Medium.ttf
+          weight: 500
+        - asset: assets/google_fonts/Cairo-SemiBold.ttf
+          weight: 600
+        - asset: assets/google_fonts/Cairo-Bold.ttf
+          weight: 700
+        - asset: assets/google_fonts/Cairo-ExtraBold.ttf
+          weight: 800
+        - asset: assets/google_fonts/Cairo-Black.ttf
+          weight: 900
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
