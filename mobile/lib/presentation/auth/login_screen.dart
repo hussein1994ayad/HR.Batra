@@ -11,12 +11,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
-import '../../core/design/design.dart';
+
+
 import '../../core/routes/app_router.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/notification_service.dart';
-import '../../core/theme/app_theme.dart';
-import '../shared/widgets/glass_background.dart';
+import '../shared/ui/ui.dart';
+import 'widgets/auth_shell.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -25,7 +26,7 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStateMixin {
+class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -37,23 +38,9 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   String? _errorMessage;
   String _appVersion = '';
 
-  late final AnimationController _animController;
-  late final Animation<double> _fadeAnimation;
-  late final Animation<Offset> _slideAnimation;
-
   @override
   void initState() {
     super.initState();
-    _animController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 700),
-    );
-    _fadeAnimation = CurvedAnimation(parent: _animController, curve: Curves.easeOut);
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.06),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(parent: _animController, curve: AppMotion.emphasized));
-    _animController.forward();
     _loadVersion();
   }
 
@@ -70,7 +57,6 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     _passwordController.dispose();
     _emailFocus.dispose();
     _passwordFocus.dispose();
-    _animController.dispose();
     super.dispose();
   }
 
@@ -119,336 +105,81 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final t = Theme.of(context).textTheme;
-    final media = MediaQuery.of(context);
-
-    return GlassBackground(
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          return SingleChildScrollView(
-            physics: const ClampingScrollPhysics(),
-            padding: EdgeInsets.only(
-              left: AppSpace.xxl,
-              right: AppSpace.xxl,
-              top: AppSpace.xxl,
-              bottom: AppSpace.xxl + media.viewInsets.bottom,
-            ),
-            child: ConstrainedBox(
-              constraints: BoxConstraints(minHeight: constraints.maxHeight),
-              child: IntrinsicHeight(
-                child: FadeTransition(
-                  opacity: _fadeAnimation,
-                  child: SlideTransition(
-                    position: _slideAnimation,
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Spacer(),
-                        _buildLogo(isDark),
-                        const SizedBox(height: AppSpace.xxl),
-                        _buildTitle(t, isDark),
-                        const SizedBox(height: AppSpace.x3),
-                        _buildFormCard(isDark, t),
-                        const Spacer(flex: 2),
-                        _buildFooter(t, isDark),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  // -------- Widgets --------
-  Widget _buildLogo(bool isDark) {
-    return Container(
-      width: 96,
-      height: 96,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: isDark ? AppColors.surface1 : AppColors.textPrimary,
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.brandStrong.withValues(alpha: isDark ? 0.45 : 0.25),
-            blurRadius: 32,
-            spreadRadius: 4,
-            offset: const Offset(0, 8),
-          ),
-        ],
-        border: Border.all(
-          color: AppColors.brandStrong.withValues(alpha: 0.15),
-          width: 1.5,
-        ),
-      ),
-      child: const Icon(
-        Icons.business_center_rounded,
-        size: 48,
-        color: AppColors.brandStrong,
-      ),
-    );
-  }
-
-  Widget _buildTitle(TextTheme t, bool isDark) {
-    return Column(
-      children: [
-        Text(
-          'HR Pro',
-          style: t.displaySmall?.copyWith(
-            color: isDark ? AppColors.brand : AppColors.brandStrong,
-            fontWeight: FontWeight.w900,
-            letterSpacing: 1.2,
-          ),
-        ),
-        const SizedBox(height: AppSpace.sm),
-        Text(
-          'مرحباً بعودتك — سجّل الدخول لمتابعة عملك',
-          textAlign: TextAlign.center,
-          style: t.bodyMedium?.copyWith(
-            color: isDark ? AppColors.textSecondary : AppColors.textSecondary,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildFormCard(bool isDark, TextTheme t) {
-    return Container(
-      constraints: const BoxConstraints(maxWidth: 480),
-      padding: const EdgeInsets.all(AppSpace.xxl),
-      decoration: BoxDecoration(
-        color: isDark
-            ? AppColors.surface1.withValues(alpha: 0.92)
-            : AppColors.textPrimary.withValues(alpha: 0.96),
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(
-          color: isDark
-              ? AppColors.textPrimary.withValues(alpha: 0.08)
-              : AppColors.borderStrong,
-        ),
-        boxShadow: AppElevation.high,
+    return AuthShell(
+      icon: Icons.badge_rounded,
+      title: 'أهلاً بك في HR Pro',
+      subtitle: 'سجّل دخولك بحساب العمل لمتابعة دوامك وطلباتك.',
+      footer: Text(
+        _appVersion.isEmpty ? '© 2026 HR Pro' : '© 2026 HR Pro · $_appVersion',
+        style: AppText.caption,
+        textAlign: TextAlign.center,
       ),
       child: Form(
         key: _formKey,
-        autovalidateMode: AutovalidateMode.onUserInteraction,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (_errorMessage != null) ...[
-              _buildErrorBanner(_errorMessage!),
-              const SizedBox(height: AppSpace.xl),
-            ],
-            _buildFieldLabel('البريد الإلكتروني', isDark, t),
-            const SizedBox(height: AppSpace.sm),
-            TextFormField(
-              controller: _emailController,
-              focusNode: _emailFocus,
-              keyboardType: TextInputType.emailAddress,
-              textInputAction: TextInputAction.next,
-              autofillHints: const [AutofillHints.email, AutofillHints.username],
-              onFieldSubmitted: (_) => _passwordFocus.requestFocus(),
-              textAlign: TextAlign.left,
-              textDirection: TextDirection.ltr,
-              enableSuggestions: false,
-              autocorrect: false,
-              decoration: const InputDecoration(
-                hintText: 'name@company.com',
-                hintTextDirection: TextDirection.ltr,
-                prefixIcon: Icon(Icons.email_outlined),
+        child: AutofillGroup(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              AppTextField(
+                controller: _emailController,
+                focusNode: _emailFocus,
+                label: 'البريد الإلكتروني',
+                hint: 'name@company.com',
+                icon: Icons.alternate_email_rounded,
+                keyboardType: TextInputType.emailAddress,
+                textInputAction: TextInputAction.next,
+                autofillHints: const [AutofillHints.username, AutofillHints.email],
+                textDirection: TextDirection.ltr,
+                onSubmitted: (_) => _passwordFocus.requestFocus(),
+                validator: (v) {
+                  final val = v?.trim() ?? '';
+                  if (val.isEmpty) return 'اكتب بريدك الإلكتروني';
+                  if (!RegExp(r'^[\w.\-]+@([\w\-]+\.)+[\w\-]{2,}$').hasMatch(val)) {
+                    return 'صيغة البريد غير صحيحة';
+                  }
+                  return null;
+                },
               ),
-              validator: (v) {
-                final val = v?.trim() ?? '';
-                if (val.isEmpty) return 'يرجى إدخال البريد الإلكتروني';
-                if (!RegExp(r'^[\w.\-]+@([\w\-]+\.)+[\w\-]{2,}$').hasMatch(val)) {
-                  return 'صيغة البريد الإلكتروني غير صحيحة';
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: AppSpace.xl),
-            _buildFieldLabel('كلمة المرور', isDark, t),
-            const SizedBox(height: AppSpace.sm),
-            TextFormField(
-              controller: _passwordController,
-              focusNode: _passwordFocus,
-              obscureText: !_isPasswordVisible,
-              textInputAction: TextInputAction.done,
-              autofillHints: const [AutofillHints.password],
-              onFieldSubmitted: (_) => _handleLogin(),
-              textAlign: TextAlign.left,
-              textDirection: TextDirection.ltr,
-              decoration: InputDecoration(
-                hintText: '••••••••',
-                hintTextDirection: TextDirection.ltr,
-                prefixIcon: const Icon(Icons.lock_outline_rounded),
-                suffixIcon: IconButton(
-                  tooltip: _isPasswordVisible ? 'إخفاء' : 'إظهار',
-                  icon: AnimatedSwitcher(
-                    duration: AppMotion.fast,
-                    child: Icon(
-                      _isPasswordVisible
-                          ? Icons.visibility_off_outlined
-                          : Icons.visibility_outlined,
-                      key: ValueKey(_isPasswordVisible),
-                    ),
-                  ),
+              const SizedBox(height: AppSpace.lg),
+              AppTextField(
+                controller: _passwordController,
+                focusNode: _passwordFocus,
+                label: 'كلمة المرور',
+                hint: '••••••••',
+                icon: Icons.lock_outline_rounded,
+                obscureText: !_isPasswordVisible,
+                textInputAction: TextInputAction.done,
+                autofillHints: const [AutofillHints.password],
+                textDirection: TextDirection.ltr,
+                onSubmitted: (_) => _handleLogin(),
+                suffix: PasswordVisibilityButton(
+                  visible: _isPasswordVisible,
                   onPressed: () => setState(() => _isPasswordVisible = !_isPasswordVisible),
                 ),
+                validator: (v) {
+                  if (v == null || v.isEmpty) return 'اكتب كلمة المرور';
+                  if (v.length < 6) return 'كلمة المرور 6 خانات على الأقل';
+                  return null;
+                },
               ),
-              validator: (v) {
-                if (v == null || v.isEmpty) return 'يرجى إدخال كلمة المرور';
-                if (v.length < 6) return 'كلمة المرور 6 خانات على الأقل';
-                return null;
-              },
-            ),
-            const SizedBox(height: AppSpace.x3),
-            _buildLoginButton(),
-            const SizedBox(height: AppSpace.lg),
-            Center(
-              child: Text(
-                'نسيت كلمة المرور؟ راجع إدارة الموارد البشرية',
-                textAlign: TextAlign.center,
-                style: t.bodySmall?.copyWith(
-                  color: isDark ? AppColors.textMuted : AppColors.textMuted,
-                ),
+              AnimatedSize(
+                duration: AppMotion.of(context),
+                child: _errorMessage == null
+                    ? const SizedBox(width: double.infinity)
+                    : Padding(padding: const EdgeInsets.only(top: AppSpace.lg), child: FormErrorBanner(_errorMessage!)),
               ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFieldLabel(String label, bool isDark, TextTheme t) {
-    return Text(
-      label,
-      style: t.labelLarge?.copyWith(
-        color: isDark ? AppColors.textPrimary : AppColors.textPrimary,
-        fontWeight: FontWeight.w700,
-      ),
-    );
-  }
-
-  Widget _buildErrorBanner(String msg) {
-    return AnimatedContainer(
-      duration: AppMotion.normal,
-      padding: const EdgeInsets.all(AppSpace.md),
-      decoration: BoxDecoration(
-        color: AppColors.danger.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(AppRadius.sm),
-        border: Border.all(color: AppColors.danger.withValues(alpha: 0.35)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(Icons.error_outline_rounded, color: AppColors.danger, size: 20),
-          const SizedBox(width: AppSpace.sm),
-          Expanded(
-            child: Text(
-              msg,
-              style: const TextStyle(
-                color: AppColors.danger,
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                fontFamily: 'Cairo',
-                height: 1.4,
+              const SizedBox(height: AppSpace.xl),
+              AppButton(
+                label: 'تسجيل الدخول',
+                icon: Icons.login_rounded,
+                size: AppButtonSize.large,
+                expand: true,
+                loading: _isLoading,
+                onPressed: _handleLogin,
               ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLoginButton() {
-    return AnimatedContainer(
-      duration: AppMotion.fast,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(AppRadius.sm),
-        boxShadow: _isLoading ? null : AppElevation.low,
-      ),
-      child: SizedBox(
-        height: 54,
-        child: ElevatedButton(
-          onPressed: _isLoading ? null : _handleLogin,
-          style: ElevatedButton.styleFrom(
-            padding: EdgeInsets.zero,
-            elevation: 0,
-            backgroundColor: Colors.transparent,
-            shadowColor: Colors.transparent,
-            foregroundColor: AppColors.textPrimary,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.sm)),
-          ),
-          child: Ink(
-            decoration: const BoxDecoration(
-              gradient: AppTheme.primaryGradient,
-              borderRadius: BorderRadius.all(Radius.circular(AppRadius.sm)),
-            ),
-            child: Center(
-              child: AnimatedSwitcher(
-                duration: AppMotion.normal,
-                child: _isLoading
-                    ? const SizedBox(
-                        key: ValueKey('loading'),
-                        height: 22,
-                        width: 22,
-                        child: CircularProgressIndicator(color: AppColors.textPrimary, strokeWidth: 2.5),
-                      )
-                    : const Row(
-                        key: ValueKey('label'),
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.login_rounded, color: AppColors.textPrimary, size: 20),
-                          SizedBox(width: 10),
-                          Text(
-                            'تسجيل الدخول',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w800,
-                              fontFamily: 'Cairo',
-                              fontSize: 16,
-                              color: AppColors.textPrimary,
-                              letterSpacing: 0.2,
-                            ),
-                          ),
-                        ],
-                      ),
-              ),
-            ),
+            ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildFooter(TextTheme t, bool isDark) {
-    return Padding(
-      padding: const EdgeInsets.only(top: AppSpace.xxl),
-      child: Column(
-        children: [
-          Text(
-            '© 2026 HR Pro',
-            style: t.bodySmall?.copyWith(
-              color: isDark ? AppColors.textMuted : AppColors.textMuted,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          if (_appVersion.isNotEmpty) ...[
-            const SizedBox(height: 2),
-            Text(
-              _appVersion,
-              style: t.bodySmall?.copyWith(
-                color: isDark ? AppColors.textMuted : AppColors.textMuted,
-                fontSize: 10,
-              ),
-            ),
-          ],
-        ],
       ),
     );
   }

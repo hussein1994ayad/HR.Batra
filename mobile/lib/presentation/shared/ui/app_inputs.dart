@@ -220,7 +220,7 @@ class AppChoiceChips<T> extends StatelessWidget {
             scrollDirection: Axis.horizontal,
             child: Row(children: [for (final c in chips) Padding(padding: const EdgeInsetsDirectional.only(end: AppSpace.sm), child: c)]),
           )
-        : Wrap(spacing: AppSpace.sm, runSpacing: 0, children: chips);
+        : Wrap(spacing: AppSpace.sm, children: chips);
     if (label == null) return body;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,

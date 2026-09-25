@@ -14,7 +14,7 @@ class AnimatedNumber extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fmt = format ?? (num v) => formatInt(v);
+    final fmt = format ?? formatInt;
     return TweenAnimationBuilder<double>(
       tween: Tween(end: value.toDouble()),
       duration: AppMotion.of(context, AppMotion.slow),

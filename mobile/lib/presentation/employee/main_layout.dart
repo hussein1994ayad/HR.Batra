@@ -1,26 +1,16 @@
 // =========================================================================
-// HR Pro v6.0 — الهيكل العام للتطبيق (Main Layout)
+// HR Pro — الهيكل الرئيسي بعد تسجيل الدخول
 // =========================================================================
-// هذا الملف هو الحاوية الرئيسية للتطبيق بعد تسجيل الدخول.
-//
-// ما يفعله:
-//   • يعرض شريط التبويب السفلي (Bottom Navigation Bar)
-//   • يُدير الانتقال بين تبويبات الموظف: الرئيسية، الدوام، الإجازات، السلف، الإعدادات
-//   • يستخدم IndexedStack لإبقاء حالة كل تبويب في الذاكرة
-//   • يُرسل ValueNotifier للشاشة الرئيسية لتحديث بيانات الدوام عند العودة إليها
-//
-// للتعديل على التبويبات: غيّر _tabs وقائمة NavBar في هذا الملف
-// لإضافة تبويب جديد: أضف الشاشة في _tabs وزر في BottomNavBar
-// =========================================================================
-
-// =========================================================================
-// نظام HR Pro v6.0 - تخطيط الهيكل الرئيسي للتطبيق (Main App Layout Container)
+// • 5 تبويبات: الرئيسية، الدوام، الإجازات، السلف، الإعدادات
+// • هاتف: شريط سفلي — تابلت (≥600dp): شريط جانبي — شاشة عريضة (≥840dp): شريط جانبي موسّع
+// • كل تبويب يُبنى أول مرة يُفتح فقط (lazy) ويبقى محفوظاً بعدها (IndexedStack)
+// • زر الرجوع في تبويب غير الرئيسية يرجع للرئيسية بدل إغلاق التطبيق
 // =========================================================================
 
 import 'package:flutter/material.dart';
 
+import '../../core/design/design.dart';
 import '../shared/widgets/bottom_nav_bar.dart';
-import '../shared/widgets/glass_background.dart';
 import 'attendance_screen.dart';
 import 'home_screen.dart';
 import 'leave_request_screen.dart';
@@ -30,10 +20,7 @@ import 'settings_screen.dart';
 class MainLayout extends StatefulWidget {
   final int initialTab;
 
-  const MainLayout({
-    super.key,
-    this.initialTab = 0,
-  });
+  const MainLayout({super.key, this.initialTab = 0});
 
   @override
   State<MainLayout> createState() => _MainLayoutState();
@@ -42,7 +29,7 @@ class MainLayout extends StatefulWidget {
 class _MainLayoutState extends State<MainLayout> {
   late int _currentIndex;
   final Set<int> _loadedTabs = {};
-  // يُستخدم لإبلاغ HomeScreen بالعودة إليها (لإعادة تحميل بيانات الدوام)
+  // يُبلغ HomeScreen بالعودة إليها لإعادة تحميل بيانات الدوام
   final ValueNotifier<int> _homeRefreshNotifier = ValueNotifier<int>(0);
 
   @override
@@ -55,7 +42,6 @@ class _MainLayoutState extends State<MainLayout> {
   @override
   void didUpdateWidget(covariant MainLayout oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // التحديث عند تغيير التبويب خارجياً (مثلاً عبر الـ Router)
     if (oldWidget.initialTab != widget.initialTab) {
       setState(() {
         _currentIndex = widget.initialTab;
@@ -70,10 +56,7 @@ class _MainLayoutState extends State<MainLayout> {
       _currentIndex = index;
       _loadedTabs.add(index);
     });
-    // لما يرجع للشاشة الرئيسية، ننبّه الـ HomeScreen لتحديث بيانات الدوام
-    if (comingBackHome) {
-      _homeRefreshNotifier.value++;
-    }
+    if (comingBackHome) _homeRefreshNotifier.value++;
   }
 
   Widget _buildScreen(int index) {
@@ -101,26 +84,38 @@ class _MainLayoutState extends State<MainLayout> {
 
   @override
   Widget build(BuildContext context) {
-    return GlassBackground(
+    final size = AppBreakpoints.of(context);
+    final tabs = IndexedStack(
+      index: _currentIndex,
+      children: List.generate(kMainDestinations.length, (index) {
+        if (!_loadedTabs.contains(index)) return const SizedBox.shrink();
+        return TickerMode(
+          enabled: _currentIndex == index,
+          child: ExcludeFocus(excluding: _currentIndex != index, child: _buildScreen(index)),
+        );
+      }),
+    );
+
+    return PopScope(
+      canPop: _currentIndex == 0,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _onTabChanged(0);
+      },
       child: Scaffold(
-        backgroundColor: Colors.transparent,
-        body: IndexedStack(
-          index: _currentIndex,
-          children: List.generate(5, (index) {
-            final isLoaded = _loadedTabs.contains(index);
-            if (!isLoaded) {
-              return const SizedBox.shrink();
-            }
-            return TickerMode(
-              enabled: _currentIndex == index,
-              child: _buildScreen(index),
-            );
-          }),
-        ),
-        bottomNavigationBar: PremiumBottomNavBar(
-          currentIndex: _currentIndex,
-          onTap: _onTabChanged,
-        ),
+        backgroundColor: AppColors.bg,
+        body: size == WindowSize.compact
+            ? tabs
+            : Row(
+                children: [
+                  SafeArea(
+                    right: false,
+                    left: false,
+                    child: AppNavRail(currentIndex: _currentIndex, onTap: _onTabChanged, extended: size == WindowSize.expanded),
+                  ),
+                  Expanded(child: tabs),
+                ],
+              ),
+        bottomNavigationBar: size == WindowSize.compact ? AppBottomNav(currentIndex: _currentIndex, onTap: _onTabChanged) : null,
       ),
     );
   }

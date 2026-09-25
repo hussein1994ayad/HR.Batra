@@ -116,6 +116,8 @@ class HRProApp extends StatelessWidget {
       darkTheme: AppTheme.darkTheme,
       themeMode: ThemeMode.dark,
       routerConfig: appRouter,
+      // شريط "غير متصل" أعلى كل الشاشات + حد أقصى لتكبير الخط (1.3)
+      builder: (context, child) => AppChrome(child: child ?? const SizedBox.shrink()),
     );
   }
 }

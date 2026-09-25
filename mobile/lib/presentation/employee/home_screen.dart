@@ -1,10 +1,11 @@
 // =========================================================================
-// نظام HR Pro v6.0 - الشاشة الرئيسية للموظف (Employee Home)
-// إعادة تصميم عصرية: ألوان الثيم بالكامل (دعم Light/Dark سليم)،
-// hierarchy واضحة، skeleton loading، انيميشن أنعم، ودعم كل الأحجام.
-// كل منطق تحميل البيانات والاشتراك الفوري والتتبع محفوظ كما هو.
+// HR Pro — الشاشة الرئيسية للموظف
 // =========================================================================
-
+// • تحية حسب الوقت + الإشعارات غير المقروءة
+// • بطاقة "اليوم": زر واحد يتغير حسب الحالة (حضور ← انصراف ← اكتمل الدوام)
+// • أوقات الدوام، اختصارات، والتعاميم
+// منطق التحميل والاشتراك الفوري والتتبع والتذكيرات لم يتغير.
+// =========================================================================
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -12,14 +13,13 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../core/design/design.dart';
 import '../../core/routes/app_router.dart';
 import '../../core/services/location_service.dart';
 import '../../core/services/notification_service.dart';
 import '../../core/services/ota_service.dart';
 import '../../core/services/schedule_service.dart';
 import '../../core/services/supabase_service.dart';
-import '../../core/theme/app_theme.dart';
+import '../shared/ui/ui.dart';
 
 class HomeScreen extends StatefulWidget {
   final void Function(int) onTabChange;
@@ -267,694 +267,351 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (e) {
       debugPrint('خطأ في تحميل بيانات لوحة الموظف: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'تعذر تحديث البيانات، يرجى التحقق من اتصال الإنترنت.',
-              style: TextStyle(fontFamily: 'Cairo'),
-            ),
-            backgroundColor: AppColors.danger,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        AppSnack.error(context, 'تعذّر تحديث البيانات، تأكد من اتصال الإنترنت.');
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
+
   // ==========================================================================
   // Build
   // ==========================================================================
+  bool get _isManager => _userRole == 'admin' || _userRole == 'manager';
+
+  Future<void> _openNotifications() async {
+    await context.push(AppRoutes.employeeNotifications);
+    unawaited(_loadDashboardData());
+  }
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final cs = theme.colorScheme;
-    final t = theme.textTheme;
-
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: RefreshIndicator(
-        onRefresh: _loadDashboardData,
-        color: cs.primary,
-        child: CustomScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          slivers: [
-            _buildAppBar(isDark, cs, t),
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpace.lg,
-                AppSpace.sm,
-                AppSpace.lg,
-                AppSpace.x4,
-              ),
-              sliver: SliverList(
-                delegate: SliverChildListDelegate([
-                  if (_workSchedule != null) ...[
-                    _buildScheduleCard(isDark, cs, t),
-                    const SizedBox(height: AppSpace.lg),
-                  ],
-                  _buildAttendanceCard(isDark, cs, t),
-                  const SizedBox(height: AppSpace.xxl),
-                  if (_userRole == 'admin' || _userRole == 'manager') ...[
-                    _buildAdminCard(isDark, cs, t),
-                    const SizedBox(height: AppSpace.xxl),
-                  ],
-                  _buildSectionHeader('الخدمات السريعة', Icons.grid_view_rounded, cs, t),
-                  const SizedBox(height: AppSpace.md),
-                  _buildQuickActionsGrid(context),
-                  const SizedBox(height: AppSpace.xxl),
-                  _buildAnnouncementsHeader(context, cs, t),
-                  const SizedBox(height: AppSpace.md),
-                  _buildAnnouncementsSection(isDark, cs, t),
-                ]),
-              ),
-            ),
-          ],
-        ),
-      ),
+    final wide = MediaQuery.sizeOf(context).width >= AppBreakpoints.expanded;
+    final today = _TodayCard(
+      loading: _isLoading && _todayAttendance == null,
+      attendance: _todayAttendance,
+      schedule: _workSchedule,
+      onAction: () => widget.onTabChange(1),
     );
-  }
-
-  // ==========================================================================
-  // App Bar
-  // ==========================================================================
-  Widget _buildAppBar(bool isDark, ColorScheme cs, TextTheme t) {
-    return SliverAppBar(
-      expandedHeight: 140,
-      pinned: true,
-      stretch: true,
-      backgroundColor: Colors.transparent,
-      elevation: 0,
-      surfaceTintColor: Colors.transparent,
-      actions: [
-        _NotificationButton(
-          count: _unreadNotificationsCount,
-          onTap: () async {
-            await context.push(AppRoutes.employeeNotifications);
-            unawaited(_loadDashboardData());
-          },
-        ),
-        const SizedBox(width: AppSpace.sm),
+    final side = <Widget>[
+      if (_isManager) ...[
+        const SizedBox(height: AppSpace.lg),
+        _AdminEntry(onTap: () => context.push(AppRoutes.adminDashboard)),
       ],
-      title: Text(
-        'HR Pro',
-        style: t.titleLarge?.copyWith(
-          color: cs.primary,
-          fontWeight: FontWeight.w900,
-          letterSpacing: 1.0,
-        ),
-      ),
-      centerTitle: false,
-      flexibleSpace: FlexibleSpaceBar(
-        collapseMode: CollapseMode.pin,
-        background: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpace.lg, 60, AppSpace.lg, AppSpace.md,
-            ),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(2),
-                  decoration: const BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: AppTheme.primaryGradient,
-                  ),
-                  child: CircleAvatar(
-                    radius: 26,
-                    backgroundColor: cs.surface,
-                    child: CircleAvatar(
-                      radius: 24,
-                      backgroundColor: cs.primaryContainer,
-                      backgroundImage: _avatarUrl.isNotEmpty
-                          ? ResizeImage.resizeIfNeeded(120, 120, NetworkImage(_avatarUrl))
-                          : null,
-                      child: _avatarUrl.isEmpty
-                          ? Icon(Icons.person, color: cs.onPrimaryContainer, size: 24)
-                          : null,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: AppSpace.md),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        _greeting(),
-                        style: t.bodySmall?.copyWith(
-                          color: isDark ? AppColors.textMuted : AppColors.textMuted,
-                        ),
-                      ),
-                      Text(
-                        _employeeName,
-                        style: t.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w800,
-                          color: cs.onSurface,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      Text(
-                        _departmentName,
-                        style: t.bodySmall?.copyWith(
-                          color: isDark ? AppColors.textSecondary : AppColors.textSecondary,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ==========================================================================
-  // Cards
-  // ==========================================================================
-  Widget _buildScheduleCard(bool isDark, ColorScheme cs, TextTheme t) {
-    final checkIn = _formatTimeStr(_workSchedule!['check_in_time']?.toString());
-    final checkOut = _formatTimeStr(_workSchedule!['check_out_time']?.toString());
-    final grace = _workSchedule!['grace_period_minutes'] ?? 15;
-
-    return _SectionCard(
-      accent: AppColors.accent,
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(AppSpace.md),
-            decoration: BoxDecoration(
-              color: AppColors.accent.withValues(alpha: 0.14),
-              borderRadius: BorderRadius.circular(AppRadius.md),
-            ),
-            child: const Icon(Icons.access_time_filled_rounded, color: AppColors.accent, size: 26),
-          ),
-          const SizedBox(width: AppSpace.lg),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('أوقات الدوام المعتمدة', style: t.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
-                const SizedBox(height: 2),
-                Text(
-                  'من $checkIn إلى $checkOut  •  سماحية $grace د',
-                  style: t.bodySmall?.copyWith(
-                    color: isDark ? AppColors.textSecondary : AppColors.textSecondary,
-                  ),
-                ),
-              ],
-            ),
-          ),
+      const SectionHeader('الخدمات'),
+      _QuickActions(
+        actions: [
+          _QuickAction(Icons.event_available_rounded, 'طلب إجازة', AppTone.accent, () => widget.onTabChange(2)),
+          _QuickAction(Icons.account_balance_wallet_rounded, 'طلب سلفة', AppTone.warning, () => widget.onTabChange(3)),
+          _QuickAction(Icons.receipt_long_rounded, 'كشف الراتب', AppTone.success, () => context.push(AppRoutes.employeePayslips)),
+          _QuickAction(Icons.history_rounded, 'سجل الدوام', AppTone.brand, () => widget.onTabChange(1)),
+          _QuickAction(Icons.groups_rounded, 'دليل الموظفين', AppTone.info, () => context.push(AppRoutes.employeeDirectory)),
+          _QuickAction(Icons.notifications_rounded, 'الإشعارات', AppTone.neutral, _openNotifications),
         ],
       ),
+    ];
+    final announcements = <Widget>[
+      SectionHeader(
+        'التعاميم',
+        actionLabel: _announcements.isNotEmpty ? 'عرض الكل' : null,
+        onAction: _openNotifications,
+      ),
+      _Announcements(loading: _isLoading && _announcements.isEmpty, items: _announcements),
+    ];
+
+    return AppPage(
+      showBack: false,
+      onRefresh: _loadDashboardData,
+      maxWidth: wide ? 1080 : AppBreakpoints.maxContent,
+      padding: const EdgeInsets.fromLTRB(AppSpace.page, AppSpace.lg, AppSpace.page, AppSpace.x4),
+      slivers: [
+        SliverToBoxAdapter(
+          child: _Header(
+            name: _employeeName,
+            subtitle: _departmentName,
+            avatarUrl: _avatarUrl,
+            unread: _unreadNotificationsCount,
+            onNotifications: _openNotifications,
+          ),
+        ),
+        const SliverToBoxAdapter(child: SizedBox(height: AppSpace.xl)),
+        if (wide)
+          SliverToBoxAdapter(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: Column(children: [today, ...side])),
+                const SizedBox(width: AppSpace.xxl),
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: announcements)),
+              ],
+            ),
+          )
+        else
+          SliverList.list(children: [today, ...side, ...announcements]),
+      ],
     );
   }
+}
 
-  Widget _buildAttendanceCard(bool isDark, ColorScheme cs, TextTheme t) {
-    final hasCheckIn = _todayAttendance != null && _todayAttendance!['check_in_time'] != null;
-    final hasCheckOut = _todayAttendance != null && _todayAttendance!['check_out_time'] != null;
+// =========================================================================
+// أجزاء الشاشة
+// =========================================================================
 
-    final (statusText, statusColor, statusIcon) = hasCheckOut
-        ? ('مكتمل الدوام اليومي', AppColors.success, Icons.check_circle_rounded)
-        : hasCheckIn
-            ? ('أنت في فترة الدوام', AppColors.warning, Icons.watch_later_rounded)
-            : ('لم تسجل الحضور بعد', AppColors.danger, Icons.error_rounded);
+class _Header extends StatelessWidget {
+  const _Header({required this.name, required this.subtitle, required this.avatarUrl, required this.unread, required this.onNotifications});
 
-    return _SectionCard(
-      accent: statusColor,
+  final String name;
+  final String subtitle;
+  final String avatarUrl;
+  final int unread;
+  final VoidCallback onNotifications;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        AppAvatar(name: name, url: avatarUrl, size: 52),
+        const SizedBox(width: AppSpace.md),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(Fmt.greeting(), style: AppText.bodySm),
+              Text(name, style: AppText.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+              Text(subtitle, style: AppText.caption, maxLines: 1, overflow: TextOverflow.ellipsis),
+            ],
+          ),
+        ),
+        AppIconButton(
+          icon: Icons.notifications_none_rounded,
+          tooltip: unread > 0 ? 'الإشعارات، $unread غير مقروءة' : 'الإشعارات',
+          badge: unread,
+          onPressed: onNotifications,
+        ),
+      ],
+    );
+  }
+}
+
+/// حالة يوم العمل الحالية.
+enum _DayState { notStarted, working, done }
+
+class _TodayCard extends StatelessWidget {
+  const _TodayCard({required this.loading, required this.attendance, required this.schedule, required this.onAction});
+
+  final bool loading;
+  final Map<String, dynamic>? attendance;
+  final Map<String, dynamic>? schedule;
+  final VoidCallback onAction;
+
+  static DateTime? _parse(Object? v) => v == null ? null : DateTime.tryParse(v.toString())?.toLocal();
+
+  /// عدد الدقائق المجدولة من "08:00:00" إلى "16:00:00".
+  double? get _scheduledMinutes {
+    final a = schedule?['check_in_time']?.toString().split(':');
+    final b = schedule?['check_out_time']?.toString().split(':');
+    if (a == null || b == null || a.length < 2 || b.length < 2) return null;
+    final start = (int.tryParse(a[0]) ?? 0) * 60 + (int.tryParse(a[1]) ?? 0);
+    final end = (int.tryParse(b[0]) ?? 0) * 60 + (int.tryParse(b[1]) ?? 0);
+    return end > start ? (end - start).toDouble() : null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (loading) {
+      return const AppCard(
+        padding: EdgeInsets.all(AppSpace.xl),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Skeleton(width: 120),
+            SizedBox(height: AppSpace.lg),
+            Skeleton(width: 180, height: 32),
+            SizedBox(height: AppSpace.xl),
+            Skeleton(height: 56, radius: AppRadius.sm),
+          ],
+        ),
+      );
+    }
+    final checkIn = _parse(attendance?['check_in_time']);
+    final checkOut = _parse(attendance?['check_out_time']);
+    final state = checkOut != null
+        ? _DayState.done
+        : checkIn != null
+            ? _DayState.working
+            : _DayState.notStarted;
+
+    final now = DateTime.now();
+    final worked = checkIn == null ? Duration.zero : (checkOut ?? now).difference(checkIn);
+    final planned = _scheduledMinutes;
+
+    final (badge, tone, bigLabel, bigValue, actionLabel, actionIcon, variant) = switch (state) {
+      _DayState.notStarted => (
+          'لم تسجّل بعد',
+          AppTone.warning,
+          'يبدأ دوامك',
+          Fmt.timeOfDay(schedule?['check_in_time']?.toString()),
+          'تسجيل الحضور',
+          Icons.fingerprint_rounded,
+          AppButtonVariant.primary,
+        ),
+      _DayState.working => (
+          'في الدوام',
+          AppTone.brand,
+          'مدة العمل حتى الآن',
+          _hm(worked),
+          'تسجيل الانصراف',
+          Icons.logout_rounded,
+          AppButtonVariant.warning,
+        ),
+      _DayState.done => (
+          'اكتمل الدوام',
+          AppTone.success,
+          'مجموع ساعات اليوم',
+          _hm(worked),
+          'عرض سجل اليوم',
+          Icons.history_rounded,
+          AppButtonVariant.secondary,
+        ),
+    };
+
+    return AppCard(
       padding: const EdgeInsets.all(AppSpace.xl),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('بصمة الدوام اليومية', style: t.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpace.md, vertical: 6),
-                decoration: BoxDecoration(
-                  color: cs.primary.withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.circular(AppRadius.full),
-                ),
-                child: Text(
-                  _getFormattedTodayDate(),
-                  style: t.bodySmall?.copyWith(color: cs.primary, fontWeight: FontWeight.w700),
-                ),
-              ),
+              Expanded(child: Text(Fmt.dateWithDay(now), style: AppText.bodySm.copyWith(fontWeight: FontWeight.w700))),
+              StatusBadge(badge, tone: tone, dot: true),
             ],
           ),
           const SizedBox(height: AppSpace.lg),
-          Row(
+          Text(bigLabel, style: AppText.caption),
+          Text(bigValue, style: AppText.display.copyWith(fontFeatures: const [FontFeature.tabularFigures()])),
+          if (state == _DayState.working && planned != null) ...[
+            const SizedBox(height: AppSpace.md),
+            AppProgressBar(value: worked.isNegative ? 0 : worked.inMinutes / planned),
+          ],
+          const SizedBox(height: AppSpace.lg),
+          Wrap(
+            spacing: AppSpace.lg,
+            runSpacing: AppSpace.xs,
             children: [
-              Container(
-                padding: const EdgeInsets.all(AppSpace.md),
-                decoration: BoxDecoration(
-                  color: statusColor.withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(AppRadius.md),
+              _TimeChip(icon: Icons.login_rounded, label: 'الحضور', value: checkIn == null ? '--:--' : Fmt.time(checkIn)),
+              _TimeChip(icon: Icons.logout_rounded, label: 'الانصراف', value: checkOut == null ? '--:--' : Fmt.time(checkOut)),
+              if (schedule != null)
+                _TimeChip(
+                  icon: Icons.schedule_rounded,
+                  label: 'الدوام',
+                  value: '${Fmt.timeOfDay(schedule!['check_in_time']?.toString())} - ${Fmt.timeOfDay(schedule!['check_out_time']?.toString())}',
                 ),
-                child: Icon(statusIcon, color: statusColor, size: 28),
-              ),
-              const SizedBox(width: AppSpace.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(statusText, style: t.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
-                    const SizedBox(height: 2),
-                    Text(
-                      hasCheckIn
-                          ? 'تسجيل الحضور: ${_formatTime(_todayAttendance!['check_in_time'] as String?)}'
-                          : 'يرجى تسجيل حضورك عند الوصول للفرع.',
-                      style: t.bodySmall?.copyWith(
-                        color: isDark ? AppColors.textSecondary : AppColors.textSecondary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
             ],
           ),
           const SizedBox(height: AppSpace.xl),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: () => widget.onTabChange(1),
-              icon: Icon(hasCheckIn ? Icons.logout_rounded : Icons.login_rounded, size: 20),
-              label: Text(
-                hasCheckIn ? (hasCheckOut ? 'عرض السجل اليومي' : 'تسجيل الانصراف') : 'ابدأ الدوام',
-                style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w800, fontSize: 15),
-              ),
-              style: FilledButton.styleFrom(
-                backgroundColor: statusColor,
-                foregroundColor: AppColors.textPrimary,
-                minimumSize: const Size(0, 52),
-              ),
+          AppButton(label: actionLabel, icon: actionIcon, variant: variant, size: AppButtonSize.large, expand: true, onPressed: onAction),
+          if (state == _DayState.notStarted && schedule?['grace_period_minutes'] != null)
+            Padding(
+              padding: const EdgeInsets.only(top: AppSpace.sm),
+              child: Center(child: Text('سماحية التأخير ${schedule!['grace_period_minutes']} دقيقة', style: AppText.caption)),
             ),
-          ),
         ],
       ),
     );
   }
 
-  Widget _buildAdminCard(bool isDark, ColorScheme cs, TextTheme t) {
-    return _SectionCard(
-      accent: AppColors.accent,
-      padding: EdgeInsets.zero,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(AppRadius.lg),
-          onTap: () => context.push(AppRoutes.adminDashboard),
-          child: Padding(
-            padding: const EdgeInsets.all(AppSpace.xl),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(AppSpace.md),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [AppColors.accent.withValues(alpha: 0.20), AppColors.accent.withValues(alpha: 0.08)],
-                    ),
-                    borderRadius: BorderRadius.circular(AppRadius.md),
-                  ),
-                  child: const Icon(Icons.admin_panel_settings_rounded, color: AppColors.accent, size: 32),
-                ),
-                const SizedBox(width: AppSpace.lg),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'بوابة الإدارة والمدراء',
-                        style: t.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w800,
-                          color: AppColors.accent,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'الإجازات، السلف، الأجهزة المقفلة، والتتبع الحي',
-                        style: t.bodySmall?.copyWith(
-                          color: isDark ? AppColors.textSecondary : AppColors.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const Icon(Icons.arrow_forward_ios_rounded, color: AppColors.accent, size: 16),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ==========================================================================
-  // Quick actions
-  // ==========================================================================
-  Widget _buildQuickActionsGrid(BuildContext context) {
-    final actions = <_QuickAction>[
-      _QuickAction(Icons.calendar_today_rounded, 'تقديم إجازة', AppColors.accent, () => widget.onTabChange(2)),
-      _QuickAction(Icons.monetization_on_rounded, 'طلب سلفة', AppColors.warning, () => widget.onTabChange(3)),
-      _QuickAction(Icons.receipt_long_rounded, 'كشف الراتب', AppColors.success, () => context.push(AppRoutes.employeePayslips)),
-      _QuickAction(Icons.fingerprint_rounded, 'بصمة الدوام', AppColors.brandStrong, () => widget.onTabChange(1)),
-      _QuickAction(Icons.people_alt_rounded, 'دليل الموظفين', AppColors.accent, () => context.push(AppRoutes.employeeDirectory)),
-      _QuickAction(Icons.settings_rounded, 'الإعدادات', AppColors.brand, () => widget.onTabChange(4)),
-    ];
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final cols = constraints.maxWidth > 600 ? 4 : 3;
-        return GridView.count(
-          crossAxisCount: cols,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisSpacing: AppSpace.md,
-          mainAxisSpacing: AppSpace.md,
-          children: actions.map((a) => _QuickActionTile(action: a)).toList(),
-        );
-      },
-    );
-  }
-
-  // ==========================================================================
-  // Announcements
-  // ==========================================================================
-  Widget _buildAnnouncementsHeader(BuildContext context, ColorScheme cs, TextTheme t) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        _buildSectionHeader('التعاميم والإعلانات', Icons.campaign_rounded, cs, t),
-        if (_announcements.isNotEmpty)
-          TextButton(
-            onPressed: () => context.push(AppRoutes.employeeNotifications),
-            child: Text('عرض الكل', style: t.bodyMedium?.copyWith(color: cs.primary, fontWeight: FontWeight.w700)),
-          ),
-      ],
-    );
-  }
-
-  Widget _buildAnnouncementsSection(bool isDark, ColorScheme cs, TextTheme t) {
-    if (_isLoading) {
-      return Column(
-        children: List.generate(2, (_) => Padding(
-          padding: const EdgeInsets.only(bottom: AppSpace.md),
-          child: _SkeletonBox(height: 84, isDark: isDark),
-        )),
-      );
-    }
-
-    if (_announcements.isEmpty) {
-      return _SectionCard(
-        padding: const EdgeInsets.symmetric(vertical: AppSpace.xxl),
-        child: Center(
-          child: Column(
-            children: [
-              Icon(Icons.notifications_off_outlined, color: cs.outline, size: 40),
-              const SizedBox(height: AppSpace.sm),
-              Text(
-                'لا توجد تعاميم جديدة حالياً',
-                style: t.bodyMedium?.copyWith(color: isDark ? AppColors.textMuted : AppColors.textMuted),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    return Column(
-      children: _announcements.asMap().entries.map((entry) {
-        final a = entry.value;
-        final isPinned = a['is_pinned'] ?? false;
-        final accent = (isPinned as bool) ? AppColors.warning : cs.primary;
-
-        return Padding(
-          padding: EdgeInsets.only(bottom: entry.key < _announcements.length - 1 ? AppSpace.md : 0),
-          child: _SectionCard(
-            accent: accent,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Row(
-                        children: [
-                          if (isPinned) ...[
-                            Icon(Icons.push_pin_rounded, color: accent, size: 16),
-                            const SizedBox(width: 6),
-                          ],
-                          Expanded(
-                            child: Text(
-                              (a['title'] ?? 'إعلان إداري') as String,
-                              style: t.titleMedium?.copyWith(fontWeight: FontWeight.w800),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Text(
-                      _formatAnnounceDate(a['created_at'] as String?),
-                      style: t.bodySmall?.copyWith(color: isDark ? AppColors.textMuted : AppColors.textMuted),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: AppSpace.sm),
-                Text(
-                  (a['content'] ?? '') as String,
-                  style: t.bodyMedium?.copyWith(
-                    color: isDark ? AppColors.textSecondary : AppColors.textSecondary,
-                    height: 1.55,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      }).toList(),
-    );
-  }
-
-  // ==========================================================================
-  // Helpers
-  // ==========================================================================
-  Widget _buildSectionHeader(String title, IconData icon, ColorScheme cs, TextTheme t) {
-    return Row(
-      children: [
-        Icon(icon, size: 20, color: cs.primary),
-        const SizedBox(width: 8),
-        Text(title, style: t.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
-      ],
-    );
-  }
-
-  String _greeting() {
-    final h = DateTime.now().hour;
-    if (h < 12) return 'صباح الخير،';
-    if (h < 17) return 'أهلاً،';
-    return 'مساء الخير،';
-  }
-
-  String _getFormattedTodayDate() {
-    final now = DateTime.now();
-    const months = [
-      'كانون الثاني', 'شباط', 'آذار', 'نيسان', 'أيار', 'حزيران',
-      'تموز', 'آب', 'أيلول', 'تشرين الأول', 'تشرين الثاني', 'كانون الأول',
-    ];
-    return '${now.day} ${months[now.month - 1]}';
-  }
-
-  String _formatTime(String? timeStr) {
-    if (timeStr == null) return '--:--';
-    try {
-      final dt = DateTime.parse(timeStr).toLocal();
-      final hour = dt.hour > 12 ? dt.hour - 12 : (dt.hour == 0 ? 12 : dt.hour);
-      final amPm = dt.hour >= 12 ? 'PM' : 'AM';
-      final minute = dt.minute.toString().padLeft(2, '0');
-      return '$hour:$minute $amPm';
-    } catch (_) {
-      return '--:--';
-    }
-  }
-
-  String _formatAnnounceDate(String? dateStr) {
-    if (dateStr == null) return '';
-    try {
-      final date = DateTime.parse(dateStr).toLocal();
-      return '${date.year}/${date.month}/${date.day}';
-    } catch (_) {
-      return '';
-    }
-  }
-
-  String _formatTimeStr(String? timeStr) {
-    if (timeStr == null || timeStr.isEmpty) return '--:--';
-    try {
-      final parts = timeStr.split(':');
-      if (parts.length < 2) return timeStr;
-      int hour = int.parse(parts[0]);
-      final int minute = int.parse(parts[1]);
-      final String period = hour >= 12 ? 'PM' : 'AM';
-      hour = hour % 12;
-      if (hour == 0) hour = 12;
-      final String minuteStr = minute.toString().padLeft(2, '0');
-      return '$hour:$minuteStr $period';
-    } catch (_) {
-      return timeStr;
-    }
+  static String _hm(Duration d) {
+    if (d.isNegative) return '0 د';
+    final h = d.inHours;
+    final m = d.inMinutes % 60;
+    if (h == 0) return '$m د';
+    return m == 0 ? '$h س' : '$h س $m د';
   }
 }
 
-// =========================================================================
-// Reusable widgets — private to this file
-// =========================================================================
-
-class _SectionCard extends StatelessWidget {
-  final Widget child;
-  final Color? accent;
-  final EdgeInsetsGeometry padding;
-
-  const _SectionCard({
-    required this.child,
-    this.accent,
-    this.padding = const EdgeInsets.all(AppSpace.lg),
-  });
+class _TimeChip extends StatelessWidget {
+  const _TimeChip({required this.icon, required this.label, required this.value});
+  final IconData icon;
+  final String label;
+  final String value;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final cs = theme.colorScheme;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 16, color: AppColors.textMuted),
+        const SizedBox(width: AppSpace.xs),
+        Text('$label ', style: AppText.caption),
+        Text(value, style: AppText.bodySm.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
+      ],
+    );
+  }
+}
 
-    return Container(
-      width: double.infinity,
-      padding: padding,
-      decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(
-          color: accent?.withValues(alpha: 0.18) ??
-              (isDark ? AppColors.borderStrong.withValues(alpha: 0.5) : AppColors.borderStrong),
-        ),
-        boxShadow: AppElevation.low,
+class _AdminEntry extends StatelessWidget {
+  const _AdminEntry({required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      tone: AppTone.accent,
+      onTap: onTap,
+      child: const Row(
+        children: [
+          ToneIcon(Icons.admin_panel_settings_rounded, tone: AppTone.accent, size: 44),
+          SizedBox(width: AppSpace.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('لوحة الإدارة', style: AppText.subtitle),
+                Text('الطلبات، الحضور، السلف، والتتبع', style: AppText.caption),
+              ],
+            ),
+          ),
+          Icon(Icons.chevron_left_rounded, color: AppColors.accent),
+        ],
       ),
-      child: child,
     );
   }
 }
 
 class _QuickAction {
+  const _QuickAction(this.icon, this.title, this.tone, this.onTap);
   final IconData icon;
   final String title;
-  final Color color;
+  final AppTone tone;
   final VoidCallback onTap;
-  const _QuickAction(this.icon, this.title, this.color, this.onTap);
 }
 
-class _QuickActionTile extends StatelessWidget {
-  final _QuickAction action;
-  const _QuickActionTile({required this.action});
+class _QuickActions extends StatelessWidget {
+  const _QuickActions({required this.actions});
+  final List<_QuickAction> actions;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final t = theme.textTheme;
-
-    return Material(
-      color: theme.colorScheme.surface,
-      borderRadius: BorderRadius.circular(AppRadius.md),
-      child: InkWell(
-        onTap: () {
-          HapticFeedback.selectionClick();
-          action.onTap();
-        },
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        child: Container(
-          padding: const EdgeInsets.all(AppSpace.md),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(AppRadius.md),
-            border: Border.all(
-              color: isDark ? AppColors.borderStrong.withValues(alpha: 0.5) : AppColors.borderStrong,
-            ),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(AppSpace.md),
-                decoration: BoxDecoration(
-                  color: action.color.withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(AppRadius.full),
-                ),
-                child: Icon(action.icon, color: action.color, size: 22),
-              ),
-              const SizedBox(height: AppSpace.sm),
-              Text(
-                action.title,
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: t.bodySmall?.copyWith(fontWeight: FontWeight.w700),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _NotificationButton extends StatelessWidget {
-  final int count;
-  final VoidCallback onTap;
-  const _NotificationButton({required this.count, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Stack(
-      alignment: Alignment.center,
+    return ResponsiveGrid(
+      minItemWidth: 96,
+      maxColumns: 6,
       children: [
-        IconButton(
-          icon: Icon(Icons.notifications_none_rounded, color: cs.onSurface),
-          tooltip: 'الإشعارات',
-          onPressed: onTap,
-        ),
-        if (count > 0)
-          Positioned(
-            right: 6,
-            top: 6,
-            child: Container(
-              padding: const EdgeInsets.all(4),
-              decoration: BoxDecoration(
-                color: AppColors.danger,
-                shape: BoxShape.circle,
-                border: Border.all(color: cs.surface, width: 2),
-              ),
-              constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
-              child: Text(
-                count > 99 ? '99+' : '$count',
-                style: const TextStyle(
-                  color: AppColors.textPrimary,
-                  fontSize: 9,
-                  fontWeight: FontWeight.w800,
-                  fontFamily: 'Cairo',
-                ),
-                textAlign: TextAlign.center,
+        for (final a in actions)
+          AppCard(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpace.sm, vertical: AppSpace.md),
+            onTap: () {
+              AppHaptics.select();
+              a.onTap();
+            },
+            semanticLabel: a.title,
+            child: ExcludeSemantics(
+              child: Column(
+                children: [
+                  ToneIcon(a.icon, tone: a.tone, size: 44),
+                  const SizedBox(height: AppSpace.sm),
+                  Text(a.title, textAlign: TextAlign.center, maxLines: 2, style: AppText.bodySm.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
+                ],
               ),
             ),
           ),
@@ -963,18 +620,57 @@ class _NotificationButton extends StatelessWidget {
   }
 }
 
-class _SkeletonBox extends StatelessWidget {
-  final double height;
-  final bool isDark;
-  const _SkeletonBox({required this.height, required this.isDark});
+class _Announcements extends StatelessWidget {
+  const _Announcements({required this.loading, required this.items});
+  final bool loading;
+  final List<Map<String, dynamic>> items;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: height,
-      decoration: BoxDecoration(
-        color: isDark ? AppColors.surface2 : AppColors.surface2,
-        borderRadius: BorderRadius.circular(AppRadius.md),
+    if (loading) return const SkeletonList(count: 2, itemHeight: 88);
+    if (items.isEmpty) {
+      return const AppCard(
+        child: EmptyView(title: 'لا توجد تعاميم جديدة', message: 'ستظهر هنا إعلانات الإدارة.', icon: Icons.campaign_rounded, compact: true),
+      );
+    }
+    return Column(
+      children: [
+        for (var i = 0; i < items.length; i++)
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppSpace.md),
+            child: FadeSlideIn(index: i, child: _AnnouncementCard(items[i])),
+          ),
+      ],
+    );
+  }
+}
+
+class _AnnouncementCard extends StatelessWidget {
+  const _AnnouncementCard(this.a);
+  final Map<String, dynamic> a;
+
+  @override
+  Widget build(BuildContext context) {
+    final pinned = a['is_pinned'] == true;
+    final body = (a['content'] ?? a['body'] ?? '').toString();
+    return AppCard(
+      tone: pinned ? AppTone.warning : null,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              if (pinned) ...[const Icon(Icons.push_pin_rounded, size: 16, color: AppColors.warning), const SizedBox(width: AppSpace.xs)],
+              Expanded(child: Text((a['title'] ?? 'إعلان إداري').toString(), style: AppText.subtitle, maxLines: 2, overflow: TextOverflow.ellipsis)),
+              const SizedBox(width: AppSpace.sm),
+              Text(Fmt.relative(DateTime.tryParse(a['created_at']?.toString() ?? '')), style: AppText.caption),
+            ],
+          ),
+          if (body.isNotEmpty) ...[
+            const SizedBox(height: AppSpace.xs),
+            Text(body, style: AppText.bodySm, maxLines: 4, overflow: TextOverflow.ellipsis),
+          ],
+        ],
       ),
     );
   }
