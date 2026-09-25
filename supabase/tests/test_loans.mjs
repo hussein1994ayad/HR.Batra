@@ -42,4 +42,24 @@ await expectOk('a fully paid loan no longer blocks a new one', approve('admin', 
 const notif = await db.query(`SELECT 1 FROM notifications WHERE employee_id=$1 AND type='loan'`, [IDS.emp]);
 check('approval still notifies the employee (existing trigger)', notif.rows.length > 0);
 
+// ---------------- create_direct_loan ----------------
+const direct = (who, amount = 600000, months = 3, pledge = 'p.png', emp = IDS.emp2) => as(db, who,
+  `SELECT create_direct_loan($1, $2, $3, '2026-10-10'::date, $4, 'سلفة زواج') AS id`, [emp, amount, months, pledge]);
+
+await expectError('employee cannot create a direct loan', direct('emp'), 'غير مصرح');
+await expectError('direct loan requires a pledge photo', direct('admin', 600000, 3, ''), 'التعهد');
+await expectError('direct loan respects the 50% salary rule', direct('admin', 900000, 1), '50%');
+const created = await expectOk('admin creates a direct loan', direct('admin'));
+const directId = created?.rows[0].id;
+const dl = (await db.query(`SELECT status, notes, installment_amount::int ia, approved_by FROM loans WHERE id=$1`, [directId])).rows[0];
+check('direct loan is approved with notes', dl?.status === 'approved' && dl?.notes === 'سلفة زواج' && dl?.ia === 200000 && dl?.approved_by === IDS.admin, JSON.stringify(dl));
+check('direct loan has its installments', (await installments(directId)).map((r) => r.d).join() === '2026-10-10,2026-11-10,2026-12-10');
+const empNotif = await db.query(`SELECT 1 FROM notifications WHERE employee_id=$1 AND title LIKE 'تم منحك سلفة%'`, [IDS.emp2]);
+check('employee is notified of the direct loan', empNotif.rows.length === 1);
+const adminNotif2 = await db.query(`SELECT 1 FROM notifications WHERE employee_id=$1 AND body LIKE '%موظف ثاني%'`, [IDS.admin]);
+check('no "new request" alert for a direct loan', adminNotif2.rows.length === 0);
+await expectError('second direct loan while one is active is rejected', direct('admin'), 'سلفة نشطة');
+await expectError('clients cannot call the internal helpers',
+  as(db, 'admin', `SELECT _insert_loan_installments($1, 100, 1, current_date)`, [directId]), 'permission denied');
+
 done();

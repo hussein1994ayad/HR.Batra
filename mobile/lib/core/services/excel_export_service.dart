@@ -10,13 +10,13 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:syncfusion_flutter_xlsio/xlsio.dart' as xlsio;
 import '../constants/constants.dart';
+import '../models/loan_model.dart';
 
 class ExcelExportService {
   /// توليد كشف حساب سلفة تفصيلي واحترافي بصيغة Excel (.xlsx)
-  static Future<String> generateLoanStatementExcel({
-    required Map<String, dynamic> loan,
-    required List<Map<String, dynamic>> installments,
-  }) async {
+  static Future<String> generateLoanStatementExcel(LoanRecord record) async {
+    final loan = record.loan;
+    final installments = loan.installments;
     // 1. إنشاء مصنف عمل جديد
     final xlsio.Workbook workbook = xlsio.Workbook();
     final xlsio.Worksheet sheet = workbook.worksheets[0];
@@ -25,19 +25,17 @@ class ExcelExportService {
     sheet.enableSheetCalculations();
 
     // استخراج بيانات الموظف والسلفة
-    final String employeeName = (loan['employees']?['full_name'] ?? 'موظف غير معروف') as String;
-    final String branchName = (loan['employees']?['branches']?['name'] ?? 'الفرع الرئيسي') as String;
-    final String deptName = (loan['employees']?['departments']?['name'] ?? 'عام') as String;
-    final double totalAmount = (loan['amount'] as num?)?.toDouble() ?? 0.0;
-    final int monthsCount = (loan['installment_count'] as num?)?.toInt() ?? 1;
-    final double monthlyAmt = (loan['installment_amount'] as num?)?.toDouble() ?? 0.0;
-    final double remainingAmt = (loan['remaining_amount'] as num?)?.toDouble() ?? 0.0;
+    final String employeeName = loan.employeeName ?? 'موظف غير معروف';
+    final String branchName = record.branchName;
+    final String deptName = record.departmentName;
+    final double totalAmount = loan.amount;
+    final int monthsCount = loan.installmentCount;
+    final double monthlyAmt = loan.installmentAmount;
+    final double remainingAmt = loan.remainingAmount;
     final double paidAmt = totalAmount - remainingAmt > 0 ? (totalAmount - remainingAmt) : 0.0;
-    final String status = (loan['status'] ?? 'pending') as String;
-    final String loanDate = loan['created_at'] != null 
-        ? loan['created_at'].toString().split('T')[0] 
-        : DateFormat('yyyy-MM-dd').format(DateTime.now());
-    final String notes = (loan['reason'] ?? loan['notes'] ?? 'لا توجد ملاحظات إضافية') as String;
+    final String status = loan.status;
+    final String loanDate = DateFormat('yyyy-MM-dd').format(loan.createdAt ?? DateTime.now());
+    final String notes = record.notes ?? 'لا توجد ملاحظات إضافية';
 
     // الألوان المستوحاة من هوية HR Pro
     const String headerDarkBg = '#0F172A'; // Slate 900
@@ -205,13 +203,14 @@ class ExcelExportService {
     int seq = 1;
 
     for (final inst in installments) {
-      final double instAmt = (inst['amount'] as num?)?.toDouble() ?? 0.0;
-      final bool isPaid = inst['is_paid'] == true;
-      final String dueDate = (inst['due_date'] ?? '-') as String;
-      final String paidDate = inst['paid_at'] != null 
-          ? inst['paid_at'].toString().split('T')[0] 
+      final double instAmt = inst.amount;
+      final bool isPaid = inst.isPaid;
+      final String dueDate = DateFormat('yyyy-MM-dd').format(inst.dueDate);
+      final String paidDate = inst.paidAt != null
+          ? DateFormat('yyyy-MM-dd').format(inst.paidAt!)
           : isPaid ? 'تم الاستقطاع من الراتب' : '-';
-      final String instNotes = (inst['notes'] ?? (isPaid ? 'تم السداد بنجاح' : 'قسط مستحق السداد')) as String;
+      final String instNotes = inst.paymentNote ??
+          (isPaid ? (inst.isCash ? 'سداد نقدي' : 'تم السداد بنجاح') : 'قسط مستحق السداد');
 
       // ت: رقم القسط
       final cellSeq = sheet.getRangeByIndex(startRow, 1);

@@ -1,28 +1,17 @@
 // =========================================================================
-// HR Pro v6.0 — نموذج الإشعار (Notification Model)
-// =========================================================================
-// الجدول المقابل في قاعدة البيانات: public.notifications
-//
-// الحقول:
-//   id           UUID    معرف الإشعار
-//   employee_id  UUID    معرف الموظف المستلِم
-//   title        TEXT    عنوان الإشعار
-//   body         TEXT    نص الإشعار
-//   type         TEXT    النوع: 'system'|'leave'|'loan'|'announcement'|'payslip'
-//   is_read      BOOL    هل قرأ الموظف الإشعار؟
-//   created_at   TIMESTAMPTZ وقت إنشاء الإشعار
+// نموذج الإشعار — الجدول: public.notifications
 // =========================================================================
 
-/// يمثّل إشعاراً داخل التطبيق.
+import '../utils/json_map.dart';
+
 class NotificationModel {
   final String id;
   final String employeeId;
   final String title;
   final String body;
 
-  /// النوع: 'system' | 'leave' | 'loan' | 'announcement' | 'payslip'
+  /// 'leave' | 'loan' | 'bonus_deduction' | 'attendance' | 'device' | 'memo' | ...
   final String type;
-
   final bool isRead;
   final DateTime? createdAt;
 
@@ -36,17 +25,13 @@ class NotificationModel {
     this.createdAt,
   });
 
-  factory NotificationModel.fromMap(Map<String, dynamic> map) {
-    return NotificationModel(
-      id:         (map['id'] ?? '') as String,
-      employeeId: (map['employee_id'] ?? '') as String,
-      title:      (map['title'] ?? '') as String,
-      body:       (map['body'] ?? '') as String,
-      type:       (map['type'] ?? 'system') as String,
-      isRead:     (map['is_read'] as bool?) ?? false,
-      createdAt:  map['created_at'] != null
-                      ? DateTime.parse(map['created_at'] as String).toLocal()
-                      : null,
-    );
-  }
+  factory NotificationModel.fromMap(JsonRow map) => NotificationModel(
+        id: map.str('id') ?? '',
+        employeeId: map.str('employee_id') ?? '',
+        title: map.str('title') ?? '',
+        body: map.str('body') ?? '',
+        type: map.str('type') ?? 'system',
+        isRead: map.boolean('is_read') ?? false,
+        createdAt: map.date('created_at'),
+      );
 }

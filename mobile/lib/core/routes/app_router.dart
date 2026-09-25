@@ -7,9 +7,9 @@ import 'package:go_router/go_router.dart';
 
 import '../../presentation/auth/change_password_screen.dart';
 import '../../presentation/auth/login_screen.dart';
-import '../../presentation/employee/admin_dashboard_screen.dart';
+import '../../presentation/employee/admin_dashboard/admin_dashboard_screen.dart';
 import '../../presentation/employee/admin_live_tracking_screen.dart';
-import '../../presentation/employee/admin_loans_management_screen.dart';
+import '../../presentation/employee/admin_loans/admin_loans_screen.dart';
 import '../../presentation/employee/announcement_screen.dart';
 import '../../presentation/employee/attendance_report_screen.dart';
 import '../../presentation/employee/branch_management_screen.dart';
