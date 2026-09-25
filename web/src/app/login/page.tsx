@@ -3,8 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import { errorMessage } from '@/lib/error-utils';
-import { Lock, Mail, AlertTriangle, ShieldCheck, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { errorMessage } from '@/lib/format';
+import { Lock, Mail, AlertTriangle, ShieldCheck, Eye, EyeOff, Loader2, Sparkles, MapPin, CalendarRange, Banknote, ArrowLeft } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -74,109 +74,151 @@ export default function LoginPage() {
 
       // Redirect on success
       router.replace('/dashboard');
-    } catch (err: unknown) {
-      setError(errorMessage(err) || 'حدث خطأ غير متوقع');
+    } catch (err) {
+      setError(errorMessage(err));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="relative min-h-screen flex items-center justify-center bg-[#090D16] p-4 overflow-hidden">
-      {/* Background Radial Glow */}
-      <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-teal-500/10 rounded-full blur-[120px] pointer-events-none animate-pulse"></div>
-      <div className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] bg-blue-500/10 rounded-full blur-[120px] pointer-events-none animate-pulse delay-700"></div>
+    <div className="relative min-h-dvh grid lg:grid-cols-2 bg-dark-bg overflow-hidden">
+      {/* Brand panel */}
+      <div className="relative hidden lg:flex flex-col justify-between p-12 overflow-hidden border-l border-slate-800/70 bg-gradient-to-bl from-indigo-600/30 via-slate-950 to-slate-950">
+        <div className="absolute inset-0 bg-grid opacity-70 pointer-events-none" />
+        <div className="absolute -top-32 -right-24 w-[420px] h-[420px] rounded-full bg-violet-500/25 blur-[120px] pointer-events-none" />
+        <div className="absolute bottom-0 left-0 w-[360px] h-[360px] rounded-full bg-indigo-500/20 blur-[120px] pointer-events-none" />
 
-      {/* Decorative Grid Pattern */}
-      <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(15,23,42,0.1)_1px,transparent_1px),linear-gradient(to_bottom,rgba(15,23,42,0.1)_1px,transparent_1px)] bg-[size:4rem_4rem] pointer-events-none"></div>
-
-      {/* Login Card */}
-      <div className="relative w-full max-w-lg bg-slate-900/60 backdrop-blur-xl border border-slate-800 rounded-3xl p-8 md:p-12 shadow-2xl shadow-black/50 overflow-hidden">
-        
-        {/* Glow border header */}
-        <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-teal-500 via-blue-500 to-teal-500"></div>
-
-        <div className="flex flex-col items-center mb-10 text-center">
-          <div className="p-4 bg-teal-500/10 rounded-2xl border border-teal-500/20 mb-4 shadow-lg shadow-teal-500/5">
-            <ShieldCheck className="w-12 h-12 text-teal-400" />
+        <div className="relative flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 via-violet-500 to-fuchsia-500 flex items-center justify-center shadow-lg shadow-indigo-500/30">
+            <Sparkles className="w-5 h-5 text-white" />
           </div>
-          <h1 className="text-3xl font-extrabold tracking-tight text-white mb-2 font-sans">
-            HR Pro v6.0
-          </h1>
-          <p className="text-slate-400 text-sm">
-            لوحة الإدارة والمراقبة والتحليلات الجغرافية
-          </p>
+          <span className="text-lg font-extrabold text-white">HR Pro</span>
         </div>
 
-        {error && (
-          <div className="flex items-center gap-3 p-4 bg-red-500/10 border border-red-500/20 rounded-2xl text-red-200 text-sm mb-6 animate-shake">
-            <AlertTriangle className="w-5 h-5 text-red-400 shrink-0" />
-            <p className="leading-relaxed font-medium">{error}</p>
-          </div>
-        )}
+        <div className="relative max-w-md">
+          <h2 className="text-4xl font-extrabold text-white leading-tight tracking-tight">
+            إدارة الكادر،
+            <br />
+            <span className="bg-gradient-to-l from-indigo-300 to-fuchsia-300 bg-clip-text text-transparent">بوضوح وسرعة.</span>
+          </h2>
+          <p className="text-slate-400 mt-4 leading-relaxed">
+            الحضور والتتبع الجغرافي، الإجازات، السلف والرواتب — كلها في لوحة واحدة متزامنة لحظياً.
+          </p>
 
-        <form onSubmit={handleLogin} className="space-y-6">
-          <div>
-            <label className="block text-slate-300 text-xs font-semibold mb-2 pr-1">
-              البريد الإلكتروني للأدمن
-            </label>
-            <div className="relative">
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="admin@hrpro.com"
-                className="w-full bg-slate-950/50 border border-slate-800 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 rounded-2xl py-3.5 px-4 pr-11 text-white placeholder-slate-600 transition-all outline-none text-left"
-                dir="ltr"
-              />
-              <Mail className="absolute left-auto right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
+          <div className="mt-10 space-y-3">
+            {[
+              { icon: MapPin, text: 'تتبع الحضور بالسياج الجغرافي وكشف المواقع المزيفة' },
+              { icon: CalendarRange, text: 'اعتماد الإجازات والسلف بنقرة واحدة' },
+              { icon: Banknote, text: 'احتساب الرواتب والاستقطاعات تلقائياً' },
+            ].map(({ icon: Icon, text }) => (
+              <div key={text} className="flex items-center gap-3 text-sm text-slate-300">
+                <div className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-indigo-300">
+                  <Icon className="w-4 h-4" />
+                </div>
+                {text}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <p className="relative text-xs text-slate-500">© {new Date().getFullYear()} HR Pro — جميع الحقوق محفوظة</p>
+      </div>
+
+      {/* Form panel */}
+      <div className="relative flex items-center justify-center p-6">
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[420px] h-[420px] bg-indigo-600/10 rounded-full blur-[120px] pointer-events-none lg:hidden" />
+
+        <div className="relative w-full max-w-sm animate-fade">
+          <div className="lg:hidden flex items-center gap-3 mb-10">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 via-violet-500 to-fuchsia-500 flex items-center justify-center shadow-lg shadow-indigo-500/30">
+              <Sparkles className="w-5 h-5 text-white" />
             </div>
+            <span className="text-lg font-extrabold text-white">HR Pro</span>
           </div>
 
-          <div>
-            <label className="block text-slate-300 text-xs font-semibold mb-2 pr-1">
-              كلمة المرور
-            </label>
-            <div className="relative">
-              <input
-                type={showPassword ? 'text' : 'password'}
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••••••"
-                className="w-full bg-slate-950/50 border border-slate-800 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 rounded-2xl py-3.5 px-4 pr-11 text-white placeholder-slate-600 transition-all outline-none text-left"
-                dir="ltr"
-              />
-              <Lock className="absolute left-auto right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-auto left-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors"
-              >
-                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-              </button>
+          <h1 className="text-2xl font-extrabold text-white tracking-tight">تسجيل الدخول</h1>
+          <p className="text-slate-400 text-sm mt-1.5 mb-8">مرحباً بعودتك! أدخل بيانات حساب المسؤول للمتابعة.</p>
+
+          {error && (
+            <div className="flex items-start gap-3 p-3.5 bg-rose-500/10 border border-rose-500/20 rounded-xl text-rose-200 text-xs mb-6 animate-shake">
+              <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+              <p className="leading-relaxed font-medium">{error}</p>
             </div>
+          )}
+
+          <form onSubmit={handleLogin} className="space-y-5">
+            <div>
+              <label htmlFor="email" className="block text-slate-300 text-xs font-bold mb-2">
+                البريد الإلكتروني
+              </label>
+              <div className="relative">
+                <input
+                  id="email"
+                  type="email"
+                  required
+                  autoComplete="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="admin@hrpro.com"
+                  className="w-full h-12 bg-slate-900/70 border border-slate-800 hover:border-slate-700 focus:border-indigo-500 rounded-xl px-4 pr-11 text-sm text-white placeholder-slate-600 outline-none text-left"
+                  dir="ltr"
+                />
+                <Mail className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" />
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="password" className="block text-slate-300 text-xs font-bold mb-2">
+                كلمة المرور
+              </label>
+              <div className="relative">
+                <input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  required
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full h-12 bg-slate-900/70 border border-slate-800 hover:border-slate-700 focus:border-indigo-500 rounded-xl px-11 text-sm text-white placeholder-slate-600 outline-none text-left"
+                  dir="ltr"
+                />
+                <Lock className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 p-1 rounded-md text-slate-500 hover:text-slate-200 transition-colors cursor-pointer"
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full h-12 flex items-center justify-center gap-2 bg-gradient-to-l from-indigo-500 to-violet-600 hover:from-indigo-400 hover:to-violet-500 text-white rounded-xl text-sm font-bold shadow-lg shadow-indigo-500/25 active:scale-[0.99] transition-all cursor-pointer disabled:opacity-60 disabled:pointer-events-none"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>جاري التحقق...</span>
+                </>
+              ) : (
+                <>
+                  <span>الدخول إلى لوحة التحكم</span>
+                  <ArrowLeft className="w-4 h-4" />
+                </>
+              )}
+            </button>
+          </form>
+
+          <div className="mt-8 flex items-center gap-2 text-[11px] text-slate-500">
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400/80" />
+            اتصال مشفّر — الدخول متاح للمسؤولين والمدراء فقط
           </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full flex items-center justify-center gap-2 py-4 px-6 bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-500 hover:to-teal-400 text-white rounded-2xl font-bold shadow-lg shadow-teal-500/20 active:scale-[0.98] transition-all cursor-pointer disabled:opacity-50 disabled:pointer-events-none"
-          >
-            {loading ? (
-              <>
-                <Loader2 className="w-5 h-5 animate-spin" />
-                <span>جاري تسجيل الدخول...</span>
-              </>
-            ) : (
-              <span>الدخول للوحة التحكم ⚡</span>
-            )}
-          </button>
-        </form>
-
-        <div className="mt-8 text-center text-slate-500 text-xs">
-          جميع الحقوق محفوظة © {new Date().getFullYear()} HR Pro v6.0
         </div>
       </div>
     </div>

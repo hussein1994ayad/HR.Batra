@@ -1,323 +1,249 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
-import type { LeaveRequest } from '@/lib/db-types';
-import { 
-  CalendarRange, 
-  Check, 
-  X, 
-  Calendar,
-  Loader2,
-  FileText,
-  User,
-  ShieldCheck
-} from 'lucide-react';
-import confetti from 'canvas-confetti';
+import React, { useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
+import {
+  CalendarRange,
+  Check,
+  X,
+  Calendar,
+  FileText,
+  ShieldCheck,
+  Paperclip,
+  Clock,
+  Hourglass,
+  CheckCircle2,
+  XCircle,
+  AlertTriangle,
+} from 'lucide-react';
+import { supabase } from '@/lib/supabase';
+import { confetti } from '@/lib/lazy';
+import { useQuery } from '@/lib/useQuery';
+import { toDateKey } from '@/lib/attendance';
+import { errorMessage, formatDateTime } from '@/lib/format';
+import type { LeaveRequest, RequestStatus } from '@/lib/types';
+import { Avatar, Badge, Button, Card, EmptyState, PageHeader, SearchInput, SegmentedTabs, Toggle, cn } from '@/components/ui';
+
+const LEAVE_TYPES: Record<string, string> = {
+  annual: 'إجازة سنوية',
+  sick: 'إجازة مرضية',
+  emergency: 'إجازة طارئة',
+  maternity: 'إجازة أمومة',
+};
+
+async function fetchLeaves(status: RequestStatus): Promise<LeaveRequest[]> {
+  const { data, error } = await supabase
+    .from('leave_requests')
+    .select(
+      `*,
+      employees!leave_requests_employee_id_fkey(full_name),
+      approver:employees!leave_requests_approved_by_fkey(full_name)`,
+    )
+    .eq('status', status)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as LeaveRequest[];
+}
+
+function leaveDays(req: LeaveRequest): number {
+  const start = new Date(toDateKey(req.start_date));
+  const end = new Date(toDateKey(req.end_date));
+  return Math.round(Math.abs(end.getTime() - start.getTime()) / 86_400_000) + 1;
+}
 
 export default function LeavesPage() {
-  const [loading, setLoading] = useState(true);
-  const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
+  const [activeTab, setActiveTab] = useState<RequestStatus>('pending');
+  const [search, setSearch] = useState('');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  // Admin may override whether a pending leave is paid before approving it.
+  const [paidOverride, setPaidOverride] = useState<Record<string, boolean>>({});
 
-  // Tab State: pending, approved, rejected
-  const [activeTab, setActiveTab] = useState<'pending' | 'approved' | 'rejected'>('pending');
-  // State for Admin to override is_paid when approving
-  const [leavePaymentOverride, setLeavePaymentOverride] = useState<Record<string, boolean>>({});
+  const query = useQuery(`leaves:${activeTab}`, () => fetchLeaves(activeTab));
+  const requests = useMemo(() => {
+    const list = query.refreshing ? [] : query.data ?? [];
+    const q = search.trim().toLowerCase();
+    return q ? list.filter((r) => (r.employees?.full_name || '').toLowerCase().includes(q)) : list;
+  }, [query.data, query.refreshing, search]);
+  const isLoading = query.loading || query.refreshing;
 
-
-  const fetchLeaveRequests = async () => {
-    setLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('leave_requests')
-        .select(`
-          *, 
-          employees!leave_requests_employee_id_fkey(full_name), 
-          approver:employees!leave_requests_approved_by_fkey(full_name)
-        `)
-        .eq('status', activeTab)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      if (data) setLeaveRequests(data);
-    } catch (err) {
-      console.error('Error fetching leave requests:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchLeaveRequests();
-  }, [activeTab]);
-
-  const handleProcessLeave = async (requestId: string, employeeId: string, approve: boolean, isPaidValue: boolean) => {
+  const handleProcess = async (req: LeaveRequest, approve: boolean, isPaid: boolean) => {
     let rejectionReason = '';
     if (!approve) {
       const reason = prompt('يرجى إدخال سبب الرفض (اختياري):');
       if (reason === null) return;
-      rejectionReason = reason;
+      rejectionReason = reason.trim();
     }
-
-    setActionLoading(requestId);
-    const statusText = approve ? 'approved' : 'rejected';
-    
+    setActionLoading(req.id);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (!session) return;
 
-      // 1. Update leave request record
-      const updateData: Partial<LeaveRequest> = {
-        status: statusText,
-        approved_by: session.user.id,
-        approved_at: new Date().toISOString(),
-      };
-      if (approve) {
-        updateData.is_paid = isPaidValue;
-      } else if (rejectionReason.trim()) {
-        updateData.rejection_reason = rejectionReason.trim();
-      }
-
-      const { error: updErr } = await supabase
+      const { error } = await supabase
         .from('leave_requests')
-        .update(updateData)
-        .eq('id', requestId);
-
-      if (updErr) throw updErr;
+        .update({
+          status: approve ? 'approved' : 'rejected',
+          is_paid: approve ? isPaid : undefined,
+          rejection_reason: !approve && rejectionReason ? rejectionReason : undefined,
+          approved_by: session.user.id,
+          approved_at: new Date().toISOString(),
+        })
+        .eq('id', req.id);
+      if (error) throw error;
 
       // إشعار الموظف بالقرار (مع سبب الرفض) يُرسل من قاعدة البيانات: trg_notify_employee_leave_decision
 
-      // Update state locally (remove from pending grid)
-      setLeaveRequests(prev => prev.filter(req => req.id !== requestId));
-
-      if (approve) {
-        confetti({
-          particleCount: 80,
-          spread: 60,
-          colors: ['#10B981', '#059669', '#34D399']
-        });
-      }
-
-      toast.success(approve ? 'تمت الموافقة على طلب الإجازة بنجاح ✅' : 'تم رفض طلب الإجازة بنجاح ❌');
-    } catch {
-      toast.error('فشل في معالجة طلب الإجازة');
+      query.mutate((list) => list.filter((r) => r.id !== req.id));
+      if (approve) confetti({ particleCount: 80, spread: 60, colors: ['#10B981', '#059669', '#34D399'] });
+      toast.success(approve ? 'تمت الموافقة على طلب الإجازة' : 'تم رفض طلب الإجازة');
+    } catch (err) {
+      toast.error(`فشل في معالجة طلب الإجازة: ${errorMessage(err)}`);
     } finally {
       setActionLoading(null);
     }
   };
 
-  const getLeaveTypeArabic = (type: string) => {
-    switch (type) {
-      case 'annual': return 'إجازة سنوية';
-      case 'sick': return 'إجازة مرضية';
-      case 'emergency': return 'إجازة طارئة';
-      case 'maternity': return 'إجازة أمومة';
-      default: return 'إجازة أخرى';
-    }
-  };
-
   return (
-    <div className="space-y-8 pb-12">
-      {/* Header and statistics */}
-      <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-800/80 rounded-3xl p-6 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h3 className="text-xl font-extrabold text-white flex items-center gap-2 mb-2">
-            <CalendarRange className="w-6 h-6 text-teal-400" />
-            <span>مركز إدارة الإجازات والغياب (Leaves Hub)</span>
-          </h3>
-          <p className="text-xs text-slate-400">إدارة واعتماد طلبات الإجازات المرفوعة ومراجعة الأرشيف التفصيلي للطلبات المعتمدة والمرفوضة</p>
+    <div className="space-y-6 pb-12">
+      <PageHeader
+        icon={CalendarRange}
+        tone="amber"
+        title="الإجازات"
+        description="مراجعة واعتماد طلبات الإجازات وأرشيف القرارات السابقة"
+        actions={
+          <SegmentedTabs
+            value={activeTab}
+            onChange={setActiveTab}
+            options={[
+              { value: 'pending', label: 'معلقة', icon: Hourglass, count: activeTab === 'pending' && !isLoading ? requests.length : undefined },
+              { value: 'approved', label: 'معتمدة', icon: CheckCircle2 },
+              { value: 'rejected', label: 'مرفوضة', icon: XCircle },
+            ]}
+          />
+        }
+      />
+
+      <Card>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+          <p className="text-xs text-slate-400">
+            {isLoading ? 'جاري التحميل...' : `${requests.length} طلب`}
+          </p>
+          <SearchInput value={search} onChange={setSearch} placeholder="ابحث باسم الموظف..." className="w-full sm:w-64" />
         </div>
 
-        {/* Tab Controls */}
-        <div className="flex gap-2 p-1.5 bg-slate-950/40 border border-slate-850 rounded-2xl w-fit">
-          <button
-            onClick={() => setActiveTab('pending')}
-            className={`px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
-              activeTab === 'pending'
-                ? 'bg-teal-600/20 text-teal-400 border border-teal-500/30'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            الطلبات المعلقة ⏳
-          </button>
-          <button
-            onClick={() => setActiveTab('approved')}
-            className={`px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
-              activeTab === 'approved'
-                ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/30'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            الطلبات المعتمدة 🟢
-          </button>
-          <button
-            onClick={() => setActiveTab('rejected')}
-            className={`px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
-              activeTab === 'rejected'
-                ? 'bg-rose-600/20 text-rose-400 border border-rose-500/30'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            الطلبات المرفوضة 🔴
-          </button>
-        </div>
-      </div>
-
-      {/* Main leaves grid */}
-      <div className="bg-slate-900/40 backdrop-blur-xl border border-slate-800/80 rounded-3xl p-6 shadow-xl">
-        {loading ? (
-          <div className="h-64 flex items-center justify-center">
-            <Loader2 className="w-8 h-8 text-teal-400 animate-spin" />
+        {isLoading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="skeleton h-64 rounded-2xl" />
+            ))}
           </div>
-        ) : leaveRequests.length === 0 ? (
-          <div className="h-64 flex flex-col items-center justify-center text-slate-500 text-xs">
-            <Calendar className="w-12 h-12 text-teal-500/20 mb-3 animate-pulse" />
-            <span>لا توجد طلبات إجازة في هذا القسم حالياً. ✨</span>
-          </div>
+        ) : query.error && !query.data ? (
+          <EmptyState icon={AlertTriangle} tone="rose" title="تعذر تحميل الطلبات" description={errorMessage(query.error)} action={<Button size="sm" variant="secondary" onClick={query.reload}>إعادة المحاولة</Button>} />
+        ) : requests.length === 0 ? (
+          <EmptyState
+            icon={Calendar}
+            tone="amber"
+            title={search ? 'لا توجد نتائج مطابقة' : 'لا توجد طلبات في هذا القسم'}
+            description={activeTab === 'pending' && !search ? 'ستظهر هنا طلبات الإجازة الجديدة فور رفعها من تطبيق الموظفين.' : undefined}
+          />
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fadeIn">
-            {leaveRequests.map((req) => {
-              const startDate = new Date(req.start_date);
-              const endDate = new Date(req.end_date);
-              const diffTime = Math.abs(endDate.getTime() - startDate.getTime());
-              const totalDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-              const currentIsPaid = leavePaymentOverride[req.id] !== undefined ? leavePaymentOverride[req.id] : req.is_paid;
-
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {requests.map((req) => {
+              const isPaid = paidOverride[req.id] ?? req.is_paid;
+              const busy = actionLoading === req.id;
               return (
-                <div 
-                  key={req.id} 
-                  className="relative bg-slate-950/40 border border-slate-850 hover:border-slate-800 rounded-2xl p-6 shadow-lg flex flex-col justify-between"
-                >
-                  <div className="space-y-4 text-right">
-                    <div className="flex items-center justify-between border-b border-slate-900 pb-3">
-                      <h4 className="font-extrabold text-sm text-white">{req.employees?.full_name || 'موظف غير معروف'}</h4>
-                      <span className="text-[9px] bg-teal-500/10 text-teal-300 font-bold border border-teal-500/20 px-2.5 py-0.5 rounded-full">
-                        {getLeaveTypeArabic(req.leave_type)}
-                      </span>
+                <article key={req.id} className="flex flex-col rounded-2xl bg-slate-900/50 border border-slate-800/80 hover:border-slate-700/80 transition-colors p-5">
+                  <div className="flex items-center gap-3 mb-4">
+                    <Avatar name={req.employees?.full_name} />
+                    <div className="flex-1 min-w-0">
+                      <h4 className="text-sm font-bold text-white truncate">{req.employees?.full_name || 'موظف غير معروف'}</h4>
+                      <p className="text-[11px] text-slate-500">{LEAVE_TYPES[req.leave_type] ?? 'إجازة أخرى'}</p>
                     </div>
+                    {req.is_hourly ? <Badge tone="violet">ساعية</Badge> : <Badge tone="sky">{leaveDays(req)} يوم</Badge>}
+                  </div>
 
-                    <div className="grid grid-cols-2 gap-4 text-xs font-medium">
-                      <div>
-                        <span className="text-slate-500 text-[10px] block mb-0.5">تاريخ البدء</span>
-                        <span className="font-mono text-slate-300">{req.start_date.split('T')[0]}</span>
-                      </div>
-                      <div>
-                        <span className="text-slate-500 text-[10px] block mb-0.5">تاريخ الانتهاء</span>
-                        <span className="font-mono text-slate-300">{req.end_date.split('T')[0]}</span>
-                      </div>
+                  <div className="grid grid-cols-2 gap-2 mb-3">
+                    <div className="rounded-xl bg-slate-950/60 border border-slate-800/70 p-2.5">
+                      <p className="text-[10px] text-slate-500 mb-0.5">من</p>
+                      <p className="text-xs font-bold text-slate-200 font-mono" dir="ltr">{toDateKey(req.start_date)}</p>
                     </div>
-
-                    <div className="flex justify-between items-center text-xs bg-slate-900/40 p-2.5 rounded-xl border border-slate-850">
-                      <span className="text-slate-400 font-semibold">نوع ومدة الإجازة:</span>
-                      {req.is_hourly ? (
-                        <span className="text-amber-400 font-extrabold">
-                          إجازة ساعية ({req.start_hour?.substring(0, 5)} - {req.end_hour?.substring(0, 5)})
-                        </span>
-                      ) : (
-                        <span className="text-teal-400 font-extrabold">{totalDays} يوم دوام</span>
-                      )}
+                    <div className="rounded-xl bg-slate-950/60 border border-slate-800/70 p-2.5">
+                      <p className="text-[10px] text-slate-500 mb-0.5">إلى</p>
+                      <p className="text-xs font-bold text-slate-200 font-mono" dir="ltr">{toDateKey(req.end_date)}</p>
                     </div>
+                  </div>
 
-                    {req.reason && (
-                      <div className="p-3 bg-slate-900/60 rounded-xl border border-slate-850">
-                        <span className="text-[10px] text-slate-500 block mb-1 flex items-center gap-1 justify-end">
-                          <span>سبب تقديم الطلب</span>
-                          <FileText className="w-3.5 h-3.5" />
-                        </span>
-                        <p className="text-xs text-slate-300 leading-relaxed font-medium">{req.reason}</p>
-                      </div>
-                    )}
+                  {req.is_hourly && (
+                    <p className="flex items-center gap-1.5 text-xs text-violet-300 mb-3">
+                      <Clock className="w-3.5 h-3.5" />
+                      <span dir="ltr">{req.start_hour?.substring(0, 5)} – {req.end_hour?.substring(0, 5)}</span>
+                    </p>
+                  )}
 
-                    {req.attachment_url && (
-                      <div className="flex justify-start bg-slate-900/30 p-2 rounded-xl border border-slate-850/60">
-                        <a 
-                          href={req.attachment_url} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-1.5 text-xs font-bold text-teal-400 hover:text-teal-300 transition-colors"
-                        >
-                          <span>عرض المستند المرفق 📎</span>
-                        </a>
-                      </div>
-                    )}
+                  {req.reason && (
+                    <div className="rounded-xl bg-slate-950/40 border border-slate-800/60 p-3 mb-3">
+                      <p className="flex items-center gap-1 text-[10px] text-slate-500 mb-1">
+                        <FileText className="w-3 h-3" /> سبب الطلب
+                      </p>
+                      <p className="text-xs text-slate-300 leading-relaxed">{req.reason}</p>
+                    </div>
+                  )}
 
-                    {/* Historical Metadata info */}
-                    {activeTab !== 'pending' && (
-                      <div className="pt-3 border-t border-slate-900 mt-2 space-y-2 text-[10px] text-slate-400 font-medium">
-                        <div className="flex items-center gap-1.5">
-                          <ShieldCheck className="w-3.5 h-3.5 text-teal-500" />
-                          <span>بواسطة المسؤول: <strong className="text-slate-300">{req.approver?.full_name || 'مدير النظام'}</strong></span>
+                  {req.attachment_url && (
+                    <a
+                      href={req.attachment_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-300 hover:text-indigo-200 mb-3"
+                    >
+                      <Paperclip className="w-3.5 h-3.5" /> عرض المستند المرفق
+                    </a>
+                  )}
+
+                  <div className="mt-auto pt-4 border-t border-slate-800/70">
+                    {activeTab === 'pending' ? (
+                      <>
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="text-xs font-semibold text-slate-400">صرف الراتب لهذه الإجازة</span>
+                          <Toggle
+                            checked={isPaid}
+                            onChange={(v) => setPaidOverride((prev) => ({ ...prev, [req.id]: v }))}
+                            label={<span className={isPaid ? 'text-emerald-300' : 'text-rose-300'}>{isPaid ? 'مدفوعة' : 'مستقطعة'}</span>}
+                          />
                         </div>
-                        <div className="flex items-center gap-1.5">
-                          <User className="w-3.5 h-3.5 text-teal-500" />
-                          <span>تاريخ القرار: <span className="font-mono text-slate-300">{req.approved_at ? new Date(req.approved_at).toLocaleString('ar-IQ') : '—'}</span></span>
+                        <div className="flex gap-2">
+                          <Button variant="success" icon={Check} block loading={busy} onClick={() => handleProcess(req, true, isPaid)}>
+                            موافقة
+                          </Button>
+                          <Button variant="soft-danger" icon={X} block disabled={busy} onClick={() => handleProcess(req, false, isPaid)}>
+                            رفض
+                          </Button>
                         </div>
+                      </>
+                    ) : (
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap gap-1.5">
+                          <Badge tone={activeTab === 'approved' ? 'emerald' : 'rose'} dot>
+                            {activeTab === 'approved' ? 'تمت الموافقة' : 'مرفوض'}
+                          </Badge>
+                          {activeTab === 'approved' && (
+                            <Badge tone={req.is_paid ? 'emerald' : 'amber'}>{req.is_paid ? 'مدفوعة الراتب' : 'مستقطعة الراتب'}</Badge>
+                          )}
+                        </div>
+                        <p className={cn('flex items-center gap-1.5 text-[11px] text-slate-500')}>
+                          <ShieldCheck className="w-3.5 h-3.5" />
+                          {req.approver?.full_name || 'مدير النظام'} · <span dir="ltr">{formatDateTime(req.approved_at)}</span>
+                        </p>
                       </div>
                     )}
                   </div>
-
-                  {activeTab === 'pending' ? (
-                    <div className="pt-4 border-t border-slate-900 mt-4">
-                      <div className="flex items-center justify-between mb-4 bg-slate-900/60 p-3 rounded-xl border border-slate-800">
-                        <span className="text-xs font-bold text-slate-300">هل سيتم صرف الراتب لهذه الإجازة؟</span>
-                        <button
-                          onClick={() => setLeavePaymentOverride(prev => ({ ...prev, [req.id]: !currentIsPaid }))}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                            currentIsPaid 
-                              ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
-                              : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
-                          }`}
-                        >
-                          {currentIsPaid ? 'إجازة مدفوعة 💰' : 'إجازة مستقطعة ⚠️'}
-                        </button>
-                      </div>
-                      <div className="flex gap-3">
-                        <button
-                          disabled={actionLoading === req.id}
-                          onClick={() => handleProcessLeave(req.id, req.employee_id, true, currentIsPaid)}
-                          className="flex-grow flex items-center justify-center gap-1.5 py-3 px-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-emerald-500/20 cursor-pointer"
-                        >
-                          <Check className="w-4 h-4" />
-                          <span>الموافقة والاعتماد</span>
-                        </button>
-                        <button
-                          disabled={actionLoading === req.id}
-                          onClick={() => handleProcessLeave(req.id, req.employee_id, false, currentIsPaid)}
-                          className="flex-grow flex items-center justify-center gap-1.5 py-3 px-4 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-xl text-xs font-bold transition-all cursor-pointer"
-                        >
-                          <X className="w-4 h-4" />
-                          <span>رفض الطلب</span>
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="pt-4 mt-4 border-t border-slate-900 space-y-2">
-                      <div className={`py-2 rounded-xl text-center font-bold text-xs ${
-                        activeTab === 'approved' 
-                          ? 'bg-emerald-500/10 border border-emerald-500/15 text-emerald-400' 
-                          : 'bg-rose-500/10 border border-rose-500/15 text-rose-400'
-                      }`}>
-                        {activeTab === 'approved' ? 'تمت الموافقة والاعتماد ✓' : 'تم رفض وإلغاء الطلب ❌'}
-                      </div>
-                      {activeTab === 'approved' && (
-                        <div className={`py-2 rounded-xl text-center font-bold text-xs ${
-                          req.is_paid 
-                            ? 'bg-emerald-500/10 border border-emerald-500/15 text-emerald-400' 
-                            : 'bg-rose-500/10 border border-rose-500/15 text-rose-400'
-                        }`}>
-                          {req.is_paid ? 'تم الاعتماد كإجازة مدفوعة الراتب 💰' : 'تم الاعتماد كإجازة مستقطعة الراتب ⚠️'}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
+                </article>
               );
             })}
           </div>
         )}
-      </div>
+      </Card>
     </div>
   );
 }

@@ -1,221 +1,158 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
-import type { DeletedFile } from '@/lib/db-types';
-import { errorMessage } from '@/lib/error-utils';
-import { 
-  Trash2, 
-  RotateCcw, 
-  Trash, 
-  Loader2,
-  FileIcon,
-  Clock
-} from 'lucide-react';
-import confetti from 'canvas-confetti';
+import React, { useState } from 'react';
 import toast from 'react-hot-toast';
+import { Trash2, RotateCcw, Trash, FileIcon, Clock, User, HardDrive, AlertTriangle, Sparkles } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
+import { confetti } from '@/lib/lazy';
+import { useQuery } from '@/lib/useQuery';
+import { daysUntil, errorMessage, formatBytes, formatDate } from '@/lib/format';
+import { bucketFor } from '@/lib/storage';
+import type { DeletedFile } from '@/lib/types';
+import { useConfirm } from '@/components/confirm';
+import { Badge, Button, Card, EmptyState, PageHeader, StatTile } from '@/components/ui';
+
+const TYPE_LABEL: Record<string, string> = {
+  avatar: 'صورة شخصية',
+  document: 'مستند رسمي',
+  pledge: 'تعهد سلفة',
+  logo: 'شعار الشركة',
+};
+
+async function fetchDeletedFiles(): Promise<DeletedFile[]> {
+  const { data, error } = await supabase
+    .from('deleted_files')
+    .select('*, employees(full_name)')
+    .is('restored_at', null)
+    .order('deleted_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as DeletedFile[];
+}
 
 export default function TrashPage() {
-  const [loading, setLoading] = useState(true);
-  const [deletedFiles, setDeletedFiles] = useState<DeletedFile[]>([]);
+  const confirm = useConfirm();
+  const query = useQuery('trash', fetchDeletedFiles);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const files = query.data ?? [];
+  const totalBytes = files.reduce((sum, f) => sum + (Number(f.file_size_bytes) || 0), 0);
+  const expiringSoon = files.filter((f) => daysUntil(f.scheduled_deletion_date) <= 7).length;
 
+  const removeLocally = (id: string) => query.mutate((list) => list.filter((f) => f.id !== id));
 
-  const fetchDeletedFiles = async () => {
-    setLoading(true);
+  const handleRestore = async (file: DeletedFile) => {
+    setActionLoading(file.id);
     try {
-      const { data, error } = await supabase
-        .from('deleted_files')
-        .select('*, employees(full_name)')
-        .is('restored_at', null)
-        .order('deleted_at', { ascending: false });
-
+      const { error } = await supabase.from('deleted_files').update({ restored_at: new Date().toISOString() }).eq('id', file.id);
       if (error) throw error;
-      if (data) setDeletedFiles(data);
+      removeLocally(file.id);
+      confetti({ particleCount: 50, spread: 40, colors: ['#818CF8', '#34D399'] });
+      toast.success('تم استعادة الملف وإرجاعه لمساره الأصلي');
     } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchDeletedFiles();
-  }, []);
-
-  const getBucketName = (fileType: string) => {
-    switch (fileType) {
-      case 'avatar': return 'avatars';
-      case 'document': return 'employee-documents';
-      case 'pledge': return 'loan-pledges';
-      case 'logo': return 'company-logos';
-      default: return 'employee-documents';
-    }
-  };
-
-  const getFileTypeNameArabic = (fileType: string) => {
-    switch (fileType) {
-      case 'avatar': return 'الصورة الشخصية';
-      case 'document': return 'مستند رسمي';
-      case 'pledge': return 'تعهد السلفة';
-      case 'logo': return 'شعار الشركة';
-      default: return 'ملف آخر';
-    }
-  };
-
-  const formatBytes = (bytes: number) => {
-    if (!bytes) return 'غير محدد';
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  };
-
-  const handleRestoreFile = async (fileRow: DeletedFile) => {
-    setActionLoading(fileRow.id);
-    try {
-      const { error } = await supabase
-        .from('deleted_files')
-        .update({
-          restored_at: new Date().toISOString(),
-        })
-        .eq('id', fileRow.id);
-
-      if (error) throw error;
-
-      // Filter locally
-      setDeletedFiles(prev => prev.filter(f => f.id !== fileRow.id));
-
-      confetti({
-        particleCount: 50,
-        spread: 40,
-        colors: ['#0D9488', '#34D399']
-      });
-
-      toast.success('تم استعادة الملف بنجاح وإرجاعه لمساره الأصلي ✅');
-    } catch (err: unknown) {
       toast.error(`فشل استعادة الملف: ${errorMessage(err)}`);
     } finally {
       setActionLoading(null);
     }
   };
 
-  const handlePermanentDelete = async (fileRow: DeletedFile) => {
-    if (!confirm('تحذير: هل أنت متأكد من رغبتك في حذف هذا الملف وإتلافه بشكل نهائي من الخادم؟ لا يمكن التراجع عن هذا الإجراء.')) return;
-    
-    setActionLoading(fileRow.id + '_delete');
-    const bucket = getBucketName(fileRow.file_type);
+  const handlePermanentDelete = async (file: DeletedFile) => {
+    const ok = await confirm({
+      title: 'إتلاف الملف نهائياً؟',
+      message: 'سيتم حذف الملف من الخادم بشكل نهائي ولا يمكن التراجع عن هذا الإجراء.',
+      confirmLabel: 'إتلاف نهائي',
+    });
+    if (!ok) return;
 
+    setActionLoading(`${file.id}_delete`);
     try {
-      // 1. Delete from storage
-      const { error: storeErr } = await supabase.storage
-        .from(bucket)
-        .remove([fileRow.file_path]);
-
+      const bucket = bucketFor(file.file_type);
+      const { error: storeErr } = await supabase.storage.from(bucket).remove([file.file_path]);
       if (storeErr) throw storeErr;
-
-      // 2. Delete row from DB
-      const { error: dbErr } = await supabase
-        .from('deleted_files')
-        .delete()
-        .eq('id', fileRow.id);
-
+      const { error: dbErr } = await supabase.from('deleted_files').delete().eq('id', file.id);
       if (dbErr) throw dbErr;
-
-      // Filter locally
-      setDeletedFiles(prev => prev.filter(f => f.id !== fileRow.id));
-
-      toast('تم إتلاف وحذف الملف نهائياً وتصفية مساحته السحابية 🗑️');
-    } catch (err: unknown) {
+      removeLocally(file.id);
+      toast.success('تم إتلاف الملف نهائياً وتحرير مساحته');
+    } catch (err) {
       toast.error(`فشل إتلاف الملف: ${errorMessage(err)}`);
     } finally {
       setActionLoading(null);
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex-grow flex items-center justify-center">
-        <Loader2 className="w-10 h-10 text-teal-400 animate-spin" />
-      </div>
-    );
-  }
-
   return (
-    <div className="space-y-8 pb-12">
-      <div className="bg-slate-900/40 backdrop-blur-xl border border-slate-800/80 rounded-3xl p-6 shadow-xl space-y-6">
-        <div>
-          <h3 className="text-lg font-extrabold text-white flex items-center gap-2">
-            <Trash2 className="w-5 h-5 text-rose-500" />
-            <span>سلة المحذوفات للملفات المحذوفة مؤقتاً</span>
-          </h3>
-          <p className="text-[11px] text-slate-400">يتم الاحتفاظ بالملفات المحذوفة هنا لمدة 30 يوماً من تاريخ الحذف لتسهيل استعادتها قبل إتلافها بالكامل تلقائياً</p>
-        </div>
+    <div className="space-y-6 pb-12">
+      <PageHeader
+        icon={Trash2}
+        tone="rose"
+        title="سلة المحذوفات"
+        description="تُحفظ الملفات المحذوفة هنا 30 يوماً لإمكانية استعادتها قبل إتلافها تلقائياً"
+      />
 
-        {deletedFiles.length === 0 ? (
-          <div className="h-64 flex flex-col items-center justify-center text-slate-500 text-xs">
-            <Trash className="w-12 h-12 text-slate-600/30 mb-2 animate-bounce" />
-            <span>سلة المحذوفات فارغة حالياً. كل التخزين نظيف! ✨</span>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <StatTile label="ملفات في السلة" value={files.length} icon={FileIcon} tone="indigo" />
+        <StatTile label="المساحة المحجوزة" value={<span dir="ltr">{formatBytes(totalBytes)}</span>} icon={HardDrive} tone="sky" />
+        <StatTile label="تُتلف خلال 7 أيام" value={expiringSoon} icon={Clock} tone={expiringSoon > 0 ? 'amber' : 'emerald'} />
+      </div>
+
+      <Card>
+        {query.loading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="skeleton h-48 rounded-2xl" />
+            ))}
           </div>
+        ) : query.error && !query.data ? (
+          <EmptyState icon={AlertTriangle} tone="rose" title="تعذر تحميل سلة المحذوفات" description={errorMessage(query.error)} action={<Button size="sm" variant="secondary" onClick={query.reload}>إعادة المحاولة</Button>} />
+        ) : files.length === 0 ? (
+          <EmptyState icon={Sparkles} tone="emerald" title="سلة المحذوفات فارغة" description="لا توجد ملفات محذوفة حالياً. التخزين نظيف!" />
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {deletedFiles.map((file) => {
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {files.map((file) => {
               const filename = file.file_path.split('/').pop() || 'ملف مجهول';
-              const deletedBy = file.employees?.full_name || 'غير معروف';
-              const expiryDate = new Date(file.scheduled_deletion_date);
-              const daysLeft = Math.ceil((expiryDate.getTime() - new Date().getTime()) / (1000 * 3600 * 24));
-              
+              const daysLeft = daysUntil(file.scheduled_deletion_date);
               return (
-                <div 
-                  key={file.id} 
-                  className="bg-slate-950/40 border border-slate-850 hover:border-slate-800 rounded-2xl p-5 flex flex-col justify-between"
-                >
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2 max-w-[70%]">
-                        <FileIcon className="w-5 h-5 text-teal-400 shrink-0" />
-                        <h4 className="text-xs font-bold text-white truncate" title={filename}>{filename}</h4>
-                      </div>
-                      <span className="text-[8px] font-bold text-rose-400 bg-rose-500/10 border border-rose-500/20 px-2 py-0.5 rounded-full">
-                        متبقي {daysLeft} يوم
-                      </span>
+                <article key={file.id} className="flex flex-col rounded-2xl bg-slate-900/50 border border-slate-800/80 hover:border-slate-700/80 transition-colors p-5">
+                  <div className="flex items-start gap-3 mb-4">
+                    <div className="w-10 h-10 shrink-0 rounded-xl bg-slate-800/80 border border-slate-700/70 flex items-center justify-center text-slate-300">
+                      <FileIcon className="w-5 h-5" />
                     </div>
-
-                    <div className="space-y-1.5 text-[10px] text-slate-400 border-b border-slate-900 pb-3">
-                      <p>نوع المستند: <span className="text-slate-200">{getFileTypeNameArabic(file.file_type)}</span></p>
-                      <p>الحجم الكلي: <span className="text-slate-200 font-mono">{formatBytes(file.file_size_bytes ?? 0)}</span></p>
-                      <p>حذف بواسطة: <span className="text-slate-200">{deletedBy}</span></p>
+                    <div className="flex-1 min-w-0">
+                      <h4 className="text-xs font-bold text-white truncate" title={filename} dir="ltr">
+                        {filename}
+                      </h4>
+                      <p className="text-[11px] text-slate-500 mt-0.5">{TYPE_LABEL[file.file_type] ?? 'ملف آخر'}</p>
                     </div>
-
-                    <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
-                      <Clock className="w-3.5 h-3.5 text-slate-600" />
-                      <span>حُذف بتاريخ {new Date(file.deleted_at).toLocaleDateString('ar-IQ')}</span>
-                    </div>
+                    <Badge tone={daysLeft <= 7 ? 'rose' : 'amber'}>{daysLeft > 0 ? `${daysLeft} يوم` : 'اليوم'}</Badge>
                   </div>
 
-                  <div className="flex gap-2 pt-4 mt-4 border-t border-slate-900">
-                    <button
-                      disabled={actionLoading === file.id}
-                      onClick={() => handleRestoreFile(file)}
-                      className="flex-1 flex items-center justify-center gap-1 py-2 px-2 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-[10px] font-bold transition-colors cursor-pointer"
-                    >
-                      <RotateCcw className="w-3.5 h-3.5" />
-                      <span>استعادة</span>
-                    </button>
-                    <button
-                      disabled={actionLoading === file.id + '_delete'}
-                      onClick={() => handlePermanentDelete(file)}
-                      className="flex-1 flex items-center justify-center gap-1 py-2 px-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-xl text-[10px] font-bold transition-colors cursor-pointer"
-                    >
-                      <Trash className="w-3.5 h-3.5" />
-                      <span>إتلاف نهائي</span>
-                    </button>
+                  <dl className="space-y-1.5 text-[11px] text-slate-400 mb-4">
+                    <div className="flex items-center justify-between">
+                      <dt className="flex items-center gap-1.5"><HardDrive className="w-3.5 h-3.5" /> الحجم</dt>
+                      <dd className="text-slate-200 font-mono" dir="ltr">{file.file_size_bytes ? formatBytes(file.file_size_bytes) : '—'}</dd>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <dt className="flex items-center gap-1.5"><User className="w-3.5 h-3.5" /> حُذف بواسطة</dt>
+                      <dd className="text-slate-200">{file.employees?.full_name || 'غير معروف'}</dd>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <dt className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" /> تاريخ الحذف</dt>
+                      <dd className="text-slate-200 font-mono" dir="ltr">{formatDate(file.deleted_at)}</dd>
+                    </div>
+                  </dl>
+
+                  <div className="flex gap-2 mt-auto pt-4 border-t border-slate-800/70">
+                    <Button size="sm" variant="soft" icon={RotateCcw} block loading={actionLoading === file.id} onClick={() => handleRestore(file)}>
+                      استعادة
+                    </Button>
+                    <Button size="sm" variant="soft-danger" icon={Trash} block loading={actionLoading === `${file.id}_delete`} onClick={() => handlePermanentDelete(file)}>
+                      إتلاف نهائي
+                    </Button>
                   </div>
-                </div>
+                </article>
               );
             })}
           </div>
         )}
-      </div>
+      </Card>
     </div>
   );
 }

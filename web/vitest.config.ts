@@ -6,7 +6,7 @@ export default defineConfig({
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },
   test: {
-    include: ['src/**/*.test.ts'],
+    include: ['src/**/*.test.ts', 'tests/unit/**/*.test.ts'],
     environment: 'node',
     // الحسابات تعتمد على التوقيت المحلي (أيام الأسبوع وحدود اليوم) — ثبّته على بغداد
     env: { TZ: 'Asia/Baghdad' },
