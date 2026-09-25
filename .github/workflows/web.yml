@@ -63,7 +63,7 @@ jobs:
           retention-days: 7
 
       - name: Upload static build
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
         uses: actions/upload-artifact@v4
         with:
           name: web-out
@@ -73,7 +73,7 @@ jobs:
   deploy:
     name: Deploy to Surge
     needs: test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     env:
       # Add a repository secret named SURGE_TOKEN (from `npx surge token`) to enable deploys.
@@ -86,9 +86,11 @@ jobs:
           name: web-out
           path: out
 
-      - name: Skip deploy (SURGE_TOKEN not configured)
+      - name: Check SURGE_TOKEN
         if: env.SURGE_TOKEN == ''
-        run: echo "::warning::SURGE_TOKEN secret is not set; skipping deployment to $SURGE_DOMAIN"
+        run: |
+          echo "::error::SURGE_TOKEN secret is not set, so the site was not deployed to $SURGE_DOMAIN. Add it under Settings > Secrets and variables > Actions."
+          exit 1
 
       - name: Publish to Surge
         if: env.SURGE_TOKEN != ''
