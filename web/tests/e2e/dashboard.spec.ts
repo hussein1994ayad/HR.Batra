@@ -111,8 +111,9 @@ test.describe('workflows', () => {
 
     await expect.poll(() => api.writes('leave_requests', 'PATCH').length).toBe(1);
     expect(api.writes('leave_requests', 'PATCH')[0].body).toMatchObject({ status: 'approved', is_paid: false, approved_by: ADMIN.id });
-    await expect.poll(() => api.writes('notifications', 'POST').length).toBe(1);
     await expect(page.getByText('سفر عائلي')).toBeHidden();
+    // إشعار الموظف يرسله trigger قاعدة البيانات، فلا تكتبه الصفحة (كان يصل مكرراً)
+    expect(api.writes('notifications', 'POST')).toHaveLength(0);
   });
 
   test('asks for confirmation before rejecting a loan', async ({ page }) => {
@@ -125,9 +126,10 @@ test.describe('workflows', () => {
     expect(api.writes('loans', 'PATCH')).toHaveLength(0);
 
     await page.getByRole('button', { name: 'رفض' }).click();
+    await page.getByRole('dialog').getByRole('textbox').fill('تجاوز الحد المسموح');
     await page.getByRole('dialog').getByRole('button', { name: 'رفض الطلب' }).click();
     await expect.poll(() => api.writes('loans', 'PATCH').length).toBe(1);
-    expect(api.writes('loans', 'PATCH')[0].body).toMatchObject({ status: 'rejected' });
+    expect(api.writes('loans', 'PATCH')[0].body).toMatchObject({ status: 'rejected', rejection_reason: 'تجاوز الحد المسموح' });
   });
 
   test('approves a loan and generates the installment schedule', async ({ page }) => {
@@ -136,9 +138,10 @@ test.describe('workflows', () => {
     await page.getByRole('button', { name: 'اعتماد وجدولة' }).click();
     await expect(page.getByRole('dialog')).toContainText('100,000 د.ع');
     await page.getByRole('button', { name: 'حفظ وتوليد الأقساط' }).click();
-    await expect.poll(() => api.writes('loan_installments', 'POST').length).toBe(1);
-    const installments = api.writes('loan_installments', 'POST')[0].body as unknown[];
-    expect(installments).toHaveLength(6);
+    // الاعتماد وتوليد الأقساط في معاملة واحدة على السيرفر (approve_loan)
+    await expect.poll(() => api.writes('rpc:approve_loan', 'POST').length).toBe(1);
+    expect(api.writes('rpc:approve_loan', 'POST')[0].body).toMatchObject({ p_loan_id: 'ln1', p_amount: 600000, p_months: 6 });
+    expect(api.writes('loan_installments', 'POST')).toHaveLength(0);
   });
 
   test('computes and approves a salary', async ({ page }) => {
@@ -148,10 +151,11 @@ test.describe('workflows', () => {
     // 900,000 + 50,000 bonus − 20,000 deduction − 100,000 loan installment
     await expect(row).toContainText('830,000 د.ع');
     await row.getByRole('button', { name: 'اعتماد' }).click();
-    await expect.poll(() => api.writes('salary_slips', 'POST').length).toBe(1);
-    expect(api.writes('salary_slips', 'POST')[0].body).toMatchObject({ employee_id: 'e1', basic_salary: 900000, net_salary: 830000, loans_deduction: 100000 });
-    await expect.poll(() => api.writes('loan_installments', 'PATCH').length).toBe(1);
-    expect(api.writes('loan_installments', 'PATCH')[0].body).toMatchObject({ is_paid: true });
+    // الكشف والأقساط والقيود تُعتمد في معاملة واحدة على السيرفر (approve_salary_slip)
+    await expect.poll(() => api.writes('rpc:approve_salary_slip', 'POST').length).toBe(1);
+    expect(api.writes('rpc:approve_salary_slip', 'POST')[0].body).toMatchObject({
+      p_employee_id: 'e1', p_basic_salary: 900000, p_net_salary: 830000, p_loans_deduction: 100000, p_installment_ids: ['i2'],
+    });
   });
 
   test('opens the add-employee form from the overview and masks passwords', async ({ page }) => {

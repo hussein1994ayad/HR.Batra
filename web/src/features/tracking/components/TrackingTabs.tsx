@@ -1,38 +1,23 @@
+import { Gavel, Map as MapIcon } from 'lucide-react';
+import { SegmentedTabs } from '@/components/ui';
+
+type Tab = 'monitoring' | 'decisions';
+
 type Props = {
-  activeTab: 'monitoring' | 'decisions';
+  activeTab: Tab;
   pendingDecisions: number;
-  onTabChange: (tab: 'monitoring' | 'decisions') => void;
+  onTabChange: (tab: Tab) => void;
 };
 
-/** التبديل بين المراقبة والخرائط وقرارات الغياب والتأخير. */
 export function TrackingTabs({ activeTab, pendingDecisions, onTabChange }: Props) {
   return (
-    <div className="flex border-b border-slate-800/80 mb-6 gap-6">
-      <button
-        onClick={() => onTabChange('monitoring')}
-        className={`pb-4 text-xs sm:text-sm font-bold transition-all relative cursor-pointer ${
-          activeTab === 'monitoring' 
-            ? 'text-teal-400 border-b-2 border-teal-400' 
-            : 'text-slate-400 hover:text-white'
-        }`}
-      >
-        المراقبة والخرائط المباشرة
-      </button>
-      <button
-        onClick={() => onTabChange('decisions')}
-        className={`pb-4 text-xs sm:text-sm font-bold transition-all relative cursor-pointer flex items-center gap-2 ${
-          activeTab === 'decisions' 
-            ? 'text-teal-400 border-b-2 border-teal-400' 
-            : 'text-slate-400 hover:text-white'
-        }`}
-      >
-        <span>قرارات الغياب والتأخير</span>
-        {pendingDecisions > 0 && (
-          <span className="bg-amber-500 text-slate-950 font-extrabold text-[9px] px-1.5 py-0.5 rounded-full">
-            {pendingDecisions}
-          </span>
-        )}
-      </button>
-    </div>
+    <SegmentedTabs
+      value={activeTab}
+      onChange={onTabChange}
+      options={[
+        { value: 'monitoring', label: 'السجل والخريطة', icon: MapIcon },
+        { value: 'decisions', label: 'قرارات الغياب والتأخير', icon: Gavel, count: pendingDecisions || undefined },
+      ]}
+    />
   );
 }

@@ -1,10 +1,10 @@
 'use client';
 
-import { useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Card, PageSkeleton } from '@/components/ui';
 import { ARABIC_MONTHS } from '@/lib/dates';
 import { usePayroll } from '@/features/payroll/usePayroll';
-import type { PayrollRow } from '@/features/payroll/calc';
+import { sumPayroll, type PayrollRow } from '@/features/payroll/calc';
 import { AddAdjustmentModal } from '@/features/payroll/components/AddAdjustmentModal';
 import { AttendanceBreakdownModal } from '@/features/payroll/components/AttendanceBreakdownModal';
 import { BulkApproveModal } from '@/features/payroll/components/BulkApproveModal';
@@ -12,36 +12,37 @@ import { PayrollHeader } from '@/features/payroll/components/PayrollHeader';
 import { PayrollPrintHeader } from '@/features/payroll/components/PayrollPrintHeader';
 import { PayrollPrintSignatures } from '@/features/payroll/components/PayrollPrintSignatures';
 import { PayrollTable } from '@/features/payroll/components/PayrollTable';
-import { PayrollToolbar } from '@/features/payroll/components/PayrollToolbar';
+import { PayrollToolbar, type PayrollStatusFilter } from '@/features/payroll/components/PayrollToolbar';
 
 export default function PayrollPage() {
   const p = usePayroll();
+  const [statusFilter, setStatusFilter] = useState<PayrollStatusFilter>('all');
 
-  // النوافذ المنبثقة
   const [adjustmentFor, setAdjustmentFor] = useState<{ row: PayrollRow; type: 'bonus' | 'deduction' } | null>(null);
   const [breakdownEmployeeId, setBreakdownEmployeeId] = useState<string | null>(null);
   const [showBulkModal, setShowBulkModal] = useState(false);
 
+  const visibleRows = useMemo(
+    () => p.filteredRows.filter(r => statusFilter === 'all' || (statusFilter === 'issued' ? r.isIssued : !r.isIssued)),
+    [p.filteredRows, statusFilter],
+  );
+  const visibleTotals = useMemo(() => sumPayroll(visibleRows), [visibleRows]);
+
+  if (p.loading) return <PageSkeleton rows={8} />;
+
   const [currentYearVal, currentMonthVal] = p.selectedMonth.split('-');
   const branchName = p.branches.find(b => b.id === p.selectedBranch)?.name ?? '';
+  const branchLabel = p.selectedBranch === 'all' ? 'كافة فروع الشركة' : branchName || '-';
   const breakdownRow = p.rows.find(r => r.id === breakdownEmployeeId);
 
-  if (p.loading) {
-    return (
-      <div className="flex-grow flex items-center justify-center">
-        <Loader2 className="w-10 h-10 text-teal-400 animate-spin" />
-      </div>
-    );
-  }
-
   return (
-    <div className="space-y-8 pb-12">
+    <div className="space-y-6 pb-12">
       <PayrollPrintHeader
         currentMonthName={ARABIC_MONTHS[currentMonthVal] || currentMonthVal}
         currentYearVal={currentYearVal}
         startDate={p.startDate}
         endDate={p.endDate}
-        branchLabel={p.selectedBranch === 'all' ? 'كافة فروع الشركة' : branchName || '-'}
+        branchLabel={branchLabel}
       />
 
       <PayrollHeader
@@ -50,19 +51,23 @@ export default function PayrollPage() {
         currentYearVal={currentYearVal}
         startDate={p.startDate}
         endDate={p.endDate}
-        totalNetSalaries={p.totals.net}
+        totals={p.totals}
+        issuedCount={p.filteredRows.filter(r => r.isIssued).length}
+        rowCount={p.filteredRows.length}
+        branchLabel={branchLabel}
         onMonthChange={p.changeMonth}
       />
 
-      {/* Main Table Area */}
-      <div className="bg-slate-900/40 backdrop-blur-xl border border-slate-800/80 rounded-3xl p-6 shadow-xl print:border-none print:bg-transparent print:p-0 print:shadow-none">
+      <Card className="print:border-none print:bg-transparent print:p-0">
         <PayrollToolbar
           searchTerm={p.searchTerm}
           onSearchChange={p.setSearchTerm}
           selectedBranch={p.selectedBranch}
           onBranchChange={p.setSelectedBranch}
           branches={p.branches}
-          selectedMonth={p.selectedMonth}
+          statusFilter={statusFilter}
+          onStatusFilterChange={setStatusFilter}
+          pendingCount={p.pendingRows.length}
           isMonthArchived={p.isMonthArchived}
           sendingNotifs={p.sendingNotifs}
           archiving={p.actionLoading === 'archive_month'}
@@ -72,8 +77,8 @@ export default function PayrollPage() {
         />
 
         <PayrollTable
-          rows={p.filteredRows}
-          totals={p.totals}
+          rows={visibleRows}
+          totals={visibleTotals}
           isMonthArchived={p.isMonthArchived}
           actionLoading={p.actionLoading}
           payrollOverrides={p.payrollOverrides}
@@ -86,7 +91,7 @@ export default function PayrollPage() {
         />
 
         <PayrollPrintSignatures />
-      </div>
+      </Card>
 
       {adjustmentFor && (
         <AddAdjustmentModal

@@ -10,7 +10,7 @@ import {
   subscribeToEmployeeLocations, updateAttendanceTimes, type TrackingDataset,
 } from './api';
 import { exportDisciplineReport } from './exportReport';
-import { analyzeTrail, buildAttendanceRows, buildDecisions, buildMapMarkers, parseZonePolygons } from './logic';
+import { analyzeTrail, buildAttendanceRows, buildDecisions, buildMapMarkers, decisionKey, parseZonePolygons } from './logic';
 import type { Decision, DetectedStop } from './types';
 
 const EMPTY: TrackingDataset = {
@@ -20,7 +20,10 @@ const BAGHDAD: [number, number] = [33.3152, 44.3661];
 
 /** حالة صفحة المراقبة: البيانات، الفلاتر، مسار الحركة، القرارات، والإجراءات. */
 export function useTracking() {
+  // loading: أول تحميل فقط (هيكل الصفحة). refreshing: إعادة التحميل مع بقاء البيانات ظاهرة.
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [busyKey, setBusyKey] = useState<string | null>(null);
   const [data, setData] = useState<TrackingDataset>(EMPTY);
 
   const [startDate, setStartDate] = useState(getLocalDateStr);
@@ -40,7 +43,7 @@ export function useTracking() {
   const [mapView, setMapView] = useState<{ center: [number, number]; zoom: number }>({ center: BAGHDAD, zoom: 12 });
 
   const loadData = useCallback(async () => {
-    setLoading(true);
+    setRefreshing(true);
     try {
       setData(await fetchTrackingDataset({ startDate, endDate, selectedBranch, selectedEmployee }));
     } catch (err: unknown) {
@@ -48,6 +51,7 @@ export function useTracking() {
       toast.error(`تعذر تحميل بيانات المراقبة: ${errorMessage(err)}`);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, [startDate, endDate, selectedBranch, selectedEmployee]);
 
@@ -108,8 +112,8 @@ export function useTracking() {
   // ------------------------------------------------------------------
   // الإجراءات
   // ------------------------------------------------------------------
-  const run = async (action: () => Promise<void>, success: string, failure: (err: unknown) => string) => {
-    setLoading(true);
+  const run = async (key: string, action: () => Promise<void>, success: string, failure: (err: unknown) => string) => {
+    setBusyKey(key);
     try {
       await action();
       toast.success(success);
@@ -119,7 +123,7 @@ export function useTracking() {
       toast.error(failure(err));
       return false;
     } finally {
-      setLoading(false);
+      setBusyKey(null);
     }
   };
 
@@ -129,7 +133,7 @@ export function useTracking() {
   };
 
   const updateTimes = (record: AttendanceRecord, checkIn: string, checkOut: string) =>
-    run(() => updateAttendanceTimes(record, checkIn, checkOut, endDate),
+    run('edit', () => updateAttendanceTimes(record, checkIn, checkOut, endDate),
       'تم تحديث أوقات الدوام بنجاح! ✅', () => 'حدث خطأ أثناء التحديث.');
 
   const addManualAttendance = (entry: { employeeId: string; date: string; checkIn: string; checkOut: string }) => {
@@ -138,15 +142,15 @@ export function useTracking() {
       toast.error('حدث خطأ: الموظف المختار غير مربوط بفرع، والفرع الافتراضي للمؤسسة غير متوفر.');
       return Promise.resolve(false);
     }
-    return run(() => saveManualAttendance({ ...entry, branchId }),
+    return run('manual', () => saveManualAttendance({ ...entry, branchId }),
       'تم تسجيل الحضور اليدوي بنجاح! ✅', (err) => `حدث خطأ: ${errorMessage(err)}`);
   };
 
   const checkoutNow = (recordId: string) =>
-    run(() => forceCheckout(recordId), 'تم تسجيل خروج الموظف بنجاح!', () => 'حدث خطأ أثناء تسجيل الخروج.');
+    run(`checkout_${recordId}`, () => forceCheckout(recordId), 'تم تسجيل خروج الموظف بنجاح!', () => 'حدث خطأ أثناء تسجيل الخروج.');
 
   const decide = (item: Decision, status: 'applied' | 'ignored', reason: string, amount: number) =>
-    run(() => saveDecision({
+    run(decisionKey(item), () => saveDecision({
       employee: item.employee, type: item.type, date: item.date, status, recordId: item.id, reason, amount, fallbackBranchId,
     }), 'تم حفظ القرار وإرسال إشعار للموظف بنجاح! 🔔', (err) => `حدث خطأ أثناء حفظ القرار: ${errorMessage(err)}`);
 
@@ -164,13 +168,13 @@ export function useTracking() {
   };
 
   return {
-    loading, ...data,
+    loading, refreshing, busyKey, ...data,
     startDate, setStartDate, endDate, setEndDate,
     selectedBranch, changeBranch, selectedEmployee, setSelectedEmployee,
     activeTab, setActiveTab,
     selectedAmounts, setSelectedAmounts, selectedReasons, setSelectedReasons,
     selectedEmployeeForTrail, setSelectedEmployeeForTrail, liveTrackingActive, setLiveTrackingActive,
-    trailCoordinates, mapView, markers, polygons,
+    trailCoordinates, detectedStops, mapView, markers, polygons,
     decisionsList, pendingDecisions, attendanceRows,
     reload: loadData, updateTimes, addManualAttendance, checkoutNow, decide, exportReport,
   };

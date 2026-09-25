@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import confetti from 'canvas-confetti';
 import toast from 'react-hot-toast';
+import type { ConfirmOptions } from '@/components/confirm';
 import type { ArchivedEmployee, Employee, EmployeeDevice } from '@/lib/db-types';
 import { errorMessage } from '@/lib/error-utils';
 import { readLocalCache, writeLocalCache } from '@/lib/local-cache';
@@ -23,7 +24,9 @@ const EMPTY: EmployeesDataset = { employees: [], deviceRequests: [], branches: [
 const celebrate = (colors?: string[]) => confetti({ particleCount: 60, spread: 45, ...(colors ? { colors } : {}) });
 
 /** حالة صفحة الموظفين: البيانات، الأرشيف، وكل الإجراءات. */
-export function useEmployees() {
+type Ask = (options: ConfirmOptions) => Promise<boolean>;
+
+export function useEmployees(ask: Ask) {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<EmployeesDataset>(EMPTY);
   const [archivedEmployees, setArchivedEmployees] = useState<ArchivedEmployee[]>([]);
@@ -99,8 +102,14 @@ export function useEmployees() {
       void celebrate(['#0D9488', '#10B981']);
     }, 'فشل تغيير قفل الجهاز');
 
-  const resetDevice = (emp: Employee) => {
-    if (!confirm('هل تريد فعلاً إلغاء ربط هاتف هذا الموظف بالكامل؟ سيمكنه هذا من تسجيل الدخول من أي هاتف جديد.')) return;
+  const resetDevice = async (emp: Employee) => {
+    const ok = await ask({
+      title: 'إلغاء ربط هاتف الموظف؟',
+      message: `سيتمكن ${emp.full_name} من تسجيل الدخول من هاتف جديد، وسيُقفل الحساب على أول جهاز يسجل منه.`,
+      confirmLabel: 'إلغاء الربط',
+      tone: 'warning',
+    });
+    if (!ok) return;
     return run(emp.id + '_reset', async () => {
       await resetDeviceBinding(emp.id);
       patchEmployee(emp.id, { device_id_lock: 'force_lock_active' });
@@ -146,8 +155,14 @@ export function useEmployees() {
       toast.success('تم تنفيذ عملية الحذف/الأرشفة المطلوبة للموظف بنجاح! ✅');
     }, 'فشل إتمام العملية');
 
-  const restoreArchived = (record: ArchivedEmployee) => {
-    if (!confirm(`هل أنت متأكد من رغبتك في استعادة الموظف (${record.full_name}) وتنشيط حسابه الجغرافي للدوام مجدداً؟`)) return;
+  const restoreArchived = async (record: ArchivedEmployee) => {
+    const ok = await ask({
+      title: 'استعادة الموظف؟',
+      message: `سيتم إعادة تفعيل حساب ${record.full_name} والسماح له بتسجيل الدوام مجدداً.`,
+      confirmLabel: 'استعادة',
+      tone: 'primary',
+    });
+    if (!ok) return;
     return run('restore_' + record.id, async () => {
       await restoreArchivedEmployee(record);
       await refreshAll();
@@ -156,8 +171,13 @@ export function useEmployees() {
     }, 'فشل استعادة الموظف');
   };
 
-  const destroyArchived = (record: ArchivedEmployee) => {
-    if (!confirm(`تحذير نهائي: هل تريد حقاً حذف الموظف (${record.full_name}) وإتلاف حسابه وسجلاته وبصماته من قاعدة البيانات بشكل كامل ونهائي؟ لا يمكن استعادة البيانات بعد ذلك.`)) return;
+  const destroyArchived = async (record: ArchivedEmployee) => {
+    const ok = await ask({
+      title: 'إتلاف بيانات الموظف نهائياً؟',
+      message: `سيتم حذف حساب ${record.full_name} وسجلاته وبصماته من قاعدة البيانات بشكل كامل. لا يمكن استعادة البيانات بعد ذلك.`,
+      confirmLabel: 'إتلاف نهائي',
+    });
+    if (!ok) return;
     return run('perm_del_' + record.id, async () => {
       await destroyArchivedEmployee(record);
       await refreshAll();

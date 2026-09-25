@@ -6,7 +6,6 @@ import { errorMessage } from '@/lib/error-utils';
 import { 
   Trash2, 
   RefreshCw,
-  Loader2,
   Database,
   Cloud,
   Table2,
@@ -18,6 +17,7 @@ import {
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import toast from 'react-hot-toast';
+import { Button, PageHeader, PageSkeleton } from '@/components/ui';
 
 interface TableSizeRow {
   table_name: string;
@@ -233,36 +233,20 @@ export default function StoragePage() {
     { name: 'ملفات أخرى', size: otherBytes, color: 'bg-amber-500' },
   ];
 
-  if (loading) {
-    return (
-      <div className="flex-grow flex items-center justify-center">
-        <Loader2 className="w-10 h-10 text-teal-400 animate-spin" />
-      </div>
-    );
-  }
+  if (loading) return <PageSkeleton />;
 
   return (
-    <div className="space-y-8 pb-12" dir="rtl">
-      
-      {/* Grand Summary Header */}
-      <div className="bg-gradient-to-br from-slate-900/60 via-slate-900/40 to-slate-950/60 backdrop-blur-xl border border-slate-800/80 rounded-3xl p-8 shadow-xl">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
-          <div>
-            <h3 className="text-lg font-extrabold text-white flex items-center gap-2">
-              <Gauge className="w-5 h-5 text-teal-400" />
-              <span>لوحة تحليلات التخزين الشاملة — Supabase</span>
-            </h3>
-            <p className="text-[11px] text-slate-400 mt-1">عرض لحظي لكل شيء يستهلك مساحة من خوادم Supabase (قاعدة البيانات + التخزين السحابي للملفات)</p>
-          </div>
+    <div className="space-y-6 pb-12" dir="rtl">
+      <PageHeader
+        icon={Gauge}
+        tone="teal"
+        title="التخزين والمساحة"
+        description="عرض لحظي لكل شيء يستهلك مساحة من خوادم Supabase: قاعدة البيانات والتخزين السحابي للملفات"
+        actions={<Button size="sm" variant="secondary" icon={RefreshCw} onClick={fetchAllStats}>تحديث لحظي</Button>}
+      />
 
-          <button
-            onClick={fetchAllStats}
-            className="flex items-center gap-2 py-2.5 px-5 bg-slate-800 hover:bg-slate-750 text-white rounded-xl text-xs font-bold transition-all border border-slate-700/60 cursor-pointer active:scale-95"
-          >
-            <RefreshCw className="w-4 h-4" />
-            <span>تحديث لحظي</span>
-          </button>
-        </div>
+      {/* Grand Summary */}
+      <div className="surface rounded-3xl p-5 md:p-6">
 
         {/* Two main gauges: Database + Storage side by side */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">

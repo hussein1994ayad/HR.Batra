@@ -1,123 +1,609 @@
 'use client';
 
-import { useState } from 'react';
-import { Loader2 } from 'lucide-react';
-import type { Loan } from '@/lib/db-types';
-import { useLoans } from '@/features/loans/useLoans';
-import type { InstallmentPrompt, LoansTab } from '@/features/loans/types';
-import { ApprovalModal } from '@/features/loans/components/ApprovalModal';
-import { CashPaymentModal } from '@/features/loans/components/CashPaymentModal';
-import { EditInstallmentModal } from '@/features/loans/components/EditInstallmentModal';
-import { EditLoanModal } from '@/features/loans/components/EditLoanModal';
-import { InstallmentsModal } from '@/features/loans/components/InstallmentsModal';
-import { LoanRequestsSection } from '@/features/loans/components/LoanRequestsSection';
-import { LoansListSection } from '@/features/loans/components/LoansListSection';
+import React, { useMemo, useState } from 'react';
+import toast from 'react-hot-toast';
+import {
+  Coins,
+  X,
+  Calendar,
+  Settings2,
+  CreditCard,
+  Save,
+  FileText,
+  Wallet,
+  CalendarClock,
+  Pencil,
+  Undo2,
+  Trash2,
+  Banknote,
+  CheckCircle2,
+  Hourglass,
+  AlertTriangle,
+  Printer,
+} from 'lucide-react';
+import { confetti } from '@/lib/lazy';
+import { useQuery } from '@/lib/useQuery';
+import { errorMessage, formatIQD } from '@/lib/format';
+import {
+  approveLoan, deleteCompletedLoan, deleteInstallment, fetchLoans as fetchLoanLists, payInstallmentCash,
+  postponeInstallments, rejectLoan as rejectLoanRequest, rescheduleLoan, revertInstallmentPayment, updateInstallmentAmount as saveInstallmentAmount,
+} from '@/features/loans/api';
+import { sameDayNextMonth, validateApproval } from '@/features/loans/logic';
 import { LoanStatementPrint } from '@/features/loans/components/LoanStatementPrint';
+import { ReasonModal } from '@/components/ReasonModal';
+import type { Loan as DbLoan } from '@/lib/db-types';
+import type { Loan, LoanInstallment } from '@/lib/types';
+import { useConfirm } from '@/components/confirm';
+import {
+  AmountInput,
+  Avatar,
+  Badge,
+  Button,
+  Card,
+  CardHeader,
+  DataTable,
+  EmptyState,
+  Field,
+  IconButton,
+  Input,
+  Modal,
+  ModalFooter,
+  PageHeader,
+  PageSkeleton,
+  SearchInput,
+  SegmentedTabs,
+  StatTile,
+  TableEmpty,
+} from '@/components/ui';
+
+interface LoansData {
+  pending: Loan[];
+  approved: Loan[];
+}
+
+async function fetchLoans(): Promise<LoansData> {
+  const { pending, approved } = await fetchLoanLists();
+  return { pending: pending as unknown as Loan[], approved: approved as unknown as Loan[] };
+}
+
+const byDueDate = (a: LoanInstallment, b: LoanInstallment) => a.due_date.localeCompare(b.due_date);
+
+interface ApprovalDraft {
+  loan: Loan;
+  amount: number;
+  months: number;
+  startDate: string;
+}
+
+interface EditDraft {
+  loan: Loan;
+  amount: number;
+  installmentAmount: number;
+  installmentCount: number;
+  remainingAmount: number;
+}
 
 export default function LoansPage() {
-  const l = useLoans();
-  const [loansTab, setLoansTab] = useState<LoansTab>('active');
-  const [approvingLoan, setApprovingLoan] = useState<Loan | null>(null);
-  const [editingLoan, setEditingLoan] = useState<Loan | null>(null);
-  // يُحفظ المعرّف فقط حتى يعرض جدول الأقساط آخر نسخة بعد كل إعادة تحميل
+  const confirm = useConfirm();
+  const query = useQuery('loans', fetchLoans);
+  const [tab, setTab] = useState<'active' | 'completed'>('active');
+  const [search, setSearch] = useState('');
+  const [busy, setBusy] = useState<string | null>(null);
+
+  const [approval, setApproval] = useState<ApprovalDraft | null>(null);
+  const [rejecting, setRejecting] = useState<Loan | null>(null);
+  const [editDraft, setEditDraft] = useState<EditDraft | null>(null);
   const [scheduleLoanId, setScheduleLoanId] = useState<string | null>(null);
-  const [cashPrompt, setCashPrompt] = useState<InstallmentPrompt | null>(null);
-  const [amountPrompt, setAmountPrompt] = useState<InstallmentPrompt | null>(null);
+  const [cashPrompt, setCashPrompt] = useState<{ installment: LoanInstallment; note: string } | null>(null);
+  const [amountPrompt, setAmountPrompt] = useState<{ installment: LoanInstallment; amount: number } | null>(null);
 
-  const scheduleLoan = l.activeLoans.find(loan => loan.id === scheduleLoanId) ?? null;
-  const busy = l.actionLoading !== null;
+  const approved = useMemo(() => query.data?.approved ?? [], [query.data]);
+  const active = approved.filter((l) => Number(l.remaining_amount) > 0);
+  const completed = approved.filter((l) => Number(l.remaining_amount) <= 0);
+  const outstanding = active.reduce((sum, l) => sum + Number(l.remaining_amount), 0);
+  const scheduleLoan = approved.find((l) => l.id === scheduleLoanId) ?? null;
 
-  if (l.loading) {
-    return (
-      <div className="flex-grow flex items-center justify-center">
-        <Loader2 className="w-10 h-10 text-teal-400 animate-spin" />
-      </div>
-    );
+  const displayed = (tab === 'active' ? active : completed).filter((l) =>
+    (l.employees?.full_name || '').toLowerCase().includes(search.trim().toLowerCase()),
+  );
+
+  if (!query.data) {
+    if (query.error) {
+      return (
+        <EmptyState icon={AlertTriangle} tone="rose" title="تعذر تحميل السلف" description={errorMessage(query.error)} action={<Button size="sm" variant="secondary" onClick={query.reload}>إعادة المحاولة</Button>} />
+      );
+    }
+    return <PageSkeleton />;
   }
+  const pending = query.data.pending;
+
+  const run = async (key: string, action: () => Promise<void>, failMsg: string) => {
+    setBusy(key);
+    try {
+      await action();
+    } catch (err) {
+      toast.error(`${failMsg}: ${errorMessage(err)}`);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const startApproval = (loan: Loan) =>
+    setApproval({
+      loan,
+      amount: Number(loan.amount),
+      months: Number(loan.installment_count),
+      startDate: sameDayNextMonth(),
+    });
+
+  // سبب الرفض يصل للموظف في إشعار قاعدة البيانات (trg_notify_employee_loan_decision)
+  const rejectLoan = async (loan: Loan, reason: string) => {
+    setRejecting(null);
+    await run(
+      loan.id,
+      async () => {
+        await rejectLoanRequest(loan.id, reason);
+        query.mutate((d) => ({ ...d, pending: d.pending.filter((l) => l.id !== loan.id) }));
+        toast.success('تم رفض طلب السلفة');
+      },
+      'فشل معالجة الطلب',
+    );
+  };
+
+  const submitApproval = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!approval) return;
+    const salary = Number((approval.loan as { employees?: { monthly_salary_iqd?: number | null } | null }).employees?.monthly_salary_iqd) || 0;
+    const invalid = validateApproval(approval.amount, approval.months, salary);
+    if (invalid) {
+      toast.error(invalid);
+      return;
+    }
+    await run(
+      'approve',
+      async () => {
+        // اعتماد وتوليد الأقساط في معاملة واحدة على السيرفر (approve_loan)
+        await approveLoan({ ...approval, loan: (approval.loan as unknown as DbLoan) });
+        setApproval(null);
+        query.reload();
+        confetti({ particleCount: 100, spread: 70, colors: ['#818CF8', '#34D399', '#6EE7B7'] });
+        toast.success('تم اعتماد السلفة وتوليد الأقساط');
+      },
+      'فشل الاعتماد',
+    );
+  };
+
+  const submitEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editDraft) return;
+    const d = editDraft;
+    await run(
+      'edit',
+      async () => {
+        await rescheduleLoan({ ...d, loan: (d.loan as unknown as DbLoan) });
+        setEditDraft(null);
+        query.reload();
+        toast.success('تم تعديل السلفة وإعادة جدولة الأقساط المتبقية');
+      },
+      'فشل التعديل',
+    );
+  };
+
+  const recordCash = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!cashPrompt) return;
+    await run(
+      'cash',
+      async () => {
+        await payInstallmentCash(cashPrompt.installment.id, cashPrompt.note);
+        setCashPrompt(null);
+        query.reload();
+        toast.success('تم تسجيل السداد النقدي وتحديث الرصيد');
+      },
+      'فشل تسجيل السداد',
+    );
+  };
+
+  const updateInstallmentAmount = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!amountPrompt || amountPrompt.amount <= 0) return;
+    await run(
+      'amount',
+      async () => {
+        await saveInstallmentAmount(amountPrompt.installment.id, amountPrompt.amount);
+        setAmountPrompt(null);
+        query.reload();
+        toast.success('تم تعديل قيمة القسط');
+      },
+      'فشل تعديل القسط',
+    );
+  };
+
+  const revertPayment = async (inst: LoanInstallment) => {
+    const ok = await confirm({
+      title: 'التراجع عن السداد؟',
+      message: 'سيعود القسط غير مدفوع ويُضاف للمبلغ المتبقي ليُستقطع مع الراتب القادم.',
+      confirmLabel: 'تراجع عن السداد',
+      tone: 'warning',
+    });
+    if (!ok) return;
+    await run(
+      `revert_${inst.id}`,
+      async () => {
+        await revertInstallmentPayment(inst.id);
+        query.reload();
+        toast.success('تم التراجع عن السداد');
+      },
+      'فشل التراجع عن السداد',
+    );
+  };
+
+  const deletePaidInstallment = async (inst: LoanInstallment) => {
+    const ok = await confirm({
+      title: 'حذف القسط المسدد نهائياً؟',
+      message: 'يُحذف السجل من قاعدة البيانات لتوفير المساحة، ولن يؤثر على رصيد السلفة المتبقي. لا يمكن التراجع.',
+      confirmLabel: 'حذف نهائي',
+    });
+    if (!ok) return;
+    await run(
+      `delete_${inst.id}`,
+      async () => {
+        await deleteInstallment(inst.id);
+        query.mutate((d) => ({
+          ...d,
+          approved: d.approved.map((l) =>
+            l.id === inst.loan_id ? { ...l, loan_installments: (l.loan_installments ?? []).filter((i) => i.id !== inst.id) } : l,
+          ),
+        }));
+        toast.success('تم حذف القسط المسدد');
+      },
+      'فشل حذف القسط',
+    );
+  };
+
+  const postponeFrom = async (inst: LoanInstallment) => {
+    await run(
+      `postpone_${inst.id}`,
+      async () => {
+        await postponeInstallments(inst as Parameters<typeof postponeInstallments>[0]);
+        query.reload();
+        toast.success('تم تأجيل القسط والأقساط اللاحقة شهراً');
+      },
+      'فشل تأجيل القسط',
+    );
+  };
+
+  /** حذف سلفة مسددة بالكامل مع ملف تعهدها لتوفير المساحة. */
+  const deleteLoan = async (loan: Loan) => {
+    const ok = await confirm({
+      title: 'حذف سجل السلفة المكتملة؟',
+      message: 'ستُحذف السلفة وأقساطها وصورة التعهد نهائياً لتوفير المساحة. لا يمكن التراجع.',
+      confirmLabel: 'حذف نهائي',
+    });
+    if (!ok) return;
+    await run(
+      `delete_loan_${loan.id}`,
+      async () => {
+        await deleteCompletedLoan((loan as unknown as DbLoan));
+        query.mutate((d) => ({ ...d, approved: d.approved.filter((l) => l.id !== loan.id) }));
+        toast.success('تم حذف السلفة وتوفير المساحة');
+      },
+      'فشل الحذف',
+    );
+  };
 
   return (
-    <>
-      <div className="space-y-8 pb-12 print:hidden">
-        <div className="bg-slate-900/40 backdrop-blur-xl border border-slate-800/80 rounded-3xl p-6 shadow-xl space-y-6">
-          <LoanRequestsSection
-            loanRequests={l.loanRequests}
-            actionLoading={l.actionLoading}
-            onApprove={(loan) => {
-              if (l.canApprove(loan)) setApprovingLoan(loan);
-            }}
-            onReject={(loan) => void l.reject(loan)}
-          />
-          <LoansListSection
-            loansTab={loansTab}
-            incompleteLoans={l.incompleteLoans}
-            completedLoans={l.completedLoans}
-            actionLoading={l.actionLoading}
-            onTabChange={setLoansTab}
-            onOpenSchedule={(loan) => setScheduleLoanId(loan.id)}
-            onDelete={(loan) => void l.deleteLoan(loan)}
-          />
-        </div>
+    <div className="space-y-6 pb-12">
+      <PageHeader icon={Coins} tone="sky" title="السلف والأقساط" description="اعتماد طلبات السلف وجدولة الأقساط الشهرية ومتابعة السداد" />
 
-        {approvingLoan && (
-          <ApprovalModal
-            loan={approvingLoan}
-            saving={busy}
-            onClose={() => setApprovingLoan(null)}
-            onSubmit={async (draft) => {
-              if (await l.approve(draft)) setApprovingLoan(null);
-            }}
-          />
-        )}
-
-        {editingLoan && (
-          <EditLoanModal
-            loan={editingLoan}
-            saving={busy}
-            onClose={() => setEditingLoan(null)}
-            onSubmit={async (draft) => {
-              if (await l.reschedule(draft)) setEditingLoan(null);
-            }}
-          />
-        )}
-
-        {scheduleLoan && (
-          <InstallmentsModal
-            selectedLoanForInstallments={scheduleLoan}
-            actionLoading={l.actionLoading}
-            onClose={() => setScheduleLoanId(null)}
-            onEditLoan={setEditingLoan}
-            onCashPayment={(inst) => setCashPrompt({ installmentId: inst.id, amount: inst.amount })}
-            onPostpone={(inst) => void l.postpone(inst)}
-            onEditInstallment={(inst) => setAmountPrompt({ installmentId: inst.id, amount: inst.amount })}
-            onRevert={(id) => void l.revertPayment(id)}
-            onDeletePaid={(id) => void l.deletePaidInstallment(id)}
-          />
-        )}
-
-        {cashPrompt && (
-          <CashPaymentModal
-            cashPaymentPrompt={cashPrompt}
-            saving={busy}
-            onClose={() => setCashPrompt(null)}
-            onSubmit={async (note) => {
-              if (await l.payCash(cashPrompt.installmentId, note)) setCashPrompt(null);
-            }}
-          />
-        )}
-
-        {amountPrompt && (
-          <EditInstallmentModal
-            editInstallmentPrompt={amountPrompt}
-            saving={busy}
-            onClose={() => setAmountPrompt(null)}
-            onSubmit={async (amount) => {
-              if (await l.changeInstallmentAmount(amountPrompt.installmentId, amount)) setAmountPrompt(null);
-            }}
-          />
-        )}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatTile label="طلبات معلقة" value={pending.length} icon={Hourglass} tone={pending.length > 0 ? 'amber' : 'slate'} />
+        <StatTile label="سلف جارية" value={active.length} icon={CreditCard} tone="sky" />
+        <StatTile label="المبالغ المتبقية" value={formatIQD(outstanding)} icon={Wallet} tone="indigo" />
+        <StatTile label="سلف مكتملة" value={completed.length} icon={CheckCircle2} tone="emerald" />
       </div>
 
-      {scheduleLoan && <LoanStatementPrint selectedLoanForInstallments={scheduleLoan} />}
-    </>
+      {/* Pending requests */}
+      <Card>
+        <CardHeader
+          icon={Hourglass}
+          tone="amber"
+          title={<>طلبات بانتظار الاعتماد {pending.length > 0 && <Badge tone="amber">{pending.length}</Badge>}</>}
+          description="راجع الطلب ثم اعتمده مع إمكانية تعديل المبلغ ومدة التقسيط"
+        />
+        {pending.length === 0 ? (
+          <EmptyState icon={Coins} title="لا توجد طلبات سلف معلقة" description="ستظهر هنا الطلبات الجديدة فور رفعها من تطبيق الموظفين." />
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {pending.map((loan) => {
+              const amount = Number(loan.amount);
+              const months = Number(loan.installment_count) || 1;
+              return (
+                <article key={loan.id} className="flex flex-col rounded-2xl bg-slate-900/50 border border-slate-800/80 hover:border-slate-700/80 transition-colors p-5">
+                  <div className="flex items-center gap-3 mb-4">
+                    <Avatar name={loan.employees?.full_name} />
+                    <div className="flex-1 min-w-0">
+                      <h4 className="text-sm font-bold text-white truncate">{loan.employees?.full_name || 'موظف'}</h4>
+                      <p className="text-[11px] text-slate-500">طلب سلفة مالية</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 mb-3">
+                    <div className="rounded-xl bg-slate-950/60 border border-slate-800/70 p-2.5">
+                      <p className="text-[10px] text-slate-500 mb-0.5">المبلغ</p>
+                      <p className="text-sm font-extrabold text-white">{formatIQD(amount)}</p>
+                    </div>
+                    <div className="rounded-xl bg-slate-950/60 border border-slate-800/70 p-2.5">
+                      <p className="text-[10px] text-slate-500 mb-0.5">المدة</p>
+                      <p className="text-sm font-extrabold text-white">{months} شهر</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between rounded-xl bg-sky-500/5 border border-sky-500/15 px-3 py-2.5 mb-3">
+                    <span className="text-xs text-slate-400">القسط الشهري</span>
+                    <span className="text-sm font-extrabold text-sky-300">{formatIQD(amount / months)}</span>
+                  </div>
+                  {loan.pledge_url && (
+                    <a href={loan.pledge_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-300 hover:text-indigo-200 mb-3">
+                      <FileText className="w-3.5 h-3.5" /> عرض التعهد الموقّع
+                    </a>
+                  )}
+                  <div className="flex gap-2 mt-auto pt-4 border-t border-slate-800/70">
+                    <Button variant="primary" icon={Settings2} block disabled={busy === loan.id} onClick={() => startApproval(loan)}>
+                      اعتماد وجدولة
+                    </Button>
+                    <Button variant="soft-danger" icon={X} block loading={busy === loan.id} onClick={() => setRejecting(loan)}>
+                      رفض
+                    </Button>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </Card>
+
+      {/* Active & completed loans */}
+      <Card>
+        <CardHeader
+          icon={CreditCard}
+          tone="indigo"
+          title="سجل السلف المعتمدة"
+          description="اضغط على جدول الأقساط لتسجيل سداد نقدي أو تأجيل أو تعديل قسط"
+          actions={
+            <>
+              <SearchInput value={search} onChange={setSearch} placeholder="ابحث باسم الموظف..." className="w-full sm:w-56" />
+              <SegmentedTabs
+                value={tab}
+                onChange={setTab}
+                options={[
+                  { value: 'active', label: 'الجارية', count: active.length },
+                  { value: 'completed', label: 'المكتملة', count: completed.length },
+                ]}
+              />
+            </>
+          }
+        />
+        <DataTable>
+          <thead>
+            <tr>
+              <th>الموظف</th>
+              <th>المبلغ الكلي</th>
+              <th>نسبة السداد</th>
+              <th>المتبقي</th>
+              <th>القسط القادم</th>
+              <th className="!text-left">الإجراءات</th>
+            </tr>
+          </thead>
+          <tbody>
+            {displayed.length === 0 ? (
+              <TableEmpty colSpan={6}>{tab === 'active' ? 'لا توجد سلف جارية' : 'لا توجد سلف مكتملة'}</TableEmpty>
+            ) : (
+              displayed.map((loan) => {
+                const unpaid = (loan.loan_installments ?? []).filter((i) => !i.is_paid).sort(byDueDate);
+                const amount = Number(loan.amount);
+                const paidPct = amount > 0 ? Math.min(100, Math.max(0, Math.round(((amount - Number(loan.remaining_amount)) / amount) * 100))) : 0;
+                return (
+                  <tr key={loan.id}>
+                    <td>
+                      <div className="flex items-center gap-2.5">
+                        <Avatar name={loan.employees?.full_name} size="sm" />
+                        <span className="font-bold text-white">{loan.employees?.full_name}</span>
+                      </div>
+                    </td>
+                    <td className="font-bold text-slate-200">{formatIQD(amount)}</td>
+                    <td className="min-w-[140px]">
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 h-1.5 rounded-full bg-slate-800 overflow-hidden" dir="ltr">
+                          <div className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-teal-400" style={{ width: `${paidPct}%` }} />
+                        </div>
+                        <span className="text-[11px] font-bold text-slate-400 w-9" dir="ltr">{paidPct}%</span>
+                      </div>
+                    </td>
+                    <td>
+                      <span className={Number(loan.remaining_amount) > 0 ? 'font-bold text-amber-300' : 'font-bold text-emerald-300'}>
+                        {formatIQD(loan.remaining_amount)}
+                      </span>
+                      <span className="block text-[10px] text-slate-500">{unpaid.length} أقساط متبقية</span>
+                    </td>
+                    <td className="font-mono text-slate-300" dir="ltr">
+                      {unpaid[0]?.due_date ?? <Badge tone="emerald">مكتمل</Badge>}
+                    </td>
+                    <td className="!text-left">
+                      <div className="flex justify-end gap-1.5">
+                        <Button size="sm" variant="soft" icon={Calendar} onClick={() => setScheduleLoanId(loan.id)}>
+                          جدول الأقساط
+                        </Button>
+                        {tab === 'completed' && (
+                          <IconButton icon={Trash2} label="حذف السجل نهائياً" tone="rose" loading={busy === `delete_loan_${loan.id}`} onClick={() => deleteLoan(loan)} />
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </DataTable>
+      </Card>
+
+      {/* Approval */}
+      {approval && (
+        <Modal title="اعتماد وجدولة السلفة" subtitle={approval.loan.employees?.full_name ?? undefined} icon={Settings2} tone="brand" onClose={() => setApproval(null)}>
+          <form onSubmit={submitApproval} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <Field label="المبلغ الإجمالي (د.ع)">
+                <AmountInput required value={approval.amount} onValueChange={(v) => setApproval({ ...approval, amount: v })} />
+              </Field>
+              <Field label="عدد أشهر التقسيط">
+                <AmountInput required value={approval.months} onValueChange={(v) => setApproval({ ...approval, months: v })} />
+              </Field>
+            </div>
+            <Field label="تاريخ استحقاق أول قسط">
+              <Input type="date" required value={approval.startDate} onChange={(e) => setApproval({ ...approval, startDate: e.target.value })} dir="ltr" />
+            </Field>
+            <div className="rounded-2xl bg-indigo-500/5 border border-indigo-500/20 p-4 text-center">
+              <p className="text-[11px] text-slate-400 mb-1">القسط الشهري</p>
+              <p className="text-2xl font-extrabold text-indigo-200">{formatIQD(approval.months > 0 ? approval.amount / approval.months : 0)}</p>
+            </div>
+            <ModalFooter onCancel={() => setApproval(null)} loading={busy === 'approve'} submitLabel="حفظ وتوليد الأقساط" submitIcon={Save} />
+          </form>
+        </Modal>
+      )}
+
+      {/* Installment schedule */}
+      {scheduleLoan && (
+        <Modal
+          title="جدول الأقساط والسداد"
+          subtitle={scheduleLoan.employees?.full_name ?? undefined}
+          icon={Calendar}
+          tone="sky"
+          size="lg"
+          onClose={() => setScheduleLoanId(null)}
+        >
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+            <StatTile label="المبلغ الكلي" value={formatIQD(scheduleLoan.amount)} tone="slate" className="!p-3" />
+            <StatTile label="المسدد" value={formatIQD(Number(scheduleLoan.amount) - Number(scheduleLoan.remaining_amount))} tone="emerald" className="!p-3" />
+            <StatTile label="المتبقي" value={formatIQD(scheduleLoan.remaining_amount)} tone="amber" className="!p-3" />
+            <StatTile label="القسط الشهري" value={formatIQD(scheduleLoan.installment_amount)} tone="indigo" className="!p-3" />
+          </div>
+
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="text-xs font-bold text-slate-300">الأقساط</h4>
+            <div className="flex gap-2">
+            <Button size="sm" variant="secondary" icon={Printer} onClick={() => window.print()}>
+              طباعة كشف الحساب
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              icon={Pencil}
+              onClick={() =>
+                setEditDraft({
+                  loan: scheduleLoan,
+                  amount: Number(scheduleLoan.amount),
+                  installmentAmount: Number(scheduleLoan.installment_amount),
+                  installmentCount: Number(scheduleLoan.installment_count),
+                  remainingAmount: Number(scheduleLoan.remaining_amount),
+                })
+              }
+            >
+              تعديل السلفة وإعادة الجدولة
+            </Button>
+            </div>
+          </div>
+
+          <div className="max-h-[360px] overflow-y-auto rounded-2xl border border-slate-800/80 divide-y divide-slate-800/70">
+            {[...(scheduleLoan.loan_installments ?? [])].sort(byDueDate).map((inst, idx) => (
+              <div key={inst.id} className="p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-900/40 transition-colors">
+                <div className="flex items-center gap-3 text-xs">
+                  <span className="w-7 h-7 shrink-0 rounded-lg bg-slate-800 text-slate-400 font-bold flex items-center justify-center text-[11px]">{idx + 1}</span>
+                  <span className="font-mono text-slate-300" dir="ltr">{inst.due_date}</span>
+                  <span className="font-bold text-white">{formatIQD(inst.amount)}</span>
+                  {inst.is_paid ? (
+                    <Badge tone={inst.payment_type === 'cash' ? 'emerald' : 'sky'} dot>
+                      {inst.payment_type === 'cash' ? `نقداً${inst.payment_note ? ` · ${inst.payment_note}` : ''}` : 'استقطاع راتب'}
+                    </Badge>
+                  ) : (
+                    <Badge tone="slate">غير مدفوع</Badge>
+                  )}
+                </div>
+                <div className="flex items-center gap-1.5 justify-end">
+                  {!inst.is_paid ? (
+                    <>
+                      <Button size="xs" variant="soft-success" icon={Banknote} disabled={!!busy} onClick={() => setCashPrompt({ installment: inst, note: '' })}>
+                        دفع نقدي
+                      </Button>
+                      <IconButton icon={CalendarClock} label="تأجيل هذا القسط وما بعده شهراً" tone="indigo" loading={busy === `postpone_${inst.id}`} disabled={!!busy} onClick={() => postponeFrom(inst)} />
+                      <IconButton icon={Pencil} label="تعديل قيمة القسط" tone="sky" disabled={!!busy} onClick={() => setAmountPrompt({ installment: inst, amount: Number(inst.amount) })} />
+                    </>
+                  ) : (
+                    <>
+                      <IconButton icon={Undo2} label="التراجع عن السداد" tone="amber" loading={busy === `revert_${inst.id}`} disabled={!!busy} onClick={() => revertPayment(inst)} />
+                      <IconButton icon={Trash2} label="حذف القسط المسدد نهائياً" tone="rose" loading={busy === `delete_${inst.id}`} disabled={!!busy} onClick={() => deletePaidInstallment(inst)} />
+                    </>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Modal>
+      )}
+
+      {/* Edit loan */}
+      {editDraft && (
+        <Modal title="تعديل السلفة وإعادة الجدولة" subtitle="تُحذف الأقساط غير المدفوعة ويُعاد توليدها ابتداءً من الشهر القادم" icon={Pencil} tone="sky" onClose={() => setEditDraft(null)}>
+          <form onSubmit={submitEdit} className="grid grid-cols-2 gap-4">
+            <Field label="المبلغ الإجمالي (د.ع)">
+              <AmountInput required value={editDraft.amount} onValueChange={(v) => setEditDraft({ ...editDraft, amount: v })} />
+            </Field>
+            <Field label="القسط الشهري (د.ع)">
+              <AmountInput required value={editDraft.installmentAmount} onValueChange={(v) => setEditDraft({ ...editDraft, installmentAmount: v })} />
+            </Field>
+            <Field label="عدد الأقساط الكلي">
+              <AmountInput required value={editDraft.installmentCount} onValueChange={(v) => setEditDraft({ ...editDraft, installmentCount: v })} />
+            </Field>
+            <Field label="المبلغ المتبقي (د.ع)">
+              <AmountInput required value={editDraft.remainingAmount} onValueChange={(v) => setEditDraft({ ...editDraft, remainingAmount: v })} />
+            </Field>
+            <div className="col-span-2">
+              <ModalFooter onCancel={() => setEditDraft(null)} loading={busy === 'edit'} submitLabel="حفظ وإعادة الجدولة" submitIcon={Save} />
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* Cash payment */}
+      {cashPrompt && (
+        <Modal title="تسجيل سداد نقدي" subtitle={`قيمة القسط: ${formatIQD(cashPrompt.installment.amount)}`} icon={Banknote} tone="emerald" size="sm" onClose={() => setCashPrompt(null)}>
+          <form onSubmit={recordCash} className="space-y-4">
+            <Field label="ملاحظة (اختياري)" hint="يُخصم القسط من الرصيد فوراً ولا يُستقطع من الراتب القادم.">
+              <Input value={cashPrompt.note} onChange={(e) => setCashPrompt({ ...cashPrompt, note: e.target.value })} placeholder="مثال: وصل استلام رقم 12" />
+            </Field>
+            <ModalFooter onCancel={() => setCashPrompt(null)} loading={busy === 'cash'} submitLabel="تأكيد السداد" variant="success" />
+          </form>
+        </Modal>
+      )}
+
+      {/* Edit installment amount */}
+      {amountPrompt && (
+        <Modal title="تعديل قيمة القسط" icon={Pencil} tone="sky" size="sm" onClose={() => setAmountPrompt(null)}>
+          <form onSubmit={updateInstallmentAmount} className="space-y-4">
+            <Field label="المبلغ الجديد (د.ع)">
+              <AmountInput required autoFocus value={amountPrompt.amount} onValueChange={(v) => setAmountPrompt({ ...amountPrompt, amount: v })} />
+            </Field>
+            <ModalFooter onCancel={() => setAmountPrompt(null)} loading={busy === 'amount'} submitLabel="حفظ التعديل" />
+          </form>
+        </Modal>
+      )}
+      {rejecting && (
+        <ReasonModal
+          title="رفض طلب السلفة؟"
+          message={`سيتم إشعار ${rejecting.employees?.full_name || 'الموظف'} برفض الطلب.`}
+          confirmLabel="رفض الطلب"
+          onCancel={() => setRejecting(null)}
+          onConfirm={(reason) => void rejectLoan(rejecting, reason)}
+        />
+      )}
+      {scheduleLoan && <LoanStatementPrint selectedLoanForInstallments={(scheduleLoan as unknown as DbLoan)} />}
+    </div>
   );
 }

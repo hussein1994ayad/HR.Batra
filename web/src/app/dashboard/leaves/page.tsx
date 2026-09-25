@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
+import { ReasonModal } from '@/components/ReasonModal';
 import {
   CalendarRange,
   Check,
@@ -66,13 +67,10 @@ export default function LeavesPage() {
   }, [query.data, query.refreshing, search]);
   const isLoading = query.loading || query.refreshing;
 
-  const handleProcess = async (req: LeaveRequest, approve: boolean, isPaid: boolean) => {
-    let rejectionReason = '';
-    if (!approve) {
-      const reason = prompt('يرجى إدخال سبب الرفض (اختياري):');
-      if (reason === null) return;
-      rejectionReason = reason.trim();
-    }
+  const [rejecting, setRejecting] = useState<LeaveRequest | null>(null);
+
+  const handleProcess = async (req: LeaveRequest, approve: boolean, isPaid: boolean, rejectionReason = '') => {
+    setRejecting(null);
     setActionLoading(req.id);
     try {
       const {
@@ -216,7 +214,7 @@ export default function LeavesPage() {
                           <Button variant="success" icon={Check} block loading={busy} onClick={() => handleProcess(req, true, isPaid)}>
                             موافقة
                           </Button>
-                          <Button variant="soft-danger" icon={X} block disabled={busy} onClick={() => handleProcess(req, false, isPaid)}>
+                          <Button variant="soft-danger" icon={X} block disabled={busy} onClick={() => setRejecting(req)}>
                             رفض
                           </Button>
                         </div>
@@ -244,6 +242,16 @@ export default function LeavesPage() {
           </div>
         )}
       </Card>
+
+      {rejecting && (
+        <ReasonModal
+          title="رفض طلب الإجازة؟"
+          message={`سيتم إشعار ${rejecting.employees?.full_name || 'الموظف'} برفض الطلب مع السبب إن كتبته.`}
+          confirmLabel="رفض الطلب"
+          onCancel={() => setRejecting(null)}
+          onConfirm={(reason) => void handleProcess(rejecting, false, false, reason)}
+        />
+      )}
     </div>
   );
 }
