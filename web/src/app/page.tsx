@@ -27,6 +27,7 @@ export default function Home() {
         }
         router.replace('/login');
       } catch (err) {
+        console.error('Session check failed:', err);
         router.replace('/login');
       }
     };

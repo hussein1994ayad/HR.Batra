@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Cairo } from "next/font/google";
 import "./globals.css";
-import "leaflet/dist/leaflet.css";
 
 const cairo = Cairo({
   subsets: ["arabic", "latin"],

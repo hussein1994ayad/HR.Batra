@@ -1,1181 +1,809 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
-import MapComponent from '@/components/MapComponent';
-import { 
-  MapPin, 
-  Users, 
-  ShieldAlert, 
-  CheckCircle,
-  Loader2,
+import React, { useEffect, useMemo, useState } from 'react';
+import dynamic from 'next/dynamic';
+import toast from 'react-hot-toast';
+import {
+  MapPin,
+  Users,
+  ShieldAlert,
+  CheckCircle2,
   RefreshCw,
   Clock,
-  Edit,
+  Pencil,
   Save,
   LogOut,
-  Calendar as CalendarIcon,
   Building2,
-  Map,
-  Download
+  Map as MapIcon,
+  Download,
+  UserPlus,
+  Gavel,
+  AlertTriangle,
+  Radio,
+  Timer,
+  XCircle,
 } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { supabase } from '@/lib/supabase';
+import { useQuery } from '@/lib/useQuery';
+import {
+  DEFAULT_CHECK_IN,
+  findSchedule,
+  formatLateDurationArabic,
+  isDateInRange,
+  minutesLate,
+  weekdayOf,
+  workDaysFor,
+} from '@/lib/attendance';
+import { escapeHtml, errorMessage, formatClock, formatDuration, localDateStr } from '@/lib/format';
+import { BAGHDAD_CENTER } from '@/lib/geo';
+import type { Attendance, Branch, DeductionStatus, Employee, GeofenceZone, LeaveRequest, MockGpsAttempt, WorkSchedule } from '@/lib/types';
+import type { MapMarker, MapPolygon } from '@/components/MapComponent';
+import { useConfirm } from '@/components/confirm';
+import {
+  AmountInput,
+  Avatar,
+  Badge,
+  Button,
+  Card,
+  CardHeader,
+  DataTable,
+  EmptyState,
+  Field,
+  FilterSelect,
+  IconButton,
+  Input,
+  Modal,
+  ModalFooter,
+  PageHeader,
+  PageSkeleton,
+  SegmentedTabs,
+  Select,
+  StatTile,
+  TableEmpty,
+  Toggle,
+  cn,
+} from '@/components/ui';
 
-const formatLateDurationArabic = (minutes: number) => {
-  if (minutes <= 0) return '0 دقيقة';
-  const hrs = Math.floor(minutes / 60);
-  const mins = minutes % 60;
+const MapComponent = dynamic(() => import('@/components/MapComponent'), {
+  ssr: false,
+  loading: () => <div className="skeleton w-full h-full min-h-[420px] rounded-2xl" />,
+});
 
-  let hrsStr = '';
-  if (hrs > 0) {
-    if (hrs === 1) hrsStr = 'ساعة';
-    else if (hrs === 2) hrsStr = 'ساعتين';
-    else if (hrs >= 3 && hrs <= 10) hrsStr = `${hrs} ساعات`;
-    else hrsStr = `${hrs} ساعة`;
+type TrackedEmployee = Pick<Employee, 'id' | 'full_name' | 'branch_id' | 'department_id' | 'role' | 'departments'>;
+
+interface TrackingData {
+  zones: GeofenceZone[];
+  branches: Branch[];
+  employees: TrackedEmployee[];
+  schedules: WorkSchedule[];
+  leaves: LeaveRequest[];
+  attendance: Attendance[];
+  mockAttempts: MockGpsAttempt[];
+}
+
+function dayBounds(dateStr: string): { start: string; end: string } {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return { start: new Date(y, m - 1, d).toISOString(), end: new Date(y, m - 1, d + 1).toISOString() };
+}
+
+async function fetchTracking(dateStr: string): Promise<TrackingData> {
+  const { start, end } = dayBounds(dateStr);
+  const [zones, branches, employees, schedules, leaves, attendance, mock] = await Promise.all([
+    supabase.from('geofence_zones').select('*').eq('is_active', true),
+    supabase.from('branches').select('*'),
+    supabase
+      .from('employees')
+      .select('id, full_name, branch_id, department_id, role, departments:departments!employees_department_id_fkey(name)')
+      .eq('is_active', true)
+      .order('full_name'),
+    supabase.from('work_schedules').select('*'),
+    supabase.from('leave_requests').select('*').eq('status', 'approved'),
+    supabase.from('attendance').select('*, employees!employee_id(full_name, branch_id)').eq('work_date', dateStr),
+    supabase
+      .from('mock_gps_attempts')
+      .select('*, employees(full_name)')
+      .gte('timestamp', start)
+      .lt('timestamp', end)
+      .order('timestamp', { ascending: false }),
+  ]);
+  if (attendance.error) throw attendance.error;
+  return {
+    zones: (zones.data ?? []) as GeofenceZone[],
+    branches: (branches.data ?? []) as Branch[],
+    employees: (employees.data ?? []) as unknown as TrackedEmployee[],
+    schedules: (schedules.data ?? []) as WorkSchedule[],
+    leaves: (leaves.data ?? []) as LeaveRequest[],
+    attendance: (attendance.data ?? []) as Attendance[],
+    mockAttempts: (mock.data ?? []) as MockGpsAttempt[],
+  };
+}
+
+async function fetchTrail(employeeId: string | null, dateStr: string): Promise<[number, number][]> {
+  if (!employeeId) return [];
+  const { start, end } = dayBounds(dateStr);
+  const { data, error } = await supabase
+    .from('location_tracking')
+    .select('latitude, longitude, timestamp')
+    .eq('employee_id', employeeId)
+    .gte('timestamp', start)
+    .lt('timestamp', end)
+    .order('timestamp', { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map((p) => [Number(p.latitude), Number(p.longitude)] as [number, number]);
+}
+
+interface Decision {
+  key: string;
+  recordId: string | null;
+  type: 'late' | 'absent' | 'virtual_absent';
+  employee: TrackedEmployee;
+  date: string;
+  time: string;
+  duration: string;
+  status: DeductionStatus;
+  reason: string;
+  suggestedAmount: number;
+}
+
+function buildDecisions(data: TrackingData, dateStr: string, branchId: string): Decision[] {
+  const weekday = weekdayOf(dateStr);
+  const list: Decision[] = [];
+  data.employees.forEach((emp) => {
+    if (branchId !== 'all' && emp.branch_id !== branchId) return;
+    const schedule = findSchedule(emp, data.schedules);
+    if (!workDaysFor(schedule).includes(weekday)) return;
+
+    const att = data.attendance.find((a) => a.employee_id === emp.id);
+    const base = { employee: emp, date: dateStr };
+    if (att?.status === 'late') {
+      const mins = minutesLate(att.check_in_time, schedule?.check_in_time ?? DEFAULT_CHECK_IN);
+      list.push({
+        ...base,
+        key: `${emp.id}_late`,
+        recordId: att.id,
+        type: 'late',
+        time: formatClock(att.check_in_time),
+        duration: formatLateDurationArabic(mins),
+        status: att.deduction_status || 'pending',
+        reason: att.deduction_reason || `التأخير: ${formatLateDurationArabic(mins)}`,
+        suggestedAmount: mins * 50,
+      });
+    } else if (att?.status === 'absent') {
+      list.push({
+        ...base,
+        key: `${emp.id}_absent`,
+        recordId: att.id,
+        type: 'absent',
+        time: '-',
+        duration: 'يوم واحد',
+        status: att.deduction_status || 'pending',
+        reason: att.deduction_reason || 'الغياب بدون إجازة',
+        suggestedAmount: 25000,
+      });
+    } else if (!att) {
+      const onLeave = data.leaves.some((l) => l.employee_id === emp.id && isDateInRange(dateStr, l.start_date, l.end_date));
+      if (!onLeave) {
+        list.push({
+          ...base,
+          key: `${emp.id}_virtual`,
+          recordId: null,
+          type: 'virtual_absent',
+          time: '-',
+          duration: 'يوم واحد',
+          status: 'pending',
+          reason: 'الغياب بدون إجازة',
+          suggestedAmount: 25000,
+        });
+      }
+    }
+  });
+  return list;
+}
+
+function zonePolygon(zone: GeofenceZone): MapPolygon {
+  let coords: [number, number][] = [];
+  if (zone.polygon_coordinates) {
+    try {
+      coords = Array.isArray(zone.polygon_coordinates) ? zone.polygon_coordinates : JSON.parse(zone.polygon_coordinates);
+    } catch {
+      coords = [];
+    }
   }
-
-  let minsStr = '';
-  if (mins > 0) {
-    if (mins === 1) minsStr = 'دقيقة واحدة';
-    else if (mins === 2) minsStr = 'دقيقتين';
-    else if (mins >= 3 && mins <= 10) minsStr = `${mins} دقائق`;
-    else minsStr = `${mins} دقيقة`;
+  if (coords.length < 3 && zone.latitude && zone.longitude) {
+    const o = 0.003;
+    coords = [
+      [zone.latitude + o, zone.longitude - o],
+      [zone.latitude + o, zone.longitude + o],
+      [zone.latitude - o, zone.longitude + o],
+      [zone.latitude - o, zone.longitude - o],
+    ];
   }
+  return { name: zone.name, coords };
+}
 
-  if (hrsStr && minsStr) {
-    return `${hrsStr} و ${minsStr}`;
-  } else if (hrsStr) {
-    return hrsStr;
-  } else {
-    return minsStr;
-  }
-};
+function timeInputValue(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+}
 
 export default function TrackingPage() {
-  const [loading, setLoading] = useState(true);
-  const [attendanceLogs, setAttendanceLogs] = useState<any[]>([]);
-  const [securityLogs, setSecurityLogs] = useState<any[]>([]);
-  const [geofenceZones, setGeofenceZones] = useState<any[]>([]);
-  const [selectedCenter, setSelectedCenter] = useState<[number, number]>([33.3152, 44.3661]); // Baghdad default
-  const [selectedZoom, setSelectedZoom] = useState(12);
+  const confirm = useConfirm();
+  const [date, setDate] = useState(() => localDateStr());
+  const [branchId, setBranchId] = useState('all');
+  const [tab, setTab] = useState<'monitoring' | 'decisions'>('monitoring');
+  const query = useQuery(`tracking:${date}`, () => fetchTracking(date || localDateStr()));
+  const [busy, setBusy] = useState<string | null>(null);
 
-  const getLocalDateStr = () => {
-    const d = new Date();
-    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-    return d.toISOString().split('T')[0];
-  };
+  const [editing, setEditing] = useState<{ record: Attendance; checkIn: string; checkOut: string } | null>(null);
+  const [manual, setManual] = useState<{ employeeId: string; date: string; checkIn: string; checkOut: string } | null>(null);
+  const [reasons, setReasons] = useState<Record<string, string>>({});
+  const [amounts, setAmounts] = useState<Record<string, number>>({});
 
-  // New states for advanced attendance
-  const [selectedDate, setSelectedDate] = useState(getLocalDateStr());
-  const [editingRecord, setEditingRecord] = useState<any>(null);
-  const [editCheckIn, setEditCheckIn] = useState('');
-  const [editCheckOut, setEditCheckOut] = useState('');
-  
-  const [branches, setBranches] = useState<any[]>([]);
-  const [selectedBranch, setSelectedBranch] = useState('all');
+  const [trailEmployee, setTrailEmployee] = useState<string | null>(null);
+  const [live, setLive] = useState(false);
+  const trail = useQuery(`trail:${trailEmployee}:${date}`, () => fetchTrail(trailEmployee, date));
+  const trailMutate = trail.mutate;
 
-  // Manual attendance states
-  const [employees, setEmployees] = useState<any[]>([]);
-  const [showManualModal, setShowManualModal] = useState(false);
-  const [manualEmpId, setManualEmpId] = useState('');
-  const [manualDate, setManualDate] = useState(selectedDate);
-  const [manualCheckIn, setManualCheckIn] = useState('09:00');
-  const [manualCheckOut, setManualCheckOut] = useState('17:00');
-
-  // Decisions states
-  const [activeTab, setActiveTab] = useState<'monitoring' | 'decisions'>('monitoring');
-  const [workSchedules, setWorkSchedules] = useState<any[]>([]);
-  const [leaveRequests, setLeaveRequests] = useState<any[]>([]);
-  const [selectedReasons, setSelectedReasons] = useState<Record<string, string>>({});
-  const [selectedAmounts, setSelectedAmounts] = useState<Record<string, string>>({});
-  
-  // Live Trail States
-  const [selectedEmployeeForTrail, setSelectedEmployeeForTrail] = useState<string | null>(null);
-  const [trailCoordinates, setTrailCoordinates] = useState<[number, number][]>([]);
-  const [liveTrackingActive, setLiveTrackingActive] = useState(false);
-
+  // Stream new points for the selected employee while live mode is on.
   useEffect(() => {
-    fetchTrackingData(selectedDate, selectedBranch);
-  }, [selectedDate, selectedBranch]);
-
-  const fetchTrackingData = async (dateStr = selectedDate, branchId = selectedBranch) => {
-    setLoading(true);
-    try {
-      const promises: any[] = [
-        supabase.from('geofence_zones').select('*').eq('is_active', true),
-        supabase.from('branches').select('*'),
-        supabase.from('employees').select('id, full_name, branch_id, department_id, role, departments:departments!employees_department_id_fkey(name)').eq('is_active', true).order('full_name'),
-        supabase.from('work_schedules').select('*'),
-        supabase.from('leave_requests').select('*').eq('status', 'approved')
-      ];
-
-      // Only query attendance and mock attempts if date is selected
-      if (dateStr) {
-        promises.push(
-          supabase.from('attendance').select('*, employees!employee_id(full_name, branch_id)').eq('work_date', dateStr),
-          supabase.from('mock_gps_attempts').select('*, employees(full_name)').order('timestamp', { ascending: false })
-        );
-      }
-
-      const results = await Promise.all(promises);
-
-      const resZones = results[0];
-      const resBranches = results[1];
-      const resEmps = results[2];
-      const resScheds = results[3];
-      const resLeaves = results[4];
-
-      if (resZones.data) setGeofenceZones(resZones.data);
-      if (resBranches.data) setBranches(resBranches.data);
-      if (resEmps.data) setEmployees(resEmps.data);
-      if (resScheds.data) setWorkSchedules(resScheds.data);
-      if (resLeaves.data) setLeaveRequests(resLeaves.data);
-
-      if (dateStr) {
-        const resAtt = results[5];
-        const resMock = results[6];
-
-        let filteredAtt = resAtt.data || [];
-        if (branchId !== 'all') {
-          filteredAtt = filteredAtt.filter((log: any) => log.employees?.branch_id === branchId);
-        }
-        setAttendanceLogs(filteredAtt);
-        if (resMock.data) setSecurityLogs(resMock.data);
-      } else {
-        setAttendanceLogs([]);
-        setSecurityLogs([]);
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchTrailData = async (employeeId: string, dateStr: string) => {
-    try {
-      const startOfDay = `${dateStr}T00:00:00.000Z`;
-      const endOfDay = `${dateStr}T23:59:59.999Z`;
-
-      const { data, error } = await supabase
-        .from('location_tracking')
-        .select('latitude, longitude, timestamp')
-        .eq('employee_id', employeeId)
-        .gte('timestamp', startOfDay)
-        .lte('timestamp', endOfDay)
-        .order('timestamp', { ascending: true });
-
-      if (error) throw error;
-
-      if (data) {
-        const coords: [number, number][] = data.map((item: any) => [Number(item.latitude), Number(item.longitude)]);
-        setTrailCoordinates(coords);
-        if (coords.length > 0) {
-          setSelectedCenter(coords[coords.length - 1]);
-          setSelectedZoom(15);
-        }
-      }
-    } catch (err) {
-      console.error('Failed to fetch trail data:', err);
-    }
-  };
-
-  useEffect(() => {
-    if (!selectedEmployeeForTrail) {
-      setTrailCoordinates([]);
-      return;
-    }
-
-    fetchTrailData(selectedEmployeeForTrail, selectedDate);
-
-    if (!liveTrackingActive) return;
-
+    if (!trailEmployee || !live) return;
     const channel = supabase
-      .channel(`location_tracking:live:${selectedEmployeeForTrail}`)
+      .channel(`location_tracking:live:${trailEmployee}`)
       .on(
         'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'location_tracking',
-          filter: `employee_id=eq.${selectedEmployeeForTrail}`,
-        },
-        (payload: any) => {
-          const newLat = Number(payload.new.latitude);
-          const newLng = Number(payload.new.longitude);
-          if (newLat && newLng) {
-            setTrailCoordinates(prev => [...prev, [newLat, newLng]]);
-            setSelectedCenter([newLat, newLng]);
-            toast.success('موقع جديد مستلم في الوقت المباشر! 📍');
+        { event: 'INSERT', schema: 'public', table: 'location_tracking', filter: `employee_id=eq.${trailEmployee}` },
+        (payload) => {
+          const row = payload.new as { latitude?: number; longitude?: number };
+          const lat = Number(row.latitude);
+          const lng = Number(row.longitude);
+          if (lat && lng) {
+            trailMutate((prev) => [...prev, [lat, lng]]);
+            toast.success('تم استلام موقع جديد مباشرةً');
           }
-        }
+        },
       )
       .subscribe();
-
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [selectedEmployeeForTrail, liveTrackingActive, selectedDate]);
+  }, [trailEmployee, live, trailMutate]);
 
-  const handleUpdateTimes = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingRecord) return;
-    
-    try {
-      setLoading(true);
-      const checkInISO = editCheckIn ? new Date(`${selectedDate}T${editCheckIn}:00`).toISOString() : null;
-      const checkOutISO = editCheckOut ? new Date(`${selectedDate}T${editCheckOut}:00`).toISOString() : null;
-      
-      const { error } = await supabase
-        .from('attendance')
-        .update({
-          check_in_time: checkInISO,
-          check_out_time: checkOutISO,
-          status: checkOutISO ? 'present' : editingRecord.status
-        })
-        .eq('id', editingRecord.id);
-        
-      if (error) throw error;
-      
-      toast.success('تم تحديث أوقات الدوام بنجاح! ✅');
-      setEditingRecord(null);
-      fetchTrackingData(selectedDate);
-    } catch (err) {
-      toast.error('حدث خطأ أثناء التحديث.');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const data = query.data;
+  const stale = query.refreshing && !!data;
 
-  const handleManualAttendanceSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!manualEmpId) {
-      toast('الرجاء اختيار الموظف أولاً');
-      return;
-    }
-    
-    try {
-      setLoading(true);
-      const selectedEmpObj = employees.find(e => e.id === manualEmpId);
-      const defaultBranchId = selectedEmpObj?.branch_id || (branches.length > 0 ? branches[0].id : null);
-      
-      if (!defaultBranchId) {
-        throw new Error('الموظف المختار غير مربوط بفرع، والفرع الافتراضي للمؤسسة غير متوفر.');
-      }
-      
-      const checkInISO = manualCheckIn ? new Date(`${manualDate}T${manualCheckIn}:00`).toISOString() : null;
-      const checkOutISO = manualCheckOut ? new Date(`${manualDate}T${manualCheckOut}:00`).toISOString() : null;
-      
-      // Check if attendance already exists for this date and employee
-      const { data: existing } = await supabase
-        .from('attendance')
-        .select('id')
-        .eq('employee_id', manualEmpId)
-        .eq('work_date', manualDate)
-        .maybeSingle();
-        
-      if (existing) {
-        const { error } = await supabase
-          .from('attendance')
-          .update({
-            check_in_time: checkInISO,
-            check_out_time: checkOutISO,
-            status: 'present',
-            branch_id: defaultBranchId
-          })
-          .eq('id', existing.id);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from('attendance')
-          .insert({
-            employee_id: manualEmpId,
-            work_date: manualDate,
-            check_in_time: checkInISO,
-            check_out_time: checkOutISO,
-            status: 'present',
-            branch_id: defaultBranchId
-          });
-        if (error) throw error;
-      }
-      
-      toast.success('تم تسجيل الحضور اليدوي بنجاح! ✅');
-      setShowManualModal(false);
-      fetchTrackingData(selectedDate);
-    } catch (err: any) {
-      toast.error(`حدث خطأ: ${err.message || err}`);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const attendance = useMemo(
+    () => (data?.attendance ?? []).filter((a) => branchId === 'all' || (a.employees?.branch_id ?? a.branch_id) === branchId),
+    [data, branchId],
+  );
+  const decisions = useMemo(() => (data && date ? buildDecisions(data, date, branchId) : []), [data, date, branchId]);
+  const virtualAbsents = decisions.filter((d) => d.type === 'virtual_absent');
+  const pendingDecisions = decisions.filter((d) => d.status === 'pending').length;
+  const trailPoints = useMemo(() => trail.data ?? [], [trail.data]);
 
-  const handleForceCheckout = async (recordId: string) => {
-    try {
-      setLoading(true);
-      const now = new Date();
-      const { error } = await supabase
-        .from('attendance')
-        .update({
-          check_out_time: now.toISOString(),
-          status: 'completed'
-        })
-        .eq('id', recordId);
-        
-      if (error) throw error;
-      toast.success('تم تسجيل خروج الموظف بنجاح!');
-      fetchTrackingData(selectedDate);
-    } catch (err) {
-      toast.error('حدث خطأ أثناء تسجيل الخروج.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDecision = async (
-    emp: any,
-    type: string,
-    infractionDate: string,
-    status: 'applied' | 'ignored',
-    recordId: string | null,
-    reason: string,
-    amount: number
-  ) => {
-    try {
-      setLoading(true);
-      if (status === 'applied' && amount > 0) {
-        await supabase.from('bonuses_deductions').insert({
-          employee_id: emp.id,
-          type: 'deduction',
-          amount: amount,
-          reason: reason,
-          issue_date: infractionDate
-        });
-      }
-
-      if (type === 'virtual_absent') {
-        const defaultBranchId = emp.branch_id || (branches.length > 0 ? branches[0].id : null);
-        if (!defaultBranchId) {
-          toast.error('الموظف غير مرتبط بفرع، يرجى ربطه بفرع أولاً.');
-          return;
-        }
-
-        const { error } = await supabase.from('attendance').insert({
-          employee_id: emp.id,
-          work_date: infractionDate,
-          status: 'absent',
-          deduction_status: status,
-          deduction_reason: reason,
-          branch_id: defaultBranchId
-        });
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from('attendance')
-          .update({
-            deduction_status: status,
-            deduction_reason: reason
-          })
-          .eq('id', recordId);
-        if (error) throw error;
-      }
-
-      // Add a notification for the employee
-      await supabase.from('notifications').insert({
-        employee_id: emp.id,
-        title: status === 'applied' ? 'تطبيق خصم مالي ⚠️' : 'إعفاء من الخصم المالي ✅',
-        body: status === 'applied'
-          ? `تقرر تطبيق الخصم المالي المترتب على ${type === 'late' ? 'التأخير الصباحي' : 'الغياب'} ليوم ${infractionDate}. السبب: ${reason}`
-          : `تم إعفاؤك من الخصم المالي المترتب على ${type === 'late' ? 'التأخير الصباحي' : 'الغياب'} ليوم ${infractionDate}.`,
-        type: 'attendance'
+  const markers = useMemo<MapMarker[]>(() => {
+    const list: MapMarker[] = [];
+    attendance.forEach((log) => {
+      if (!log.check_in_lat || !log.check_in_lng) return;
+      list.push({
+        lat: Number(log.check_in_lat),
+        lng: Number(log.check_in_lng),
+        popupText: `<strong>${escapeHtml(log.employees?.full_name || 'موظف')}</strong><br/>الحضور: ${formatClock(log.check_in_time)}<br/>الحالة: ${log.status === 'late' ? 'متأخر' : 'في الوقت'}`,
       });
-
-      toast.success('تم حفظ القرار وإرسال إشعار للموظف بنجاح! 🔔');
-      fetchTrackingData(selectedDate, selectedBranch);
-    } catch (err: any) {
-      toast.error(`حدث خطأ أثناء حفظ القرار: ${err.message || err}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const formatHours = (checkIn: string, checkOut: string) => {
-    if (!checkIn || !checkOut) return '-';
-    const diffMs = new Date(checkOut).getTime() - new Date(checkIn).getTime();
-    if (diffMs <= 0) return '-';
-    const diffHrs = Math.floor(diffMs / (1000 * 60 * 60));
-    const diffMins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-    return `${diffHrs} س و ${diffMins} د`;
-  };
-
-  const formatTimeInputValue = (dateString: string | null) => {
-    if (!dateString) return '';
-    const d = new Date(dateString);
-    const h = d.getHours().toString().padStart(2, '0');
-    const m = d.getMinutes().toString().padStart(2, '0');
-    return `${h}:${m}`;
-  };
-
-  const handleExportExcel = async () => {
-    try {
-      const fullList = [
-        ...attendanceLogs,
-        ...decisionsList.filter(d => d.type === 'virtual_absent').map(d => ({
-          is_virtual: true,
-          employee_id: d.employee.id,
-          work_date: selectedDate,
-          check_in_time: null,
-          check_out_time: null,
-          employees: d.employee
-        }))
-      ];
-      
-      const excelData = fullList.map(log => ({
-        'اسم الموظف': log.employees?.full_name || 'غير محدد',
-        'التاريخ': log.work_date,
-        'وقت الدخول': log.check_in_time ? new Date(log.check_in_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : '-',
-        'وقت الخروج': log.check_out_time ? new Date(log.check_out_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : '-',
-        'ساعات العمل': formatHours(log.check_in_time, log.check_out_time),
-        'الحالة': log.is_virtual ? 'غياب' : (log.status === 'late' ? 'تأخير' : 'حضور')
-      }));
-
-      const XLSX = await import('xlsx');
-      const worksheet = XLSX.utils.json_to_sheet(excelData);
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "تقرير الحضور");
-      XLSX.writeFile(workbook, `تقرير_الحضور_${selectedDate}.xlsx`);
-    } catch (err) {
-      toast.error("حدث خطأ أثناء تصدير التقرير");
-    }
-  };
-
-  const getMapMarkers = () => {
-    const markers: any[] = [];
-    attendanceLogs.forEach((log) => {
-      if (log.check_in_lat && log.check_in_lng) {
-        markers.push({
-          lat: Number(log.check_in_lat),
-          lng: Number(log.check_in_lng),
-          isViolation: false,
-          popupText: `
-            <strong style="color: #0D9488; font-size: 13px;">حضور موظف فعال ✅</strong><br/>
-            <strong>الاسم:</strong> ${log.employees?.full_name || 'موظف'}<br/>
-            <strong>الوقت:</strong> ${new Date(log.check_in_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}<br/>
-            <strong>الحالة:</strong> ${log.status === 'late' ? 'متأخر ⚠️' : 'في الوقت المعتمد'}<br/>
-            <strong>الجهاز:</strong> هاتف مسجل معتمد
-          `
-        });
-      }
     });
-
-    securityLogs.forEach((log) => {
-      if (log.latitude && log.longitude) {
-        markers.push({
-          lat: Number(log.latitude),
-          lng: Number(log.longitude),
-          isViolation: true,
-          popupText: `
-            <strong style="color: #EF4444; font-size: 13px;">تنبيه خرق أمني: GPS وهمي 🚨</strong><br/>
-            <strong>الموظف:</strong> ${log.employees?.full_name || 'غير معروف'}<br/>
-            <strong>الوقت:</strong> ${new Date(log.timestamp).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}<br/>
-            <strong>التطبيق المكتشف:</strong> ${log.app_used || 'وهمي غير مصنف'}<br/>
-            <span style="color: #EF4444; font-weight: bold;">تم قفل ومنع تسجيل الدوام تلقائياً!</span>
-          `
-        });
-      }
-    });
-
-    // Add latest trail marker for selected employee
-    if (selectedEmployeeForTrail && trailCoordinates.length > 0) {
-      const latest = trailCoordinates[trailCoordinates.length - 1];
-      const empName = attendanceLogs.find(log => log.employee_id === selectedEmployeeForTrail)?.employees?.full_name || 'الموظف المختار';
-      markers.push({
-        lat: latest[0],
-        lng: latest[1],
-        color: '#3B82F6', // Glowing blue for live current location
-        popupText: `
-          <strong style="color: #3B82F6; font-size: 13px;">الموقع المباشر الحالي للموظف 📍</strong><br/>
-          <strong>الموظف:</strong> ${empName}<br/>
-          <strong>الحالة:</strong> متصل (أونلاين)<br/>
-          <span style="color: #3B82F6; font-weight: bold;">يتم رصد الحركة الجغرافية تلقائياً...</span>
-        `
+    (data?.mockAttempts ?? []).forEach((m) => {
+      if (!m.latitude || !m.longitude) return;
+      list.push({
+        lat: Number(m.latitude),
+        lng: Number(m.longitude),
+        isViolation: true,
+        popupText: `<strong style="color:#FB7185">محاولة موقع وهمي</strong><br/>${escapeHtml(m.employees?.full_name || 'غير معروف')}<br/>${formatClock(m.timestamp)} · ${escapeHtml(m.app_used || 'تطبيق غير مصنف')}`,
       });
+    });
+    if (trailEmployee && trailPoints.length > 0) {
+      const [lat, lng] = trailPoints[trailPoints.length - 1];
+      const name = data?.employees.find((e) => e.id === trailEmployee)?.full_name;
+      list.push({ lat, lng, color: '#60A5FA', popupText: `<strong>الموقع الحالي</strong><br/>${escapeHtml(name || 'الموظف المختار')}` });
     }
-
-    return markers;
-  };
-
-  const getMapPolygons = () => {
-    return geofenceZones.map((zone) => {
-      let coords: [number, number][] = [];
-      if (zone.polygon_coordinates) {
-        coords = Array.isArray(zone.polygon_coordinates) ? zone.polygon_coordinates : JSON.parse(zone.polygon_coordinates as string);
-      }
-      
-      if (coords.length < 3 && zone.latitude && zone.longitude) {
-        const offset = 0.003;
-        coords = [
-          [zone.latitude + offset, zone.longitude - offset],
-          [zone.latitude + offset, zone.longitude + offset],
-          [zone.latitude - offset, zone.longitude + offset],
-          [zone.latitude - offset, zone.longitude - offset]
-        ];
-      }
-
-      return {
-        name: zone.name,
-        coords: coords
-      };
-    });
-  };
-
-  // Compile infractions (absences and latenesses) for decisions
-  const getDecisionsList = () => {
-    if (!selectedDate) return [];
-    const list: any[] = [];
-    employees.forEach(emp => {
-      if (selectedBranch !== 'all' && emp.branch_id !== selectedBranch) return;
-
-      const attRecord = attendanceLogs.find(log => log.employee_id === emp.id);
-
-      const empSched = workSchedules.find(s => s.employee_id === emp.id) || 
-                       workSchedules.find(s => s.department_id === emp.department_id && !s.employee_id) ||
-                       workSchedules.find(s => s.branch_id === emp.branch_id && !s.employee_id && !s.department_id);
-      const workDays = empSched ? empSched.work_days : [6, 0, 1, 2, 3, 4];
-      
-      const [year, month, day] = selectedDate.split('-');
-      const dayObj = new Date(Number(year), Number(month) - 1, Number(day));
-      const weekday = dayObj.getDay();
-      const isWorkingDay = workDays.includes(weekday);
-
-      if (!isWorkingDay) return;
-
-      const isDateWithinRange = (dStr: string, startStr: string, endStr: string) => {
-        if (!dStr || !startStr || !endStr) return false;
-        const d = new Date(dStr).getTime();
-        const s = new Date(startStr.split('T')[0]).getTime();
-        const e = new Date(endStr.split('T')[0]).getTime();
-        return d >= s && d <= e;
-      };
-
-      const leaveRecord = leaveRequests.find(l => l.employee_id === emp.id && isDateWithinRange(selectedDate, l.start_date, l.end_date));
-
-      if (attRecord) {
-        if (attRecord.status === 'late') {
-          const schedCheckIn = empSched ? empSched.check_in_time : '09:00:00';
-          const checkIn = new Date(attRecord.check_in_time);
-          const [h, m, s] = schedCheckIn.split(':').map(Number);
-          const sched = new Date(checkIn);
-          sched.setHours(h, m, s || 0, 0);
-          const diffMs = checkIn.getTime() - sched.getTime();
-          const lateMinutes = diffMs > 0 ? Math.floor(diffMs / (1000 * 60)) : 0;
-
-          list.push({
-            id: attRecord.id,
-            type: 'late',
-            employee: emp,
-            date: selectedDate,
-            time: attRecord.check_in_time ? new Date(attRecord.check_in_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : '-',
-            duration: formatLateDurationArabic(lateMinutes),
-            typeName: 'التأخير الصباحي',
-            deductionStatus: attRecord.deduction_status || 'pending',
-            reason: attRecord.deduction_reason || `التأخير: ${formatLateDurationArabic(lateMinutes)}`,
-            suggestedAmount: lateMinutes * 50
-          });
-        } else if (attRecord.status === 'absent') {
-          list.push({
-            id: attRecord.id,
-            type: 'absent',
-            employee: emp,
-            date: selectedDate,
-            time: '-',
-            duration: 'يوم واحد',
-            typeName: 'الغياب',
-            deductionStatus: attRecord.deduction_status || 'pending',
-            reason: attRecord.deduction_reason || 'الغياب بدون إجازة',
-            suggestedAmount: 25000
-          });
-        }
-      } else {
-        if (!leaveRecord) {
-          list.push({
-            id: null,
-            type: 'virtual_absent',
-            employee: emp,
-            date: selectedDate,
-            time: '-',
-            duration: 'يوم واحد',
-            typeName: 'الغياب',
-            deductionStatus: 'pending',
-            reason: 'الغياب بدون إجازة',
-            suggestedAmount: 25000
-          });
-        }
-      }
-    });
     return list;
-  };
+  }, [attendance, data, trailEmployee, trailPoints]);
 
-  if (loading) {
-    return (
-      <div className="flex-grow flex items-center justify-center">
-        <Loader2 className="w-10 h-10 text-teal-400 animate-spin" />
-      </div>
-    );
+  const polygons = useMemo(() => (data?.zones ?? []).map(zonePolygon), [data]);
+  const polylines = useMemo(
+    () => (trailPoints.length >= 2 ? [{ coords: trailPoints, color: '#60A5FA', weight: 4.5 }] : []),
+    [trailPoints],
+  );
+  const mapCenter: [number, number] = trailPoints.length > 0 ? trailPoints[trailPoints.length - 1] : BAGHDAD_CENTER;
+  const mapZoom = trailPoints.length > 0 ? 15 : 12;
+
+  if (!data) {
+    if (query.error) {
+      return <EmptyState icon={AlertTriangle} tone="rose" title="تعذر تحميل بيانات الحضور" description={errorMessage(query.error)} action={<Button size="sm" variant="secondary" onClick={query.reload}>إعادة المحاولة</Button>} />;
+    }
+    return <PageSkeleton rows={8} />;
   }
 
-  const markers = getMapMarkers();
-  const polygons = getMapPolygons();
-  const decisionsList = getDecisionsList();
+  const lateCount = attendance.filter((a) => a.status === 'late').length;
+
+  const run = async (key: string, action: () => Promise<void>, failMsg: string) => {
+    setBusy(key);
+    try {
+      await action();
+    } catch (err) {
+      toast.error(`${failMsg}: ${errorMessage(err)}`);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const saveTimes = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editing) return;
+    return run(
+      'edit',
+      async () => {
+        const checkIn = editing.checkIn ? new Date(`${date}T${editing.checkIn}:00`).toISOString() : null;
+        const checkOut = editing.checkOut ? new Date(`${date}T${editing.checkOut}:00`).toISOString() : null;
+        const { error } = await supabase
+          .from('attendance')
+          .update({ check_in_time: checkIn, check_out_time: checkOut, status: checkOut ? 'present' : editing.record.status })
+          .eq('id', editing.record.id);
+        if (error) throw error;
+        setEditing(null);
+        query.reload();
+        toast.success('تم تحديث أوقات الدوام');
+      },
+      'فشل التحديث',
+    );
+  };
+
+  const saveManual = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!manual) return;
+    if (!manual.employeeId) {
+      toast.error('الرجاء اختيار الموظف أولاً');
+      return;
+    }
+    return run(
+      'manual',
+      async () => {
+        const emp = data.employees.find((x) => x.id === manual.employeeId);
+        const branch = emp?.branch_id || data.branches[0]?.id;
+        if (!branch) throw new Error('الموظف غير مربوط بفرع ولا يوجد فرع افتراضي');
+        const checkIn = manual.checkIn ? new Date(`${manual.date}T${manual.checkIn}:00`).toISOString() : null;
+        const checkOut = manual.checkOut ? new Date(`${manual.date}T${manual.checkOut}:00`).toISOString() : null;
+        const record = { check_in_time: checkIn, check_out_time: checkOut, status: 'present', branch_id: branch };
+
+        const { data: existing } = await supabase
+          .from('attendance')
+          .select('id')
+          .eq('employee_id', manual.employeeId)
+          .eq('work_date', manual.date)
+          .maybeSingle();
+        const { error } = existing
+          ? await supabase.from('attendance').update(record).eq('id', existing.id)
+          : await supabase.from('attendance').insert({ ...record, employee_id: manual.employeeId, work_date: manual.date });
+        if (error) throw error;
+
+        setManual(null);
+        query.reload();
+        toast.success('تم تسجيل الحضور اليدوي');
+      },
+      'حدث خطأ',
+    );
+  };
+
+  const forceCheckout = async (record: Attendance) => {
+    const ok = await confirm({
+      title: 'تسجيل خروج الموظف الآن؟',
+      message: `سيُسجَّل وقت الخروج لـ ${record.employees?.full_name || 'الموظف'} بتوقيت اللحظة الحالية.`,
+      confirmLabel: 'تسجيل الخروج',
+      tone: 'warning',
+      icon: LogOut,
+    });
+    if (!ok) return;
+    await run(
+      `checkout_${record.id}`,
+      async () => {
+        // Only the checkout time changes; the attendance status (present/late) is kept.
+        const { error } = await supabase.from('attendance').update({ check_out_time: new Date().toISOString() }).eq('id', record.id);
+        if (error) throw error;
+        query.reload();
+        toast.success('تم تسجيل خروج الموظف');
+      },
+      'فشل تسجيل الخروج',
+    );
+  };
+
+  const decide = (item: Decision, status: 'applied' | 'ignored') =>
+    run(
+      `${item.key}_${status}`,
+      async () => {
+        const reason = reasons[item.key] ?? item.reason;
+        const amount = status === 'applied' ? amounts[item.key] ?? item.suggestedAmount : 0;
+        if (status === 'applied' && amount > 0) {
+          await supabase.from('bonuses_deductions').insert({
+            employee_id: item.employee.id,
+            type: 'deduction',
+            amount,
+            reason,
+            issue_date: item.date,
+          });
+        }
+
+        if (item.type === 'virtual_absent') {
+          const branch = item.employee.branch_id || data.branches[0]?.id;
+          if (!branch) throw new Error('الموظف غير مرتبط بفرع، يرجى ربطه بفرع أولاً');
+          const { error } = await supabase.from('attendance').insert({
+            employee_id: item.employee.id,
+            work_date: item.date,
+            status: 'absent',
+            deduction_status: status,
+            deduction_reason: reason,
+            branch_id: branch,
+          });
+          if (error) throw error;
+        } else {
+          const { error } = await supabase
+            .from('attendance')
+            .update({ deduction_status: status, deduction_reason: reason })
+            .eq('id', item.recordId);
+          if (error) throw error;
+        }
+
+        const what = item.type === 'late' ? 'التأخير الصباحي' : 'الغياب';
+        await supabase.from('notifications').insert({
+          employee_id: item.employee.id,
+          title: status === 'applied' ? 'تطبيق خصم مالي ⚠️' : 'إعفاء من الخصم المالي ✅',
+          body:
+            status === 'applied'
+              ? `تقرر تطبيق الخصم المالي المترتب على ${what} ليوم ${item.date}. السبب: ${reason}`
+              : `تم إعفاؤك من الخصم المالي المترتب على ${what} ليوم ${item.date}.`,
+          type: 'attendance',
+        });
+
+        query.reload();
+        toast.success('تم حفظ القرار وإشعار الموظف');
+      },
+      'فشل حفظ القرار',
+    );
+
+  const exportExcel = async () => {
+    try {
+      const rows = [
+        ...attendance.map((log) => ({
+          'اسم الموظف': log.employees?.full_name || 'غير محدد',
+          'التاريخ': log.work_date,
+          'وقت الدخول': formatClock(log.check_in_time),
+          'وقت الخروج': formatClock(log.check_out_time),
+          'ساعات العمل': formatDuration(log.check_in_time, log.check_out_time),
+          'الحالة': log.status === 'late' ? 'تأخير' : log.status === 'absent' ? 'غياب' : 'حضور',
+        })),
+        ...virtualAbsents.map((d) => ({
+          'اسم الموظف': d.employee.full_name,
+          'التاريخ': date,
+          'وقت الدخول': '-',
+          'وقت الخروج': '-',
+          'ساعات العمل': '-',
+          'الحالة': 'غياب',
+        })),
+      ];
+      const XLSX = await import('xlsx');
+      const sheet = XLSX.utils.json_to_sheet(rows);
+      const book = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(book, sheet, 'تقرير الحضور');
+      XLSX.writeFile(book, `تقرير_الحضور_${date}.xlsx`);
+    } catch (err) {
+      toast.error(`حدث خطأ أثناء تصدير التقرير: ${errorMessage(err)}`);
+    }
+  };
 
   return (
-    <div className="space-y-8 pb-12 flex-grow flex flex-col">
-      <div className="bg-slate-900/40 backdrop-blur-xl border border-slate-800/80 rounded-3xl p-6 shadow-xl flex-grow flex flex-col justify-between">
-        
-        {/* Header controller */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-          <div>
-            <h3 className="text-lg font-extrabold text-white flex items-center gap-2">
-              <MapPin className="w-5 h-5 text-teal-400" />
-              <span>مراقبة وإدارة الانضباط الوظيفي اليومي</span>
-            </h3>
-            <p className="text-[11px] text-slate-400">مراقبة وتسجيل حضور وانصراف الموظفين جغرافياً مع اتخاذ قرارات خصم الغيابات والتأخير يدوياً</p>
-          </div>
-
-          <div className="flex flex-col sm:flex-row items-center gap-3">
-            <div className="flex items-center gap-2 bg-slate-800/60 border border-slate-700/60 rounded-xl px-3 py-2">
-              <Building2 className="w-4 h-4 text-teal-400" />
-              <select 
-                value={selectedBranch}
-                onChange={(e) => setSelectedBranch(e.target.value)}
-                className="bg-transparent border-none text-white text-xs outline-none cursor-pointer min-w-[120px]"
-              >
-                <option value="all" className="bg-slate-900">جميع الفروع</option>
-                {branches.map(b => (
-                  <option key={b.id} value={b.id} className="bg-slate-900">{b.name}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="flex items-center gap-2 bg-slate-800/60 border border-slate-700/60 rounded-xl px-3 py-2">
-              <CalendarIcon className="w-4 h-4 text-teal-400" />
-              <input 
-                type="date" 
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                className="bg-transparent border-none text-white text-xs outline-none cursor-pointer"
-              />
-            </div>
-            
-            <button
-              onClick={() => fetchTrackingData(selectedDate, selectedBranch)}
-              className="flex items-center gap-2 py-2 px-4 bg-slate-800 hover:bg-slate-750 text-white rounded-xl text-xs font-bold transition-all border border-slate-700/60 cursor-pointer"
-            >
-              <RefreshCw className="w-4 h-4" />
-              <span className="hidden sm:inline">تحديث</span>
-            </button>
-
-            <button
-              onClick={() => {
-                setManualDate(selectedDate);
-                setManualCheckIn('09:00');
-                setManualCheckOut('17:00');
-                setManualEmpId('');
-                setShowManualModal(true);
-              }}
-              className="flex items-center gap-2 py-2 px-4 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-teal-500/10 cursor-pointer"
-            >
-              <Users className="w-4 h-4" />
-              <span>تسجيل حضور يدوي</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Custom Tabs */}
-        <div className="flex border-b border-slate-800/80 mb-6 gap-6">
-          <button
-            onClick={() => setActiveTab('monitoring')}
-            className={`pb-4 text-xs sm:text-sm font-bold transition-all relative cursor-pointer ${
-              activeTab === 'monitoring' 
-                ? 'text-teal-400 border-b-2 border-teal-400' 
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            المراقبة والخرائط المباشرة
-          </button>
-          <button
-            onClick={() => setActiveTab('decisions')}
-            className={`pb-4 text-xs sm:text-sm font-bold transition-all relative cursor-pointer flex items-center gap-2 ${
-              activeTab === 'decisions' 
-                ? 'text-teal-400 border-b-2 border-teal-400' 
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <span>قرارات الغياب والتأخير</span>
-            {decisionsList.filter(d => d.deductionStatus === 'pending').length > 0 && (
-              <span className="bg-amber-500 text-slate-950 font-extrabold text-[9px] px-1.5 py-0.5 rounded-full">
-                {decisionsList.filter(d => d.deductionStatus === 'pending').length}
-              </span>
-            )}
-          </button>
-        </div>
-
-        {!selectedDate ? (
-          <div className="flex flex-col items-center justify-center p-12 bg-slate-900/20 border border-slate-800 rounded-3xl text-center">
-            <CalendarIcon className="w-16 h-16 text-amber-500 mb-4 animate-bounce" />
-            <h4 className="text-md font-bold text-white mb-2">
-              {activeTab === 'monitoring' 
-                ? 'يرجى تحديد تاريخ أولاً لعرض خريطة التتبع وسجل الحضور 📅' 
-                : 'يرجى تحديد تاريخ أولاً لعرض قرارات الغياب والتأخير المعلقة 📅'}
-            </h4>
-            <p className="text-slate-400 text-xs">اختر التاريخ من شريط التحكم أعلاه للبدء</p>
-          </div>
-        ) : activeTab === 'monitoring' ? (
+    <div className="space-y-6 pb-12">
+      <PageHeader
+        icon={MapPin}
+        tone="emerald"
+        title="الحضور والتتبع"
+        description="سجل الحضور والانصراف اليومي، التتبع على الخريطة، وقرارات خصم الغياب والتأخير"
+        actions={
           <>
-            {/* Bottom index indicator logs */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-              <div className="bg-slate-950/40 border border-slate-850 rounded-2xl p-4 text-center">
-                <span className="text-[10px] text-slate-400 block mb-1">الموظفين الحاضرين بالخريطة</span>
-                <span className="text-xl font-black text-teal-400">{attendanceLogs.length}</span>
-              </div>
-              <div className="bg-slate-950/40 border border-slate-850 rounded-2xl p-4 text-center">
-                <span className="text-[10px] text-slate-400 block mb-1">رصد التزييف الجغرافي (Mock)</span>
-                <span className="text-xl font-black text-rose-500">{securityLogs.length}</span>
-              </div>
-              <div className="bg-slate-950/40 border border-slate-850 rounded-2xl p-4 text-center">
-                <span className="text-[10px] text-slate-400 block mb-1">سياجات جغرافية نشطة</span>
-                <span className="text-xl font-black text-blue-400">{geofenceZones.length}</span>
-              </div>
-              <div className="bg-slate-950/40 border border-slate-850 rounded-2xl p-4 text-center">
-                <span className="text-[10px] text-slate-400 block mb-1">نسبة الأمان للمؤسسة</span>
-                <span className="text-xl font-black text-emerald-400">
-                  {securityLogs.length === 0 ? '100%' : '94.2%'}
-                </span>
-              </div>
-            </div>
-
-            {/* Advanced Attendance Table */}
-            <div className="mb-8">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-lg font-extrabold text-white flex items-center gap-2">
-                  <Clock className="w-5 h-5 text-teal-400" />
-                  <span>سجل الحضور والانصراف المتقدم</span>
-                </h3>
-                <button
-                  onClick={handleExportExcel}
-                  className="flex items-center gap-2 py-2 px-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-emerald-500/10 cursor-pointer"
-                >
-                  <Download className="w-4 h-4" />
-                  <span className="hidden sm:inline">تصدير Excel</span>
-                </button>
-              </div>
-              
-              <div className="overflow-x-auto rounded-2xl border border-slate-800/60">
-                <table className="w-full text-sm text-right">
-                  <thead className="bg-slate-900/80 text-slate-300 text-xs border-b border-slate-800/80">
-                    <tr>
-                      <th className="px-4 py-4 font-bold">اسم الموظف</th>
-                      <th className="px-4 py-4 font-bold">التاريخ</th>
-                      <th className="px-4 py-4 font-bold">وقت الدخول</th>
-                      <th className="px-4 py-4 font-bold">وقت الخروج</th>
-                      <th className="px-4 py-4 font-bold">ساعات العمل</th>
-                      <th className="px-4 py-4 font-bold text-center">الإجراءات</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800/60 bg-slate-950/30">
-                    {[
-                      ...attendanceLogs,
-                      ...decisionsList.filter(d => d.type === 'virtual_absent').map(d => ({
-                        id: `virtual_${d.employee.id}`,
-                        is_virtual: true,
-                        employee_id: d.employee.id,
-                        work_date: selectedDate,
-                        check_in_time: null,
-                        check_out_time: null,
-                        employees: d.employee
-                      }))
-                    ].length === 0 ? (
-                      <tr>
-                        <td colSpan={6} className="px-4 py-12 text-center text-slate-500 text-xs">
-                          لا توجد سجلات حضور لهذا اليوم
-                        </td>
-                      </tr>
-                    ) : (
-                      [
-                        ...attendanceLogs,
-                        ...decisionsList.filter(d => d.type === 'virtual_absent').map(d => ({
-                          id: `virtual_${d.employee.id}`,
-                          is_virtual: true,
-                          employee_id: d.employee.id,
-                          work_date: selectedDate,
-                          check_in_time: null,
-                          check_out_time: null,
-                          employees: d.employee
-                        }))
-                      ].map((log) => (
-                        <tr key={log.id} className={`hover:bg-slate-900/40 transition-colors ${log.is_virtual ? 'bg-rose-500/5' : ''}`}>
-                          <td className="px-4 py-3 font-bold text-white text-xs flex items-center gap-2">
-                            {log.employees?.full_name || 'موظف'}
-                            {log.is_virtual && <span className="bg-rose-500/20 text-rose-400 text-[9px] px-1.5 py-0.5 rounded border border-rose-500/30">لم يبصم (غائب)</span>}
-                          </td>
-                          <td className="px-4 py-3 text-slate-400 text-xs font-mono">{log.work_date}</td>
-                          <td className="px-4 py-3 text-emerald-400 text-xs font-mono">
-                            {log.check_in_time ? new Date(log.check_in_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : '-'}
-                          </td>
-                          <td className="px-4 py-3 text-rose-400 text-xs font-mono">
-                            {log.check_out_time ? new Date(log.check_out_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : '-'}
-                          </td>
-                          <td className="px-4 py-3 text-slate-300 text-xs font-bold">
-                            {formatHours(log.check_in_time, log.check_out_time)}
-                          </td>
-                          <td className="px-4 py-3 flex items-center justify-center gap-2">
-                            {!log.is_virtual && (
-                              <>
-                                <button
-                                  onClick={() => {
-                                    setEditingRecord(log);
-                                    setEditCheckIn(formatTimeInputValue(log.check_in_time));
-                                    setEditCheckOut(formatTimeInputValue(log.check_out_time));
-                                  }}
-                                  className="p-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-teal-400 transition-colors cursor-pointer"
-                                  title="تعديل وقت الدخول/الخروج"
-                                >
-                                  <Edit className="w-3.5 h-3.5" />
-                                </button>
-                                {!log.check_out_time && (
-                                  <button
-                                    onClick={() => handleForceCheckout(log.id)}
-                                    className="p-1.5 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 rounded-lg text-rose-400 transition-colors cursor-pointer flex items-center gap-1"
-                                    title="تسجيل خروج إجباري الآن"
-                                  >
-                                    <LogOut className="w-3.5 h-3.5" />
-                                  </button>
-                                )}
-                              </>
-                            )}
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* Dynamic Map Component */}
-            <div className="mt-8 pt-8 border-t border-slate-800/80 space-y-6">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                  <h3 className="text-lg font-extrabold text-white flex items-center gap-2 mb-1">
-                    <Map className="w-5 h-5 text-teal-400" />
-                    <span>خريطة التتبع المباشر وحركة الموظفين</span>
-                  </h3>
-                  <p className="text-[11px] text-slate-400">تتبع مسار حركة الموظفين ميدانياً على الخريطة في الوقت الفعلي أثناء ساعات العمل</p>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-3 bg-slate-950/40 p-2 border border-slate-800 rounded-2xl">
-                  {/* Select Employee to Track */}
-                  <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5">
-                    <Users className="w-3.5 h-3.5 text-teal-400" />
-                    <select
-                      value={selectedEmployeeForTrail || ''}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setSelectedEmployeeForTrail(val || null);
-                      }}
-                      className="bg-transparent border-none text-white text-xs outline-none cursor-pointer"
-                    >
-                      <option value="" className="bg-slate-900">اختر موظف لتتبع مساره...</option>
-                      {attendanceLogs.map((log) => (
-                        <option key={log.employee_id} value={log.employee_id} className="bg-slate-900">
-                          {log.employees?.full_name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {selectedEmployeeForTrail && (
-                    <label className="flex items-center gap-2 cursor-pointer bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 select-none">
-                      <input
-                        type="checkbox"
-                        checked={liveTrackingActive}
-                        onChange={(e) => setLiveTrackingActive(e.target.checked)}
-                        className="rounded border-slate-800 text-teal-500 focus:ring-teal-500 bg-slate-950 w-3.5 h-3.5"
-                      />
-                      <span className="text-xs text-slate-300 font-bold">بث مباشر متواصل (أونلاين) 🟢</span>
-                    </label>
-                  )}
-                </div>
-              </div>
-
-              {selectedEmployeeForTrail && trailCoordinates.length > 0 && (
-                <div className="p-4 bg-teal-950/10 border border-teal-500/10 rounded-2xl flex justify-between items-center text-xs animate-glass">
-                  <div className="space-y-1">
-                    <p className="text-slate-300">
-                      • إجمالي نقاط الحركة المرصودة اليوم: <strong className="text-white font-bold">{trailCoordinates.length} نقطة تتبع</strong>
-                    </p>
-                    <p className="text-[10px] text-slate-400">
-                      * يربط الخط المتقطع الأزرق بين مسار تنقلات الموظف منذ بصمة الحضور وحتى اللحظة.
-                    </p>
-                  </div>
-                  {liveTrackingActive && (
-                    <span className="flex items-center gap-1.5 text-xs text-teal-400 font-black animate-pulse">
-                      <span className="w-2.5 h-2.5 bg-teal-400 rounded-full"></span>
-                      <span>تحديث فوري نشط...</span>
-                    </span>
-                  )}
-                </div>
-              )}
-
-              <div className="flex-grow min-h-[500px] relative rounded-2xl overflow-hidden border border-slate-800/60">
-                <MapComponent 
-                  markers={markers}
-                  polygons={polygons}
-                  polylines={
-                    selectedEmployeeForTrail && trailCoordinates.length >= 2
-                      ? [{ coords: trailCoordinates, color: '#3B82F6', weight: 4.5 }]
-                      : []
-                  }
-                  center={selectedCenter}
-                  zoom={selectedZoom}
-                />
-              </div>
-            </div>
+            <FilterSelect icon={Building2} value={branchId} onChange={setBranchId} className="w-40">
+              <option value="all">جميع الفروع</option>
+              {data.branches.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
+            </FilterSelect>
+            <Input type="date" value={date} max={localDateStr()} onChange={(e) => e.target.value && setDate(e.target.value)} className="h-9 w-40 text-xs" dir="ltr" />
+            <IconButton icon={RefreshCw} label="تحديث" loading={query.refreshing} onClick={query.reload} className="w-9 h-9" />
+            <Button size="sm" icon={UserPlus} onClick={() => setManual({ employeeId: '', date, checkIn: '09:00', checkOut: '17:00' })}>
+              حضور يدوي
+            </Button>
           </>
-        ) : (
-          /* Decisions Tab View */
-          <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h4 className="text-md font-bold text-white">إجراءات المخالفات وقرارات الخصم من الراتب</h4>
-                <p className="text-[11px] text-slate-400">حدد "تطبيق" لتخصيم القيمة من صافي الراتب، أو "تجاهل" للعفو عن الموظف دون تأثر راتبه</p>
-              </div>
-            </div>
+        }
+      />
 
-            <div className="overflow-x-auto rounded-2xl border border-slate-800/60">
-              <table className="w-full text-sm text-right">
-                <thead className="bg-slate-900/80 text-slate-300 text-xs border-b border-slate-800/80">
-                  <tr>
-                    <th className="px-4 py-4 font-bold w-12 text-center">✓</th>
-                    <th className="px-4 py-4 font-bold">الموظف</th>
-                    <th className="px-4 py-4 font-bold">المدة</th>
-                    <th className="px-4 py-4 font-bold">نوع المخالفة</th>
-                    <th className="px-4 py-4 font-bold">الخصم (د.ع)</th>
-                    <th className="px-4 py-4 font-bold">السبب</th>
-                    <th className="px-4 py-4 font-bold text-center">القرار</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800/60 bg-slate-950/30 text-xs">
-                  {decisionsList.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className="px-4 py-12 text-center text-slate-500 text-xs">
-                        لا توجد غيابات أو تأخيرات مرصودة للتاريخ المختار
-                      </td>
-                    </tr>
-                  ) : (
-                    decisionsList.map((item, idx) => {
-                      const rowKey = `${item.employee.id}_${item.type}_${item.date}`;
-                      const currentReason = selectedReasons[rowKey] || item.reason;
-
-                      return (
-                        <tr key={idx} className="hover:bg-slate-900/40 transition-colors">
-                          <td className="px-4 py-4 text-center">
-                            <span className="text-[10px] bg-slate-850 px-2 py-0.5 rounded text-slate-400 font-mono">
-                              {idx + 1}
-                            </span>
-                          </td>
-                          <td className="px-4 py-4">
-                            <div className="flex flex-col">
-                              <span className="font-bold text-white">{item.employee.full_name}</span>
-                              <span className="text-[10px] text-slate-400">
-                                {item.employee.departments?.name || 'بدون قسم'} • {item.time !== '-' ? `البصمة: ${item.time}` : 'غياب كامل اليوم'}
-                              </span>
-                            </div>
-                          </td>
-                          <td className="px-4 py-4 text-slate-300 font-bold font-mono">
-                            {item.duration}
-                          </td>
-                          <td className="px-4 py-4">
-                            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                              item.type === 'late' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
-                            }`}>
-                              {item.typeName}
-                            </span>
-                          </td>
-                          <td className="px-4 py-4">
-                            <input 
-                              type="number"
-                              value={selectedAmounts[rowKey] !== undefined ? selectedAmounts[rowKey] : (item.suggestedAmount || '')}
-                              onChange={(e) => setSelectedAmounts(prev => ({ ...prev, [rowKey]: e.target.value }))}
-                              className="bg-slate-900 text-xs text-white border border-slate-700/60 rounded-xl px-2.5 py-1.5 outline-none w-24 mb-2"
-                              placeholder="مبلغ الخصم"
-                            />
-                          </td>
-                          <td className="px-4 py-4">
-                            <input
-                              type="text"
-                              value={currentReason}
-                              onChange={(e) => setSelectedReasons(prev => ({ ...prev, [rowKey]: e.target.value }))}
-                              className="bg-slate-900 text-xs text-white border border-slate-700/60 rounded-xl px-2.5 py-1.5 outline-none w-full"
-                              placeholder="اكتب سبب الخصم هنا..."
-                            />
-                          </td>
-                          <td className="px-4 py-4 text-center">
-                            <div className="flex items-center justify-center gap-2">
-                              {/* Apply button */}
-                              <button
-                                onClick={() => {
-                                  const amt = Number(selectedAmounts[rowKey] !== undefined ? selectedAmounts[rowKey] : item.suggestedAmount) || 0;
-                                  handleDecision(item.employee, item.type, item.date, 'applied', item.id, currentReason, amt);
-                                }}
-                                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                                  item.deductionStatus === 'applied'
-                                    ? 'bg-emerald-600 text-white shadow-md shadow-emerald-500/10'
-                                    : 'bg-slate-800 text-slate-400 hover:bg-emerald-600/20 hover:text-emerald-400 border border-slate-700'
-                                }`}
-                              >
-                                تطبيق
-                              </button>
-                              
-                              {/* Ignore button */}
-                              <button
-                                onClick={() => handleDecision(item.employee, item.type, item.date, 'ignored', item.id, currentReason, 0)}
-                                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                                  item.deductionStatus === 'ignored'
-                                    ? 'bg-rose-600 text-white shadow-md shadow-rose-500/10'
-                                    : 'bg-slate-800 text-slate-400 hover:bg-rose-600/20 hover:text-rose-400 border border-slate-700'
-                                }`}
-                              >
-                                تجاهل
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
+      <div className={cn('grid grid-cols-2 lg:grid-cols-4 gap-4 transition-opacity', stale && 'opacity-60')}>
+        <StatTile label="سجلوا الحضور" value={attendance.filter((a) => a.status !== 'absent').length} icon={CheckCircle2} tone="emerald" />
+        <StatTile label="متأخرون" value={lateCount} icon={Timer} tone={lateCount > 0 ? 'amber' : 'slate'} />
+        <StatTile label="لم يسجلوا حضوراً" value={virtualAbsents.length} icon={XCircle} tone={virtualAbsents.length > 0 ? 'rose' : 'slate'} />
+        <StatTile label="محاولات موقع وهمي" value={data.mockAttempts.length} icon={ShieldAlert} tone={data.mockAttempts.length > 0 ? 'rose' : 'emerald'} />
       </div>
 
-      {/* Edit Modal */}
-      {editingRecord && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 w-full max-w-md shadow-2xl">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-bold text-white">تعديل سجل الحضور</h3>
-              <button onClick={() => setEditingRecord(null)} className="text-slate-400 hover:text-white cursor-pointer">✕</button>
+      <SegmentedTabs
+        value={tab}
+        onChange={setTab}
+        options={[
+          { value: 'monitoring', label: 'السجل والخريطة', icon: MapIcon },
+          { value: 'decisions', label: 'قرارات الغياب والتأخير', icon: Gavel, count: pendingDecisions || undefined },
+        ]}
+      />
+
+      {tab === 'monitoring' ? (
+        <>
+          <Card className={cn('transition-opacity', stale && 'opacity-60')}>
+            <CardHeader
+              icon={Clock}
+              tone="emerald"
+              title="سجل الحضور والانصراف"
+              description={`يوم ${date}`}
+              actions={
+                <Button size="sm" variant="soft-success" icon={Download} onClick={exportExcel}>
+                  تصدير Excel
+                </Button>
+              }
+            />
+            <DataTable>
+              <thead>
+                <tr>
+                  <th>الموظف</th>
+                  <th>الحالة</th>
+                  <th>الدخول</th>
+                  <th>الخروج</th>
+                  <th>ساعات العمل</th>
+                  <th className="!text-left">الإجراءات</th>
+                </tr>
+              </thead>
+              <tbody>
+                {attendance.length === 0 && virtualAbsents.length === 0 ? (
+                  <TableEmpty colSpan={6}>لا توجد سجلات حضور لهذا اليوم</TableEmpty>
+                ) : (
+                  <>
+                    {attendance.map((log) => (
+                      <tr key={log.id}>
+                        <td>
+                          <div className="flex items-center gap-2.5">
+                            <Avatar name={log.employees?.full_name} size="sm" />
+                            <span className="font-bold text-white">{log.employees?.full_name || 'موظف'}</span>
+                          </div>
+                        </td>
+                        <td>
+                          {log.status === 'late' ? (
+                            <Badge tone="amber" dot>متأخر</Badge>
+                          ) : log.status === 'absent' ? (
+                            <Badge tone="rose" dot>غائب</Badge>
+                          ) : log.status === 'half_day' ? (
+                            <Badge tone="violet" dot>نصف يوم</Badge>
+                          ) : (
+                            <Badge tone="emerald" dot>حاضر</Badge>
+                          )}
+                        </td>
+                        <td className="font-mono text-emerald-300" dir="ltr">{formatClock(log.check_in_time)}</td>
+                        <td className="font-mono text-slate-300" dir="ltr">
+                          {log.check_out_time ? formatClock(log.check_out_time) : log.check_in_time ? <Badge tone="sky">داخل الدوام</Badge> : '-'}
+                        </td>
+                        <td className="font-bold text-slate-200">{formatDuration(log.check_in_time, log.check_out_time)}</td>
+                        <td className="!text-left">
+                          <div className="flex justify-end gap-1.5">
+                            <IconButton
+                              icon={Pencil}
+                              label="تعديل أوقات الدخول والخروج"
+                              tone="indigo"
+                              onClick={() => setEditing({ record: log, checkIn: timeInputValue(log.check_in_time), checkOut: timeInputValue(log.check_out_time) })}
+                            />
+                            {log.check_in_time && !log.check_out_time && (
+                              <IconButton icon={LogOut} label="تسجيل خروج الآن" tone="rose" loading={busy === `checkout_${log.id}`} onClick={() => forceCheckout(log)} />
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {virtualAbsents.map((d) => (
+                      <tr key={d.key} className="bg-rose-500/[0.03]">
+                        <td>
+                          <div className="flex items-center gap-2.5">
+                            <Avatar name={d.employee.full_name} size="sm" />
+                            <span className="font-bold text-white">{d.employee.full_name}</span>
+                          </div>
+                        </td>
+                        <td>
+                          <Badge tone="rose">لم يبصم</Badge>
+                        </td>
+                        <td className="text-slate-600">-</td>
+                        <td className="text-slate-600">-</td>
+                        <td className="text-slate-600">-</td>
+                        <td className="!text-left">
+                          <Button size="xs" variant="ghost" icon={Gavel} onClick={() => setTab('decisions')}>
+                            اتخاذ قرار
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </>
+                )}
+              </tbody>
+            </DataTable>
+          </Card>
+
+          <Card>
+            <CardHeader
+              icon={MapIcon}
+              tone="sky"
+              title="خريطة التتبع المباشر"
+              description="مواقع بصمات الحضور، محاولات المواقع الوهمية، ومسار حركة الموظف المختار"
+              actions={
+                <>
+                  <Select
+                    value={trailEmployee ?? ''}
+                    onChange={(e) => setTrailEmployee(e.target.value || null)}
+                    className="h-9 w-56 text-xs"
+                  >
+                    <option value="">اختر موظفاً لعرض مساره...</option>
+                    {attendance.map((log) => (
+                      <option key={log.employee_id} value={log.employee_id}>
+                        {log.employees?.full_name}
+                      </option>
+                    ))}
+                  </Select>
+                  {trailEmployee && <Toggle checked={live} onChange={setLive} label="بث مباشر" />}
+                </>
+              }
+            />
+            {trailEmployee && (
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-4 px-3.5 py-2.5 rounded-xl bg-sky-500/5 border border-sky-500/15 text-xs">
+                <span className="text-slate-300">
+                  {trail.loading || trail.refreshing ? 'جاري تحميل المسار...' : `${trailPoints.length} نقطة تتبع مسجلة لهذا اليوم`}
+                </span>
+                {live && (
+                  <span className="flex items-center gap-1.5 font-bold text-emerald-300">
+                    <Radio className="w-3.5 h-3.5 animate-pulse" /> تحديث مباشر
+                  </span>
+                )}
+              </div>
+            )}
+            <div className="h-[520px]">
+              <MapComponent markers={markers} polygons={polygons} polylines={polylines} center={mapCenter} zoom={mapZoom} />
             </div>
-            
-            <form onSubmit={handleUpdateTimes} className="space-y-4">
-              <div className="p-4 bg-slate-950/50 rounded-xl mb-4 text-sm text-slate-300">
-                <strong>الموظف:</strong> {editingRecord.employees?.full_name} <br/>
-                <strong>التاريخ:</strong> {selectedDate}
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs text-slate-400 font-bold">وقت تسجيل الدخول</label>
-                <input 
-                  type="time" 
-                  value={editCheckIn}
-                  onChange={(e) => setEditCheckIn(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-sm focus:border-teal-500/50 focus:ring-1 focus:ring-teal-500/50 outline-none transition-all"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs text-slate-400 font-bold">وقت تسجيل الخروج</label>
-                <input 
-                  type="time" 
-                  value={editCheckOut}
-                  onChange={(e) => setEditCheckOut(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-sm focus:border-teal-500/50 focus:ring-1 focus:ring-teal-500/50 outline-none transition-all"
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full mt-6 bg-teal-600 hover:bg-teal-500 text-white font-bold py-3 rounded-xl transition-colors cursor-pointer flex items-center justify-center gap-2"
-              >
-                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                <span>حفظ التعديلات</span>
-              </button>
-            </form>
-          </div>
-        </div>
+          </Card>
+        </>
+      ) : (
+        <Card className={cn('transition-opacity', stale && 'opacity-60')}>
+          <CardHeader
+            icon={Gavel}
+            tone="amber"
+            title="قرارات الغياب والتأخير"
+            description="«تطبيق» يخصم المبلغ من صافي الراتب، و«تجاهل» يعفي الموظف دون التأثير على راتبه"
+          />
+          <DataTable>
+            <thead>
+              <tr>
+                <th>الموظف</th>
+                <th>المخالفة</th>
+                <th>المدة</th>
+                <th>الخصم (د.ع)</th>
+                <th>السبب</th>
+                <th className="!text-left">القرار</th>
+              </tr>
+            </thead>
+            <tbody>
+              {decisions.length === 0 ? (
+                <TableEmpty colSpan={6}>لا توجد غيابات أو تأخيرات لهذا اليوم</TableEmpty>
+              ) : (
+                decisions.map((item) => (
+                  <tr key={item.key}>
+                    <td>
+                      <div className="flex items-center gap-2.5 min-w-[180px]">
+                        <Avatar name={item.employee.full_name} size="sm" />
+                        <div>
+                          <p className="font-bold text-white">{item.employee.full_name}</p>
+                          <p className="text-[10px] text-slate-500">
+                            {item.employee.departments?.name || 'بدون قسم'} · {item.time !== '-' ? `البصمة ${item.time}` : 'غياب كامل'}
+                          </p>
+                        </div>
+                      </div>
+                    </td>
+                    <td>
+                      <Badge tone={item.type === 'late' ? 'amber' : 'rose'}>{item.type === 'late' ? 'تأخير' : 'غياب'}</Badge>
+                    </td>
+                    <td className="whitespace-nowrap">{item.duration}</td>
+                    <td>
+                      <AmountInput
+                        value={amounts[item.key] ?? item.suggestedAmount}
+                        onValueChange={(v) => setAmounts((prev) => ({ ...prev, [item.key]: v }))}
+                        className="h-8 w-28 text-xs"
+                      />
+                    </td>
+                    <td>
+                      <Input
+                        value={reasons[item.key] ?? item.reason}
+                        onChange={(e) => setReasons((prev) => ({ ...prev, [item.key]: e.target.value }))}
+                        className="h-8 min-w-[200px] text-xs"
+                      />
+                    </td>
+                    <td className="!text-left">
+                      <div className="flex justify-end gap-1.5">
+                        <Button
+                          size="xs"
+                          variant={item.status === 'applied' ? 'success' : 'soft-success'}
+                          loading={busy === `${item.key}_applied`}
+                          disabled={!!busy}
+                          onClick={() => decide(item, 'applied')}
+                        >
+                          تطبيق
+                        </Button>
+                        <Button
+                          size="xs"
+                          variant={item.status === 'ignored' ? 'secondary' : 'ghost'}
+                          loading={busy === `${item.key}_ignored`}
+                          disabled={!!busy}
+                          onClick={() => decide(item, 'ignored')}
+                        >
+                          تجاهل
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </DataTable>
+        </Card>
       )}
 
-      {/* Manual Attendance Modal */}
-      {showManualModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 w-full max-w-md shadow-2xl animate-glass">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-bold text-white">تسجيل حضور وانصراف يدوي ✍️</h3>
-              <button onClick={() => setShowManualModal(false)} className="text-slate-400 hover:text-white cursor-pointer">✕</button>
+      {editing && (
+        <Modal title="تعديل سجل الحضور" subtitle={`${editing.record.employees?.full_name ?? ''} · ${date}`} icon={Pencil} tone="indigo" size="sm" onClose={() => setEditing(null)}>
+          <form onSubmit={saveTimes} className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="وقت الدخول">
+                <Input type="time" value={editing.checkIn} onChange={(e) => setEditing({ ...editing, checkIn: e.target.value })} dir="ltr" />
+              </Field>
+              <Field label="وقت الخروج">
+                <Input type="time" value={editing.checkOut} onChange={(e) => setEditing({ ...editing, checkOut: e.target.value })} dir="ltr" />
+              </Field>
             </div>
-            
-            <form onSubmit={handleManualAttendanceSubmit} className="space-y-4">
-              <div className="space-y-1.5">
-                <label className="text-xs text-slate-400 font-bold">الموظف</label>
-                <select
-                  required
-                  value={manualEmpId}
-                  onChange={(e) => setManualEmpId(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-xs focus:border-teal-500/50 focus:ring-1 focus:ring-teal-500/50 outline-none transition-all cursor-pointer"
-                >
-                  <option value="">-- اختر الموظف --</option>
-                  {employees.map(emp => (
-                    <option key={emp.id} value={emp.id} className="bg-slate-900">{emp.full_name}</option>
-                  ))}
-                </select>
-              </div>
+            <ModalFooter onCancel={() => setEditing(null)} loading={busy === 'edit'} submitLabel="حفظ التعديلات" submitIcon={Save} />
+          </form>
+        </Modal>
+      )}
 
-              <div className="space-y-1.5">
-                <label className="text-xs text-slate-400 font-bold">تاريخ الدوام (YYYY-MM-DD)</label>
-                <input 
-                  type="text" 
-                  value={manualDate}
-                  onChange={(e) => setManualDate(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-sm focus:border-teal-500/50 focus:ring-1 focus:ring-teal-500/50 outline-none transition-all font-mono"
-                  required
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs text-slate-400 font-bold">وقت الدخول</label>
-                <input 
-                  type="time" 
-                  value={manualCheckIn}
-                  onChange={(e) => setManualCheckIn(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-sm focus:border-teal-500/50 focus:ring-1 focus:ring-teal-500/50 outline-none transition-all"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs text-slate-400 font-bold">وقت الخروج</label>
-                <input 
-                  type="time" 
-                  value={manualCheckOut}
-                  onChange={(e) => setManualCheckOut(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-sm focus:border-teal-500/50 focus:ring-1 focus:ring-teal-500/50 outline-none transition-all"
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full mt-6 bg-teal-600 hover:bg-teal-500 text-white font-bold py-3 rounded-xl transition-colors cursor-pointer flex items-center justify-center gap-2"
-              >
-                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                <span>تسجيل الحضور اليدوي 🎯</span>
-              </button>
-            </form>
-          </div>
-        </div>
+      {manual && (
+        <Modal title="تسجيل حضور يدوي" subtitle="يُحدَّث السجل إن كان للموظف بصمة في نفس اليوم" icon={UserPlus} tone="brand" size="sm" onClose={() => setManual(null)}>
+          <form onSubmit={saveManual} className="space-y-4">
+            <Field label="الموظف">
+              <Select required value={manual.employeeId} onChange={(e) => setManual({ ...manual, employeeId: e.target.value })}>
+                <option value="">اختر الموظف...</option>
+                {data.employees.map((emp) => (
+                  <option key={emp.id} value={emp.id}>
+                    {emp.full_name}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="تاريخ الدوام">
+              <Input type="date" required value={manual.date} max={localDateStr()} onChange={(e) => setManual({ ...manual, date: e.target.value })} dir="ltr" />
+            </Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="وقت الدخول">
+                <Input type="time" value={manual.checkIn} onChange={(e) => setManual({ ...manual, checkIn: e.target.value })} dir="ltr" />
+              </Field>
+              <Field label="وقت الخروج">
+                <Input type="time" value={manual.checkOut} onChange={(e) => setManual({ ...manual, checkOut: e.target.value })} dir="ltr" />
+              </Field>
+            </div>
+            <ModalFooter onCancel={() => setManual(null)} loading={busy === 'manual'} submitLabel="تسجيل الحضور" submitIcon={Users} />
+          </form>
+        </Modal>
       )}
     </div>
   );

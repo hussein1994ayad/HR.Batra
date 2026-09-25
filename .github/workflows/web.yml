@@ -1,0 +1,95 @@
+name: Web Dashboard
+
+on:
+  push:
+    branches: [ "main" ]
+    paths: [ "web/**", ".github/workflows/web.yml" ]
+  pull_request:
+    paths: [ "web/**", ".github/workflows/web.yml" ]
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+concurrency:
+  group: web-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Lint, test & build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./web
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm run test:unit
+
+      - name: Build static site
+        run: npm run build
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: End-to-end tests
+        run: npm run test:e2e
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: web/playwright-report
+          retention-days: 7
+
+      - name: Upload static build
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-out
+          path: web/out
+          retention-days: 7
+
+  deploy:
+    name: Deploy to Surge
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    env:
+      # Add a repository secret named SURGE_TOKEN (from `npx surge token`) to enable deploys.
+      SURGE_TOKEN: ${{ secrets.SURGE_TOKEN }}
+      SURGE_DOMAIN: hrpro-batra.surge.sh
+    steps:
+      - name: Download static build
+        uses: actions/download-artifact@v4
+        with:
+          name: web-out
+          path: out
+
+      - name: Skip deploy (SURGE_TOKEN not configured)
+        if: env.SURGE_TOKEN == ''
+        run: echo "::warning::SURGE_TOKEN secret is not set; skipping deployment to $SURGE_DOMAIN"
+
+      - name: Publish to Surge
+        if: env.SURGE_TOKEN != ''
+        run: npx --yes surge@0.44 ./out "$SURGE_DOMAIN" --token "$SURGE_TOKEN"

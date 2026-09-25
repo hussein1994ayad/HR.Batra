@@ -27,13 +27,17 @@ import {
   CheckCheck,
   Sparkles,
   Inbox,
+  type LucideIcon,
 } from 'lucide-react';
+import type { User } from '@supabase/supabase-js';
+import { ConfirmProvider } from '@/components/confirm';
+import type { AppNotification } from '@/lib/types';
 
 interface SidebarItem {
   name: string;
   description: string;
   href: string;
-  icon: React.ComponentType<any>;
+  icon: LucideIcon;
   badgeKey?: 'leaves' | 'loans';
 }
 
@@ -81,7 +85,7 @@ class ErrorBoundary extends React.Component<
   { children: React.ReactNode },
   { hasError: boolean; error: Error | null }
 > {
-  constructor(props: any) {
+  constructor(props: { children: React.ReactNode }) {
     super(props);
     this.state = { hasError: false, error: null };
   }
@@ -90,7 +94,7 @@ class ErrorBoundary extends React.Component<
     return { hasError: true, error };
   }
 
-  componentDidCatch(error: Error, errorInfo: any) {
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error("Dashboard Boundary caught an error:", error, errorInfo);
   }
 
@@ -165,7 +169,7 @@ export default function DashboardLayout({
   const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
-  const [adminUser, setAdminUser] = useState<any>(null);
+  const [adminUser, setAdminUser] = useState<User | null>(null);
   const [adminName, setAdminName] = useState<string>('مدير النظام');
   const [pendingLeaves, setPendingLeaves] = useState(0);
   const [pendingLoans, setPendingLoans] = useState(0);
@@ -173,7 +177,7 @@ export default function DashboardLayout({
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
 
-  const [systemNotifs, setSystemNotifs] = useState<any[]>([]);
+  const [systemNotifs, setSystemNotifs] = useState<AppNotification[]>([]);
 
   const notifRef = useRef<HTMLDivElement>(null);
   const closeNotifications = useCallback(() => setShowNotifications(false), []);
@@ -279,6 +283,7 @@ export default function DashboardLayout({
 
         setLoading(false);
       } catch (err) {
+        console.error('Auth check failed:', err);
         localStorage.removeItem('batra_cache_admin');
         router.replace('/login');
       }
@@ -289,7 +294,8 @@ export default function DashboardLayout({
 
   const playBeep = () => {
     try {
-      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      const AudioContextClass =
+        window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
       if (!AudioContextClass) return;
       const ctx = new AudioContextClass();
       const osc = ctx.createOscillator();
@@ -368,7 +374,7 @@ export default function DashboardLayout({
         },
         async (payload) => {
           if (payload.new) {
-            setSystemNotifs(prev => [payload.new, ...prev]);
+            setSystemNotifs(prev => [payload.new as AppNotification, ...prev]);
             playBeep();
           }
         }
@@ -434,7 +440,6 @@ export default function DashboardLayout({
                 <Link
                   key={item.href}
                   href={item.href}
-                  prefetch
                   title={isCollapsed ? item.name : undefined}
                   aria-current={isActive ? 'page' : undefined}
                   onClick={() => setSidebarOpen(false)}
@@ -755,9 +760,11 @@ export default function DashboardLayout({
               </div>
             ) : (
               <ErrorBoundary>
-                <div key={pathname} className="animate-fade flex-1 flex flex-col">
-                  {children}
-                </div>
+                <ConfirmProvider>
+                  <div key={pathname} className="animate-fade flex-1 flex flex-col">
+                    {children}
+                  </div>
+                </ConfirmProvider>
               </ErrorBoundary>
             )}
           </div>
