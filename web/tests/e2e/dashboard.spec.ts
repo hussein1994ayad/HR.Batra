@@ -88,7 +88,7 @@ const PAGES: Array<{ path: string; heading: string }> = [
   { path: '/dashboard/loans', heading: 'السلف والأقساط' },
   { path: '/dashboard/payroll', heading: 'الرواتب والمكافآت' },
   { path: '/dashboard/trash', heading: 'سلة المحذوفات' },
-  { path: '/dashboard/storage', heading: 'التخزين' },
+  { path: '/dashboard/storage', heading: 'التخزين والمساحة' },
   { path: '/dashboard/settings', heading: 'الإعدادات' },
 ];
 
