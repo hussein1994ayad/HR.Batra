@@ -41,11 +41,19 @@ function Read-Secret([string]$prompt) {
 }
 
 $values = @{}
+$rewriteProps = $false
 if (Test-Path $props) {
     Get-Content $props | ForEach-Object {
         if ($_ -match '^\s*([^#=]+?)\s*=\s*(.*)$') { $values[$Matches[1]] = $Matches[2] }
     }
-    Write-Host 'استعملت القيم الموجودة في key.properties.' -ForegroundColor Cyan
+    # قالب key.properties فيه نص توضيحي بدل كلمات السر؛ نتجاهله ونسأل.
+    $isPlaceholder = { param($v) -not $v -or $v -match '[<>()\[\]]|[؀-ۿ]' }
+    if ((& $isPlaceholder $values['storePassword']) -or (& $isPlaceholder $values['keyPassword'])) {
+        $values.Remove('storePassword'); $values.Remove('keyPassword')
+        $rewriteProps = $true
+    } else {
+        Write-Host 'استعملت القيم الموجودة في key.properties.' -ForegroundColor Cyan
+    }
 }
 if (-not $values['keyAlias']) { $values['keyAlias'] = 'batra' }
 if (-not $values['storePassword']) {
@@ -66,7 +74,7 @@ if (-not $org) { $org = 'Batra' }
     -dname "CN=HR Pro, O=$org, C=IQ" | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'فشل إنشاء المفتاح.' }
 
-if (-not (Test-Path $props)) {
+if ($rewriteProps -or -not (Test-Path $props)) {
     @(
         "storeFile=$($values['storeFile'])",
         "storePassword=$($values['storePassword'])",
