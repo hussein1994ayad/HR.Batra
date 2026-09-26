@@ -25,10 +25,11 @@ import { confetti } from '@/lib/lazy';
 import { useQuery } from '@/lib/useQuery';
 import { errorMessage, formatIQD } from '@/lib/format';
 import {
-  approveLoan, deleteCompletedLoan, deleteInstallment, fetchLoans as fetchLoanLists, payInstallmentCash,
-  postponeInstallments, rejectLoan as rejectLoanRequest, rescheduleLoan, revertInstallmentPayment, updateInstallmentAmount as saveInstallmentAmount,
+  approveLoan, deleteCompletedLoan, deleteInstallment, fetchLoans as fetchLoanLists, payInstallment,
+  postponeInstallments, rejectLoan as rejectLoanRequest, rescheduleLoan, revertInstallmentPayment,
 } from '@/features/loans/api';
-import { sameDayNextMonth, validateApproval } from '@/features/loans/logic';
+import { previewPayment, sameDayNextMonth, validateApproval } from '@/features/loans/logic';
+import type { PaymentMethod } from '@/features/loans/types';
 import { LoanStatementPrint } from '@/features/loans/components/LoanStatementPrint';
 import { ReasonModal } from '@/components/ReasonModal';
 import type { Loan as DbLoan } from '@/lib/db-types';
@@ -75,6 +76,13 @@ interface ApprovalDraft {
   startDate: string;
 }
 
+interface PayDraft {
+  installment: LoanInstallment;
+  amount: number;
+  method: PaymentMethod;
+  note: string;
+}
+
 interface EditDraft {
   loan: Loan;
   amount: number;
@@ -94,14 +102,17 @@ export default function LoansPage() {
   const [rejecting, setRejecting] = useState<Loan | null>(null);
   const [editDraft, setEditDraft] = useState<EditDraft | null>(null);
   const [scheduleLoanId, setScheduleLoanId] = useState<string | null>(null);
-  const [cashPrompt, setCashPrompt] = useState<{ installment: LoanInstallment; note: string } | null>(null);
-  const [amountPrompt, setAmountPrompt] = useState<{ installment: LoanInstallment; amount: number } | null>(null);
+  const [payPrompt, setPayPrompt] = useState<PayDraft | null>(null);
 
   const approved = useMemo(() => query.data?.approved ?? [], [query.data]);
   const active = approved.filter((l) => Number(l.remaining_amount) > 0);
   const completed = approved.filter((l) => Number(l.remaining_amount) <= 0);
   const outstanding = active.reduce((sum, l) => sum + Number(l.remaining_amount), 0);
   const scheduleLoan = approved.find((l) => l.id === scheduleLoanId) ?? null;
+  const paymentPreview = useMemo(
+    () => (payPrompt && scheduleLoan ? previewPayment(scheduleLoan as unknown as DbLoan, payPrompt.installment.id, payPrompt.amount) : null),
+    [payPrompt, scheduleLoan],
+  );
 
   const displayed = (tab === 'active' ? active : completed).filter((l) =>
     (l.employees?.full_name || '').toLowerCase().includes(search.trim().toLowerCase()),
@@ -189,33 +200,18 @@ export default function LoansPage() {
     );
   };
 
-  const recordCash = async (e: React.FormEvent) => {
+  const recordPayment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!cashPrompt) return;
+    if (!payPrompt || !paymentPreview || paymentPreview.error) return;
     await run(
-      'cash',
+      'pay',
       async () => {
-        await payInstallmentCash(cashPrompt.installment.id, cashPrompt.note);
-        setCashPrompt(null);
+        await payInstallment(payPrompt.installment.id, payPrompt.amount, payPrompt.method, payPrompt.note);
+        setPayPrompt(null);
         query.reload();
-        toast.success('تم تسجيل السداد النقدي وتحديث الرصيد');
+        toast.success('تم تسجيل الدفعة وإعادة توزيع الأقساط المتبقية');
       },
-      'فشل تسجيل السداد',
-    );
-  };
-
-  const updateInstallmentAmount = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!amountPrompt || amountPrompt.amount <= 0) return;
-    await run(
-      'amount',
-      async () => {
-        await saveInstallmentAmount(amountPrompt.installment.id, amountPrompt.amount);
-        setAmountPrompt(null);
-        query.reload();
-        toast.success('تم تعديل قيمة القسط');
-      },
-      'فشل تعديل القسط',
+      'فشل تسجيل الدفعة',
     );
   };
 
@@ -367,7 +363,7 @@ export default function LoansPage() {
           icon={CreditCard}
           tone="indigo"
           title="سجل السلف المعتمدة"
-          description="اضغط على جدول الأقساط لتسجيل سداد نقدي أو تأجيل أو تعديل قسط"
+          description="اضغط على جدول الأقساط لتسجيل دفعة بأي مبلغ أو تأجيل قسط"
           actions={
             <>
               <SearchInput value={search} onChange={setSearch} placeholder="ابحث باسم الموظف..." className="w-full sm:w-56" />
@@ -529,11 +525,16 @@ export default function LoansPage() {
                 <div className="flex items-center gap-1.5 justify-end">
                   {!inst.is_paid ? (
                     <>
-                      <Button size="xs" variant="soft-success" icon={Banknote} disabled={!!busy} onClick={() => setCashPrompt({ installment: inst, note: '' })}>
-                        دفع نقدي
+                      <Button
+                        size="xs"
+                        variant="soft-success"
+                        icon={Banknote}
+                        disabled={!!busy}
+                        onClick={() => setPayPrompt({ installment: inst, amount: Number(inst.amount), method: 'cash', note: '' })}
+                      >
+                        تسجيل دفعة
                       </Button>
                       <IconButton icon={CalendarClock} label="تأجيل هذا القسط وما بعده شهراً" tone="indigo" loading={busy === `postpone_${inst.id}`} disabled={!!busy} onClick={() => postponeFrom(inst)} />
-                      <IconButton icon={Pencil} label="تعديل قيمة القسط" tone="sky" disabled={!!busy} onClick={() => setAmountPrompt({ installment: inst, amount: Number(inst.amount) })} />
                     </>
                   ) : (
                     <>
@@ -571,26 +572,76 @@ export default function LoansPage() {
         </Modal>
       )}
 
-      {/* Cash payment */}
-      {cashPrompt && (
-        <Modal title="تسجيل سداد نقدي" subtitle={`قيمة القسط: ${formatIQD(cashPrompt.installment.amount)}`} icon={Banknote} tone="emerald" size="sm" onClose={() => setCashPrompt(null)}>
-          <form onSubmit={recordCash} className="space-y-4">
-            <Field label="ملاحظة (اختياري)" hint="يُخصم القسط من الرصيد فوراً ولا يُستقطع من الراتب القادم.">
-              <Input value={cashPrompt.note} onChange={(e) => setCashPrompt({ ...cashPrompt, note: e.target.value })} placeholder="مثال: وصل استلام رقم 12" />
+      {/* Record a payment of any amount */}
+      {payPrompt && scheduleLoan && paymentPreview && (
+        <Modal
+          title="تسجيل دفعة"
+          subtitle={`القسط المجدول: ${formatIQD(payPrompt.installment.amount)} · المتبقي على السلفة: ${formatIQD(scheduleLoan.remaining_amount)}`}
+          icon={Banknote}
+          tone="emerald"
+          onClose={() => setPayPrompt(null)}
+        >
+          <form onSubmit={recordPayment} className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Field label="المبلغ المدفوع (د.ع)" hint="الزيادة تُخصم من آخر الأقساط، والنقص يُضاف لآخر قسط.">
+                <AmountInput required autoFocus value={payPrompt.amount} onValueChange={(v) => setPayPrompt({ ...payPrompt, amount: v })} />
+              </Field>
+              <Field label="طريقة السداد">
+                <SegmentedTabs
+                  value={payPrompt.method}
+                  onChange={(method) => setPayPrompt({ ...payPrompt, method })}
+                  options={[
+                    { value: 'cash', label: 'نقداً' },
+                    { value: 'salary_deduction', label: 'استقطاع راتب' },
+                  ]}
+                />
+              </Field>
+            </div>
+            <Field label="ملاحظة (اختياري)">
+              <Input value={payPrompt.note} onChange={(e) => setPayPrompt({ ...payPrompt, note: e.target.value })} placeholder="مثال: وصل استلام رقم 12" />
             </Field>
-            <ModalFooter onCancel={() => setCashPrompt(null)} loading={busy === 'cash'} submitLabel="تأكيد السداد" variant="success" />
-          </form>
-        </Modal>
-      )}
 
-      {/* Edit installment amount */}
-      {amountPrompt && (
-        <Modal title="تعديل قيمة القسط" icon={Pencil} tone="sky" size="sm" onClose={() => setAmountPrompt(null)}>
-          <form onSubmit={updateInstallmentAmount} className="space-y-4">
-            <Field label="المبلغ الجديد (د.ع)">
-              <AmountInput required autoFocus value={amountPrompt.amount} onValueChange={(v) => setAmountPrompt({ ...amountPrompt, amount: v })} />
-            </Field>
-            <ModalFooter onCancel={() => setAmountPrompt(null)} loading={busy === 'amount'} submitLabel="حفظ التعديل" />
+            {paymentPreview.error ? (
+              <p className="text-xs font-bold text-rose-400">{paymentPreview.error}</p>
+            ) : (
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-xs font-bold text-slate-300">الأقساط بعد هذه الدفعة</h4>
+                  <span className="text-xs text-slate-400">
+                    المتبقي بعدها: <b className="text-amber-300">{formatIQD(paymentPreview.remaining)}</b>
+                  </span>
+                </div>
+                <div className="max-h-56 overflow-y-auto rounded-2xl border border-slate-800/80 divide-y divide-slate-800/70">
+                  {paymentPreview.rows.map((r, idx) => (
+                    <div key={`${r.due_date}-${idx}`} className={`px-3 py-2 flex items-center justify-between text-xs ${r.current ? 'bg-emerald-500/10' : ''}`}>
+                      <span className="flex items-center gap-2">
+                        <span className="w-6 text-slate-500 font-bold">{idx + 1}</span>
+                        <span className="font-mono text-slate-300" dir="ltr">{r.due_date}</span>
+                      </span>
+                      <span className="flex items-center gap-2">
+                        <b className="text-white">{formatIQD(r.amount)}</b>
+                        {r.current ? (
+                          <Badge tone="emerald" dot>هذه الدفعة</Badge>
+                        ) : r.is_paid ? (
+                          <Badge tone="sky">مسدد</Badge>
+                        ) : r.added ? (
+                          <Badge tone="amber">شهر إضافي</Badge>
+                        ) : (
+                          <Badge tone="slate">قادم</Badge>
+                        )}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            <ModalFooter
+              onCancel={() => setPayPrompt(null)}
+              loading={busy === 'pay'}
+              disabled={!!paymentPreview.error}
+              submitLabel="تأكيد الدفعة"
+              variant="success"
+            />
           </form>
         </Modal>
       )}

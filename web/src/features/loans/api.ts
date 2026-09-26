@@ -5,7 +5,7 @@
 import { supabase } from '@/lib/supabase';
 import type { Loan, LoanInstallment } from '@/lib/db-types';
 import { addMonths, buildInstallmentSchedule, firstOfNextMonth } from './logic';
-import type { ApprovalDraft, EditLoanDraft } from './types';
+import type { ApprovalDraft, EditLoanDraft, PaymentMethod } from './types';
 
 const EMPLOYEE_JOIN = 'employees!loans_employee_id_fkey(full_name, monthly_salary_iqd)';
 
@@ -97,11 +97,17 @@ export async function rescheduleLoan(draft: EditLoanDraft) {
 // الأقساط
 // ------------------------------------------------------------------
 
-export async function payInstallmentCash(installmentId: string, note: string) {
-  const { error } = await supabase
-    .from('loan_installments')
-    .update({ is_paid: true, paid_at: new Date().toISOString(), payment_type: 'cash', payment_note: note || 'سداد نقدي مباشر' })
-    .eq('id', installmentId);
+/**
+ * يسجّل سداد قسط بأي مبلغ (pay_loan_installment): الزيادة تُخصم من آخر الأقساط،
+ * والنقص يُضاف لآخر قسط (أو لشهر جديد إن كان هذا آخرها)، ويُشعَر الموظف.
+ */
+export async function payInstallment(installmentId: string, amount: number, method: PaymentMethod, note: string) {
+  const { error } = await supabase.rpc('pay_loan_installment', {
+    p_installment_id: installmentId,
+    p_amount: Math.round(amount),
+    p_method: method,
+    p_note: note.trim() || null,
+  });
   if (error) throw error;
 }
 
@@ -115,11 +121,6 @@ export async function revertInstallmentPayment(installmentId: string) {
 
 export async function deleteInstallment(installmentId: string) {
   const { error } = await supabase.from('loan_installments').delete().eq('id', installmentId);
-  if (error) throw error;
-}
-
-export async function updateInstallmentAmount(installmentId: string, amount: number) {
-  const { error } = await supabase.from('loan_installments').update({ amount }).eq('id', installmentId);
   if (error) throw error;
 }
 

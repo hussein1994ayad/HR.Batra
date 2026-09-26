@@ -62,4 +62,39 @@ await expectError('second direct loan while one is active is rejected', direct('
 await expectError('clients cannot call the internal helpers',
   as(db, 'admin', `SELECT _insert_loan_installments($1, 100, 1, current_date)`, [directId]), 'permission denied');
 
+// ---------------- pay_loan_installment (سداد بمبلغ مرن) ----------------
+const flex = (await expectOk('admin creates a 500k / 5 month loan', direct('admin', 500000, 5, 'p.png', IDS.manager))).rows[0].id;
+const unpaid = async () =>
+  (await db.query(`SELECT id, amount::int a FROM loan_installments WHERE loan_id=$1 AND NOT is_paid ORDER BY due_date`, [flex])).rows;
+const nextId = async () => (await unpaid())[0].id;
+const pay = (who, id, amount, method = 'cash') =>
+  as(db, who, `SELECT pay_loan_installment($1, $2, $3, 'وصل 1') AS r`, [id, amount, method]);
+const amounts = async () => (await installments(flex)).map((r) => r.a / 1000).join();
+const remaining = async () => (await db.query('SELECT remaining_amount::int r FROM loans WHERE id=$1', [flex])).rows[0].r;
+
+await expectError('employee cannot record a payment', pay('manager', await nextId(), 100000), 'غير مصرح');
+await expectOk('month 1 pays the planned 100k', pay('admin', await nextId(), 100000, 'salary_deduction'));
+await expectOk('month 2 pays 150k instead of 100k', pay('admin', await nextId(), 150000));
+check('overpayment shrinks the last installment', (await amounts()) === '100,150,100,100,50', await amounts());
+check('remaining is 250k', (await remaining()) === 250000, String(await remaining()));
+await expectOk('month 3 pays only 50k', pay('admin', await nextId(), 50000));
+check('underpayment grows the last installment', (await amounts()) === '100,150,50,100,100', await amounts());
+await expectError('paying more than the remaining is rejected', pay('admin', await nextId(), 999999), 'أكبر من المتبقي');
+await expectError('zero payment is rejected', pay('admin', await nextId(), 0), 'أكبر من الصفر');
+await expectOk('month 4 pays 150k', pay('admin', await nextId(), 150000));
+check('the last installment shrinks to 50k', (await amounts()) === '100,150,50,150,50', await amounts());
+await expectOk('last month pays only 20k', pay('admin', await nextId(), 20000));
+const tail = await installments(flex);
+check('a new month is added with the 30k difference',
+  tail.length === 6 && tail[5].a === 30000 && tail[5].d === '2027-03-10', JSON.stringify(tail));
+await expectOk('the extra month is paid in full', pay('admin', await nextId(), 30000));
+check('loan is fully repaid', (await remaining()) === 0 && (await unpaid()).length === 0);
+const firstPaid = (await db.query(
+  `SELECT payment_type, payment_note FROM loan_installments WHERE loan_id=$1 ORDER BY due_date LIMIT 1`, [flex])).rows[0];
+check('payment method and note are stored',
+  firstPaid.payment_type === 'salary_deduction' && firstPaid.payment_note === 'وصل 1', JSON.stringify(firstPaid));
+const payNotifs = await db.query(`SELECT 1 FROM notifications WHERE employee_id=$1 AND title LIKE 'تسجيل دفعة%'`, [IDS.manager]);
+check('employee is notified of each payment', payNotifs.rows.length === 6, String(payNotifs.rows.length));
+await expectError('anon cannot record a payment', pay('anon', tail[0].id ?? IDS.branch, 1), 'permission denied');
+
 done();

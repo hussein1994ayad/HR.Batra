@@ -28,3 +28,5 @@ export interface ScheduledInstallment {
   due_date: string;
   amount: number;
 }
+
+export type PaymentMethod = 'cash' | 'salary_deduction';

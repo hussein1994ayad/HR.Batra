@@ -81,3 +81,65 @@ export function loanToEditDraft(loan: Loan): EditLoanDraft {
     remainingAmount: Number(loan.remaining_amount),
   };
 }
+
+export interface PaymentPreviewRow {
+  due_date: string;
+  amount: number;
+  is_paid: boolean;
+  /** القسط الذي يُسجَّل سداده الآن */
+  current?: boolean;
+  /** قسط جديد يُضاف لأن المدفوع أقل من المتبقي */
+  added?: boolean;
+}
+
+export interface PaymentPreview {
+  rows: PaymentPreviewRow[];
+  remaining: number;
+  error: string | null;
+}
+
+/**
+ * معاينة سداد قسط بمبلغ مختلف عن المجدول — نفس قواعد التريجر
+ * trg_update_loan_and_installments في القاعدة (pay_loan_installment):
+ * الأقساط غير المدفوعة الباقية بقيمة القسط الأساسي، وآخرها يأخذ الفرق،
+ * وما لا يبقى له رصيد يُحذف، وإن لم يبقَ قسط يُضاف شهر جديد بالفرق.
+ */
+export function previewPayment(loan: Loan, installmentId: string, amount: number): PaymentPreview {
+  const all = sortInstallments(loan.loan_installments);
+  const target = all.find((i) => i.id === installmentId);
+  const paidBefore = all.filter((i) => i.is_paid).reduce((s, i) => s + Number(i.amount), 0);
+  const before = Math.max(Number(loan.amount) - paidBefore, 0);
+  const pay = Math.round(amount);
+
+  if (!target || target.is_paid) return { rows: [], remaining: before, error: 'القسط غير موجود أو مسدد مسبقاً.' };
+  if (!(pay > 0)) return { rows: [], remaining: before, error: 'يرجى إدخال مبلغ سداد أكبر من الصفر.' };
+  if (pay > before) return { rows: [], remaining: before, error: `المبلغ أكبر من المتبقي على السلفة (${before.toLocaleString('en-US')}).` };
+
+  const remaining = before - pay;
+  const base = Number(loan.installment_amount);
+  const rows: PaymentPreviewRow[] = [];
+  const others = all.filter((i) => !i.is_paid && i.id !== installmentId);
+  let allocated = 0;
+
+  for (const i of all) {
+    if (i.is_paid) rows.push({ due_date: i.due_date, amount: Number(i.amount), is_paid: true });
+    else if (i.id === installmentId) rows.push({ due_date: i.due_date, amount: pay, is_paid: true, current: true });
+  }
+  others.forEach((i, idx) => {
+    if (allocated >= remaining) return;
+    const share = idx === others.length - 1 ? remaining - allocated : Math.min(base, remaining - allocated);
+    rows.push({ due_date: i.due_date, amount: share, is_paid: false });
+    allocated += share;
+  });
+
+  let last = all.reduce((max, i) => (i.due_date > max ? i.due_date : max), target.due_date);
+  while (allocated < remaining) {
+    last = addMonths(last, 1);
+    const share = Math.min(base > 0 ? base : remaining, remaining - allocated);
+    rows.push({ due_date: last, amount: share, is_paid: false, added: true });
+    allocated += share;
+  }
+
+  rows.sort((a, b) => a.due_date.localeCompare(b.due_date));
+  return { rows, remaining, error: null };
+}

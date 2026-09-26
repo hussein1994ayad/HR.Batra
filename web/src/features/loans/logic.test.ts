@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Loan, LoanInstallment } from '@/lib/db-types';
 import {
   addMonths, buildInstallmentSchedule, firstOfNextMonth, nextUnpaidInstallment, sameDayNextMonth, sortInstallments,
-  splitAmount, splitLoansByCompletion, validateApproval,
+  previewPayment, splitAmount, splitLoansByCompletion, validateApproval,
 } from './logic';
 
 const inst = (id: string, due_date: string, is_paid = false): LoanInstallment =>
@@ -70,5 +70,41 @@ describe('installment helpers', () => {
     const { incomplete, completed } = splitLoansByCompletion([loan({ id: '1' }), loan({ id: '2', remaining_amount: 0 })]);
     expect(incomplete.map(l => l.id)).toEqual(['1']);
     expect(completed.map(l => l.id)).toEqual(['2']);
+  });
+});
+
+describe('previewPayment', () => {
+  const schedule = (paid: number[], planned: number[]): Loan => {
+    const insts: LoanInstallment[] = [...paid, ...planned].map((amount, i) => ({
+      id: `i${i}`, loan_id: 'l', due_date: `2026-0${i + 1}-10`, amount, is_paid: i < paid.length,
+    }));
+    return loan({ amount: 500000, installment_amount: 100000, installment_count: 5, loan_installments: insts });
+  };
+  const amounts = (p: ReturnType<typeof previewPayment>) => p.rows.map((r) => r.amount / 1000).join();
+
+  it('paying more shrinks the last installment', () => {
+    const p = previewPayment(schedule([100000], [100000, 100000, 100000, 100000]), 'i1', 150000);
+    expect(amounts(p)).toBe('100,150,100,100,50');
+    expect(p.remaining).toBe(250000);
+  });
+
+  it('paying less grows the last installment', () => {
+    expect(amounts(previewPayment(schedule([100000], [100000, 100000, 100000, 100000]), 'i1', 50000))).toBe('100,50,100,100,150');
+  });
+
+  it('a large payment removes installments that are no longer needed', () => {
+    expect(amounts(previewPayment(schedule([100000], [100000, 100000, 100000, 100000]), 'i1', 350000))).toBe('100,350,50');
+  });
+
+  it('underpaying the last installment adds a new month', () => {
+    const p = previewPayment(schedule([100000, 100000, 100000, 100000], [100000]), 'i4', 20000);
+    expect(amounts(p)).toBe('100,100,100,100,20,80');
+    expect(p.rows.at(-1)).toMatchObject({ due_date: '2026-06-10', added: true });
+  });
+
+  it('rejects zero and amounts above the remaining balance', () => {
+    const l = schedule([100000], [100000, 100000, 100000, 100000]);
+    expect(previewPayment(l, 'i1', 0).error).toMatch('أكبر من الصفر');
+    expect(previewPayment(l, 'i1', 400001).error).toMatch('أكبر من المتبقي');
   });
 });
