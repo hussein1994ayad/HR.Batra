@@ -15,8 +15,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
 
-import '../../core/constants/constants.dart';
 import '../../core/services/file_upload_service.dart';
+import '../../core/services/storage_links.dart';
 import '../../core/services/supabase_service.dart';
 import '../../core/utils/arabic_format.dart';
 import '../../core/utils/input_formatters.dart';
@@ -145,9 +145,12 @@ class _LoanRequestScreenState extends State<LoanRequestScreen> with SingleTicker
     );
     if (!confirmed || !mounted) return;
 
-    setState(() => _isSubmitting = true);
     final user = SupabaseService.currentUser;
-    if (user == null) return;
+    if (user == null) {
+      AppSnack.error(context, 'انتهت الجلسة، سجّل الدخول مرة ثانية.');
+      return;
+    }
+    setState(() => _isSubmitting = true);
 
     try {
       // 1. رفع صورة التعهد إلى bucket 'loan-pledges' (مع الضغط التلقائي)
@@ -172,14 +175,6 @@ class _LoanRequestScreenState extends State<LoanRequestScreen> with SingleTicker
         'remaining_amount': _requestedAmount,
         'pledge_url': pledgeUrl,
         'status': 'pending',
-      });
-
-      // 3. إشعار للموظف نفسه
-      await SupabaseService.client.from('notifications').insert({
-        'employee_id': user.id,
-        'title': 'طلب سلفة جديدة 💰',
-        'body': 'تم تقديم طلب السلفة المالية بقيمة (${_requestedAmount.toStringAsFixed(0)} ${AppConstants.currency}) رسمياً للإدارة المالية للتدقيق.',
-        'type': 'loan',
       });
 
       // إشعار المدراء يُرسل من قاعدة البيانات (trg_notify_admins_new_loan_request)
@@ -484,7 +479,7 @@ class _LoanCard extends StatelessWidget {
                 icon: Icons.attach_file_rounded,
                 size: AppButtonSize.small,
                 onPressed: () async {
-                  final url = Uri.tryParse(pledge);
+                  final url = Uri.tryParse(await StorageLinks.resolve(pledge));
                   if (url != null && await canLaunchUrl(url)) {
                     await launchUrl(url, mode: LaunchMode.externalApplication);
                   } else if (context.mounted) {

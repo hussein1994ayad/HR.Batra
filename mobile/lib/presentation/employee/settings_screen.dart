@@ -3,7 +3,6 @@
 // =========================================================================
 
 import 'dart:async';
-
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -12,7 +11,6 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/constants/constants.dart';
@@ -21,6 +19,8 @@ import '../../core/services/auth_service.dart';
 import '../../core/services/device_service.dart';
 import '../../core/services/file_upload_service.dart';
 import '../../core/services/notification_service.dart';
+import '../../core/services/share_helper.dart';
+import '../../core/services/storage_links.dart';
 import '../../core/services/supabase_service.dart';
 import '../shared/ui/ui.dart';
 
@@ -251,7 +251,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: Container(
               constraints: const BoxConstraints(maxHeight: 360),
               color: AppColors.surface2,
-              child: Image.network(
+              child: SignedNetworkImage(
                 url,
                 fit: BoxFit.contain,
                 errorBuilder: (_, __, ___) => const EmptyView(title: 'ملف PDF أو مستند', icon: Icons.picture_as_pdf_rounded, tone: AppTone.accent, compact: true),
@@ -265,7 +265,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             expand: true,
             onPressed: () async {
               Navigator.pop(ctx);
-              await SharePlus.instance.share(ShareParams(uri: Uri.parse(url)));
+              await ShareHelper.shareLink(url, context);
             },
           ),
           if (_isAdminOrManager) ...[
@@ -338,7 +338,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final router = GoRouter.of(context);
     final ok = await showAppConfirm(context, title: 'تسجيل الخروج؟', message: 'تقدر ترجع تدخل بنفس حسابك من هذا الجهاز.', confirmLabel: 'خروج', destructive: true);
     if (!ok) return;
-    await SupabaseService.signOut();
+    await AuthService.signOut();
     router.go(AppRoutes.login);
   }
 
@@ -614,7 +614,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     width: 72,
                     height: 72,
                     color: AppColors.surface2,
-                    child: Image.network(
+                    child: SignedNetworkImage(
                       url,
                       fit: BoxFit.cover,
                       cacheWidth: 216,

@@ -84,10 +84,14 @@ class AttendanceSyncService {
     } catch (e) {
       if (!isNetworkError(e)) rethrow;
       debugPrint('⚠️ لا يوجد اتصال، حفظ البصمة محلياً: $e');
+      // علامة الموقع الوهمي وصاحب البصمة تُحفظ معها: بدونها كان وضع الطيران
+      // + موقع وهمي يمرّر البصمة، وبصمة موظف تُرسل باسم من يدخل بعده.
       await _queueOfflinePunch({
         'type': type,
         'latitude': latitude,
         'longitude': longitude,
+        'is_mocked': isMocked,
+        'user_id': SupabaseService.currentUser?.id,
         'time': punchTime.toIso8601String(),
       });
       return const PunchResult.queued();
@@ -195,6 +199,8 @@ class AttendanceSyncService {
 
     final remaining = <Map<String, dynamic>>[];
     final rejected = <PunchResult>[];
+    final userId = SupabaseService.currentUser?.id;
+    if (userId == null) return const [];
 
     for (final punch in queue) {
       final time = DateTime.tryParse(punch['time'] as String? ?? '');
@@ -203,11 +209,22 @@ class AttendanceSyncService {
       final type = punch['type'] as String?;
       if (time == null || lat == null || lng == null || type == null) continue;
 
+      // بصمة موظف آخر سجّل على نفس الهاتف: تبقى له (حتى 48 ساعة) ولا تُرسل باسم الحالي.
+      // البصمات القديمة بدون صاحب (قبل هذا التحديث) لا تُرسل لأننا لا نعرف لمن هي.
+      final owner = punch['user_id'] as String?;
+      if (owner != userId) {
+        if (owner != null && DateTime.now().toUtc().difference(time) < const Duration(hours: 48)) {
+          remaining.add(punch);
+        }
+        continue;
+      }
+
       try {
         final result = await _sendPunch(
           type: type,
           latitude: lat,
           longitude: lng,
+          isMocked: punch['is_mocked'] as bool? ?? false,
           offlineTime: time,
         );
         // مكررة = سبق رفعها؛ لا داعي لإزعاج الموظف

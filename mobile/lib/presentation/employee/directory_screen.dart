@@ -4,10 +4,11 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-
+import '../../core/services/auth_service.dart';
+import '../../core/services/share_helper.dart';
+import '../../core/services/storage_links.dart';
 import '../../core/services/supabase_service.dart';
 import '../shared/ui/ui.dart';
 
@@ -60,13 +61,10 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final dynamic data =
-          await SupabaseService.client.rpc<dynamic>('get_employee_directory');
+      final dynamic data = await SupabaseService.client.rpc<dynamic>('get_employee_directory');
 
       if (!mounted) return;
-      final list = (data as List<dynamic>)
-          .map((e) => Map<String, dynamic>.from(e as Map))
-          .toList();
+      final list = (data as List<dynamic>).map((e) => Map<String, dynamic>.from(e as Map)).toList();
       final branches = {'all', ...list.map((e) => (e['branch_name'] ?? '').toString()).where((b) => b.isNotEmpty)};
 
       setState(() {
@@ -125,7 +123,9 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
       'manager' => 'مدير فرع',
       _ => 'موظف',
     };
-    final docUrls = [for (final u in (emp['document_urls'] as List<dynamic>? ?? const [])) u.toString()];
+    // وثائق الزملاء (هويات، عقود) للأدمن فقط — الموظف يرى الاسم والقسم والتواصل
+    final canSeeDocs = AuthService.currentUserRole == 'admin';
+    final docUrls = canSeeDocs ? [for (final u in (emp['document_urls'] as List<dynamic>? ?? const [])) u.toString()] : const <String>[];
 
     showAppSheet<void>(
       context,
@@ -209,35 +209,37 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
               ],
             ),
           ),
-          SectionHeader(
-            'الوثائق (${docUrls.length})',
-            actionLabel: docUrls.length > 1 ? 'مشاركة الكل' : null,
-            onAction: () => SharePlus.instance.share(ShareParams(text: docUrls.join('\n'), subject: 'وثائق الموظف: $name')),
-          ),
-          if (docUrls.isEmpty)
-            const Text('لا توجد وثائق مرفوعة لهذا الموظف.', style: AppText.caption)
-          else
-            for (var i = 0; i < docUrls.length; i++)
-              AppListTile(
-                dense: true,
-                leading: ToneIcon(
-                  docUrls[i].toLowerCase().contains('.pdf') ? Icons.picture_as_pdf_rounded : Icons.image_rounded,
-                  tone: docUrls[i].toLowerCase().contains('.pdf') ? AppTone.accent : AppTone.brand,
-                  size: 36,
+          if (canSeeDocs) ...[
+            SectionHeader(
+              'الوثائق (${docUrls.length})',
+              actionLabel: docUrls.length > 1 ? 'مشاركة الكل' : null,
+              onAction: () => ShareHelper.shareLinks(docUrls, subject: 'وثائق الموظف: $name', context: context),
+            ),
+            if (docUrls.isEmpty)
+              const Text('لا توجد وثائق مرفوعة لهذا الموظف.', style: AppText.caption)
+            else
+              for (var i = 0; i < docUrls.length; i++)
+                AppListTile(
+                  dense: true,
+                  leading: ToneIcon(
+                    docUrls[i].toLowerCase().contains('.pdf') ? Icons.picture_as_pdf_rounded : Icons.image_rounded,
+                    tone: docUrls[i].toLowerCase().contains('.pdf') ? AppTone.accent : AppTone.brand,
+                    size: 36,
+                  ),
+                  title: 'وثيقة ${i + 1}',
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        tooltip: 'معاينة',
+                        icon: const Icon(Icons.visibility_rounded),
+                        onPressed: () => _previewImageDialog(docUrls[i], 'وثيقة ${i + 1}'),
+                      ),
+                      IconButton(tooltip: 'مشاركة', icon: const Icon(Icons.ios_share_rounded), onPressed: () => ShareHelper.shareLink(docUrls[i], context)),
+                    ],
+                  ),
                 ),
-                title: 'وثيقة ${i + 1}',
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(tooltip: 'معاينة', icon: const Icon(Icons.visibility_rounded), onPressed: () => _previewImageDialog(docUrls[i], 'وثيقة ${i + 1}')),
-                    IconButton(
-                      tooltip: 'مشاركة',
-                      icon: const Icon(Icons.ios_share_rounded),
-                      onPressed: () => SharePlus.instance.share(ShareParams(uri: Uri.parse(docUrls[i]))),
-                    ),
-                  ],
-                ),
-              ),
+          ],
         ],
       ),
     );
@@ -254,7 +256,7 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
           child: Container(
             constraints: const BoxConstraints(maxHeight: 360),
             color: AppColors.surface1,
-            child: Image.network(
+            child: SignedNetworkImage(
               url,
               fit: BoxFit.contain,
               errorBuilder: (_, __, ___) => const EmptyView(title: 'مستند PDF', icon: Icons.picture_as_pdf_rounded, tone: AppTone.accent, compact: true),
@@ -268,7 +270,7 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
             icon: Icons.ios_share_rounded,
             onPressed: () async {
               Navigator.pop(ctx);
-              await SharePlus.instance.share(ShareParams(uri: Uri.parse(url)));
+              await ShareHelper.shareLink(url, context);
             },
           ),
         ],
@@ -295,7 +297,7 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
         itemCount: _filteredEmployees.length,
         itemBuilder: (context, index) {
           final emp = _filteredEmployees[index];
-          final docs = (emp['document_urls'] as List<dynamic>? ?? const []).length;
+          final docs = AuthService.currentUserRole == 'admin' ? (emp['document_urls'] as List<dynamic>? ?? const []).length : 0;
           return Padding(
             padding: const EdgeInsets.only(bottom: AppSpace.sm),
             child: ContentWidth(
@@ -365,7 +367,10 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
           ),
         ),
       ),
-      body: RefreshIndicator.adaptive(onRefresh: _loadDirectory, child: list is ListView ? list : ListView(children: [list])),
+      body: RefreshIndicator.adaptive(
+        onRefresh: _loadDirectory,
+        child: list is ListView ? list : ListView(children: [list]),
+      ),
     );
   }
 }

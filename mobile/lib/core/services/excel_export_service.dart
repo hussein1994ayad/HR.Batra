@@ -11,6 +11,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:syncfusion_flutter_xlsio/xlsio.dart' as xlsio;
 import '../constants/constants.dart';
 import '../models/loan_model.dart';
+import 'share_helper.dart';
 
 class ExcelExportService {
   /// توليد كشف حساب سلفة تفصيلي واحترافي بصيغة Excel (.xlsx)
@@ -362,7 +363,7 @@ class ExcelExportService {
   /// مشاركة ملف Excel عبر واتساب أو تيليغرام أو التطبيقات
   static Future<void> shareExcelFile(String filePath, {String? text}) async {
     try {
-      await SharePlus.instance.share(ShareParams(
+      await ShareHelper.shareParams(ShareParams(
         files: [XFile(filePath)],
         text: text ?? 'كشف حساب سلفة الموظف - HR Pro Batra',
       ));

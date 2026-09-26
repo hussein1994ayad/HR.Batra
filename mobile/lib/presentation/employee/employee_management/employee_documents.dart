@@ -5,9 +5,10 @@ import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../../../core/services/image_compression_service.dart';
+import '../../../core/services/share_helper.dart';
+import '../../../core/services/storage_links.dart';
 import '../../../core/services/supabase_service.dart';
 import '../../shared/ui/ui.dart';
 
@@ -31,7 +32,7 @@ Future<List<String>> uploadEmployeeDocuments(List<File> files, String employeeId
 /// ينزّل الملف مؤقتاً ويفتحه بالتطبيق المناسب.
 Future<void> downloadAndOpenDocument(BuildContext context, String url) async {
   try {
-    final response = await http.get(Uri.parse(url));
+    final response = await http.get(Uri.parse(await StorageLinks.resolve(url)));
     if (response.statusCode != 200) throw Exception('HTTP ${response.statusCode}');
     final dir = await getTemporaryDirectory();
     final ext = url.split('?').first.split('.').last;
@@ -62,7 +63,7 @@ Future<void> previewEmployeeDocument(BuildContext context, String url, String ti
                 : InteractiveViewer(
                     minScale: 0.5,
                     maxScale: 4,
-                    child: Image.network(
+                    child: SignedNetworkImage(
                       url,
                       fit: BoxFit.contain,
                       loadingBuilder: (_, child, p) => p == null ? child : const Skeleton(height: 240, radius: 0),
@@ -78,7 +79,7 @@ Future<void> previewEmployeeDocument(BuildContext context, String url, String ti
           label: 'مشاركة',
           icon: Icons.ios_share_rounded,
           expand: true,
-          onPressed: () => SharePlus.instance.share(ShareParams(uri: Uri.parse(url))),
+          onPressed: () => ShareHelper.shareLink(url, ctx),
         ),
       ],
     ),
@@ -137,7 +138,7 @@ class DocumentsGrid extends StatelessWidget {
       children: [
         for (var i = 0; i < urls.length; i++)
           _thumb(
-            Image.network(urls[i], fit: BoxFit.cover, cacheWidth: 216, errorBuilder: (_, __, ___) => const ColoredBox(color: AppColors.surface2, child: Icon(Icons.description_rounded, color: AppColors.accent))),
+            SignedNetworkImage(urls[i], fit: BoxFit.cover, cacheWidth: 216, errorBuilder: (_, __, ___) => const ColoredBox(color: AppColors.surface2, child: Icon(Icons.description_rounded, color: AppColors.accent))),
             onRemoveUrl == null ? null : () => onRemoveUrl!(i),
           ),
         for (var i = 0; i < files.length; i++) _thumb(Image.file(files[i], fit: BoxFit.cover, cacheWidth: 216), () => onRemoveFile(i)),

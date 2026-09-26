@@ -249,18 +249,13 @@ class _HomeScreenState extends State<HomeScreen> {
         _unreadNotificationsCount = unreadRes.length;
       });
 
-      // جدولة تذكيرات الحضور والانصراف تلقائياً بناءً على جدول العمل
-      unawaited(NotificationService.scheduleAttendanceReminders(schedule: _workSchedule));
 
       if (_todayAttendance != null &&
           _todayAttendance!['check_in_time'] != null &&
           _todayAttendance!['check_out_time'] == null) {
         unawaited(LocationService.startTracking(employeeId: user.id));
-        unawaited(NotificationService.cancelTodayCheckInReminder());
       } else if (_todayAttendance != null && _todayAttendance!['check_out_time'] != null) {
         unawaited(LocationService.stopTracking());
-        unawaited(NotificationService.cancelTodayCheckInReminder());
-        unawaited(NotificationService.cancelTodayCheckOutReminder());
       } else {
         unawaited(LocationService.stopTracking());
       }

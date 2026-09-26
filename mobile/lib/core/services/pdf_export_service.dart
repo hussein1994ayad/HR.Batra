@@ -11,6 +11,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 import '../constants/constants.dart';
+import 'share_helper.dart';
 
 class PdfExportService {
   /// توليد كشف راتب شهري PDF وحفظه في مستندات الجهاز (ونسخة في التنزيلات على Android).
@@ -436,7 +437,7 @@ class PdfExportService {
   /// مشاركة ملف الـ PDF عبر واتساب أو البريد أو التطبيقات
   static Future<void> sharePdfFile(String filePath) async {
     try {
-      await SharePlus.instance.share(ShareParams(
+      await ShareHelper.shareParams(ShareParams(
         files: [XFile(filePath)],
         text: 'كشف الراتب الشهري الرسمي - HR Pro Batra',
       ));

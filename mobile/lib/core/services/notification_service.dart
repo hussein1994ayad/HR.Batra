@@ -13,10 +13,8 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
-import 'package:timezone/timezone.dart' as tz;
 
 import '../../core/design/design.dart';
-import 'schedule_service.dart';
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -174,7 +172,7 @@ class NotificationService {
             _firebaseMessaging.onTokenRefresh.listen(_saveTokenToSupabase);
           }
           if (user != null) {
-            unawaited(scheduleAttendanceReminders());
+            unawaited(cancelAllAttendanceReminders());
           }
         } catch (e) {
           debugPrint('Non-fatal background notification init error: $e');
@@ -190,7 +188,7 @@ class NotificationService {
   /// طلب الصلاحيات وحفظ التوكن. يُستدعى بعد تسجيل الدخول.
   static Future<bool> requestPermissionAndSaveToken() async {
     if (!_firebaseReady) {
-      await scheduleAttendanceReminders();
+      await cancelAllAttendanceReminders();
       return false;
     }
     try {
@@ -206,7 +204,7 @@ class NotificationService {
       _firebaseMessaging.onTokenRefresh.listen(_saveTokenToSupabase);
 
       // إعادة جدولة التذكيرات بعد منح الصلاحيات
-      await scheduleAttendanceReminders();
+      await cancelAllAttendanceReminders();
 
       return true;
     } catch (e) {
@@ -266,162 +264,6 @@ class NotificationService {
   // نظام جدولة تذكيرات بصمة الدخول وبصمة الخروج (Check-in & Check-out Alarms)
   // =========================================================================
 
-  /// جدولة تذكيرات بصمة الحضور والانصراف تلقائياً بناءً على جدول عمل الموظف
-  static Future<void> scheduleAttendanceReminders({
-    Map<String, dynamic>? schedule,
-    int reminderMinutesBeforeCheckIn = 15,
-    int reminderMinutesBeforeCheckOut = 0,
-  }) async {
-    try {
-      final user = Supabase.instance.client.auth.currentUser;
-      if (user == null) return;
-
-      Map<String, dynamic>? activeSchedule = schedule;
-      final scheduleMode = await _reminderScheduleMode();
-
-      // إذا لم يتم تمرير الجدول، نحاول جلبه من السيرفر
-      if (activeSchedule == null) {
-        try {
-          activeSchedule = await ScheduleService.fetchEffectiveSchedule();
-        } catch (e) {
-          debugPrint('⚠️ تعذر جلب جدول العمل للجدولة: $e');
-        }
-      }
-
-      // أوقات الدوام الافتراضية إذا لم يوجد جدول محدد
-      final String checkInStr = (activeSchedule?['check_in_time'] ?? '08:30:00') as String;
-      final String checkOutStr = (activeSchedule?['check_out_time'] ?? '16:30:00') as String;
-      final List<dynamic> rawWorkDays = (activeSchedule?['work_days'] ?? [0, 1, 2, 3, 4, 6]) as List<dynamic>; // الأحد إلى الخميس + السبت
-
-      final List<int> workDays = rawWorkDays.map((e) => int.tryParse(e.toString()) ?? 0).toList();
-
-      // تحليل وقت الحضور والانصراف
-      final inParts = checkInStr.split(':');
-      final outParts = checkOutStr.split(':');
-      if (inParts.length < 2 || outParts.length < 2) return;
-
-      final int inHour = int.parse(inParts[0]);
-      final int inMin = int.parse(inParts[1]);
-      final int outHour = int.parse(outParts[0]);
-      final int outMin = int.parse(outParts[1]);
-
-      // إلغاء أي تذكيرات قديمة مبرمجة سابقاً
-      await cancelAllAttendanceReminders();
-
-      // حساب وقت التنبيه قبل الحضور
-      int targetInMin = inMin - reminderMinutesBeforeCheckIn;
-      int targetInHour = inHour;
-      if (targetInMin < 0) {
-        targetInMin += 60;
-        targetInHour -= 1;
-        if (targetInHour < 0) targetInHour = 23;
-      }
-
-      // حساب وقت التنبيه للانصراف
-      int targetOutMin = outMin - reminderMinutesBeforeCheckOut;
-      int targetOutHour = outHour;
-      if (targetOutMin < 0) {
-        targetOutMin += 60;
-        targetOutHour -= 1;
-        if (targetOutHour < 0) targetOutHour = 23;
-      }
-
-      // جدولة لكل يوم من أيام الدوام الأسبوعية
-      for (final dbDay in workDays) {
-        final dartWeekday = _dbDayToDartWeekday(dbDay);
-
-        // 1. تذكير بصمة الحضور (Check-in Reminder)
-        final inId = 1000 + dbDay;
-        final inScheduledDate = _nextInstanceOfWeekdayAndTime(dartWeekday, targetInHour, targetInMin);
-
-        await _localNotifications.zonedSchedule(
-          inId,
-          'تذكير: موعد بصمة الحضور 🟢',
-          reminderMinutesBeforeCheckIn > 0 
-              ? 'يبدأ دوامك بعد $reminderMinutesBeforeCheckIn دقيقة ($checkInStr). يرجى التواجد في الفرع لتسجيل الحضور.'
-              : 'حان موعد بدء الدوام الرسمي ($checkInStr). يرجى تسجيل بصمة الحضور الآن.',
-          inScheduledDate,
-          const NotificationDetails(
-            android: AndroidNotificationDetails(
-              reminderChannelId,
-              reminderChannelName,
-              channelDescription: 'تنبيهات وتذكيرات مواعيد تسجيل بصمة الحضور والانصراف',
-              importance: Importance.max,
-              priority: Priority.max,
-              icon: '@mipmap/launcher_icon',
-              sound: RawResourceAndroidNotificationSound('special_chime'),
-              enableLights: true,
-              ledColor: AppColors.brandStrong,
-              category: AndroidNotificationCategory.alarm,
-              visibility: NotificationVisibility.public,
-            ),
-            iOS: DarwinNotificationDetails(
-              presentAlert: true,
-              presentBadge: true,
-              presentSound: true,
-              sound: 'special_chime.wav',
-              interruptionLevel: InterruptionLevel.timeSensitive,
-            ),
-          ),
-          androidScheduleMode: scheduleMode,
-          uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
-          matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
-        );
-
-        // 2. تذكير بصمة الانصراف (Check-out Reminder)
-        final outId = 2000 + dbDay;
-        final outScheduledDate = _nextInstanceOfWeekdayAndTime(dartWeekday, targetOutHour, targetOutMin);
-
-        await _localNotifications.zonedSchedule(
-          outId,
-          'تذكير: موعد بصمة الانصراف 🔴',
-          'انتهى وقت الدوام الرسمي المقرّر ($checkOutStr). يرجى تسجيل بصمة الانصراف قبل مغادرة الفرع.',
-          outScheduledDate,
-          const NotificationDetails(
-            android: AndroidNotificationDetails(
-              reminderChannelId,
-              reminderChannelName,
-              channelDescription: 'تنبيهات وتذكيرات مواعيد تسجيل بصمة الحضور والانصراف',
-              importance: Importance.max,
-              priority: Priority.max,
-              icon: '@mipmap/launcher_icon',
-              sound: RawResourceAndroidNotificationSound('special_chime'),
-              enableLights: true,
-              ledColor: AppColors.brandStrong,
-              category: AndroidNotificationCategory.alarm,
-              visibility: NotificationVisibility.public,
-            ),
-            iOS: DarwinNotificationDetails(
-              presentAlert: true,
-              presentBadge: true,
-              presentSound: true,
-              sound: 'special_chime.wav',
-              interruptionLevel: InterruptionLevel.timeSensitive,
-            ),
-          ),
-          androidScheduleMode: scheduleMode,
-          uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
-          matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
-        );
-      }
-
-      debugPrint('✅ تم بنجاح جدولة تذكيرات الحضور والانصراف لـ ${workDays.length} أيام عمل أسبوعية.');
-    } catch (e, stack) {
-      debugPrint('❌ خطأ في جدولة تذكيرات الحضور والانصراف: $e\n$stack');
-    }
-  }
-
-  /// المنبه الدقيق يحتاج موافقة المستخدم على Android 14+ (SCHEDULE_EXACT_ALARM).
-  /// بدونها نستعمل التذكير غير الدقيق بدل أن تفشل الجدولة كلياً.
-  static Future<AndroidScheduleMode> _reminderScheduleMode() async {
-    final android = _localNotifications.resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin>();
-    final canExact = await android?.canScheduleExactNotifications() ?? true;
-    return canExact
-        ? AndroidScheduleMode.exactAllowWhileIdle
-        : AndroidScheduleMode.inexactAllowWhileIdle;
-  }
-
   /// إلغاء كافة تذكيرات البصمة المجدولة
   static Future<void> cancelAllAttendanceReminders() async {
     for (int day = 0; day <= 6; day++) {
@@ -432,48 +274,31 @@ class NotificationService {
     }
   }
 
-  /// إلغاء تذكير حضور اليوم (يُستدعى فور قيام الموظف بالتبصيم)
-  static Future<void> cancelTodayCheckInReminder() async {
+  /// يفصل هذا الهاتف عن حساب المستخدم عند تسجيل الخروج: يحذف رمز الإشعارات
+  /// من السيرفر ويلغيه من Firebase، حتى لا تصل إشعارات الحساب السابق لهذا الهاتف.
+  /// يجب أن يُستدعى والجلسة ما زالت فعّالة.
+  static Future<void> unregisterDevice() async {
+    await cancelAllAttendanceReminders();
+    final user = Supabase.instance.client.auth.currentUser;
+    if (!_firebaseReady) return;
     try {
-      final now = DateTime.now();
-      final dbDay = now.weekday % 7; // Sunday = 0, Monday = 1...
-      await _localNotifications.cancel(1000 + dbDay);
-      debugPrint('تم إلغاء تذكير حضور اليوم بعد اكتمال البصمة.');
-    } catch (_) {}
-  }
-
-  /// إلغاء تذكير انصراف اليوم (يُستدعى فور تسجيل الانصراف)
-  static Future<void> cancelTodayCheckOutReminder() async {
-    try {
-      final now = DateTime.now();
-      final dbDay = now.weekday % 7;
-      await _localNotifications.cancel(2000 + dbDay);
-      debugPrint('تم إلغاء تذكير انصراف اليوم بعد اكتمال البصمة.');
-    } catch (_) {}
-  }
-
-  /// حساب التوقيت القادم ليوم محدد وساعة محددة
-  static tz.TZDateTime _nextInstanceOfWeekdayAndTime(int dartWeekday, int hour, int minute) {
-    final tz.TZDateTime now = tz.TZDateTime.now(tz.local);
-    tz.TZDateTime scheduledDate = tz.TZDateTime(
-      tz.local,
-      now.year,
-      now.month,
-      now.day,
-      hour,
-      minute,
-    );
-
-    while (scheduledDate.weekday != dartWeekday || scheduledDate.isBefore(now)) {
-      scheduledDate = scheduledDate.add(const Duration(days: 1));
+      final token = await _firebaseMessaging.getToken().timeout(const Duration(seconds: 5));
+      if (token != null && user != null) {
+        final db = Supabase.instance.client;
+        await Future.wait([
+          db.from('fcm_tokens').delete().eq('employee_id', user.id).eq('token', token),
+          db.from('device_tokens').delete().eq('employee_id', user.id).eq('token', token),
+          db.from('employees').update({'fcm_token': null}).eq('id', user.id).eq('fcm_token', token),
+        ]).timeout(const Duration(seconds: 8));
+      }
+    } catch (e) {
+      debugPrint('unregisterDevice: server cleanup failed: $e');
     }
-    return scheduledDate;
-  }
-
-  /// تحويل ترميز اليوم في قاعدة البيانات (0=الأحد ... 6=السبت) إلى ترميز Dart (1=الإثنين ... 7=الأحد)
-  static int _dbDayToDartWeekday(int dbDay) {
-    if (dbDay == 0) return DateTime.sunday; // 7
-    return dbDay; // 1 = monday, 2 = tuesday, 3 = wednesday, 4 = thursday, 5 = friday, 6 = saturday
+    try {
+      await _firebaseMessaging.deleteToken();
+    } catch (e) {
+      debugPrint('unregisterDevice: deleteToken failed: $e');
+    }
   }
 
   static Future<void> _saveTokenToSupabase(String token) async {

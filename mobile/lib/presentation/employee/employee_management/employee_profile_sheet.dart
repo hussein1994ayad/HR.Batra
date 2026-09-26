@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/services/share_helper.dart';
 import '../../shared/ui/ui.dart';
 import 'employee_documents.dart';
 
@@ -132,7 +132,7 @@ Future<void> showEmployeeProfileSheet(
                 ? IconButton(
                     tooltip: 'مشاركة الكل',
                     icon: const Icon(Icons.ios_share_rounded, size: 20),
-                    onPressed: () => SharePlus.instance.share(ShareParams(text: docUrls.join('\n'), subject: 'وثائق الموظف: $name')),
+                    onPressed: () => ShareHelper.shareLinks(docUrls, subject: 'وثائق الموظف: $name', context: ctx),
                   )
                 : null,
             actionLabel: 'تعديل',

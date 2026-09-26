@@ -29,9 +29,4 @@ class SupabaseService {
   static bool get isAuthenticated => currentUser != null;
 
   // تسجيل الخروج التام
-  static Future<void> signOut() async {
-    try {
-      await client.auth.signOut();
-    } catch (_) {}
-  }
 }

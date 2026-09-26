@@ -3,6 +3,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/logic/loan_rules.dart';
 import '../../../../core/models/models.dart';
+import '../../../../core/services/storage_links.dart';
 import '../../../shared/ui/ui.dart';
 import 'loan_card.dart';
 
@@ -143,7 +144,7 @@ class _PledgePreview extends StatelessWidget {
               onTap: () => showFullScreenImage(context, url, 'تعهد سلفة: $employeeName'),
               child: SizedBox(
                 height: 180,
-                child: Image.network(
+                child: SignedNetworkImage(
                   url,
                   fit: BoxFit.cover,
                   cacheWidth: 900,
@@ -216,7 +217,7 @@ Future<void> showFullScreenImage(BuildContext context, String imageUrl, String c
             minScale: 0.5,
             maxScale: 4.0,
             child: Center(
-              child: Image.network(
+              child: SignedNetworkImage(
                 imageUrl,
                 fit: BoxFit.contain,
                 errorBuilder: (_, __, ___) => const Center(child: Text('تعذّر تحميل الصورة', style: AppText.body)),

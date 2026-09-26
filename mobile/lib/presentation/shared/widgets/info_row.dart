@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/design/design.dart';
+import '../../../core/services/storage_links.dart';
 import '../ui/app_overlays.dart';
 
 /// صف معلومة: أيقونة + عنوان صغير + قيمة. إذا أُعطي [url] تصير القيمة رابطاً يُفتح.
@@ -22,7 +23,7 @@ class InfoRow extends StatelessWidget {
   final String? url;
 
   Future<void> _open(BuildContext context) async {
-    final uri = Uri.tryParse(url ?? '');
+    final uri = Uri.tryParse(url == null ? '' : await StorageLinks.resolve(url!));
     final opened = uri != null && await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (!opened && context.mounted) AppSnack.error(context, 'تعذّر فتح المرفق');
   }

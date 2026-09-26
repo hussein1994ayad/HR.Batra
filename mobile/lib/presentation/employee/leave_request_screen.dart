@@ -16,6 +16,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../core/services/file_upload_service.dart';
+import '../../core/services/storage_links.dart';
 import '../../core/services/supabase_service.dart';
 import '../shared/ui/ui.dart';
 
@@ -206,9 +207,12 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
     );
     if (!confirmed || !mounted) return;
 
-    setState(() => _isUploading = true);
     final user = SupabaseService.currentUser;
-    if (user == null) return;
+    if (user == null) {
+      AppSnack.error(context, 'انتهت الجلسة، سجّل الدخول مرة ثانية.');
+      return;
+    }
+    setState(() => _isUploading = true);
 
     try {
       String? attachmentUrl;
@@ -247,14 +251,6 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
         'reason': _reasonController.text.trim(),
         'attachment_url': attachmentUrl,
         'status': 'pending',
-      });
-
-      // 4. إشعار للموظف نفسه بأن الطلب وصل
-      await SupabaseService.client.from('notifications').insert({
-        'employee_id': user.id,
-        'title': 'تقديم طلب إجازة جديد 📝',
-        'body': 'تم إرسال طلب إجازتك الجديد بنجاح للإدارة وجاري مراجعته والرد قريباً.',
-        'type': 'leave',
       });
 
       // إشعار المدراء يُرسل من قاعدة البيانات (trg_notify_admins_new_leave_request)
@@ -605,7 +601,7 @@ class _LeaveCard extends StatelessWidget {
               icon: Icons.attach_file_rounded,
               size: AppButtonSize.small,
               onPressed: () async {
-                final uri = Uri.tryParse(url);
+                final uri = Uri.tryParse(await StorageLinks.resolve(url));
                 if (uri != null && await canLaunchUrl(uri)) {
                   await launchUrl(uri, mode: LaunchMode.externalApplication);
                 }

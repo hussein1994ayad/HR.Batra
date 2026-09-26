@@ -12,7 +12,6 @@ import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 
 import '../../core/services/attendance_sync_service.dart';
 import '../../core/services/location_service.dart';
-import '../../core/services/notification_service.dart';
 import '../../core/services/schedule_service.dart';
 import '../../core/services/supabase_service.dart';
 import '../shared/ui/ui.dart';
@@ -261,7 +260,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
       // 6. دمج البصمات المحلية المعلقة في طابور التزامن
       final offlinePunches = await AttendanceSyncService.getOfflinePunchesQueue();
+      final me = SupabaseService.currentUser?.id;
       final todayOfflinePunches = offlinePunches.where((p) {
+        if (p['user_id'] != me) return false;
         final time = DateTime.tryParse(p['time'] as String? ?? '')?.toLocal();
         return time != null && time.toIso8601String().startsWith(todayStr);
       }).toList();
@@ -369,11 +370,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       // تشغيل التتبع الجغرافي عند الحضور أو إيقافه عند الانصراف
       if (punchType == 'check_in') {
         unawaited(LocationService.startTracking(employeeId: user.id));
-        unawaited(NotificationService.cancelTodayCheckInReminder());
       } else {
         unawaited(LocationService.stopTracking());
-        unawaited(NotificationService.cancelTodayCheckInReminder());
-        unawaited(NotificationService.cancelTodayCheckOutReminder());
       }
 
       if (mounted) {

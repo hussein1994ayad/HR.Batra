@@ -18,6 +18,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../providers/app_container.dart';
 import '../providers/auth_provider.dart';
 import 'device_service.dart';
+import 'ios_region_monitor.dart';
+import 'location_service.dart';
+import 'notification_service.dart';
+import 'storage_links.dart';
 import 'supabase_service.dart';
 
 // -------------------------------------------------------------------------
@@ -149,7 +153,6 @@ class AuthService {
 
     await SupabaseService.client.from('employees').update({
       'must_change_password': false,
-      'plain_password': newPassword,
     }).eq('id', user.id);
 
     await _touchActivity();
@@ -204,8 +207,21 @@ class AuthService {
   }
 
   /// تسجيل الخروج الشامل: يمسح جلسة Supabase + الحالة الثابتة + نشاط الجلسة.
+  ///
+  /// قبل إنهاء الجلسة: يوقف التتبع والخدمة الخلفية، ويفصل رمز الإشعارات عن
+  /// الحساب (وإلا تبقى إشعارات هذا الموظف تصل لهذا الهاتف بعد خروجه).
   static Future<void> signOut() async {
     _setRole(null);
+    try {
+      await LocationService.stopTracking().timeout(const Duration(seconds: 5));
+    } catch (e) {
+      debugPrint('signOut: stopTracking failed: $e');
+    }
+    try {
+      await IosRegionMonitor.stopMonitoring();
+    } catch (_) {}
+    await NotificationService.unregisterDevice();
+    StorageLinks.clearCache();
     try {
       await SupabaseService.client.auth.signOut();
     } catch (e) {

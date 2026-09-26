@@ -25,9 +25,6 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.VIBRATE"/>
 
-    <!-- التنبيهات الدقيقة لتذكيرات البصمة (يطلبها التطبيق من المستخدم على Android 14+).
-         USE_EXACT_ALARM غير مستخدم: Google Play يقصره على تطبيقات المنبه والتقويم. -->
-    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
