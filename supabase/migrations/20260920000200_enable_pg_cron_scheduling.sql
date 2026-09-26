@@ -86,7 +86,7 @@ SELECT cron.schedule(
 -- =====================================================================
 
 CREATE TABLE IF NOT EXISTS orphan_storage_candidates_cache (
-    id                UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     bucket_id         TEXT NOT NULL,
     file_path         TEXT NOT NULL,
     file_size         BIGINT,
