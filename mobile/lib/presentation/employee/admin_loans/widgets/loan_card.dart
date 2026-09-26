@@ -1,36 +1,27 @@
 import 'package:flutter/material.dart';
 
-import '../../../../core/constants/constants.dart';
-import '../../../../core/design/design.dart';
 import '../../../../core/logic/loan_rules.dart';
 import '../../../../core/models/models.dart';
-import '../../../shared/widgets/glass_container.dart';
+import '../../../shared/ui/ui.dart';
 
 /// شارة حالة السلفة (معلقة، مسددة، مرفوضة، نشطة).
-({String label, Color color}) loanBadge(LoanModel loan) {
-  if (loan.isPending) return (label: 'طلب معلق ⏳', color: AppColors.warning);
-  if (loan.isRejected) return (label: 'مرفوضة', color: AppColors.danger);
-  if (loan.remainingAmount <= 0) return (label: 'مسددة بالكامل', color: AppColors.success);
-  return (label: 'سلفة نشطة', color: AppColors.brand);
+({String label, AppTone tone}) loanBadge(LoanModel loan) {
+  if (loan.isPending) return (label: 'طلب معلق', tone: AppTone.warning);
+  if (loan.isRejected) return (label: 'مرفوضة', tone: AppTone.danger);
+  if (loan.remainingAmount <= 0) return (label: 'مسددة', tone: AppTone.success);
+  return (label: 'نشطة', tone: AppTone.brand);
 }
 
-/// صورة الموظف أو أيقونة بديلة.
+/// صورة الموظف (أو الحروف الأولى).
 class EmployeeAvatar extends StatelessWidget {
-  const EmployeeAvatar({super.key, this.url, this.radius = 20});
+  const EmployeeAvatar({super.key, this.url, this.radius = 20, this.name = ''});
 
   final String? url;
   final double radius;
+  final String name;
 
   @override
-  Widget build(BuildContext context) {
-    final hasUrl = url != null && url!.isNotEmpty;
-    return CircleAvatar(
-      radius: radius,
-      backgroundColor: AppColors.brandStrong.withValues(alpha: 0.2),
-      backgroundImage: hasUrl ? NetworkImage(url!) : null,
-      child: hasUrl ? null : Icon(Icons.person_rounded, color: AppColors.brand, size: radius),
-    );
-  }
+  Widget build(BuildContext context) => AppAvatar(name: name, url: url, size: radius * 2);
 }
 
 class LoanCard extends StatelessWidget {
@@ -40,129 +31,82 @@ class LoanCard extends StatelessWidget {
   final VoidCallback onOpen;
   final VoidCallback onExport;
 
-  Widget _amount(String label, double value, Color color, CrossAxisAlignment align) => Column(
-        crossAxisAlignment: align,
-        children: [
-          Text(label, style: const TextStyle(fontFamily: 'Cairo', fontSize: 10, color: AppColors.textMuted)),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(
-              AppConstants.formatMoney(value),
-              style: TextStyle(fontFamily: 'Cairo', fontSize: 13, fontWeight: FontWeight.bold, color: color),
-            ),
-          ),
-        ],
-      );
-
   @override
   Widget build(BuildContext context) {
     final loan = record.loan;
     final progress = loanProgress(loan);
     final paidCount = loan.installments.where((i) => i.isPaid).length;
     final badge = loanBadge(loan);
+    final name = loan.employeeName ?? 'موظف';
 
-    return GlassContainer(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
-      borderRadius: 18,
-      borderColor: AppColors.border,
-      child: InkWell(
-        onTap: onOpen,
-        borderRadius: BorderRadius.circular(18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+    return AppCard(
+      onTap: onOpen,
+      semanticLabel: 'سلفة $name، ${badge.label}',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              EmployeeAvatar(url: record.avatarUrl, name: name),
+              const SizedBox(width: AppSpace.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(name, style: AppText.subtitle, maxLines: 1, overflow: TextOverflow.ellipsis),
+                    Text(record.branchName, style: AppText.caption, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ],
+                ),
+              ),
+              StatusBadge(badge.label, tone: badge.tone, dot: true),
+            ],
+          ),
+          const SizedBox(height: AppSpace.md),
+          Row(
+            children: [
+              Expanded(child: _Amount('المبلغ', loan.amount, AppColors.textPrimary)),
+              Expanded(child: _Amount('المسدد', loan.paidAmount > 0 ? loan.paidAmount : 0, AppColors.success)),
+              Expanded(child: _Amount('المتبقي', loan.remainingAmount, loan.remainingAmount > 0 ? AppColors.danger : AppColors.textMuted)),
+            ],
+          ),
+          if (!loan.isPending && !loan.isRejected) ...[
+            const SizedBox(height: AppSpace.md),
+            AppProgressBar(value: progress, tone: progress >= 1 ? AppTone.success : AppTone.brand, height: 6),
+            const SizedBox(height: AppSpace.xs),
             Row(
               children: [
-                EmployeeAvatar(url: record.avatarUrl),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        loan.employeeName ?? 'موظف غير معروف',
-                        style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textPrimary),
-                      ),
-                      Text(record.branchName, style: const TextStyle(fontFamily: 'Cairo', fontSize: 10, color: AppColors.textMuted)),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(color: badge.color.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(8)),
-                  child: Text(
-                    badge.label,
-                    style: TextStyle(fontFamily: 'Cairo', fontSize: 10, fontWeight: FontWeight.bold, color: badge.color),
-                  ),
-                ),
-              ],
-            ),
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 8),
-              child: Divider(color: AppColors.border, height: 1),
-            ),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(child: _amount('المبلغ الكلي', loan.amount, AppColors.textPrimary, CrossAxisAlignment.start)),
-                Expanded(child: _amount('المسدد', loan.paidAmount > 0 ? loan.paidAmount : 0, AppColors.success, CrossAxisAlignment.center)),
-                Expanded(child: _amount('المتبقي بذمته', loan.remainingAmount, AppColors.danger, CrossAxisAlignment.end)),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(6),
-                        child: LinearProgressIndicator(
-                          value: progress,
-                          minHeight: 6,
-                          backgroundColor: AppColors.border,
-                          valueColor: AlwaysStoppedAnimation<Color>(progress >= 1.0 ? AppColors.success : AppColors.brand),
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'الأقساط المسددة: $paidCount من ${loan.installmentCount} أقساط (${(progress * 100).toStringAsFixed(0)}%)',
-                        style: const TextStyle(fontFamily: 'Cairo', fontSize: 10, color: AppColors.textMuted),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 12),
-                InkWell(
-                  onTap: onExport,
-                  borderRadius: BorderRadius.circular(8),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: AppColors.success.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.file_download_outlined, color: AppColors.success, size: 15),
-                        SizedBox(width: 4),
-                        Text(
-                          'Excel',
-                          style: TextStyle(fontFamily: 'Cairo', fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.success),
-                        ),
-                      ],
-                    ),
-                  ),
+                Expanded(child: Text('$paidCount من ${loan.installmentCount} أقساط · ${(progress * 100).round()}%', style: AppText.caption)),
+                TextButton.icon(
+                  onPressed: onExport,
+                  style: TextButton.styleFrom(foregroundColor: AppColors.success, minimumSize: const Size(48, 40)),
+                  icon: const Icon(Icons.file_download_outlined, size: 18),
+                  label: const Text('Excel'),
                 ),
               ],
             ),
           ],
-        ),
+        ],
       ),
     );
   }
+}
+
+class _Amount extends StatelessWidget {
+  const _Amount(this.label, this.value, this.color);
+  final String label;
+  final double value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: AppText.caption),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: AlignmentDirectional.centerStart,
+            child: Text(Fmt.iqd(value), style: AppText.subtitle.copyWith(color: color, fontFeatures: const [FontFeature.tabularFigures()])),
+          ),
+        ],
+      );
 }

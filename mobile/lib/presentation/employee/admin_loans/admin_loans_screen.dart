@@ -17,7 +17,6 @@ import '../../../core/services/excel_export_service.dart';
 import '../../../data/repositories/loan_repository.dart';
 import '../../../data/repositories/role_repository.dart';
 import '../../shared/ui/ui.dart';
-import '../../shared/widgets/glass_background.dart';
 import 'widgets/create_loan_sheet.dart';
 import 'widgets/loan_card.dart';
 import 'widgets/loan_details_sheet.dart';
@@ -55,9 +54,7 @@ class _AdminLoansManagementScreenState extends State<AdminLoansManagementScreen>
 
   void _toast(String message, Color color) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message, style: const TextStyle(fontFamily: 'Cairo')), backgroundColor: color),
-    );
+    AppSnack.show(context, message, tone: color == AppColors.danger ? AppTone.danger : AppTone.success);
   }
 
   Future<void> _init() async {
@@ -103,7 +100,7 @@ class _AdminLoansManagementScreenState extends State<AdminLoansManagementScreen>
   Future<void> _createLoan() async {
     final created = await showCreateLoanSheet(context, employees: _data.employees, repo: _repo);
     if (created ?? false) {
-      _toast('تمت إضافة واعتماد السلفة وتوليد الأقساط بنجاح', AppColors.success);
+      _toast('تمت إضافة واعتماد السلفة وتولّدت الأقساط', AppColors.success);
       await _load();
     }
   }
@@ -112,36 +109,62 @@ class _AdminLoansManagementScreenState extends State<AdminLoansManagementScreen>
   Widget build(BuildContext context) {
     final loans = filterLoans(_data.loans, query: _query, branchId: _branchId, status: _status);
 
-    return GlassBackground(
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        floatingActionButton: FloatingActionButton.extended(
-          heroTag: 'create_loan_admin_fab',
-          icon: const Icon(Icons.add_circle_outline_rounded),
-          label: const Text('سلفة لموظف'),
-          onPressed: _createLoan,
+    final List<Widget> list;
+    if (_isLoading && _data.loans.isEmpty) {
+      list = const [SkeletonList(header: true, count: 3, itemHeight: 140)];
+    } else if (loans.isEmpty) {
+      list = [
+        EmptyView(
+          title: _data.loans.isEmpty ? 'لا توجد سلف بعد' : 'لا نتائج',
+          message: _data.loans.isEmpty ? 'طلبات السلف والسلف المباشرة تظهر هنا.' : 'غيّر البحث أو الفلتر.',
+          icon: Icons.account_balance_wallet_rounded,
+          compact: true,
         ),
-        appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textPrimary),
-            onPressed: () => Navigator.pop(context),
-          ),
-          title: const Text(
-            'متابعة سلف وأقساط الموظفين',
-            style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.textPrimary),
-          ),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.refresh_rounded, color: AppColors.brand),
-              tooltip: 'تحديث البيانات',
-              onPressed: _load,
+      ];
+    } else {
+      list = [
+        for (var i = 0; i < loans.length; i++)
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppSpace.md),
+            child: FadeSlideIn(
+              index: i,
+              child: LoanCard(
+                key: ValueKey(loans[i].loan.id),
+                record: loans[i],
+                onOpen: () => showLoanDetailsSheet(context, loans[i], onExport: () => _export(loans[i])),
+                onExport: () => _export(loans[i]),
+              ),
             ),
-          ],
-          bottom: PreferredSize(
-            preferredSize: const Size.fromHeight(165),
-            child: LoansFilterBar(
+          ),
+      ];
+    }
+
+    return Scaffold(
+      backgroundColor: AppColors.bg,
+      floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'create_loan_admin_fab',
+        icon: const Icon(Icons.add_rounded),
+        label: const Text('سلفة لموظف'),
+        onPressed: _createLoan,
+      ),
+      appBar: AppBar(
+        title: const Text('سلف الموظفين'),
+        actions: [
+          if (_isExporting)
+            const Padding(
+              padding: EdgeInsets.all(AppSpace.md),
+              child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+            ),
+          IconButton(icon: const Icon(Icons.refresh_rounded), tooltip: 'تحديث', onPressed: _load),
+          const SizedBox(width: AppSpace.xs),
+        ],
+      ),
+      body: RefreshIndicator.adaptive(
+        onRefresh: _load,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(0, AppSpace.sm, 0, 96),
+          children: [
+            LoansFilterBar(
               searchController: _searchController,
               query: _query,
               branches: _data.branches,
@@ -151,62 +174,27 @@ class _AdminLoansManagementScreenState extends State<AdminLoansManagementScreen>
               onBranchChanged: (v) => setState(() => _branchId = v),
               onStatusChanged: (v) => setState(() => _status = v),
             ),
-          ),
-        ),
-        body: _isLoading
-            ? const Padding(padding: EdgeInsets.all(AppSpace.page), child: SkeletonList())
-            : RefreshIndicator(
-                onRefresh: _load,
-                color: AppColors.brand,
-                child: ListView(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
-                  children: [
-                    LoansKpiPanel(kpis: LoanKpis.of(_data.loans, branchId: _branchId)),
-                    const SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'قائمة المستلفين (${loans.length})',
-                          style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.textPrimary),
-                        ),
-                        if (_isExporting)
-                          const Row(
-                            children: [
-                              SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.success)),
-                              SizedBox(width: 6),
-                              Text('جاري إنشاء Excel...', style: TextStyle(fontFamily: 'Cairo', fontSize: 11, color: AppColors.success)),
-                            ],
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    if (loans.isEmpty)
-                      Padding(
-                        padding: const EdgeInsets.all(32),
-                        child: Column(
-                          children: [
-                            Icon(Icons.search_off_rounded, size: 64, color: AppColors.textPrimary.withValues(alpha: 0.3)),
-                            const SizedBox(height: 16),
-                            const Text(
-                              'لا توجد سجلات سلف مطابقة للبحث أو الفلتر المختار',
-                              style: TextStyle(fontFamily: 'Cairo', fontSize: 13, color: AppColors.textMuted),
-                              textAlign: TextAlign.center,
-                            ),
-                          ],
-                        ),
-                      )
-                    else
-                      for (final record in loans)
-                        LoanCard(
-                          key: ValueKey(record.loan.id),
-                          record: record,
-                          onOpen: () => showLoanDetailsSheet(context, record, onExport: () => _export(record)),
-                          onExport: () => _export(record),
-                        ),
-                  ],
+            const SizedBox(height: AppSpace.md),
+            if (!(_isLoading && _data.loans.isEmpty)) ...[
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: AppSpace.page),
+                child: ContentWidth(
+                  maxWidth: 1000,
+                  child: LoansKpiPanel(kpis: LoanKpis.of(_data.loans, branchId: _branchId)),
                 ),
               ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: AppSpace.page),
+                child: SectionHeader('المستلفون (${loans.length})'),
+              ),
+            ],
+            for (final w in list)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: AppSpace.page),
+                child: ContentWidth(child: w),
+              ),
+          ],
+        ),
       ),
     );
   }

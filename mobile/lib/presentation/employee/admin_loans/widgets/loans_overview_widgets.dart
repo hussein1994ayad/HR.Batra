@@ -3,14 +3,12 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../../../core/constants/constants.dart';
-import '../../../../core/design/design.dart';
 import '../../../../core/logic/loan_rules.dart';
 import '../../../../core/models/models.dart';
 import '../../../../core/services/excel_export_service.dart';
-import '../../../shared/widgets/glass_container.dart';
+import '../../../shared/ui/ui.dart';
 
-/// البحث بالاسم، قائمة الفروع، وشرائح الحالة.
+/// البحث بالاسم، فلتر الفرع، ورقاقات الحالة.
 class LoansFilterBar extends StatelessWidget {
   const LoansFilterBar({
     super.key,
@@ -33,134 +31,79 @@ class LoansFilterBar extends StatelessWidget {
   final ValueChanged<String> onBranchChanged;
   final ValueChanged<LoanStatusFilter> onStatusChanged;
 
-  static const _chips = {
-    LoanStatusFilter.all: 'الكل',
-    LoanStatusFilter.active: 'سلف نشطة (عليها متبقي)',
-    LoanStatusFilter.completed: 'مسددة بالكامل',
-    LoanStatusFilter.pending: 'طلبات معلقة',
-  };
+  /// ارتفاع الشريط عند وضعه أسفل AppBar.
+  static const double height = 164;
 
   @override
   Widget build(BuildContext context) {
-    final branchSelected = branchId != 'all';
+    final branchName = branches.where((b) => b.id == branchId).firstOrNull?.name;
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 3),
-          child: Container(
-            height: 40,
-            decoration: BoxDecoration(
-              color: AppColors.textPrimary.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppColors.border),
-            ),
+          padding: const EdgeInsets.symmetric(horizontal: AppSpace.page),
+          child: ContentWidth(
             child: TextField(
               controller: searchController,
-              style: const TextStyle(fontFamily: 'Cairo', color: AppColors.textPrimary, fontSize: 12),
               onChanged: onQueryChanged,
+              textInputAction: TextInputAction.search,
+              style: AppText.body,
               decoration: InputDecoration(
-                hintText: 'البحث باسم الموظف المستلف...',
-                hintStyle: const TextStyle(fontFamily: 'Cairo', color: AppColors.textDisabled, fontSize: 11),
-                prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textMuted, size: 18),
+                hintText: 'ابحث باسم الموظف',
+                prefixIcon: const Icon(Icons.search_rounded),
                 suffixIcon: query.isEmpty
                     ? null
                     : IconButton(
-                        icon: const Icon(Icons.clear_rounded, color: AppColors.textMuted, size: 16),
+                        tooltip: 'مسح البحث',
+                        icon: const Icon(Icons.close_rounded),
                         onPressed: () {
                           searchController.clear();
                           onQueryChanged('');
                         },
                       ),
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(vertical: 8),
               ),
             ),
           ),
         ),
+        const SizedBox(height: AppSpace.sm),
+        AppFilterBar(
+          children: [
+            AppFilterPill(
+              icon: Icons.store_rounded,
+              label: branchName ?? 'كل الفروع',
+              active: branchId != 'all',
+              onTap: () async {
+                final id = await showAppOptions(
+                  context,
+                  title: 'الفرع',
+                  current: branchId,
+                  options: [('all', 'كل الفروع'), for (final b in branches) (b.id, b.name)],
+                );
+                if (id != null) onBranchChanged(id);
+              },
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpace.xs),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 3),
-          child: Container(
-            height: 38,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            decoration: BoxDecoration(
-              color: AppColors.textPrimary.withValues(alpha: 0.06),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: branchSelected ? AppColors.brand : AppColors.border, width: branchSelected ? 1.5 : 1.0),
-            ),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                isExpanded: true,
-                dropdownColor: AppColors.surface1,
-                value: branches.any((b) => b.id == branchId) ? branchId : 'all',
-                icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.brand, size: 20),
-                items: [
-                  const DropdownMenuItem(
-                    value: 'all',
-                    child: Row(
-                      children: [
-                        Icon(Icons.domain_rounded, color: AppColors.brand, size: 16),
-                        SizedBox(width: 8),
-                        Text(' جميع الفروع (كافة الموظفين)',
-                            style: TextStyle(fontFamily: 'Cairo', color: AppColors.textPrimary, fontSize: 12, fontWeight: FontWeight.bold)),
-                      ],
-                    ),
-                  ),
-                  for (final b in branches)
-                    DropdownMenuItem(
-                      value: b.id,
-                      child: Row(
-                        children: [
-                          const Icon(Icons.storefront_rounded, color: AppColors.success, size: 16),
-                          const SizedBox(width: 8),
-                          Text('فرع: ${b.name}', style: const TextStyle(fontFamily: 'Cairo', color: AppColors.textPrimary, fontSize: 12)),
-                        ],
-                      ),
-                    ),
-                ],
-                onChanged: (v) => onBranchChanged(v ?? 'all'),
-              ),
-            ),
-          ),
-        ),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          child: Row(
-            children: [
-              for (final entry in _chips.entries) ...[
-                _chip(entry.value, selected: status == entry.key, onTap: () => onStatusChanged(entry.key)),
-                const SizedBox(width: 8),
-              ],
+          padding: const EdgeInsets.symmetric(horizontal: AppSpace.page),
+          child: AppChoiceChips<LoanStatusFilter>(
+            scrollable: true,
+            value: status,
+            onChanged: onStatusChanged,
+            options: const [
+              (LoanStatusFilter.all, 'الكل', null),
+              (LoanStatusFilter.active, 'نشطة', null),
+              (LoanStatusFilter.pending, 'طلبات معلقة', null),
+              (LoanStatusFilter.completed, 'مسددة', null),
             ],
           ),
         ),
       ],
     );
   }
-
-  Widget _chip(String label, {required bool selected, required VoidCallback onTap}) => GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-          decoration: BoxDecoration(
-            color: selected ? AppColors.brandStrong : AppColors.textPrimary.withValues(alpha: 0.06),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: selected ? AppColors.brand : AppColors.border),
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              fontFamily: 'Cairo',
-              fontSize: 11,
-              fontWeight: selected ? FontWeight.bold : FontWeight.normal,
-              color: selected ? AppColors.textPrimary : AppColors.textSecondary,
-            ),
-          ),
-        ),
-      );
 }
 
-/// بطاقات إجمالي السلف والمسدد والمتبقي وعدد السلف النشطة.
+/// مؤشرات السلف: الممنوح، المسدد، المتبقي، وعدد السلف النشطة.
 class LoansKpiPanel extends StatelessWidget {
   const LoansKpiPanel({super.key, required this.kpis});
 
@@ -168,183 +111,71 @@ class LoansKpiPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GlassContainer(
-      padding: const EdgeInsets.all(16),
-      borderRadius: 22,
-      borderColor: AppColors.brand.withValues(alpha: 0.2),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              _Kpi('إجمالي السلف الممنوحة', AppConstants.formatMoney(kpis.total), AppColors.textPrimary,
-                  Icons.account_balance_wallet_rounded, AppColors.brandStrong.withValues(alpha: 0.2)),
-              const SizedBox(width: 10),
-              _Kpi('إجمالي المبالغ المسددة', AppConstants.formatMoney(kpis.paid), AppColors.success, Icons.task_alt_rounded,
-                  AppColors.success.withValues(alpha: 0.2)),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              _Kpi('المتبقي بذمة الموظفين', AppConstants.formatMoney(kpis.remaining), AppColors.danger,
-                  Icons.hourglass_bottom_rounded, AppColors.danger.withValues(alpha: 0.2)),
-              const SizedBox(width: 10),
-              _Kpi('السلف النشطة الجارية', '${kpis.activeCount} موظف', AppColors.brand, Icons.people_alt_rounded,
-                  AppColors.brand.withValues(alpha: 0.2)),
-            ],
-          ),
-        ],
-      ),
+    return ResponsiveGrid(
+      children: [
+        KpiTile(label: 'إجمالي الممنوح', value: kpis.total, icon: Icons.account_balance_wallet_rounded, format: Fmt.iqd),
+        KpiTile(label: 'المسدد', value: kpis.paid, icon: Icons.task_alt_rounded, tone: AppTone.success, format: Fmt.iqd),
+        KpiTile(label: 'المتبقي بذمة الموظفين', value: kpis.remaining, icon: Icons.hourglass_bottom_rounded, tone: AppTone.danger, format: Fmt.iqd),
+        KpiTile(label: 'سلف نشطة', value: kpis.activeCount, icon: Icons.people_alt_rounded, tone: AppTone.info, format: (v) => '${v.round()} موظف'),
+      ],
     );
   }
 }
 
-class _Kpi extends StatelessWidget {
-  const _Kpi(this.title, this.value, this.color, this.icon, this.iconBg);
-
-  final String title;
-  final String value;
-  final Color color;
-  final IconData icon;
-  final Color iconBg;
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: AppColors.textPrimary.withValues(alpha: 0.03),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(color: iconBg, borderRadius: BorderRadius.circular(12)),
-              child: Icon(icon, color: color, size: 20),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title,
-                      style: const TextStyle(fontFamily: 'Cairo', fontSize: 10, color: AppColors.textMuted),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis),
-                  const SizedBox(height: 2),
-                  FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(value, style: TextStyle(fontFamily: 'Cairo', fontSize: 13, fontWeight: FontWeight.bold, color: color)),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// نافذة نجاح تصدير كشف Excel مع النسخ والمشاركة والفتح.
+/// نجاح تصدير كشف Excel: فتح، مشاركة، أو نسخ المسار.
 Future<void> showExcelExportedDialog(BuildContext context, {required String employeeName, required String filePath}) {
-  return showDialog<void>(
-    context: context,
-    builder: (ctx) => AlertDialog(
-      backgroundColor: AppColors.surface1,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(24),
-        side: BorderSide(color: AppColors.success.withValues(alpha: 0.4)),
-      ),
-      title: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(color: AppColors.success.withValues(alpha: 0.2), shape: BoxShape.circle),
-            child: const Icon(Icons.table_chart_rounded, color: AppColors.success, size: 24),
-          ),
-          const SizedBox(width: 12),
-          const Flexible(
-            child: Text('تم تصدير كشف Excel بنجاح!',
-                style: TextStyle(fontFamily: 'Cairo', fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
-          ),
-        ],
-      ),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'تم إنشاء كشف حساب السلفة الاحترافي الخاص بالموظف ($employeeName) متضمناً كافة التسديدات والملاحظات وجدول الأقساط.',
-            style: const TextStyle(fontFamily: 'Cairo', fontSize: 13, color: AppColors.textSecondary, height: 1.5),
-          ),
-          const SizedBox(height: 14),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: AppColors.textPrimary.withValues(alpha: 0.05),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.border),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.folder_rounded, color: AppColors.brand, size: 20),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    filePath.split(Platform.pathSeparator).last,
-                    style: const TextStyle(fontFamily: 'Cairo', fontSize: 11, color: AppColors.brand, fontWeight: FontWeight.bold),
-                    overflow: TextOverflow.ellipsis,
-                  ),
+  return showAppSheet<void>(
+    context,
+    title: 'كشف Excel جاهز',
+    builder: (ctx) => Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text('كشف حساب سلفة $employeeName مع التسديدات وجدول الأقساط.', style: AppText.bodySm),
+        const SizedBox(height: AppSpace.md),
+        AppCard(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpace.md, vertical: AppSpace.sm),
+          child: Row(
+            children: [
+              const ToneIcon(Icons.table_chart_rounded, tone: AppTone.success, size: 36),
+              const SizedBox(width: AppSpace.md),
+              Expanded(
+                child: Text(
+                  filePath.split(Platform.pathSeparator).last,
+                  style: AppText.bodySm.copyWith(color: AppColors.textPrimary),
+                  overflow: TextOverflow.ellipsis,
+                  textDirection: TextDirection.ltr,
                 ),
-              ],
-            ),
-          ),
-        ],
-      ),
-      actions: [
-        TextButton.icon(
-          onPressed: () async {
-            await Clipboard.setData(ClipboardData(text: filePath));
-            if (!ctx.mounted) return;
-            ScaffoldMessenger.of(ctx).showSnackBar(
-              const SnackBar(
-                content: Text('تم نسخ مسار الملف إلى الحافظة', style: TextStyle(fontFamily: 'Cairo')),
-                backgroundColor: AppColors.brandStrong,
               ),
-            );
-          },
-          icon: const Icon(Icons.copy_rounded, size: 18, color: AppColors.textSecondary),
-          label: const Text('نسخ المسار', style: TextStyle(fontFamily: 'Cairo', color: AppColors.textSecondary, fontSize: 11)),
-        ),
-        OutlinedButton.icon(
-          onPressed: () {
-            Navigator.pop(ctx);
-            ExcelExportService.shareExcelFile(filePath, text: 'كشف حساب سلفة الموظف: $employeeName');
-          },
-          style: OutlinedButton.styleFrom(
-            foregroundColor: AppColors.brand,
-            side: const BorderSide(color: AppColors.brand),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              IconButton(
+                tooltip: 'نسخ المسار',
+                icon: const Icon(Icons.copy_rounded, size: 18),
+                onPressed: () async {
+                  await Clipboard.setData(ClipboardData(text: filePath));
+                  if (ctx.mounted) AppSnack.info(ctx, 'نُسخ مسار الملف');
+                },
+              ),
+            ],
           ),
-          icon: const Icon(Icons.share_rounded, size: 18),
-          label: const Text('مشاركة / واتساب', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 11)),
         ),
-        ElevatedButton.icon(
+        const SizedBox(height: AppSpace.lg),
+        AppButton(
+          label: 'فتح الملف',
+          icon: Icons.open_in_new_rounded,
+          expand: true,
           onPressed: () {
             Navigator.pop(ctx);
             ExcelExportService.openExcelFile(filePath);
           },
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.success,
-            foregroundColor: AppColors.textPrimary,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          ),
-          icon: const Icon(Icons.open_in_new_rounded, size: 18),
-          label: const Text('فتح الملف', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 11)),
+        ),
+        const SizedBox(height: AppSpace.sm),
+        AppButton.secondary(
+          label: 'مشاركة',
+          icon: Icons.ios_share_rounded,
+          expand: true,
+          onPressed: () {
+            Navigator.pop(ctx);
+            ExcelExportService.shareExcelFile(filePath, text: 'كشف حساب سلفة الموظف: $employeeName');
+          },
         ),
       ],
     ),

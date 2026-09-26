@@ -3,18 +3,20 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
-import '../../../../core/design/design.dart';
+
 import '../../../../core/models/models.dart';
 import '../../../../core/utils/arabic_format.dart';
 import '../../../../core/utils/input_formatters.dart';
 import '../../../../data/repositories/loan_repository.dart';
+import '../../../shared/ui/ui.dart';
 
 /// نافذة منح سلفة مباشرة لموظف. ترجع true بعد الحفظ.
 Future<bool?> showCreateLoanSheet(BuildContext context, {required List<LoanEmployeeOption> employees, required LoanRepository repo}) {
   return showModalBottomSheet<bool>(
     context: context,
     isScrollControlled: true,
-    backgroundColor: Colors.transparent,
+    useSafeArea: true,
+    showDragHandle: true,
     builder: (_) => _CreateLoanSheet(employees: employees, repo: repo),
   );
 }
@@ -45,11 +47,7 @@ class _CreateLoanSheetState extends State<_CreateLoanSheet> {
     super.dispose();
   }
 
-  void _error(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message, style: const TextStyle(fontFamily: 'Cairo')), backgroundColor: AppColors.danger),
-    );
-  }
+  void _error(String message) => AppSnack.error(context, message);
 
   Future<void> _pickPledge() async {
     final picked = await ImagePicker().pickImage(source: ImageSource.camera, imageQuality: 80);
@@ -60,12 +58,12 @@ class _CreateLoanSheetState extends State<_CreateLoanSheet> {
     final employeeId = _employeeId;
     final amount = parseThousands(_amount.text);
     final months = int.tryParse(_months.text.trim()) ?? 0;
-    if (employeeId == null) return _error('يرجى اختيار الموظف المستفيد أولاً!');
-    if (amount <= 0) return _error('يرجى إدخال مبلغ سلفة صحيح أكبر من الصفر!');
-    if (months <= 0) return _error('يرجى إدخال عدد أشهر سداد صحيح (شهر واحد على الأقل)!');
+    if (employeeId == null) return _error('اختر الموظف');
+    if (amount <= 0) return _error('اكتب مبلغ السلفة');
+    if (months <= 0) return _error('اكتب عدد أشهر السداد');
     // pledge_url عمود إلزامي في الجدول
     final pledge = _pledge;
-    if (pledge == null) return _error('يرجى تصوير التعهد الخطي الموقّع أولاً!');
+    if (pledge == null) return _error('صوّر التعهد الموقّع أولاً');
 
     setState(() => _saving = true);
     try {
@@ -85,150 +83,115 @@ class _CreateLoanSheetState extends State<_CreateLoanSheet> {
       debugPrint('Error creating direct loan: $e');
       if (mounted) {
         setState(() => _saving = false);
-        _error('فشل إضافة السلفة: $e');
+        _error('تعذّرت إضافة السلفة: $e');
       }
     }
   }
 
-  InputDecoration _decoration(String hint, {String? suffix}) => InputDecoration(
-        hintText: hint,
-        hintStyle: const TextStyle(fontFamily: 'Cairo', color: AppColors.textDisabled, fontSize: 12),
-        suffixText: suffix,
-        suffixStyle: const TextStyle(fontFamily: 'Cairo', color: AppColors.brand, fontWeight: FontWeight.bold),
-        filled: true,
-        fillColor: AppColors.textPrimary.withValues(alpha: 0.06),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: AppColors.border)),
-      );
-
-  static const _label = TextStyle(fontFamily: 'Cairo', fontSize: 12, color: AppColors.textSecondary, fontWeight: FontWeight.bold);
-  static const _input = TextStyle(fontFamily: 'Cairo', color: AppColors.textPrimary, fontWeight: FontWeight.bold);
+  Future<void> _pickEmployee() async {
+    final id = await showAppOptions(
+      context,
+      title: 'الموظف',
+      current: _employeeId,
+      options: [for (final e in widget.employees) (e.id, e.branchName == null ? e.fullName : '${e.fullName} · ${e.branchName}')],
+    );
+    if (id != null) setState(() => _employeeId = id);
+  }
 
   @override
   Widget build(BuildContext context) {
-    final hasPledge = _pledge != null;
-    return Container(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom + 24, top: 24, left: 20, right: 20),
-      decoration: BoxDecoration(
-        color: AppColors.surface1,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-        border: Border.all(color: AppColors.brand.withValues(alpha: 0.4), width: 1.5),
-      ),
+    final employee = widget.employees.where((e) => e.id == _employeeId).firstOrNull;
+    final amount = parseThousands(_amount.text);
+    final months = int.tryParse(_months.text.trim()) ?? 0;
+    final installment = amount > 0 && months > 0 ? (amount / months).ceilToDouble() : 0.0;
+    final salary = employee?.monthlySalary ?? 0;
+    final overHalf = salary > 0 && installment > salary / 2;
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(AppSpace.xl, 0, AppSpace.xl, AppSpace.xl + MediaQuery.viewInsetsOf(context).bottom),
       child: SingleChildScrollView(
         child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            const Text('سلفة مباشرة لموظف', style: AppText.title),
+            const Text('تُعتمد فوراً وتتولّد أقساطها تلقائياً.', style: AppText.caption),
+            const SizedBox(height: AppSpace.lg),
+            AppPickerField(
+              label: 'الموظف',
+              icon: Icons.person_search_rounded,
+              value: employee?.fullName,
+              placeholder: 'اختر الموظف',
+              onTap: _saving ? null : _pickEmployee,
+            ),
+            if (salary > 0)
+              Padding(
+                padding: const EdgeInsetsDirectional.only(start: AppSpace.sm, top: AppSpace.xs),
+                child: Text('الراتب ${Fmt.iqd(salary)}', style: AppText.caption),
+              ),
+            const SizedBox(height: AppSpace.lg),
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Row(
-                  children: [
-                    Icon(Icons.add_circle_rounded, color: AppColors.brand, size: 24),
-                    SizedBox(width: 10),
-                    Text('إضافة سلفة جديدة لموظف',
-                        style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.textPrimary)),
-                  ],
-                ),
-                IconButton(icon: const Icon(Icons.close_rounded, color: AppColors.textMuted), onPressed: () => Navigator.pop(context)),
-              ],
-            ),
-            const SizedBox(height: 16),
-            const Text('اختر الموظف المستفيد:', style: _label),
-            const SizedBox(height: 6),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              decoration: BoxDecoration(
-                color: AppColors.textPrimary.withValues(alpha: 0.06),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: AppColors.border),
-              ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  isExpanded: true,
-                  dropdownColor: AppColors.surface2,
-                  value: _employeeId,
-                  hint: const Text('اضغط لاختيار موظف...', style: TextStyle(fontFamily: 'Cairo', color: AppColors.textDisabled, fontSize: 12)),
-                  items: [
-                    for (final emp in widget.employees)
-                      DropdownMenuItem(
-                        value: emp.id,
-                        child: Text('${emp.fullName} (${emp.branchName ?? ''})',
-                            style: const TextStyle(fontFamily: 'Cairo', color: AppColors.textPrimary, fontSize: 13)),
-                      ),
-                  ],
-                  onChanged: (v) => setState(() => _employeeId = v),
-                ),
-              ),
-            ),
-            const SizedBox(height: 14),
-            const Text('مبلغ السلفة الإجمالي (دينار عراقي):', style: _label),
-            const SizedBox(height: 6),
-            TextField(
-              controller: _amount,
-              keyboardType: TextInputType.number,
-              inputFormatters: [DotThousandsSeparatorInputFormatter()],
-              style: _input,
-              decoration: _decoration('مثال: 1.000.000', suffix: 'د.ع'),
-            ),
-            const SizedBox(height: 14),
-            const Text('مدة السداد (عدد الأشهر):', style: _label),
-            const SizedBox(height: 6),
-            TextField(
-              controller: _months,
-              keyboardType: TextInputType.number,
-              style: _input,
-              decoration: _decoration('مثال: 5', suffix: 'أشهر'),
-            ),
-            const SizedBox(height: 14),
-            const Text('ملاحظات وسبب منح السلفة:', style: _label),
-            const SizedBox(height: 6),
-            TextField(
-              controller: _notes,
-              maxLines: 2,
-              style: const TextStyle(fontFamily: 'Cairo', color: AppColors.textPrimary, fontSize: 12),
-              decoration: _decoration('اكتب تفاصيل أو سبب منح السلفة...'),
-            ),
-            const SizedBox(height: 14),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: _saving ? null : _pickPledge,
-                style: OutlinedButton.styleFrom(
-                  side: BorderSide(color: hasPledge ? AppColors.success : AppColors.brand.withValues(alpha: 0.5)),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                ),
-                icon: Icon(hasPledge ? Icons.check_circle_rounded : Icons.camera_alt_rounded,
-                    color: hasPledge ? AppColors.success : AppColors.brand, size: 18),
-                label: Text(
-                  hasPledge ? 'تم التقاط صورة التعهد' : 'تصوير التعهد الخطي (إلزامي)',
-                  style: TextStyle(
-                    fontFamily: 'Cairo',
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                    color: hasPledge ? AppColors.success : AppColors.textPrimary,
+                Expanded(
+                  flex: 3,
+                  child: AppTextField(
+                    controller: _amount,
+                    label: 'المبلغ (د.ع)',
+                    hint: '1.000.000',
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [DotThousandsSeparatorInputFormatter()],
+                    onChanged: (_) => setState(() {}),
                   ),
                 ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: ElevatedButton(
-                onPressed: _saving ? null : _submit,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.success,
-                  foregroundColor: AppColors.textPrimary,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  elevation: 0,
+                const SizedBox(width: AppSpace.md),
+                Expanded(
+                  flex: 2,
+                  child: AppTextField(
+                    controller: _months,
+                    label: 'الأشهر',
+                    hint: '5',
+                    keyboardType: TextInputType.number,
+                    onChanged: (_) => setState(() {}),
+                  ),
                 ),
-                child: _saving
-                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: AppColors.textPrimary, strokeWidth: 2))
-                    : const Text('حفظ واعتماد السلفة مباشرة',
-                        style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 14)),
+              ],
+            ),
+            const SizedBox(height: AppSpace.md),
+            AppCard(
+              tone: overHalf ? AppTone.warning : null,
+              color: AppColors.surface2,
+              padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg, vertical: AppSpace.md),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  KeyValueRow('القسط الشهري', installment > 0 ? Fmt.iqd(installment) : '—', bold: true, valueColor: AppColors.brand),
+                  if (overHalf)
+                    Text('القسط أكثر من نصف الراتب — النظام سيرفض السلفة. زِد عدد الأشهر.', style: AppText.caption.copyWith(color: AppColors.warning)),
+                ],
               ),
             ),
+            const SizedBox(height: AppSpace.lg),
+            AppTextField(controller: _notes, label: 'ملاحظات', hint: 'سبب منح السلفة (اختياري)', maxLines: 2),
+            const SizedBox(height: AppSpace.lg),
+            AppCard(
+              tone: _pledge != null ? AppTone.success : null,
+              onTap: _saving ? null : _pickPledge,
+              padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg, vertical: AppSpace.md),
+              child: Row(
+                children: [
+                  Icon(_pledge != null ? Icons.task_alt_rounded : Icons.photo_camera_rounded, color: _pledge != null ? AppColors.success : AppColors.brand),
+                  const SizedBox(width: AppSpace.md),
+                  Expanded(
+                    child: Text(
+                      _pledge != null ? 'صُوّر التعهد — اضغط لإعادة التصوير' : 'تصوير التعهد الموقّع (إلزامي)',
+                      style: AppText.bodySm.copyWith(color: AppColors.textPrimary),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: AppSpace.xl),
+            AppButton(label: 'اعتماد السلفة', icon: Icons.check_rounded, size: AppButtonSize.large, expand: true, loading: _saving, onPressed: _submit),
           ],
         ),
       ),
