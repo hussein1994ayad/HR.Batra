@@ -1,18 +1,32 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../../core/constants/constants.dart';
-import '../../../../core/design/design.dart';
 import '../../../../core/logic/attendance_rules.dart';
 import '../../../../core/models/models.dart';
 import '../../../../core/routes/app_router.dart';
-import '../../../../core/utils/arabic_format.dart';
-import '../../../shared/widgets/empty_state.dart';
+import '../../../shared/ui/ui.dart';
 import '../../../shared/widgets/info_row.dart';
 import 'decision_card.dart';
 import 'request_card.dart';
 
-const _listPadding = EdgeInsets.fromLTRB(16, 12, 16, 24);
+const _listPadding = EdgeInsets.fromLTRB(AppSpace.page, AppSpace.md, AppSpace.page, 96);
+
+/// قائمة بعرض مريح على التابلت.
+Widget _list(int count, IndexedWidgetBuilder builder, {Widget? header}) {
+  return ListView.builder(
+    padding: _listPadding,
+    itemCount: count + (header == null ? 0 : 1),
+    itemBuilder: (context, i) {
+      if (header != null && i == 0) return ContentWidth(child: header);
+      return ContentWidth(child: builder(context, header == null ? i : i - 1));
+    },
+  );
+}
+
+Widget _empty(String title, {String? message, IconData icon = Icons.task_alt_rounded, AppTone tone = AppTone.success}) => ListView(
+      padding: _listPadding,
+      children: [EmptyView(title: title, message: message, icon: icon, tone: tone)],
+    );
 
 /// تبويب قرارات الغياب والتأخير (يتطلب اختيار تاريخ).
 class DecisionsTab extends StatelessWidget {
@@ -34,29 +48,20 @@ class DecisionsTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!hasDate) {
-      return const EmptyState(
-        'يرجى تحديد تاريخ أولاً لعرض القرارات المعلقة',
-        icon: Icons.calendar_today_rounded,
-        tone: AppTone.warning,
-      );
+      return _empty('اختر يوماً أولاً', message: 'من فلتر التاريخ فوق، حتى تظهر قرارات الغياب والتأخير لذلك اليوم.', icon: Icons.event_rounded, tone: AppTone.warning);
     }
-    if (decisions.isEmpty) return const EmptyState('لا توجد قرارات غياب أو تأخير معلقة لليوم المختار');
+    if (decisions.isEmpty) return _empty('لا توجد قرارات معلقة', message: 'كل الغيابات والتأخيرات لهذا اليوم محسومة.');
 
-    return ListView.builder(
-      padding: _listPadding,
-      itemCount: decisions.length,
-      itemBuilder: (context, index) {
-        final item = decisions[index];
-        return DecisionCard(
-          key: ValueKey(item.key),
-          item: item,
-          schedule: scheduleFor(item),
-          busy: busyKey == item.key,
-          onDecide: ({required deduct, required reason, required amount}) =>
-              onDecide(item, deduct: deduct, reason: reason, amount: amount),
-        );
-      },
-    );
+    return _list(decisions.length, (context, index) {
+      final item = decisions[index];
+      return DecisionCard(
+        key: ValueKey(item.key),
+        item: item,
+        schedule: scheduleFor(item),
+        busy: busyKey == item.key,
+        onDecide: ({required deduct, required reason, required amount}) => onDecide(item, deduct: deduct, reason: reason, amount: amount),
+      );
+    });
   }
 }
 
@@ -68,44 +73,39 @@ class LeavesTab extends StatelessWidget {
   final String? busyKey;
 
   String _period(LeaveRequestModel l) => l.isHourly
-      ? '${formatDateSlash(l.startDate)} (${l.startHour ?? '--'} - ${l.endHour ?? '--'})'
-      : 'من ${formatDateSlash(l.startDate)} إلى ${formatDateSlash(l.endDate)}';
+      ? '${Fmt.date(l.startDate)} · ${Fmt.timeOfDay(l.startHour)} - ${Fmt.timeOfDay(l.endHour)}'
+      : Fmt.date(l.startDate) == Fmt.date(l.endDate)
+          ? Fmt.dateWithDay(l.startDate)
+          : '${Fmt.date(l.startDate)} إلى ${Fmt.date(l.endDate)} (${Fmt.days(l.endDate.difference(l.startDate).inDays + 1)})';
 
   @override
   Widget build(BuildContext context) {
-    if (leaves.isEmpty) return const EmptyState('لا توجد طلبات إجازة معلقة حالياً');
+    if (leaves.isEmpty) return _empty('لا توجد طلبات إجازة معلقة');
 
-    return ListView.builder(
-      padding: _listPadding,
-      itemCount: leaves.length,
-      itemBuilder: (context, index) {
-        final leave = leaves[index];
-        return RequestCard(
-          title: leave.employeeName ?? 'موظف غير معروف',
-          accent: AppColors.brand,
-          trailing: StatusBadge(leave.typeArabic, color: AppColors.brand),
-          actions: DecisionButtons(
-            busy: busyKey == leave.id,
-            onApprove: () => onDecide(leave, true),
-            onReject: () => onDecide(leave, false),
-          ),
-          children: [
-            InfoRow(icon: Icons.calendar_month_rounded, label: 'الفترة الزمنية', value: _period(leave)),
-            const SizedBox(height: 10),
-            InfoRow(icon: Icons.comment_rounded, label: 'سبب الإجازة', value: leave.reason ?? 'بدون سبب مذكور'),
-            if (leave.hasAttachment) ...[
-              const SizedBox(height: 10),
-              InfoRow(
-                icon: Icons.attachment_rounded,
-                label: 'المرفق المرفوع',
-                value: 'يوجد مستند رسمي مرفق',
-                url: leave.attachmentUrl,
-              ),
-            ],
+    return _list(leaves.length, (context, index) {
+      final leave = leaves[index];
+      return RequestCard(
+        title: leave.employeeName ?? 'موظف',
+        subtitle: leave.createdAt == null ? null : 'قُدّم ${Fmt.relative(leave.createdAt)}',
+        tone: AppTone.accent,
+        trailing: StatusBadge(leave.typeArabic, tone: AppTone.accent),
+        actions: DecisionButtons(
+          busy: busyKey == leave.id,
+          confirmRejectTitle: 'رفض إجازة ${leave.employeeName ?? ''}؟',
+          onApprove: () => onDecide(leave, true),
+          onReject: () => onDecide(leave, false),
+        ),
+        children: [
+          InfoRow(icon: Icons.event_rounded, label: 'المدة', value: _period(leave)),
+          const SizedBox(height: AppSpace.sm),
+          InfoRow(icon: Icons.notes_rounded, label: 'السبب', value: leave.reason ?? 'بدون سبب'),
+          if (leave.hasAttachment) ...[
+            const SizedBox(height: AppSpace.sm),
+            InfoRow(icon: Icons.attach_file_rounded, label: 'المرفق', value: 'فتح المستند', url: leave.attachmentUrl),
           ],
-        );
-      },
-    );
+        ],
+      );
+    });
   }
 }
 
@@ -118,100 +118,69 @@ class LoansTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      padding: _listPadding,
-      children: [
-        const _LoansLedgerShortcut(),
-        if (loans.isEmpty)
-          const EmptyState('لا توجد طلبات سلف جديدة معلقة حالياً')
-        else
-          for (final loan in loans)
-            RequestCard(
-              title: loan.employeeName ?? 'موظف غير معروف',
-              accent: AppColors.accent,
-              trailing: Text(
-                AppConstants.formatMoney(loan.amount),
-                style: const TextStyle(color: AppColors.brand, fontWeight: FontWeight.w900, fontSize: 14, fontFamily: 'Cairo'),
-              ),
-              actions: DecisionButtons(
-                busy: busyKey == loan.id,
-                onApprove: () => onDecide(loan, true),
-                onReject: () => onDecide(loan, false),
-              ),
+    final shortcut = AppCard(
+      onTap: () => context.push(AppRoutes.adminLoans),
+      child: const Row(
+        children: [
+          ToneIcon(Icons.table_chart_rounded),
+          SizedBox(width: AppSpace.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                InfoRow(icon: Icons.schedule_rounded, label: 'عدد الأقساط', value: '${loan.installmentCount} أشهر متتالية'),
-                const SizedBox(height: 10),
-                InfoRow(
-                  icon: Icons.price_change_rounded,
-                  label: 'القسط الشهري',
-                  value: '${AppConstants.formatMoney(loan.installmentAmount)} / الشهر',
-                ),
-                if (loan.pledgeUrl != null && loan.pledgeUrl!.isNotEmpty) ...[
-                  const SizedBox(height: 10),
-                  InfoRow(
-                    icon: Icons.draw_rounded,
-                    label: 'تعهد السلفة الموقّع',
-                    value: 'رابط التعهد الإلزامي المرفق',
-                    url: loan.pledgeUrl,
-                  ),
-                ],
+                Text('سجل المستلفين وكشوف Excel', style: AppText.subtitle),
+                Text('المبالغ، الأقساط، التعهدات، والتصدير', style: AppText.caption),
               ],
             ),
-      ],
-    );
-  }
-}
-
-/// بطاقة الانتقال إلى سجل المستلفين وكشوف Excel.
-class _LoansLedgerShortcut extends StatelessWidget {
-  const _LoansLedgerShortcut();
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () => context.push(AppRoutes.adminLoans),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 16),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [AppColors.brandStrong.withValues(alpha: 0.35), AppColors.accent.withValues(alpha: 0.25)],
-            begin: Alignment.topRight,
-            end: Alignment.bottomLeft,
           ),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: AppColors.brand.withValues(alpha: 0.4), width: 1.5),
-          boxShadow: [BoxShadow(color: AppColors.brand.withValues(alpha: 0.12), blurRadius: 16, spreadRadius: 1)],
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: AppColors.brandStrong, borderRadius: BorderRadius.circular(14)),
-              child: const Icon(Icons.table_chart_rounded, color: AppColors.textPrimary, size: 24),
-            ),
-            const SizedBox(width: 14),
-            const Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'سجل ومتابعة المستلفين وكشوف Excel',
-                    style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textPrimary),
-                  ),
-                  SizedBox(height: 2),
-                  Text(
-                    'عرض مبالغ السلف، الأقساط المسددة والمتبقية، صور التعهدات، وتصدير كشف Excel احترافي',
-                    style: TextStyle(fontFamily: 'Cairo', fontSize: 10, color: AppColors.textSecondary, height: 1.3),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            const Icon(Icons.arrow_forward_ios_rounded, color: AppColors.brand, size: 16),
-          ],
-        ),
+          Icon(Icons.chevron_right_rounded, color: AppColors.textMuted),
+        ],
       ),
+    );
+
+    if (loans.isEmpty) {
+      return ListView(
+        padding: _listPadding,
+        children: [ContentWidth(child: shortcut), const EmptyView(title: 'لا توجد طلبات سلف معلقة', icon: Icons.task_alt_rounded, tone: AppTone.success)],
+      );
+    }
+
+    return _list(
+      loans.length,
+      header: Padding(padding: const EdgeInsets.only(bottom: AppSpace.md), child: shortcut),
+      (context, index) {
+        final loan = loans[index];
+        final salary = loan.employeeSalary ?? 0;
+        final overHalf = salary > 0 && loan.installmentAmount > salary / 2;
+        return RequestCard(
+          title: loan.employeeName ?? 'موظف',
+          subtitle: loan.createdAt == null ? null : 'قُدّم ${Fmt.relative(loan.createdAt)}',
+          tone: AppTone.warning,
+          trailing: Text(Fmt.iqd(loan.amount), style: AppText.subtitle.copyWith(color: AppColors.brand)),
+          actions: DecisionButtons(
+            busy: busyKey == loan.id,
+            approveLabel: 'اعتماد',
+            confirmRejectTitle: 'رفض سلفة ${loan.employeeName ?? ''}؟',
+            onApprove: () => onDecide(loan, true),
+            onReject: () => onDecide(loan, false),
+          ),
+          children: [
+            InfoRow(icon: Icons.payments_rounded, label: 'القسط الشهري', value: '${Fmt.iqd(loan.installmentAmount)} × ${Fmt.monthCount(loan.installmentCount)}'),
+            if (salary > 0) ...[
+              const SizedBox(height: AppSpace.sm),
+              InfoRow(icon: Icons.account_balance_rounded, label: 'راتب الموظف', value: Fmt.iqd(salary)),
+            ],
+            if (overHalf) ...[
+              const SizedBox(height: AppSpace.sm),
+              Text('القسط أكثر من نصف الراتب — الاعتماد سيُرفض.', style: AppText.caption.copyWith(color: AppColors.warning)),
+            ],
+            if (loan.pledgeUrl != null && loan.pledgeUrl!.isNotEmpty) ...[
+              const SizedBox(height: AppSpace.sm),
+              InfoRow(icon: Icons.draw_rounded, label: 'التعهد الموقّع', value: 'فتح الصورة', url: loan.pledgeUrl),
+            ],
+          ],
+        );
+      },
     );
   }
 }
@@ -225,33 +194,31 @@ class DevicesTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (devices.isEmpty) return const EmptyState('لا توجد طلبات اعتماد أجهزة معلقة حالياً');
+    if (devices.isEmpty) return _empty('لا توجد طلبات أجهزة معلقة');
 
-    return ListView.builder(
-      padding: _listPadding,
-      itemCount: devices.length,
-      itemBuilder: (context, index) {
-        final device = devices[index];
-        return RequestCard(
-          title: device.employeeName,
-          accent: AppColors.accent,
-          actions: DecisionButtons(
-            busy: busyKey == device.id,
-            approveLabel: 'اعتماد الجهاز',
-            rejectLabel: 'رفض الطلب',
-            onApprove: () => onDecide(device, true),
-            onReject: () => onDecide(device, false),
-          ),
-          children: [
-            InfoRow(icon: Icons.phone_android_rounded, label: 'طراز الهاتف الجديد', value: device.model ?? 'هاتف غير معروف'),
-            const SizedBox(height: 10),
-            InfoRow(icon: Icons.adb_rounded, label: 'إصدار نظام التشغيل', value: device.osVersion ?? 'نظام غير معروف'),
-            const SizedBox(height: 10),
-            InfoRow(icon: Icons.fingerprint_rounded, label: 'معرف الهاتف الفريد', value: device.deviceId, isCode: true),
-          ],
-        );
-      },
-    );
+    return _list(devices.length, (context, index) {
+      final device = devices[index];
+      return RequestCard(
+        title: device.employeeName,
+        subtitle: 'يطلب الدخول من جهاز جديد',
+        tone: AppTone.info,
+        trailing: const StatusBadge('جهاز جديد', tone: AppTone.info, icon: Icons.phone_android_rounded),
+        actions: DecisionButtons(
+          busy: busyKey == device.id,
+          approveLabel: 'اعتماد',
+          confirmRejectTitle: 'رفض جهاز ${device.employeeName}؟',
+          onApprove: () => onDecide(device, true),
+          onReject: () => onDecide(device, false),
+        ),
+        children: [
+          InfoRow(icon: Icons.phone_android_rounded, label: 'الطراز', value: device.model ?? 'غير معروف'),
+          const SizedBox(height: AppSpace.sm),
+          InfoRow(icon: Icons.memory_rounded, label: 'النظام', value: device.osVersion ?? 'غير معروف'),
+          const SizedBox(height: AppSpace.sm),
+          InfoRow(icon: Icons.fingerprint_rounded, label: 'معرّف الجهاز', value: device.deviceId, isCode: true),
+        ],
+      );
+    });
   }
 }
 
@@ -262,35 +229,27 @@ class SecurityTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (logs.isEmpty) return const EmptyState('سجل الأمان خالٍ من الخروقات اليوم');
+    if (logs.isEmpty) return _empty('لا توجد مخالفات أمنية', message: 'لم تُرصد محاولات موقع مزيّف أو خروج من النطاق.', icon: Icons.verified_user_rounded);
 
-    return ListView.builder(
-      padding: _listPadding,
-      itemCount: logs.length,
-      itemBuilder: (context, index) {
-        final log = logs[index];
-        return RequestCard(
-          title: log.employeeName,
-          accent: AppColors.danger,
-          opacity: 0.12,
-          glow: true,
-          trailing: const StatusBadge('خطر أمني', color: AppColors.danger),
-          children: [
-            InfoRow(icon: Icons.warning_amber_rounded, label: 'تفاصيل الخرق المكتشف', value: log.details),
-            const SizedBox(height: 10),
-            InfoRow(
-              icon: Icons.schedule_rounded,
-              label: 'توقيت المحاولة',
-              value: '${formatTime12h(log.timestamp)} بتاريخ ${formatDateSlash(log.timestamp)}',
-            ),
-            if (log.latLng.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              InfoRow(icon: Icons.location_on_rounded, label: 'الإحداثيات المرصودة', value: log.latLng, isCode: true),
-            ],
+    return _list(logs.length, (context, index) {
+      final log = logs[index];
+      return RequestCard(
+        title: log.employeeName,
+        subtitle: Fmt.relative(log.timestamp),
+        tone: AppTone.danger,
+        highlight: true,
+        trailing: const StatusBadge('تنبيه أمني', tone: AppTone.danger, icon: Icons.gpp_maybe_rounded),
+        children: [
+          InfoRow(icon: Icons.warning_amber_rounded, label: 'التفاصيل', value: log.details),
+          const SizedBox(height: AppSpace.sm),
+          InfoRow(icon: Icons.schedule_rounded, label: 'الوقت', value: '${Fmt.time(log.timestamp)} · ${Fmt.date(log.timestamp, withYear: true)}'),
+          if (log.latLng.isNotEmpty) ...[
+            const SizedBox(height: AppSpace.sm),
+            InfoRow(icon: Icons.location_on_rounded, label: 'الإحداثيات', value: log.latLng, isCode: true),
           ],
-        );
-      },
-    );
+        ],
+      );
+    });
   }
 }
 

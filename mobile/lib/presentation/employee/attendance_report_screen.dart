@@ -370,7 +370,7 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
             ContentWidth(
               maxWidth: 1000,
               child: ResponsiveGrid(
-                minItemWidth: 140,
+                minItemWidth: 120,
                 children: [
                   KpiTile(label: 'حاضر', value: present, icon: Icons.how_to_reg_rounded, tone: AppTone.success),
                   KpiTile(label: 'متأخر', value: late, icon: Icons.schedule_rounded, tone: AppTone.warning),

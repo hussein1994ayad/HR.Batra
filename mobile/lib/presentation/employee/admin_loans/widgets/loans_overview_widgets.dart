@@ -112,6 +112,7 @@ class LoansKpiPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ResponsiveGrid(
+      minItemWidth: 120,
       children: [
         KpiTile(label: 'إجمالي الممنوح', value: kpis.total, icon: Icons.account_balance_wallet_rounded, format: Fmt.iqd),
         KpiTile(label: 'المسدد', value: kpis.paid, icon: Icons.task_alt_rounded, tone: AppTone.success, format: Fmt.iqd),

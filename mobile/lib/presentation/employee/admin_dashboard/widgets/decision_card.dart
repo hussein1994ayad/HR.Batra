@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 
-import '../../../../core/design/design.dart';
+
 import '../../../../core/logic/attendance_rules.dart';
 import '../../../../core/models/models.dart';
 import '../../../../core/utils/arabic_format.dart';
 import '../../../../core/utils/input_formatters.dart';
+import '../../../shared/ui/ui.dart';
 import '../../../shared/widgets/info_row.dart';
 import 'request_card.dart';
 
@@ -52,31 +53,22 @@ class _DecisionCardState extends State<DecisionCard> {
     super.dispose();
   }
 
-  InputDecoration _field(String hint) => InputDecoration(
-        hintText: hint,
-        hintStyle: const TextStyle(color: AppColors.textDisabled),
-        filled: true,
-        fillColor: AppColors.textPrimary.withValues(alpha: 0.05),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      );
-
   String _reasonOr(String fallback) => _reason.text.trim().isEmpty ? fallback : _reason.text.trim();
 
   @override
   Widget build(BuildContext context) {
     final item = widget.item;
-    final color = item.status == 'absent' ? AppColors.danger : AppColors.warning;
-    const inputStyle = TextStyle(fontFamily: 'Cairo', color: AppColors.textPrimary, fontSize: 12);
+    final tone = item.status == 'absent' ? AppTone.danger : AppTone.warning;
 
     return RequestCard(
       title: item.employeeName,
-      accent: color,
-      trailing: StatusBadge(item.statusArabic, color: color),
+      subtitle: Fmt.dateWithDay(DateTime.tryParse(item.workDate)),
+      tone: tone,
+      trailing: StatusBadge(item.statusArabic, tone: tone, dot: true),
       actions: DecisionButtons(
         busy: widget.busy,
-        approveLabel: 'تطبيق خصم',
-        rejectLabel: 'إعفاء / مسامحة',
+        approveLabel: 'تطبيق الخصم',
+        rejectLabel: 'إعفاء',
         onApprove: () => widget.onDecide(
           deduct: true,
           reason: _reasonOr('تم الخصم بناءً على تعليمات الإدارة'),
@@ -89,37 +81,33 @@ class _DecisionCardState extends State<DecisionCard> {
         ),
       ),
       children: [
-        InfoRow(icon: Icons.calendar_month_rounded, label: 'تاريخ الدوام', value: item.workDate),
         if (_missedMinutes > 0) ...[
-          const SizedBox(height: 10),
           InfoRow(
             icon: Icons.hourglass_bottom_rounded,
-            label: item.status == 'late' ? 'المدة المفقودة (التأخير)' : 'المدة المفقودة (خروج مبكر)',
+            label: item.status == 'late' ? 'مدة التأخير' : 'خروج مبكر',
             value: formatDurationArabic(_missedMinutes),
           ),
+          const SizedBox(height: AppSpace.sm),
         ],
         if (item.status == 'late' && item.checkInTime != null) ...[
-          const SizedBox(height: 10),
-          InfoRow(icon: Icons.watch_later_rounded, label: 'توقيت البصمة (دخول)', value: formatTime12h(item.checkInTime)),
+          InfoRow(icon: Icons.login_rounded, label: 'وقت البصمة', value: Fmt.time(item.checkInTime)),
+          const SizedBox(height: AppSpace.sm),
         ],
-        const SizedBox(height: 10),
         Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
               flex: 2,
-              child: TextField(
+              child: AppTextField(
                 controller: _amount,
+                label: 'الخصم (د.ع)',
+                hint: '0',
                 keyboardType: TextInputType.number,
                 inputFormatters: [DotThousandsSeparatorInputFormatter()],
-                style: inputStyle,
-                decoration: _field('مبلغ الخصم (د.ع)'),
               ),
             ),
-            const SizedBox(width: 8),
-            Expanded(
-              flex: 3,
-              child: TextField(controller: _reason, style: inputStyle, decoration: _field('سبب الخصم...')),
-            ),
+            const SizedBox(width: AppSpace.sm),
+            Expanded(flex: 3, child: AppTextField(controller: _reason, label: 'السبب', hint: 'سبب الخصم')),
           ],
         ),
       ],

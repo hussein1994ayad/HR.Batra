@@ -16,7 +16,7 @@ class DashboardStatsRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ResponsiveGrid(
-      minItemWidth: 140,
+      minItemWidth: 120,
       children: [
         KpiTile(label: 'حاضر اليوم', value: present, icon: Icons.how_to_reg_rounded, tone: AppTone.success),
         KpiTile(label: 'غائب اليوم', value: absent, icon: Icons.person_off_rounded, tone: AppTone.danger),

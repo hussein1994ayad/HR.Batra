@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hr_pro/presentation/employee/admin_dashboard/admin_dashboard_screen.dart';
 import 'package:hr_pro/presentation/employee/admin_loans/admin_loans_screen.dart';
 import 'package:hr_pro/presentation/employee/admin_loans/widgets/loan_card.dart';
 import 'package:hr_pro/presentation/employee/branch_management_screen.dart';
@@ -20,6 +21,16 @@ Future<void> _settle(WidgetTester tester) async {
 
 void main() {
   for (final scale in const [1.0, 1.3]) {
+    for (final tab in const ['الإجازات', 'السلف', 'الأجهزة', 'الأمان']) {
+      testWidgets('dashboard tab $tab @${scale}x', (tester) async {
+        await pumpScreen(tester, const AdminDashboardScreen(), device: _small, textScale: scale);
+        await tester.tap(find.text(tab));
+        await _settle(tester);
+        await capture(tester, 'dashboard_$tab');
+        await disposeScreen(tester);
+      });
+    }
+
     testWidgets('loan details sheet @${scale}x', (tester) async {
       await pumpScreen(tester, const AdminLoansManagementScreen(), device: _small, textScale: scale);
       await tester.scrollUntilVisible(find.byType(LoanCard), 250, scrollable: find.descendant(of: find.byType(RefreshIndicator), matching: find.byType(Scrollable)).first);

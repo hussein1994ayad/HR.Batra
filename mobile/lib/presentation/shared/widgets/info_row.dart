@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/design/design.dart';
+import '../ui/app_overlays.dart';
 
-/// سطر معلومة: أيقونة، عنوان صغير، وقيمة (نص، رمز قابل للنسخ، أو رابط يُفتح خارجياً).
+/// صف معلومة: أيقونة + عنوان صغير + قيمة. إذا أُعطي [url] تصير القيمة رابطاً يُفتح.
 class InfoRow extends StatelessWidget {
   const InfoRow({
     super.key,
@@ -18,60 +19,48 @@ class InfoRow extends StatelessWidget {
   final String label;
   final String value;
   final bool isCode;
-
-  /// عند تمريره تصبح القيمة رابطاً يفتح المرفق في تطبيق خارجي
   final String? url;
 
   Future<void> _open(BuildContext context) async {
     final uri = Uri.tryParse(url ?? '');
     final opened = uri != null && await launchUrl(uri, mode: LaunchMode.externalApplication);
-    if (!opened && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('تعذر فتح المرفق', style: TextStyle(fontFamily: 'Cairo'))),
-      );
-    }
+    if (!opened && context.mounted) AppSnack.error(context, 'تعذّر فتح المرفق');
   }
 
   @override
   Widget build(BuildContext context) {
     final Widget valueWidget;
     if (url != null) {
-      valueWidget = GestureDetector(
+      valueWidget = InkWell(
         onTap: () => _open(context),
-        child: Text(
-          value,
-          style: const TextStyle(
-            fontSize: 11,
-            color: AppColors.brand,
-            fontWeight: FontWeight.bold,
-            decoration: TextDecoration.underline,
-            fontFamily: 'Cairo',
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(child: Text(value, style: AppText.bodySm.copyWith(color: AppColors.brand, fontWeight: FontWeight.w700))),
+              const SizedBox(width: AppSpace.xs),
+              const Icon(Icons.open_in_new_rounded, size: 14, color: AppColors.brand),
+            ],
           ),
         ),
       );
     } else if (isCode) {
-      valueWidget = SelectableText(
-        value,
-        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500, fontFamily: 'monospace', color: AppColors.brand),
-      );
+      valueWidget = SelectableText(value, style: AppText.caption.copyWith(color: AppColors.textSecondary, fontFamily: 'monospace'));
     } else {
-      valueWidget = Text(
-        value,
-        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, fontFamily: 'Cairo', color: AppColors.textPrimary),
-      );
+      valueWidget = Text(value, style: AppText.bodySm.copyWith(color: AppColors.textPrimary));
     }
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, size: 16, color: AppColors.textMuted),
-        const SizedBox(width: 8),
+        Padding(padding: const EdgeInsets.only(top: 2), child: Icon(icon, size: 18, color: AppColors.textMuted)),
+        const SizedBox(width: AppSpace.sm),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(label, style: const TextStyle(fontSize: 9.5, color: AppColors.textDisabled, fontFamily: 'Cairo')),
-              const SizedBox(height: 2),
+              Text(label, style: AppText.overline),
               valueWidget,
             ],
           ),
