@@ -172,7 +172,9 @@ Map<String, List<Map<String, dynamic>>> buildFixtures({String role = 'admin'}) {
     'deleted_files': [
       {'id': 'df1', 'file_path': 'E-002/doc-1.jpg', 'file_type': 'document', 'file_size_bytes': 245760, 'deleted_at': _iso(3, 10, 0), 'scheduled_deletion_date': _iso(-27, 10, 0), 'restored_at': null, 'employees': {'full_name': 'علي كريم'}},
     ],
-    'location_tracking': <Map<String, dynamic>>[],
+    'location_tracking': [
+      for (var i = 0; i < 4; i++) {'id': 'lt', 'employee_id': kTestUserId, 'latitude': 33.3152 + i * 0.002, 'longitude': 44.3661 + i * 0.001, 'battery_level': 80 - i * 5, 'is_moving': i == 3, 'timestamp': _iso(0, 9 + i, 0)},
+    ],
     'geofence_violations': <Map<String, dynamic>>[],
     'mock_gps_attempts': <Map<String, dynamic>>[],
     'tracking_schedules': <Map<String, dynamic>>[],
