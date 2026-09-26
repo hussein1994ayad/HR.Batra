@@ -22,10 +22,10 @@ VALUES
   (
     'loan-pledges', 
     'loan-pledges', 
-    false, 
+    true, 
     2097152, 
     ARRAY['image/jpeg', 'image/png', 'image/webp']
-  ), -- 2 ميجابايت لتعهد السلفة (خاصة ومحمية)
+  ), -- 2 ميجابايت لتعهد السلفة (عامة)
   (
     'company-logos', 
     'company-logos', 

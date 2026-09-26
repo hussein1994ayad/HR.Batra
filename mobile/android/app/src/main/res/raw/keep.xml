@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- صوت الإشعارات يُستدعى بالاسم فقط (special_chime)، فكان shrinkResources يحذفه
+     من نسخة الإصدار وتصل الإشعارات بدون صوت. -->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@raw/special_chime" />

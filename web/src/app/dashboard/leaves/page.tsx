@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
+import { ReasonModal } from '@/components/ReasonModal';
 import {
   CalendarRange,
   Check,
@@ -23,6 +24,7 @@ import { toDateKey } from '@/lib/attendance';
 import { errorMessage, formatDateTime } from '@/lib/format';
 import type { LeaveRequest, RequestStatus } from '@/lib/types';
 import { Avatar, Badge, Button, Card, EmptyState, PageHeader, SearchInput, SegmentedTabs, Toggle, cn } from '@/components/ui';
+import { openStorageUrl } from '@/lib/signed-urls';
 
 const LEAVE_TYPES: Record<string, string> = {
   annual: 'إجازة سنوية',
@@ -66,7 +68,10 @@ export default function LeavesPage() {
   }, [query.data, query.refreshing, search]);
   const isLoading = query.loading || query.refreshing;
 
-  const handleProcess = async (req: LeaveRequest, approve: boolean, isPaid: boolean) => {
+  const [rejecting, setRejecting] = useState<LeaveRequest | null>(null);
+
+  const handleProcess = async (req: LeaveRequest, approve: boolean, isPaid: boolean, rejectionReason = '') => {
+    setRejecting(null);
     setActionLoading(req.id);
     try {
       const {
@@ -79,20 +84,14 @@ export default function LeavesPage() {
         .update({
           status: approve ? 'approved' : 'rejected',
           is_paid: approve ? isPaid : undefined,
+          rejection_reason: !approve && rejectionReason ? rejectionReason : undefined,
           approved_by: session.user.id,
           approved_at: new Date().toISOString(),
         })
         .eq('id', req.id);
       if (error) throw error;
 
-      await supabase.from('notifications').insert({
-        employee_id: req.employee_id,
-        title: approve ? 'الموافقة على طلب إجازتك 🎉' : 'رفض طلب إجازتك ❌',
-        body: approve
-          ? 'تهانينا! تمت الموافقة على طلب إجازتك المقدم مسبقاً.'
-          : 'نأسف لإعلامك بأنه تم رفض طلب إجازتك من قبل الإدارة.',
-        type: 'leave',
-      });
+      // إشعار الموظف بالقرار (مع سبب الرفض) يُرسل من قاعدة البيانات: trg_notify_employee_leave_decision
 
       query.mutate((list) => list.filter((r) => r.id !== req.id));
       if (approve) confetti({ particleCount: 80, spread: 60, colors: ['#10B981', '#059669', '#34D399'] });
@@ -191,14 +190,13 @@ export default function LeavesPage() {
                   )}
 
                   {req.attachment_url && (
-                    <a
-                      href={req.attachment_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-300 hover:text-indigo-200 mb-3"
+                    <button
+                      type="button"
+                      onClick={() => openStorageUrl(req.attachment_url!).catch(() => toast.error('تعذر فتح الملف'))}
+                      className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-300 hover:text-indigo-200 mb-3 cursor-pointer"
                     >
                       <Paperclip className="w-3.5 h-3.5" /> عرض المستند المرفق
-                    </a>
+                    </button>
                   )}
 
                   <div className="mt-auto pt-4 border-t border-slate-800/70">
@@ -216,7 +214,7 @@ export default function LeavesPage() {
                           <Button variant="success" icon={Check} block loading={busy} onClick={() => handleProcess(req, true, isPaid)}>
                             موافقة
                           </Button>
-                          <Button variant="soft-danger" icon={X} block disabled={busy} onClick={() => handleProcess(req, false, isPaid)}>
+                          <Button variant="soft-danger" icon={X} block disabled={busy} onClick={() => setRejecting(req)}>
                             رفض
                           </Button>
                         </div>
@@ -244,6 +242,16 @@ export default function LeavesPage() {
           </div>
         )}
       </Card>
+
+      {rejecting && (
+        <ReasonModal
+          title="رفض طلب الإجازة؟"
+          message={`سيتم إشعار ${rejecting.employees?.full_name || 'الموظف'} برفض الطلب مع السبب إن كتبته.`}
+          confirmLabel="رفض الطلب"
+          onCancel={() => setRejecting(null)}
+          onConfirm={(reason) => void handleProcess(rejecting, false, false, reason)}
+        />
+      )}
     </div>
   );
 }

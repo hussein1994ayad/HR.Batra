@@ -1,4 +1,5 @@
 'use client';
+import { openStorageUrl } from '@/lib/signed-urls';
 
 import React, { useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
@@ -19,11 +20,20 @@ import {
   CheckCircle2,
   Hourglass,
   AlertTriangle,
+  Printer,
 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
 import { confetti } from '@/lib/lazy';
 import { useQuery } from '@/lib/useQuery';
-import { errorMessage, formatIQD, localDateStr } from '@/lib/format';
+import { errorMessage, formatIQD } from '@/lib/format';
+import {
+  approveLoan, deleteCompletedLoan, deleteInstallment, fetchLoans as fetchLoanLists, payInstallment,
+  postponeInstallments, rejectLoan as rejectLoanRequest, rescheduleLoan, revertInstallmentPayment,
+} from '@/features/loans/api';
+import { previewPayment, sameDayNextMonth, validateApproval } from '@/features/loans/logic';
+import type { PaymentMethod } from '@/features/loans/types';
+import { LoanStatementPrint } from '@/features/loans/components/LoanStatementPrint';
+import { ReasonModal } from '@/components/ReasonModal';
+import type { Loan as DbLoan } from '@/lib/db-types';
 import type { Loan, LoanInstallment } from '@/lib/types';
 import { useConfirm } from '@/components/confirm';
 import {
@@ -54,35 +64,24 @@ interface LoansData {
 }
 
 async function fetchLoans(): Promise<LoansData> {
-  const [{ data: pending, error: pErr }, { data: approved, error: aErr }] = await Promise.all([
-    supabase
-      .from('loans')
-      .select('*, employees!loans_employee_id_fkey(full_name)')
-      .eq('status', 'pending')
-      .order('created_at', { ascending: false }),
-    supabase
-      .from('loans')
-      .select('*, employees!loans_employee_id_fkey(full_name), loan_installments(*)')
-      .eq('status', 'approved')
-      .order('created_at', { ascending: false }),
-  ]);
-  if (pErr) throw pErr;
-  if (aErr) throw aErr;
-  return { pending: (pending ?? []) as Loan[], approved: (approved ?? []) as Loan[] };
+  const { pending, approved } = await fetchLoanLists();
+  return { pending: pending as unknown as Loan[], approved: approved as unknown as Loan[] };
 }
 
 const byDueDate = (a: LoanInstallment, b: LoanInstallment) => a.due_date.localeCompare(b.due_date);
-
-function addMonths(dateStr: string, months: number): string {
-  const [y, m, d] = dateStr.split('-').map(Number);
-  return localDateStr(new Date(y, m - 1 + months, d));
-}
 
 interface ApprovalDraft {
   loan: Loan;
   amount: number;
   months: number;
   startDate: string;
+}
+
+interface PayDraft {
+  installment: LoanInstallment;
+  amount: number;
+  method: PaymentMethod;
+  note: string;
 }
 
 interface EditDraft {
@@ -101,16 +100,20 @@ export default function LoansPage() {
   const [busy, setBusy] = useState<string | null>(null);
 
   const [approval, setApproval] = useState<ApprovalDraft | null>(null);
+  const [rejecting, setRejecting] = useState<Loan | null>(null);
   const [editDraft, setEditDraft] = useState<EditDraft | null>(null);
   const [scheduleLoanId, setScheduleLoanId] = useState<string | null>(null);
-  const [cashPrompt, setCashPrompt] = useState<{ installment: LoanInstallment; note: string } | null>(null);
-  const [amountPrompt, setAmountPrompt] = useState<{ installment: LoanInstallment; amount: number } | null>(null);
+  const [payPrompt, setPayPrompt] = useState<PayDraft | null>(null);
 
   const approved = useMemo(() => query.data?.approved ?? [], [query.data]);
   const active = approved.filter((l) => Number(l.remaining_amount) > 0);
   const completed = approved.filter((l) => Number(l.remaining_amount) <= 0);
   const outstanding = active.reduce((sum, l) => sum + Number(l.remaining_amount), 0);
   const scheduleLoan = approved.find((l) => l.id === scheduleLoanId) ?? null;
+  const paymentPreview = useMemo(
+    () => (payPrompt && scheduleLoan ? previewPayment(scheduleLoan as unknown as DbLoan, payPrompt.installment.id, payPrompt.amount) : null),
+    [payPrompt, scheduleLoan],
+  );
 
   const displayed = (tab === 'active' ? active : completed).filter((l) =>
     (l.employees?.full_name || '').toLowerCase().includes(search.trim().toLowerCase()),
@@ -142,30 +145,16 @@ export default function LoansPage() {
       loan,
       amount: Number(loan.amount),
       months: Number(loan.installment_count),
-      startDate: addMonths(localDateStr(), 1),
+      startDate: sameDayNextMonth(),
     });
 
-  const rejectLoan = async (loan: Loan) => {
-    const ok = await confirm({ title: 'رفض طلب السلفة؟', message: `سيتم إشعار ${loan.employees?.full_name || 'الموظف'} برفض الطلب.`, confirmLabel: 'رفض الطلب' });
-    if (!ok) return;
+  // سبب الرفض يصل للموظف في إشعار قاعدة البيانات (trg_notify_employee_loan_decision)
+  const rejectLoan = async (loan: Loan, reason: string) => {
+    setRejecting(null);
     await run(
       loan.id,
       async () => {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-        if (!session) return;
-        const { error } = await supabase
-          .from('loans')
-          .update({ status: 'rejected', approved_by: session.user.id, approved_at: new Date().toISOString() })
-          .eq('id', loan.id);
-        if (error) throw error;
-        await supabase.from('notifications').insert({
-          employee_id: loan.employee_id,
-          title: 'رفض طلب السلفة ❌',
-          body: 'نأسف، تم رفض طلب السلفة المقدم من قبلك.',
-          type: 'loan',
-        });
+        await rejectLoanRequest(loan.id, reason);
         query.mutate((d) => ({ ...d, pending: d.pending.filter((l) => l.id !== loan.id) }));
         toast.success('تم رفض طلب السلفة');
       },
@@ -175,44 +164,18 @@ export default function LoansPage() {
 
   const submitApproval = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!approval || approval.months <= 0) return;
+    if (!approval) return;
+    const salary = Number((approval.loan as { employees?: { monthly_salary_iqd?: number | null } | null }).employees?.monthly_salary_iqd) || 0;
+    const invalid = validateApproval(approval.amount, approval.months, salary);
+    if (invalid) {
+      toast.error(invalid);
+      return;
+    }
     await run(
       'approve',
       async () => {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-        if (!session) return;
-        const installmentAmt = Math.round(approval.amount / approval.months);
-        const { error } = await supabase
-          .from('loans')
-          .update({
-            status: 'approved',
-            amount: approval.amount,
-            installment_count: approval.months,
-            installment_amount: installmentAmt,
-            approved_by: session.user.id,
-            approved_at: new Date().toISOString(),
-          })
-          .eq('id', approval.loan.id);
-        if (error) throw error;
-
-        const installments = Array.from({ length: approval.months }, (_, i) => ({
-          loan_id: approval.loan.id,
-          due_date: addMonths(approval.startDate, i),
-          amount: installmentAmt,
-          is_paid: false,
-        }));
-        const { error: instErr } = await supabase.from('loan_installments').insert(installments);
-        if (instErr) throw instErr;
-
-        await supabase.from('notifications').insert({
-          employee_id: approval.loan.employee_id,
-          title: 'الموافقة على طلب السلفة 💸',
-          body: `تم اعتماد سلفة بقيمة ${approval.amount.toLocaleString()} د.ع وجدولتها على ${approval.months} شهر.`,
-          type: 'loan',
-        });
-
+        // اعتماد وتوليد الأقساط في معاملة واحدة على السيرفر (approve_loan)
+        await approveLoan({ ...approval, loan: (approval.loan as unknown as DbLoan) });
         setApproval(null);
         query.reload();
         confetti({ particleCount: 100, spread: 70, colors: ['#818CF8', '#34D399', '#6EE7B7'] });
@@ -229,44 +192,7 @@ export default function LoansPage() {
     await run(
       'edit',
       async () => {
-        const { error } = await supabase
-          .from('loans')
-          .update({
-            amount: Math.round(d.amount),
-            installment_amount: Math.round(d.installmentAmount),
-            installment_count: d.installmentCount,
-            remaining_amount: Math.round(d.remainingAmount),
-          })
-          .eq('id', d.loan.id);
-        if (error) throw error;
-
-        // Regenerate the unpaid installments starting next month.
-        const { data: paidInst } = await supabase.from('loan_installments').select('id').eq('loan_id', d.loan.id).eq('is_paid', true);
-        const { error: delErr } = await supabase.from('loan_installments').delete().eq('loan_id', d.loan.id).eq('is_paid', false);
-        if (delErr) throw delErr;
-
-        const remainingCount = d.installmentCount - (paidInst?.length ?? 0);
-        if (remainingCount > 0) {
-          const now = new Date();
-          const first = localDateStr(new Date(now.getFullYear(), now.getMonth() + 1, 1));
-          const { error: instErr } = await supabase.from('loan_installments').insert(
-            Array.from({ length: remainingCount }, (_, i) => ({
-              loan_id: d.loan.id,
-              due_date: addMonths(first, i),
-              amount: Math.round(d.installmentAmount),
-              is_paid: false,
-            })),
-          );
-          if (instErr) throw instErr;
-        }
-
-        await supabase.from('notifications').insert({
-          employee_id: d.loan.employee_id,
-          title: 'تعديل تفاصيل السلفة 💸',
-          body: `قامت الإدارة بتعديل تفاصيل سلفتك (المبلغ الكلي الجديد: ${Math.round(d.amount).toLocaleString()} د.ع، القسط الشهري الجديد: ${Math.round(d.installmentAmount).toLocaleString()} د.ع).`,
-          type: 'loan',
-        });
-
+        await rescheduleLoan({ ...d, loan: (d.loan as unknown as DbLoan) });
         setEditDraft(null);
         query.reload();
         toast.success('تم تعديل السلفة وإعادة جدولة الأقساط المتبقية');
@@ -275,43 +201,18 @@ export default function LoansPage() {
     );
   };
 
-  const recordCash = async (e: React.FormEvent) => {
+  const recordPayment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!cashPrompt) return;
+    if (!payPrompt || !paymentPreview || paymentPreview.error) return;
     await run(
-      'cash',
+      'pay',
       async () => {
-        const { error } = await supabase
-          .from('loan_installments')
-          .update({
-            is_paid: true,
-            paid_at: new Date().toISOString(),
-            payment_type: 'cash',
-            payment_note: cashPrompt.note || 'سداد نقدي مباشر',
-          })
-          .eq('id', cashPrompt.installment.id);
-        if (error) throw error;
-        setCashPrompt(null);
+        await payInstallment(payPrompt.installment.id, payPrompt.amount, payPrompt.method, payPrompt.note);
+        setPayPrompt(null);
         query.reload();
-        toast.success('تم تسجيل السداد النقدي وتحديث الرصيد');
+        toast.success('تم تسجيل الدفعة وإعادة توزيع الأقساط المتبقية');
       },
-      'فشل تسجيل السداد',
-    );
-  };
-
-  const updateInstallmentAmount = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!amountPrompt || amountPrompt.amount <= 0) return;
-    await run(
-      'amount',
-      async () => {
-        const { error } = await supabase.from('loan_installments').update({ amount: amountPrompt.amount }).eq('id', amountPrompt.installment.id);
-        if (error) throw error;
-        setAmountPrompt(null);
-        query.reload();
-        toast.success('تم تعديل قيمة القسط');
-      },
-      'فشل تعديل القسط',
+      'فشل تسجيل الدفعة',
     );
   };
 
@@ -326,11 +227,7 @@ export default function LoansPage() {
     await run(
       `revert_${inst.id}`,
       async () => {
-        const { error } = await supabase
-          .from('loan_installments')
-          .update({ is_paid: false, paid_at: null, payment_type: 'salary_deduction', payment_note: null })
-          .eq('id', inst.id);
-        if (error) throw error;
+        await revertInstallmentPayment(inst.id);
         query.reload();
         toast.success('تم التراجع عن السداد');
       },
@@ -348,8 +245,7 @@ export default function LoansPage() {
     await run(
       `delete_${inst.id}`,
       async () => {
-        const { error } = await supabase.from('loan_installments').delete().eq('id', inst.id);
-        if (error) throw error;
+        await deleteInstallment(inst.id);
         query.mutate((d) => ({
           ...d,
           approved: d.approved.map((l) =>
@@ -366,21 +262,30 @@ export default function LoansPage() {
     await run(
       `postpone_${inst.id}`,
       async () => {
-        const { data: later, error } = await supabase
-          .from('loan_installments')
-          .select('*')
-          .eq('loan_id', inst.loan_id)
-          .eq('is_paid', false)
-          .gte('due_date', inst.due_date)
-          .order('due_date', { ascending: true });
-        if (error) throw error;
-        for (const item of (later ?? []) as LoanInstallment[]) {
-          await supabase.from('loan_installments').update({ due_date: addMonths(item.due_date, 1) }).eq('id', item.id);
-        }
+        await postponeInstallments(inst as Parameters<typeof postponeInstallments>[0]);
         query.reload();
         toast.success('تم تأجيل القسط والأقساط اللاحقة شهراً');
       },
       'فشل تأجيل القسط',
+    );
+  };
+
+  /** حذف سلفة مسددة بالكامل مع ملف تعهدها لتوفير المساحة. */
+  const deleteLoan = async (loan: Loan) => {
+    const ok = await confirm({
+      title: 'حذف سجل السلفة المكتملة؟',
+      message: 'ستُحذف السلفة وأقساطها وصورة التعهد نهائياً لتوفير المساحة. لا يمكن التراجع.',
+      confirmLabel: 'حذف نهائي',
+    });
+    if (!ok) return;
+    await run(
+      `delete_loan_${loan.id}`,
+      async () => {
+        await deleteCompletedLoan((loan as unknown as DbLoan));
+        query.mutate((d) => ({ ...d, approved: d.approved.filter((l) => l.id !== loan.id) }));
+        toast.success('تم حذف السلفة وتوفير المساحة');
+      },
+      'فشل الحذف',
     );
   };
 
@@ -434,15 +339,15 @@ export default function LoansPage() {
                     <span className="text-sm font-extrabold text-sky-300">{formatIQD(amount / months)}</span>
                   </div>
                   {loan.pledge_url && (
-                    <a href={loan.pledge_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-300 hover:text-indigo-200 mb-3">
-                      <FileText className="w-3.5 h-3.5" /> عرض التعهد الموقّع
-                    </a>
+                    <button type="button" onClick={() => openStorageUrl(loan.pledge_url!).catch(() => toast.error('تعذر فتح التعهد'))} className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-300 hover:text-indigo-200 mb-3 cursor-pointer">
+                    <FileText className="w-3.5 h-3.5" /> عرض التعهد الموقّع
+                  </button>
                   )}
                   <div className="flex gap-2 mt-auto pt-4 border-t border-slate-800/70">
                     <Button variant="primary" icon={Settings2} block disabled={busy === loan.id} onClick={() => startApproval(loan)}>
                       اعتماد وجدولة
                     </Button>
-                    <Button variant="soft-danger" icon={X} block loading={busy === loan.id} onClick={() => rejectLoan(loan)}>
+                    <Button variant="soft-danger" icon={X} block loading={busy === loan.id} onClick={() => setRejecting(loan)}>
                       رفض
                     </Button>
                   </div>
@@ -459,7 +364,7 @@ export default function LoansPage() {
           icon={CreditCard}
           tone="indigo"
           title="سجل السلف المعتمدة"
-          description="اضغط على جدول الأقساط لتسجيل سداد نقدي أو تأجيل أو تعديل قسط"
+          description="اضغط على جدول الأقساط لتسجيل دفعة بأي مبلغ أو تأجيل قسط"
           actions={
             <>
               <SearchInput value={search} onChange={setSearch} placeholder="ابحث باسم الموظف..." className="w-full sm:w-56" />
@@ -520,9 +425,14 @@ export default function LoansPage() {
                       {unpaid[0]?.due_date ?? <Badge tone="emerald">مكتمل</Badge>}
                     </td>
                     <td className="!text-left">
-                      <Button size="sm" variant="soft" icon={Calendar} onClick={() => setScheduleLoanId(loan.id)}>
-                        جدول الأقساط
-                      </Button>
+                      <div className="flex justify-end gap-1.5">
+                        <Button size="sm" variant="soft" icon={Calendar} onClick={() => setScheduleLoanId(loan.id)}>
+                          جدول الأقساط
+                        </Button>
+                        {tab === 'completed' && (
+                          <IconButton icon={Trash2} label="حذف السجل نهائياً" tone="rose" loading={busy === `delete_loan_${loan.id}`} onClick={() => deleteLoan(loan)} />
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -575,6 +485,10 @@ export default function LoansPage() {
 
           <div className="flex items-center justify-between mb-3">
             <h4 className="text-xs font-bold text-slate-300">الأقساط</h4>
+            <div className="flex gap-2">
+            <Button size="sm" variant="secondary" icon={Printer} onClick={() => window.print()}>
+              طباعة كشف الحساب
+            </Button>
             <Button
               size="sm"
               variant="secondary"
@@ -591,6 +505,7 @@ export default function LoansPage() {
             >
               تعديل السلفة وإعادة الجدولة
             </Button>
+            </div>
           </div>
 
           <div className="max-h-[360px] overflow-y-auto rounded-2xl border border-slate-800/80 divide-y divide-slate-800/70">
@@ -611,11 +526,16 @@ export default function LoansPage() {
                 <div className="flex items-center gap-1.5 justify-end">
                   {!inst.is_paid ? (
                     <>
-                      <Button size="xs" variant="soft-success" icon={Banknote} disabled={!!busy} onClick={() => setCashPrompt({ installment: inst, note: '' })}>
-                        دفع نقدي
+                      <Button
+                        size="xs"
+                        variant="soft-success"
+                        icon={Banknote}
+                        disabled={!!busy}
+                        onClick={() => setPayPrompt({ installment: inst, amount: Number(inst.amount), method: 'cash', note: '' })}
+                      >
+                        تسجيل دفعة
                       </Button>
                       <IconButton icon={CalendarClock} label="تأجيل هذا القسط وما بعده شهراً" tone="indigo" loading={busy === `postpone_${inst.id}`} disabled={!!busy} onClick={() => postponeFrom(inst)} />
-                      <IconButton icon={Pencil} label="تعديل قيمة القسط" tone="sky" disabled={!!busy} onClick={() => setAmountPrompt({ installment: inst, amount: Number(inst.amount) })} />
                     </>
                   ) : (
                     <>
@@ -653,29 +573,89 @@ export default function LoansPage() {
         </Modal>
       )}
 
-      {/* Cash payment */}
-      {cashPrompt && (
-        <Modal title="تسجيل سداد نقدي" subtitle={`قيمة القسط: ${formatIQD(cashPrompt.installment.amount)}`} icon={Banknote} tone="emerald" size="sm" onClose={() => setCashPrompt(null)}>
-          <form onSubmit={recordCash} className="space-y-4">
-            <Field label="ملاحظة (اختياري)" hint="يُخصم القسط من الرصيد فوراً ولا يُستقطع من الراتب القادم.">
-              <Input value={cashPrompt.note} onChange={(e) => setCashPrompt({ ...cashPrompt, note: e.target.value })} placeholder="مثال: وصل استلام رقم 12" />
+      {/* Record a payment of any amount */}
+      {payPrompt && scheduleLoan && paymentPreview && (
+        <Modal
+          title="تسجيل دفعة"
+          subtitle={`القسط المجدول: ${formatIQD(payPrompt.installment.amount)} · المتبقي على السلفة: ${formatIQD(scheduleLoan.remaining_amount)}`}
+          icon={Banknote}
+          tone="emerald"
+          onClose={() => setPayPrompt(null)}
+        >
+          <form onSubmit={recordPayment} className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Field label="المبلغ المدفوع (د.ع)" hint="الزيادة تُخصم من آخر الأقساط، والنقص يُضاف لآخر قسط.">
+                <AmountInput required autoFocus value={payPrompt.amount} onValueChange={(v) => setPayPrompt({ ...payPrompt, amount: v })} />
+              </Field>
+              <Field label="طريقة السداد">
+                <SegmentedTabs
+                  value={payPrompt.method}
+                  onChange={(method) => setPayPrompt({ ...payPrompt, method })}
+                  options={[
+                    { value: 'cash', label: 'نقداً' },
+                    { value: 'salary_deduction', label: 'استقطاع راتب' },
+                  ]}
+                />
+              </Field>
+            </div>
+            <Field label="ملاحظة (اختياري)">
+              <Input value={payPrompt.note} onChange={(e) => setPayPrompt({ ...payPrompt, note: e.target.value })} placeholder="مثال: وصل استلام رقم 12" />
             </Field>
-            <ModalFooter onCancel={() => setCashPrompt(null)} loading={busy === 'cash'} submitLabel="تأكيد السداد" variant="success" />
-          </form>
-        </Modal>
-      )}
 
-      {/* Edit installment amount */}
-      {amountPrompt && (
-        <Modal title="تعديل قيمة القسط" icon={Pencil} tone="sky" size="sm" onClose={() => setAmountPrompt(null)}>
-          <form onSubmit={updateInstallmentAmount} className="space-y-4">
-            <Field label="المبلغ الجديد (د.ع)">
-              <AmountInput required autoFocus value={amountPrompt.amount} onValueChange={(v) => setAmountPrompt({ ...amountPrompt, amount: v })} />
-            </Field>
-            <ModalFooter onCancel={() => setAmountPrompt(null)} loading={busy === 'amount'} submitLabel="حفظ التعديل" />
+            {paymentPreview.error ? (
+              <p className="text-xs font-bold text-rose-400">{paymentPreview.error}</p>
+            ) : (
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-xs font-bold text-slate-300">الأقساط بعد هذه الدفعة</h4>
+                  <span className="text-xs text-slate-400">
+                    المتبقي بعدها: <b className="text-amber-300">{formatIQD(paymentPreview.remaining)}</b>
+                  </span>
+                </div>
+                <div className="max-h-56 overflow-y-auto rounded-2xl border border-slate-800/80 divide-y divide-slate-800/70">
+                  {paymentPreview.rows.map((r, idx) => (
+                    <div key={`${r.due_date}-${idx}`} className={`px-3 py-2 flex items-center justify-between text-xs ${r.current ? 'bg-emerald-500/10' : ''}`}>
+                      <span className="flex items-center gap-2">
+                        <span className="w-6 text-slate-500 font-bold">{idx + 1}</span>
+                        <span className="font-mono text-slate-300" dir="ltr">{r.due_date}</span>
+                      </span>
+                      <span className="flex items-center gap-2">
+                        <b className="text-white">{formatIQD(r.amount)}</b>
+                        {r.current ? (
+                          <Badge tone="emerald" dot>هذه الدفعة</Badge>
+                        ) : r.is_paid ? (
+                          <Badge tone="sky">مسدد</Badge>
+                        ) : r.added ? (
+                          <Badge tone="amber">شهر إضافي</Badge>
+                        ) : (
+                          <Badge tone="slate">قادم</Badge>
+                        )}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            <ModalFooter
+              onCancel={() => setPayPrompt(null)}
+              loading={busy === 'pay'}
+              disabled={!!paymentPreview.error}
+              submitLabel="تأكيد الدفعة"
+              variant="success"
+            />
           </form>
         </Modal>
       )}
+      {rejecting && (
+        <ReasonModal
+          title="رفض طلب السلفة؟"
+          message={`سيتم إشعار ${rejecting.employees?.full_name || 'الموظف'} برفض الطلب.`}
+          confirmLabel="رفض الطلب"
+          onCancel={() => setRejecting(null)}
+          onConfirm={(reason) => void rejectLoan(rejecting, reason)}
+        />
+      )}
+      {scheduleLoan && <LoanStatementPrint selectedLoanForInstallments={(scheduleLoan as unknown as DbLoan)} />}
     </div>
   );
 }

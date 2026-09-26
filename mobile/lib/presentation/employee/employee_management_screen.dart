@@ -1,15 +1,21 @@
 // =========================================================================
-// نظام HR Pro v6.0 - شاشة إدارة الموظفين
+// HR Pro — إدارة الموظفين
+// =========================================================================
+// القائمة مع بحث عربي وفلتر الحالة، ملف كل موظف، إضافة موظف (حساب دخول)،
+// تعديل المستمسكات، تفعيل/تعطيل الحساب، وفك ربط الجهاز.
+// الأجزاء: employee_management/{employee_form_sheet, employee_documents,
+// employee_profile_sheet}.dart
 // =========================================================================
 
-import 'dart:io';
+import 'dart:async';
+
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
+
 import '../../core/services/supabase_service.dart';
-import '../../core/services/image_compression_service.dart';
-import '../../core/theme/app_theme.dart';
-import '../shared/widgets/glass_background.dart';
-import '../shared/widgets/glass_container.dart';
+import '../shared/ui/ui.dart';
+import 'employee_management/employee_documents.dart';
+import 'employee_management/employee_form_sheet.dart';
+import 'employee_management/employee_profile_sheet.dart';
 
 class EmployeeManagementScreen extends StatefulWidget {
   const EmployeeManagementScreen({super.key});
@@ -20,8 +26,12 @@ class EmployeeManagementScreen extends StatefulWidget {
 
 class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
   bool _isLoading = true;
+  bool _hasError = false;
   List<Map<String, dynamic>> _employees = [];
+  List<Map<String, dynamic>> _branches = [];
   String _searchQuery = '';
+  String _statusFilter = 'all'; // all | active | inactive
+  final _search = TextEditingController();
 
   @override
   void initState() {
@@ -29,692 +39,283 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
     _loadEmployees();
   }
 
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
   Future<void> _loadEmployees() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
+
+    final user = SupabaseService.currentUser;
+    if (user == null) {
+      if (mounted) Navigator.pop(context);
+      return;
+    }
+
     try {
-      final data = await SupabaseService.client
-          .from('employees')
-          .select('*, employee_devices(id, model)')
-          .order('full_name');
-          
-      setState(() {
-        _employees = List<Map<String, dynamic>>.from(data);
-      });
+      final employeeRes = await SupabaseService.client.from('employees').select('role').eq('id', user.id).maybeSingle();
+
+      if (employeeRes == null || (employeeRes['role'] != 'admin' && employeeRes['role'] != 'manager')) {
+        if (mounted) Navigator.pop(context);
+        return;
+      }
+
+      final results = await Future.wait<dynamic>([
+        SupabaseService.client.from('employees').select('*, employee_devices(id, model), branches(name), departments(name)').order('full_name'),
+        SupabaseService.client.from('branches').select('id, name').order('name'),
+      ]);
+
+      if (mounted) {
+        setState(() {
+          _employees = List<Map<String, dynamic>>.from(results[0] as Iterable<dynamic>);
+          _branches = List<Map<String, dynamic>>.from(results[1] as Iterable<dynamic>);
+          _hasError = false;
+        });
+      }
     } catch (e) {
       debugPrint('Error loading employees: $e');
+      if (mounted) setState(() => _hasError = true);
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  Future<void> _toggleEmployeeStatus(String id, bool currentStatus) async {
+  Future<void> _toggleEmployeeStatus(Map<String, dynamic> emp) async {
+    final isActive = emp['is_active'] != false;
+    final ok = await showAppConfirm(
+      context,
+      title: isActive ? 'تعطيل حساب ${emp['full_name']}؟' : 'تفعيل حساب ${emp['full_name']}؟',
+      message: isActive ? 'ما يقدر يسجل دخول أو يبصم حتى تفعّله مرة ثانية.' : 'يرجع يقدر يدخل ويبصم عادي.',
+      confirmLabel: isActive ? 'تعطيل' : 'تفعيل',
+      destructive: isActive,
+    );
+    if (!ok) return;
     try {
       setState(() => _isLoading = true);
-      await SupabaseService.client
-          .from('employees')
-          .update({'is_active': !currentStatus})
-          .eq('id', id);
-      
-      _loadEmployees();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(!currentStatus ? 'تم تفعيل حساب الموظف ✅' : 'تم تعطيل حساب الموظف ❌', style: const TextStyle(fontFamily: 'Cairo')),
-            backgroundColor: !currentStatus ? AppTheme.successGreen : AppTheme.warningOrange,
-          ),
-        );
-      }
+      await SupabaseService.client.from('employees').update({'is_active': !isActive}).eq('id', emp['id'] as String);
+      if (mounted) AppSnack.show(context, isActive ? 'عُطّل الحساب' : 'فُعّل الحساب', tone: isActive ? AppTone.warning : AppTone.success);
+      unawaited(_loadEmployees());
     } catch (e) {
       debugPrint('Error toggling status: $e');
-    } finally {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        AppSnack.error(context, 'تعذّر تغيير الحالة');
+        setState(() => _isLoading = false);
+      }
     }
   }
 
-  Future<void> _unbindDevice(String employeeId) async {
+  Future<void> _unbindDevice(Map<String, dynamic> emp) async {
+    final ok = await showAppConfirm(
+      context,
+      title: 'فك ربط جهاز ${emp['full_name']}؟',
+      message: 'راح يقدر يسجل دخول من أول جهاز جديد يستعمله، ويُقفل عليه.',
+      confirmLabel: 'فك الربط',
+    );
+    if (!ok) return;
+    final employeeId = emp['id'] as String;
     try {
       setState(() => _isLoading = true);
-      
       // 1. مسح تسجيلات الجهاز القديمة
-      await SupabaseService.client
-          .from('employee_devices')
-          .delete()
-          .eq('employee_id', employeeId);
-
+      await SupabaseService.client.from('employee_devices').delete().eq('employee_id', employeeId);
       // 2. تحديث قفل الموظف ليكون نشطاً للجهاز القادم
-      await SupabaseService.client
-          .from('employees')
-          .update({'device_id_lock': 'force_lock_active'})
-          .eq('id', employeeId);
-          
-      _loadEmployees();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('تم فك ربط جهاز الموظف بنجاح ✅', style: TextStyle(fontFamily: 'Cairo')),
-            backgroundColor: AppTheme.successGreen,
-          ),
-        );
-      }
+      await SupabaseService.client.from('employees').update({'device_id_lock': 'force_lock_active'}).eq('id', employeeId);
+      if (mounted) AppSnack.success(context, 'فُكّ ربط الجهاز');
+      unawaited(_loadEmployees());
     } catch (e) {
       debugPrint('Error unbinding device: $e');
-    } finally {
-      setState(() => _isLoading = false);
-    }
-  }
-
-  Future<List<String>> _uploadDocuments(List<File> files, String employeeId) async {
-    List<String> uploadedUrls = [];
-    
-    for (var file in files) {
-      try {
-        // ضغط الصورة تلقائياً وإرجاعها، أو إرجاع الملف كما هو إذا كان مستنداً غير صوري (مثل PDF)
-        final processedFile = await ImageCompressionService.compressImage(file);
-        
-        final fileName = '$employeeId/${DateTime.now().millisecondsSinceEpoch}_${file.path.split('/').last}';
-        await SupabaseService.client.storage
-            .from('employee-documents')
-            .upload(fileName, processedFile);
-            
-        final url = SupabaseService.client.storage
-            .from('employee-documents')
-            .getPublicUrl(fileName);
-            
-        uploadedUrls.add(url);
-      } catch (e) {
-        debugPrint('Error compressing/uploading file: $e');
+      if (mounted) {
+        AppSnack.error(context, 'تعذّر فك الربط');
+        setState(() => _isLoading = false);
       }
     }
-    return uploadedUrls;
   }
 
-  void _showAddEmployeeModal() {
-    final nameController = TextEditingController();
-    final emailController = TextEditingController();
-    final passwordController = TextEditingController();
-    final codeController = TextEditingController();
-    String role = 'employee';
-    bool isSaving = false;
-    List<File> _selectedDocuments = [];
-    final ImagePicker _picker = ImagePicker();
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            return Container(
-              height: MediaQuery.of(context).size.height * 0.9,
-              decoration: BoxDecoration(
-                color: AppTheme.darkSurfaceHigh,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-                border: Border.all(color: AppTheme.neonCyan.withValues(alpha: 0.2)),
-              ),
-              child: isSaving 
-                  ? const Center(child: CircularProgressIndicator(color: AppTheme.neonCyan))
-                  : Column(
-                children: [
-                  Container(
-                    margin: const EdgeInsets.only(top: 12),
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.white24,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: AppTheme.neonCyan.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: const Icon(Icons.person_add_rounded, color: AppTheme.neonCyan, size: 22),
-                        ),
-                        const SizedBox(width: 12),
-                        const Text(
-                          'إضافة موظف جديد',
-                          style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const Divider(color: Colors.white10, height: 1),
-                  Expanded(
-                    child: ListView(
-                      padding: const EdgeInsets.all(20),
-                      children: [
-                        _buildTextField(nameController, 'الاسم الكامل', Icons.person_rounded),
-                        const SizedBox(height: 16),
-                        _buildTextField(emailController, 'البريد الإلكتروني', Icons.email_rounded, isEmail: true),
-                        const SizedBox(height: 16),
-                        _buildTextField(passwordController, 'كلمة المرور', Icons.lock_rounded, isPassword: true),
-                        const SizedBox(height: 16),
-                        _buildTextField(codeController, 'كود الموظف (الرقم الوظيفي)', Icons.badge_rounded),
-                        const SizedBox(height: 16),
-                        const Text('الصلاحية', style: TextStyle(fontFamily: 'Cairo', color: Colors.white70, fontSize: 12)),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _buildRoleChoice('موظف', 'employee', role, (val) => setModalState(() => role = val)),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: _buildRoleChoice('مدير/أدمن', 'admin', role, (val) => setModalState(() => role = val)),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        const Text('المستمسكات الثبوتية (اختياري)', style: TextStyle(fontFamily: 'Cairo', color: Colors.white70, fontSize: 12)),
-                        const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: [
-                            ..._selectedDocuments.asMap().entries.map((entry) {
-                              int idx = entry.key;
-                              File file = entry.value;
-                              return Stack(
-                                children: [
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(12),
-                                    child: Image.file(file, width: 60, height: 60, fit: BoxFit.cover),
-                                  ),
-                                  Positioned(
-                                    top: -4,
-                                    right: -4,
-                                    child: GestureDetector(
-                                      onTap: () => setModalState(() => _selectedDocuments.removeAt(idx)),
-                                      child: const CircleAvatar(radius: 10, backgroundColor: Colors.red, child: Icon(Icons.close, size: 12, color: Colors.white)),
-                                    ),
-                                  )
-                                ],
-                              );
-                            }),
-                            GestureDetector(
-                              onTap: () async {
-                                final pickedFiles = await _picker.pickMultiImage();
-                                if (pickedFiles.isNotEmpty) {
-                                  setModalState(() {
-                                    _selectedDocuments.addAll(pickedFiles.map((x) => File(x.path)));
-                                  });
-                                }
-                              },
-                              child: Container(
-                                width: 60,
-                                height: 60,
-                                decoration: BoxDecoration(
-                                  border: Border.all(color: AppTheme.neonCyan.withValues(alpha: 0.5), style: BorderStyle.solid),
-                                  borderRadius: BorderRadius.circular(12),
-                                  color: AppTheme.neonCyan.withValues(alpha: 0.1),
-                                ),
-                                child: const Icon(Icons.add_a_photo_rounded, color: AppTheme.neonCyan),
-                              ),
-                            )
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        const Text('سيتم ضغط الصور تلقائياً', style: TextStyle(fontFamily: 'Cairo', color: Colors.white38, fontSize: 10)),
-                      ],
-                    ),
-                  ),
-                  Padding(
-                    padding: EdgeInsets.fromLTRB(20, 0, 20, MediaQuery.of(context).viewInsets.bottom + 20),
-                    child: SizedBox(
-                      width: double.infinity,
-                      height: 50,
-                      child: ElevatedButton(
-                        onPressed: () async {
-                          if (nameController.text.isEmpty || emailController.text.isEmpty || passwordController.text.isEmpty) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('الرجاء إكمال جميع الحقول الأساسية', style: TextStyle(fontFamily: 'Cairo'))),
-                            );
-                            return;
-                          }
-
-                          setModalState(() => isSaving = true);
-                          try {
-                            // استدعاء Edge Function لإنشاء الموظف
-                            final res = await SupabaseService.client.functions.invoke(
-                              'admin-create-user',
-                              body: {
-                                'email': emailController.text.trim(),
-                                'password': passwordController.text,
-                                'full_name': nameController.text.trim(),
-                                'employee_code': codeController.text.trim(),
-                                'role': role,
-                              },
-                            );
-
-                            if (res.status == 200) {
-                              if (_selectedDocuments.isNotEmpty) {
-                                try {
-                                  final empData = await SupabaseService.client.from('employees').select('id').eq('email', emailController.text.trim()).single();
-                                  final urls = await _uploadDocuments(_selectedDocuments, empData['id']);
-                                  await SupabaseService.client.from('employees').update({'document_urls': urls}).eq('id', empData['id']);
-                                } catch (e) {
-                                  debugPrint('Failed to upload documents: $e');
-                                }
-                              }
-
-                              if (mounted) {
-                                Navigator.pop(context);
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('تم إنشاء الموظف بنجاح ✅', style: TextStyle(fontFamily: 'Cairo')), backgroundColor: AppTheme.successGreen),
-                                );
-                                _loadEmployees();
-                              }
-                            } else {
-                              throw Exception('فشل إنشاء المستخدم: ${res.data}');
-                            }
-                          } catch (e) {
-                            setModalState(() => isSaving = false);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('خطأ: $e', style: const TextStyle(fontFamily: 'Cairo')), backgroundColor: AppTheme.dangerRed),
-                            );
-                          }
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppTheme.neonCyan,
-                          foregroundColor: Colors.black,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                        ),
-                        child: const Text('إنشاء الحساب', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 15)),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
+  Future<void> _addEmployee() async {
+    final created = await showEmployeeFormSheet(context, branches: _branches);
+    if (created == true && mounted) {
+      AppSnack.success(context, 'أُنشئ حساب الموظف');
+      unawaited(_loadEmployees());
+    }
   }
 
-  void _showEditEmployeeModal(Map<String, dynamic> emp) {
-    bool isSaving = false;
-    List<File> _selectedDocuments = [];
-    List<String> _existingDocuments = List<String>.from(emp['document_urls'] ?? []);
-    final ImagePicker _picker = ImagePicker();
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            return Container(
-              height: MediaQuery.of(context).size.height * 0.9,
-              decoration: BoxDecoration(
-                color: AppTheme.darkSurfaceHigh,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-                border: Border.all(color: AppTheme.neonCyan.withValues(alpha: 0.2)),
-              ),
-              child: isSaving 
-                  ? const Center(child: CircularProgressIndicator(color: AppTheme.neonCyan))
-                  : Column(
-                children: [
-                  Container(
-                    margin: const EdgeInsets.only(top: 12),
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.white24,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: AppTheme.neonCyan.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: const Icon(Icons.edit_document, color: AppTheme.neonCyan, size: 22),
-                        ),
-                        const SizedBox(width: 12),
-                        Text(
-                          'تعديل ملف ومستمسكات ${emp['full_name']}',
-                          style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
-                  ),
-                  const Divider(color: Colors.white10, height: 1),
-                  Expanded(
-                    child: ListView(
-                      padding: const EdgeInsets.all(20),
-                      children: [
-                        const Text('تعديل المستمسكات الثبوتية', style: TextStyle(fontFamily: 'Cairo', color: Colors.white70, fontSize: 12)),
-                        const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: [
-                            ..._existingDocuments.asMap().entries.map((entry) {
-                              int idx = entry.key;
-                              String url = entry.value;
-                              return Stack(
-                                children: [
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(12),
-                                    child: Image.network(url, width: 60, height: 60, fit: BoxFit.cover),
-                                  ),
-                                  Positioned(
-                                    top: -4,
-                                    right: -4,
-                                    child: GestureDetector(
-                                      onTap: () => setModalState(() => _existingDocuments.removeAt(idx)),
-                                      child: const CircleAvatar(radius: 10, backgroundColor: Colors.red, child: Icon(Icons.close, size: 12, color: Colors.white)),
-                                    ),
-                                  )
-                                ],
-                              );
-                            }),
-                            ..._selectedDocuments.asMap().entries.map((entry) {
-                              int idx = entry.key;
-                              File file = entry.value;
-                              return Stack(
-                                children: [
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(12),
-                                    child: Image.file(file, width: 60, height: 60, fit: BoxFit.cover),
-                                  ),
-                                  Positioned(
-                                    top: -4,
-                                    right: -4,
-                                    child: GestureDetector(
-                                      onTap: () => setModalState(() => _selectedDocuments.removeAt(idx)),
-                                      child: const CircleAvatar(radius: 10, backgroundColor: Colors.red, child: Icon(Icons.close, size: 12, color: Colors.white)),
-                                    ),
-                                  )
-                                ],
-                              );
-                            }),
-                            GestureDetector(
-                              onTap: () async {
-                                final pickedFiles = await _picker.pickMultiImage();
-                                if (pickedFiles.isNotEmpty) {
-                                  setModalState(() {
-                                    _selectedDocuments.addAll(pickedFiles.map((x) => File(x.path)));
-                                  });
-                                }
-                              },
-                              child: Container(
-                                width: 60,
-                                height: 60,
-                                decoration: BoxDecoration(
-                                  border: Border.all(color: AppTheme.neonCyan.withValues(alpha: 0.5), style: BorderStyle.solid),
-                                  borderRadius: BorderRadius.circular(12),
-                                  color: AppTheme.neonCyan.withValues(alpha: 0.1),
-                                ),
-                                child: const Icon(Icons.add_a_photo_rounded, color: AppTheme.neonCyan),
-                              ),
-                            )
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        const Text('ملاحظة: يمكنك إزالة أي صورة قديمة أو رفع صور جديدة سيتم استبدالها.', style: TextStyle(fontFamily: 'Cairo', color: Colors.white38, fontSize: 10)),
-                      ],
-                    ),
-                  ),
-                  Padding(
-                    padding: EdgeInsets.fromLTRB(20, 0, 20, MediaQuery.of(context).viewInsets.bottom + 20),
-                    child: SizedBox(
-                      width: double.infinity,
-                      height: 50,
-                      child: ElevatedButton(
-                        onPressed: () async {
-                          setModalState(() => isSaving = true);
-                          try {
-                            // Find deleted
-                            final originalDocs = List<String>.from(emp['document_urls'] ?? []);
-                            final deletedDocs = originalDocs.where((url) => !_existingDocuments.contains(url)).toList();
-                            for (var url in deletedDocs) {
-                              try {
-                                final match = RegExp(r'/employee-documents/(.+)').firstMatch(url);
-                                if (match != null) {
-                                  await SupabaseService.client.storage.from('employee-documents').remove([match.group(1)!]);
-                                }
-                              } catch(e) {}
-                            }
-
-                            // Upload new
-                            List<String> newUrls = [];
-                            if (_selectedDocuments.isNotEmpty) {
-                              newUrls = await _uploadDocuments(_selectedDocuments, emp['id']);
-                            }
-                            final finalUrls = [..._existingDocuments, ...newUrls];
-
-                            await SupabaseService.client.from('employees').update({'document_urls': finalUrls}).eq('id', emp['id']);
-
-                            if (mounted) {
-                              Navigator.pop(context);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('تم تحديث المستمسكات بنجاح ✅', style: TextStyle(fontFamily: 'Cairo')), backgroundColor: AppTheme.successGreen),
-                              );
-                              _loadEmployees();
-                            }
-                          } catch (e) {
-                            setModalState(() => isSaving = false);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('خطأ: $e', style: const TextStyle(fontFamily: 'Cairo')), backgroundColor: AppTheme.dangerRed),
-                            );
-                          }
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppTheme.neonCyan,
-                          foregroundColor: Colors.black,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                        ),
-                        child: const Text('تحديث وحفظ', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 15)),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
+  Future<void> _editDocuments(Map<String, dynamic> emp) async {
+    final saved = await showEditDocumentsSheet(context, emp);
+    if (saved == true && mounted) {
+      AppSnack.success(context, 'حُدّثت المستمسكات');
+      unawaited(_loadEmployees());
+    }
   }
 
-  Widget _buildRoleChoice(String label, String value, String groupValue, Function(String) onChanged) {
-    final isSelected = value == groupValue;
-    return GestureDetector(
-      onTap: () => onChanged(value),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          color: isSelected ? AppTheme.neonCyan.withValues(alpha: 0.2) : Colors.white.withValues(alpha: 0.05),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: isSelected ? AppTheme.neonCyan : Colors.white10),
-        ),
-        child: Center(
-          child: Text(
-            label,
-            style: TextStyle(
-              fontFamily: 'Cairo',
-              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-              color: isSelected ? AppTheme.neonCyan : Colors.white54,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+  void _openProfile(Map<String, dynamic> emp) => showEmployeeProfileSheet(context, emp, onEditDocuments: () => _editDocuments(emp));
 
-  Widget _buildTextField(TextEditingController controller, String label, IconData icon, {bool isPassword = false, bool isEmail = false}) {
-    return TextField(
-      controller: controller,
-      obscureText: isPassword,
-      keyboardType: isEmail ? TextInputType.emailAddress : TextInputType.text,
-      style: const TextStyle(fontFamily: 'Cairo', color: Colors.white, fontSize: 14),
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: const TextStyle(fontFamily: 'Cairo', color: Colors.white54, fontSize: 12),
-        prefixIcon: Icon(icon, color: AppTheme.neonCyan, size: 20),
-        filled: true,
-        fillColor: Colors.white.withValues(alpha: 0.05),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: AppTheme.neonCyan)),
-      ),
-    );
+  static String _normalizeArabic(String text) => text
+      .replaceAll(RegExp(r'[أإآٱ]'), 'ا')
+      .replaceAll('ة', 'ه')
+      .replaceAll('ى', 'ي')
+      .replaceAll('ئ', 'ي')
+      .replaceAll('ؤ', 'و')
+      .replaceAll(RegExp(r'[ً-ٟ]'), '')
+      .trim()
+      .toLowerCase();
+
+  static String? _nested(Object? v) => v is Map ? v['name']?.toString() : null;
+
+  List<Map<String, dynamic>> get _filtered {
+    final q = _normalizeArabic(_searchQuery);
+    return _employees.where((e) {
+      final active = e['is_active'] != false;
+      if (_statusFilter == 'active' && !active) return false;
+      if (_statusFilter == 'inactive' && active) return false;
+      if (q.isEmpty) return true;
+      final fields = [
+        _normalizeArabic(e['full_name']?.toString() ?? ''),
+        (e['email']?.toString() ?? '').toLowerCase(),
+        (e['employee_code']?.toString() ?? '').toLowerCase(),
+        (e['phone_number']?.toString() ?? e['phone']?.toString() ?? '').toLowerCase(),
+        _normalizeArabic(_nested(e['departments']) ?? ''),
+        _normalizeArabic(_nested(e['branches']) ?? ''),
+      ];
+      return fields.any((f) => f.contains(q));
+    }).toList();
   }
 
   @override
   Widget build(BuildContext context) {
-    final filtered = _employees.where((e) => (e['full_name'] ?? '').toLowerCase().contains(_searchQuery.toLowerCase())).toList();
+    final filtered = _filtered;
+    final activeCount = _employees.where((e) => e['is_active'] != false).length;
 
-    return GlassBackground(
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-            onPressed: () => Navigator.pop(context),
-          ),
-          title: const Text('إدارة الموظفين 👥', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white)),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.person_add_rounded, color: AppTheme.neonCyan),
-              onPressed: _showAddEmployeeModal,
-            ),
-          ],
+    final List<Widget> list;
+    if (_isLoading && _employees.isEmpty) {
+      list = const [SkeletonList(count: 6)];
+    } else if (_hasError && _employees.isEmpty) {
+      list = [ErrorView(onRetry: _loadEmployees)];
+    } else if (filtered.isEmpty) {
+      list = [
+        EmptyView(
+          title: _employees.isEmpty ? 'لا يوجد موظفون' : 'لا نتائج',
+          message: _employees.isEmpty ? 'أضف أول موظف من زر "موظف جديد".' : 'جرّب اسماً أو كوداً أو فرعاً آخر.',
+          icon: Icons.person_search_rounded,
+          compact: true,
         ),
-        body: Column(
+      ];
+    } else {
+      list = [for (var i = 0; i < filtered.length; i++) FadeSlideIn(index: i, child: _employeeTile(filtered[i]))];
+    }
+
+    return Scaffold(
+      backgroundColor: AppColors.bg,
+      floatingActionButton: FloatingActionButton.extended(onPressed: _addEmployee, icon: const Icon(Icons.person_add_rounded), label: const Text('موظف جديد')),
+      appBar: AppBar(title: Text('الموظفون${_employees.isEmpty ? '' : ' (${_employees.length})'}')),
+      body: RefreshIndicator.adaptive(
+        onRefresh: _loadEmployees,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(AppSpace.page, AppSpace.sm, AppSpace.page, 96),
           children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            ContentWidth(
               child: TextField(
-                onChanged: (val) => setState(() => _searchQuery = val),
-                style: const TextStyle(color: Colors.white, fontFamily: 'Cairo'),
+                controller: _search,
+                onChanged: (v) => setState(() => _searchQuery = v),
+                textInputAction: TextInputAction.search,
+                style: AppText.body,
                 decoration: InputDecoration(
-                  hintText: 'ابحث عن موظف...',
-                  hintStyle: const TextStyle(color: Colors.white38, fontFamily: 'Cairo'),
-                  prefixIcon: const Icon(Icons.search, color: Colors.white54),
-                  filled: true,
-                  fillColor: Colors.white.withValues(alpha: 0.05),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-                  contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                  hintText: 'ابحث بالاسم، الكود، الهاتف، الفرع',
+                  prefixIcon: const Icon(Icons.search_rounded),
+                  suffixIcon: _searchQuery.isEmpty
+                      ? null
+                      : IconButton(
+                          tooltip: 'مسح البحث',
+                          icon: const Icon(Icons.close_rounded),
+                          onPressed: () {
+                            _search.clear();
+                            setState(() => _searchQuery = '');
+                          },
+                        ),
                 ),
               ),
             ),
-            Expanded(
-              child: _isLoading
-                  ? const Center(child: CircularProgressIndicator(color: AppTheme.neonCyan))
-                  : filtered.isEmpty
-                      ? const Center(child: Text('لا يوجد موظفين', style: TextStyle(color: Colors.white54, fontFamily: 'Cairo')))
-                      : ListView.builder(
-                          padding: const EdgeInsets.all(16),
-                          itemCount: filtered.length,
-                          itemBuilder: (context, index) {
-                            final emp = filtered[index];
-                            final isActive = emp['is_active'] ?? true;
-                            final devices = emp['employee_devices'] as List<dynamic>? ?? [];
-                            final hasDevice = devices.isNotEmpty;
-
-                            return GlassContainer(
-                              margin: const EdgeInsets.only(bottom: 12),
-                              padding: const EdgeInsets.all(16),
-                              borderRadius: 16,
-                              opacity: 0.08,
-                              borderColor: isActive ? AppTheme.neonCyan.withValues(alpha: 0.2) : AppTheme.dangerRed.withValues(alpha: 0.3),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      CircleAvatar(
-                                        backgroundColor: AppTheme.neonCyan.withValues(alpha: 0.2),
-                                        child: Text(emp['full_name']?.substring(0, 1) ?? '?', style: const TextStyle(color: AppTheme.neonCyan, fontWeight: FontWeight.bold)),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text(emp['full_name'] ?? 'بدون اسم', style: const TextStyle(color: Colors.white, fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 14)),
-                                            Text(emp['email'] ?? '', style: const TextStyle(color: Colors.white54, fontSize: 10)),
-                                            const SizedBox(height: 4),
-                                            Row(
-                                              children: [
-                                                _buildBadge(emp['role'] == 'admin' ? 'مدير' : 'موظف', AppTheme.cyberPurple),
-                                                const SizedBox(width: 4),
-                                                _buildBadge(isActive ? 'نشط' : 'معطل', isActive ? AppTheme.successGreen : AppTheme.dangerRed),
-                                                if (hasDevice) ...[
-                                                  const SizedBox(width: 4),
-                                                  _buildBadge('جهاز مربوط', AppTheme.warningOrange),
-                                                ]
-                                              ],
-                                            )
-                                          ],
-                                        ),
-                                      ),
-                                      PopupMenuButton<String>(
-                                        icon: const Icon(Icons.more_vert, color: Colors.white70),
-                                        color: AppTheme.darkSurfaceHigh,
-                                        onSelected: (value) {
-                                          if (value == 'edit') _showEditEmployeeModal(emp);
-                                          if (value == 'toggle') _toggleEmployeeStatus(emp['id'], isActive);
-                                          if (value == 'unbind') _unbindDevice(emp['id']);
-                                        },
-                                        itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
-                                          const PopupMenuItem<String>(
-                                            value: 'edit',
-                                            child: Text('تعديل الملف والمستمسكات', style: TextStyle(color: AppTheme.neonCyan, fontFamily: 'Cairo')),
-                                          ),
-                                          PopupMenuItem<String>(
-                                            value: 'toggle',
-                                            child: Text(isActive ? 'تعطيل الحساب' : 'تفعيل الحساب', style: TextStyle(color: isActive ? AppTheme.dangerRed : AppTheme.successGreen, fontFamily: 'Cairo')),
-                                          ),
-                                          if (hasDevice)
-                                            const PopupMenuItem<String>(
-                                              value: 'unbind',
-                                              child: Text('فك ربط الجهاز (السماح بتسجيل جديد)', style: TextStyle(color: AppTheme.warningOrange, fontFamily: 'Cairo')),
-                                            ),
-                                        ],
-                                      )
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
-                        ),
+            const SizedBox(height: AppSpace.sm),
+            AppChoiceChips<String>(
+              scrollable: true,
+              value: _statusFilter,
+              onChanged: (v) => setState(() => _statusFilter = v),
+              options: [
+                ('all', 'الكل (${_employees.length})', null),
+                ('active', 'نشط ($activeCount)', null),
+                ('inactive', 'معطل (${_employees.length - activeCount})', null),
+              ],
             ),
+            const SizedBox(height: AppSpace.md),
+            for (final w in list) Padding(padding: const EdgeInsets.only(bottom: AppSpace.sm), child: ContentWidth(child: w)),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildBadge(String text, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
+  Widget _employeeTile(Map<String, dynamic> emp) {
+    final isActive = emp['is_active'] != false;
+    final hasDevice = (emp['employee_devices'] as List<dynamic>? ?? const []).isNotEmpty;
+    final branch = _nested(emp['branches']);
+    final name = (emp['full_name'] ?? 'بدون اسم').toString();
+
+    return AppCard(
+      padding: const EdgeInsetsDirectional.fromSTEB(AppSpace.md, AppSpace.md, 0, AppSpace.md),
+      onTap: () => _openProfile(emp),
+      child: Row(
+        children: [
+          AppAvatar(name: name, url: emp['avatar_url']?.toString(), tone: isActive ? AppTone.brand : AppTone.neutral),
+          const SizedBox(width: AppSpace.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(name, style: AppText.subtitle.copyWith(color: isActive ? null : AppColors.textMuted), maxLines: 1, overflow: TextOverflow.ellipsis),
+                Text(
+                  '${emp['employee_code'] ?? ''}${branch == null ? '' : ' · $branch'}',
+                  style: AppText.caption,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: AppSpace.xs),
+                Wrap(
+                  spacing: AppSpace.xs,
+                  runSpacing: AppSpace.xs,
+                  children: [
+                    StatusBadge(employeeRoleLabel(emp['role']), tone: AppTone.accent),
+                    if (!isActive) const StatusBadge('معطل', tone: AppTone.danger, dot: true),
+                    if (hasDevice) const StatusBadge('جهاز مربوط', tone: AppTone.info, icon: Icons.smartphone_rounded),
+                    if (branch == null) const StatusBadge('بدون فرع', tone: AppTone.warning),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          PopupMenuButton<String>(
+            tooltip: 'خيارات',
+            onSelected: (value) {
+              if (value == 'profile') _openProfile(emp);
+              if (value == 'docs') _editDocuments(emp);
+              if (value == 'toggle') _toggleEmployeeStatus(emp);
+              if (value == 'unbind') _unbindDevice(emp);
+            },
+            itemBuilder: (_) => [
+              const PopupMenuItem(value: 'profile', child: ListTile(leading: Icon(Icons.badge_rounded), title: Text('الملف'))),
+              const PopupMenuItem(value: 'docs', child: ListTile(leading: Icon(Icons.folder_rounded), title: Text('المستمسكات'))),
+              if (hasDevice) const PopupMenuItem(value: 'unbind', child: ListTile(leading: Icon(Icons.phonelink_erase_rounded), title: Text('فك ربط الجهاز'))),
+              PopupMenuItem(
+                value: 'toggle',
+                child: ListTile(
+                  leading: Icon(isActive ? Icons.block_rounded : Icons.check_circle_rounded, color: isActive ? AppColors.danger : AppColors.success),
+                  title: Text(isActive ? 'تعطيل الحساب' : 'تفعيل الحساب'),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
-      child: Text(text, style: TextStyle(color: color, fontSize: 8, fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
     );
   }
 }

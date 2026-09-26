@@ -35,18 +35,20 @@ test.describe('overview', () => {
     await mockSupabase(page);
     await page.goto('/dashboard');
 
-    await expect(page.getByRole('heading', { name: /حسين/ })).toBeVisible();
+    // داخل محتوى الصفحة فقط: اسم المستخدم أسفل القائمة الجانبية (h4) يظهر بعد تحميل الجلسة
+    await expect(page.getByRole('main').getByRole('heading', { name: /صباح الخير|مساء الخير|أهلاً/ }).filter({ hasText: 'حسين' })).toBeVisible();
     // One of three active employees checked in; the other two are due and absent.
     await expect(page.getByText('نسبة الحضور')).toBeVisible();
     await expect(page.locator('#absent-section')).toContainText('مصطفى حسن');
     await expect(page.getByText('Fake GPS')).toBeVisible();
-    expect(errors).toEqual([]);
+    expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([]);
   });
 
   test('quick navigator (Ctrl+K) jumps to a page', async ({ page }) => {
     await mockSupabase(page);
     await page.goto('/dashboard');
-    await expect(page.getByRole('heading', { name: /حسين/ })).toBeVisible();
+    // داخل محتوى الصفحة فقط: اسم المستخدم أسفل القائمة الجانبية (h4) يظهر بعد تحميل الجلسة
+    await expect(page.getByRole('main').getByRole('heading', { name: /صباح الخير|مساء الخير|أهلاً/ }).filter({ hasText: 'حسين' })).toBeVisible();
     await page.keyboard.press('Control+k');
     await page.getByPlaceholder('ابحث عن صفحة أو قسم...').fill('الرواتب');
     await page.keyboard.press('Enter');
@@ -86,7 +88,7 @@ const PAGES: Array<{ path: string; heading: string }> = [
   { path: '/dashboard/loans', heading: 'السلف والأقساط' },
   { path: '/dashboard/payroll', heading: 'الرواتب والمكافآت' },
   { path: '/dashboard/trash', heading: 'سلة المحذوفات' },
-  { path: '/dashboard/storage', heading: 'التخزين' },
+  { path: '/dashboard/storage', heading: 'التخزين والمساحة' },
   { path: '/dashboard/settings', heading: 'الإعدادات' },
 ];
 
@@ -95,9 +97,9 @@ for (const p of PAGES) {
     const errors = collectPageErrors(page);
     await mockSupabase(page);
     await page.goto(p.path);
-    await expect(page.getByRole('heading', { level: 2, name: p.heading })).toBeVisible();
+    await expect(page.getByRole('main').getByRole('heading', { level: 2, name: p.heading, exact: true })).toBeVisible();
     await expect(page.locator('[aria-current="page"]').first()).toBeVisible();
-    expect(errors).toEqual([]);
+    expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([]);
   });
 }
 
@@ -111,8 +113,9 @@ test.describe('workflows', () => {
 
     await expect.poll(() => api.writes('leave_requests', 'PATCH').length).toBe(1);
     expect(api.writes('leave_requests', 'PATCH')[0].body).toMatchObject({ status: 'approved', is_paid: false, approved_by: ADMIN.id });
-    await expect.poll(() => api.writes('notifications', 'POST').length).toBe(1);
     await expect(page.getByText('سفر عائلي')).toBeHidden();
+    // إشعار الموظف يرسله trigger قاعدة البيانات، فلا تكتبه الصفحة (كان يصل مكرراً)
+    expect(api.writes('notifications', 'POST')).toHaveLength(0);
   });
 
   test('asks for confirmation before rejecting a loan', async ({ page }) => {
@@ -125,9 +128,10 @@ test.describe('workflows', () => {
     expect(api.writes('loans', 'PATCH')).toHaveLength(0);
 
     await page.getByRole('button', { name: 'رفض' }).click();
+    await page.getByRole('dialog').getByRole('textbox').fill('تجاوز الحد المسموح');
     await page.getByRole('dialog').getByRole('button', { name: 'رفض الطلب' }).click();
     await expect.poll(() => api.writes('loans', 'PATCH').length).toBe(1);
-    expect(api.writes('loans', 'PATCH')[0].body).toMatchObject({ status: 'rejected' });
+    expect(api.writes('loans', 'PATCH')[0].body).toMatchObject({ status: 'rejected', rejection_reason: 'تجاوز الحد المسموح' });
   });
 
   test('approves a loan and generates the installment schedule', async ({ page }) => {
@@ -136,9 +140,10 @@ test.describe('workflows', () => {
     await page.getByRole('button', { name: 'اعتماد وجدولة' }).click();
     await expect(page.getByRole('dialog')).toContainText('100,000 د.ع');
     await page.getByRole('button', { name: 'حفظ وتوليد الأقساط' }).click();
-    await expect.poll(() => api.writes('loan_installments', 'POST').length).toBe(1);
-    const installments = api.writes('loan_installments', 'POST')[0].body as unknown[];
-    expect(installments).toHaveLength(6);
+    // الاعتماد وتوليد الأقساط في معاملة واحدة على السيرفر (approve_loan)
+    await expect.poll(() => api.writes('rpc:approve_loan', 'POST').length).toBe(1);
+    expect(api.writes('rpc:approve_loan', 'POST')[0].body).toMatchObject({ p_loan_id: 'ln1', p_amount: 600000, p_months: 6 });
+    expect(api.writes('loan_installments', 'POST')).toHaveLength(0);
   });
 
   test('computes and approves a salary', async ({ page }) => {
@@ -148,13 +153,14 @@ test.describe('workflows', () => {
     // 900,000 + 50,000 bonus − 20,000 deduction − 100,000 loan installment
     await expect(row).toContainText('830,000 د.ع');
     await row.getByRole('button', { name: 'اعتماد' }).click();
-    await expect.poll(() => api.writes('salary_slips', 'POST').length).toBe(1);
-    expect(api.writes('salary_slips', 'POST')[0].body).toMatchObject({ employee_id: 'e1', basic_salary: 900000, net_salary: 830000, loans_deduction: 100000 });
-    await expect.poll(() => api.writes('loan_installments', 'PATCH').length).toBe(1);
-    expect(api.writes('loan_installments', 'PATCH')[0].body).toMatchObject({ is_paid: true });
+    // الكشف والأقساط والقيود تُعتمد في معاملة واحدة على السيرفر (approve_salary_slip)
+    await expect.poll(() => api.writes('rpc:approve_salary_slip', 'POST').length).toBe(1);
+    expect(api.writes('rpc:approve_salary_slip', 'POST')[0].body).toMatchObject({
+      p_employee_id: 'e1', p_basic_salary: 900000, p_net_salary: 830000, p_loans_deduction: 100000, p_installment_ids: ['i2'],
+    });
   });
 
-  test('opens the add-employee form from the overview and masks passwords', async ({ page }) => {
+  test('opens the add-employee form from the overview and never shows passwords', async ({ page }) => {
     await mockSupabase(page);
     await page.goto('/dashboard');
     await page.getByRole('link', { name: 'إضافة موظف' }).first().click();
@@ -162,10 +168,11 @@ test.describe('workflows', () => {
     await page.keyboard.press('Escape');
     await expect(page.getByRole('dialog')).toBeHidden();
 
+    // كلمات السر لا تُحفظ مقروءة ولا تُعرض (حتى لو رجعها السيرفر القديم)
     const row = page.locator('tr', { hasText: 'زينب علي' });
+    await expect(row).toBeVisible();
     await expect(row).not.toContainText('Zz123456');
-    await row.getByTitle('إظهار').click();
-    await expect(row).toContainText('Zz123456');
+    await expect(row.getByTitle('إظهار')).toHaveCount(0);
   });
 
   test('approves a pending device', async ({ page }) => {

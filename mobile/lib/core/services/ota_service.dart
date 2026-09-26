@@ -2,11 +2,13 @@
 // نظام HR Pro v6.0 - خدمة التحديثات الهوائية (OTA Service)
 // =========================================================================
 
+import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../core/design/design.dart';
+import '../constants/constants.dart';
 import 'supabase_service.dart';
-import '../theme/app_theme.dart';
 
 /// الحالات المختلفة لفحص تحديث التطبيق
 enum OtaStatus {
@@ -18,6 +20,21 @@ enum OtaStatus {
 
 /// خدمة لإدارة وفحص وتنزيل التحديثات الهوائية (OTA Updates) للحد من استخدام الإصدارات القديمة
 class OtaService {
+  /// رابط التحديث يجب أن يكون HTTPS ومن مصدر معروف:
+  /// Android → مجلد ota-updates في Supabase Storage الخاص بالمشروع.
+  /// iOS → App Store أو TestFlight.
+  /// يمنع توجيه الموظفين لتنزيل APK من أي رابط آخر لو عُدّل جدول app_versions.
+  static bool isTrustedDownloadUrl(String url, {required bool isIOS}) {
+    final uri = Uri.tryParse(url);
+    if (uri == null || uri.scheme != 'https') return false;
+    if (isIOS) {
+      return const {'apps.apple.com', 'testflight.apple.com'}.contains(uri.host);
+    }
+    final supabaseHost = Uri.parse(AppConstants.supabaseUrl).host;
+    return uri.host == supabaseHost &&
+        uri.path.startsWith('/storage/v1/object/public/ota-updates/');
+  }
+
   
   /// التحقق من توافر تحديث جديد مقارنة بجدول `app_versions` بقاعدة البيانات
   static Future<Map<String, dynamic>> checkVersion() async {
@@ -41,10 +58,18 @@ class OtaService {
       }
 
       final int latestVersionCode = latestRelease['version_code'] as int;
-      final String latestVersionName = latestRelease['version_name'] ?? '1.0.0';
-      final bool isMandatory = latestRelease['is_mandatory'] ?? false;
-      final String apkUrl = latestRelease['apk_url'] ?? '';
-      final String releaseNotes = latestRelease['release_notes'] ?? 'تحديث أمان وإصلاحات عامة';
+      final String latestVersionName = (latestRelease['version_name'] ?? '1.0.0') as String;
+      final bool isMandatory = (latestRelease['is_mandatory'] ?? false) as bool;
+      // iOS: رابط App Store/TestFlight فقط (Apple ترفض تنزيل تطبيقات من خارج المتجر)
+      final String downloadUrl = (Platform.isIOS
+              ? latestRelease['ipa_url']
+              : latestRelease['apk_url'])
+          ?.toString() ?? '';
+      if (!isTrustedDownloadUrl(downloadUrl, isIOS: Platform.isIOS)) {
+        debugPrint('OTA: تم تجاهل رابط تحديث غير موثوق: $downloadUrl');
+        return {'status': OtaStatus.upToDate};
+      }
+      final String releaseNotes = (latestRelease['release_notes'] ?? 'تحديث أمان وإصلاحات عامة') as String;
 
       // 3. مقارنة الإصدار الحالي بالإصدار الأخير
       if (latestVersionCode > currentVersionCode) {
@@ -52,7 +77,7 @@ class OtaService {
           'status': isMandatory ? OtaStatus.mandatoryUpdate : OtaStatus.optionalUpdate,
           'current_version': currentVersionName,
           'latest_version': latestVersionName,
-          'download_url': apkUrl,
+          'download_url': downloadUrl,
           'release_notes': releaseNotes,
           'is_mandatory': isMandatory,
         };
@@ -65,177 +90,79 @@ class OtaService {
     }
   }
 
-  /// إظهار نافذة التنبيه للتحديث (حوار غير قابل للإلغاء في حال التحديث الإجباري)
+  /// نافذة التحديث (لا تُغلق إذا كان التحديث إجبارياً).
   static void showUpdatePrompt(BuildContext context, Map<String, dynamic> updateInfo) {
-    final bool isMandatory = updateInfo['is_mandatory'] ?? false;
-    final String latestVersion = updateInfo['latest_version'] ?? '1.0.0';
-    final String releaseNotes = updateInfo['release_notes'] ?? '';
-    final String downloadUrl = updateInfo['download_url'] ?? '';
+    final bool isMandatory = (updateInfo['is_mandatory'] ?? false) as bool;
+    final String latestVersion = (updateInfo['latest_version'] ?? '1.0.0') as String;
+    final String releaseNotes = (updateInfo['release_notes'] ?? '') as String;
+    final String downloadUrl = (updateInfo['download_url'] ?? '') as String;
+    final Color tone = isMandatory ? AppColors.warning : AppColors.brand;
+    final Color toneBg = isMandatory ? AppColors.warningContainer : AppColors.brandContainer;
 
-    showDialog(
+    showDialog<void>(
       context: context,
-      barrierDismissible: !isMandatory, // منع الإغلاق بالنقر في الخارج للمجبر
+      barrierDismissible: !isMandatory,
       builder: (BuildContext context) {
-        final isDark = Theme.of(context).brightness == Brightness.dark;
-        
         return PopScope(
-          canPop: !isMandatory, // منع الرجوع بزر الهاتف الخلفي للمجبر
-          child: Dialog(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(24),
-            ),
-            elevation: 16,
-            backgroundColor: isDark ? AppTheme.darkSurfaceHigh : Colors.white,
-            child: Padding(
-              padding: const EdgeInsets.all(24.0),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // أيقونة التحديث اللامعة
-                  Center(
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: isMandatory 
-                            ? AppTheme.dangerRed.withAlpha(25) 
-                            : AppTheme.primaryTeal.withAlpha(25),
-                      ),
-                      child: Icon(
-                        isMandatory ? Icons.system_update_alt : Icons.cloud_download,
-                        size: 48,
-                        color: isMandatory ? AppTheme.dangerRed : AppTheme.primaryTeal,
-                      ),
-                    ),
+          canPop: !isMandatory,
+          child: AlertDialog(
+            contentPadding: const EdgeInsets.fromLTRB(AppSpace.xxl, AppSpace.xxl, AppSpace.xxl, AppSpace.md),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Center(
+                  child: Container(
+                    width: 72,
+                    height: 72,
+                    decoration: BoxDecoration(color: toneBg, shape: BoxShape.circle),
+                    child: Icon(Icons.system_update_rounded, size: 36, color: tone),
                   ),
-                  const SizedBox(height: 16),
-                  
-                  // عنوان التحديث
-                  Text(
-                    isMandatory ? 'تحديث إجباري مطلوب ⚠️' : 'يتوفر إصدار جديد للتطبيق 🎉',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w900,
-                      color: isMandatory ? AppTheme.dangerRed : AppTheme.primaryTeal,
-                      fontFamily: 'Cairo',
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  
-                  // معلومات الإصدار
-                  Text(
-                    'الإصدار المتاح: v$latestVersion',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: isDark ? Colors.grey[300] : Colors.grey[700],
-                      fontFamily: 'Cairo',
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  
-                  // تفاصيل التحديث
+                ),
+                const SizedBox(height: AppSpace.lg),
+                Text(isMandatory ? 'تحديث مطلوب' : 'إصدار جديد متوفر', textAlign: TextAlign.center, style: AppText.title),
+                const SizedBox(height: AppSpace.xs),
+                Text(
+                  isMandatory ? 'لازم تحدّث حتى تكمل استعمال التطبيق · v$latestVersion' : 'الإصدار v$latestVersion',
+                  textAlign: TextAlign.center,
+                  style: AppText.bodySm,
+                ),
+                if (releaseNotes.isNotEmpty) ...[
+                  const SizedBox(height: AppSpace.lg),
                   Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: isDark ? AppTheme.darkBg : Colors.grey[100],
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'ملاحظات الإصدار الجديد:',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: AppTheme.primaryTeal,
-                            fontFamily: 'Cairo',
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          releaseNotes,
-                          style: TextStyle(
-                            fontSize: 12,
-                            height: 1.5,
-                            color: isDark ? Colors.grey[400] : Colors.grey[800],
-                            fontFamily: 'Cairo',
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  
-                  // أزرار التحكم
-                  Row(
-                    children: [
-                      // زر التحديث الفوري
-                      Expanded(
-                        child: ElevatedButton(
-                          onPressed: () async {
-                            if (downloadUrl.isNotEmpty) {
-                              final Uri uri = Uri.parse(downloadUrl);
-                              if (await canLaunchUrl(uri)) {
-                                await launchUrl(uri, mode: LaunchMode.externalApplication);
-                              }
-                            }
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: isMandatory ? AppTheme.dangerRed : AppTheme.primaryTeal,
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          child: const Text(
-                            'تحديث الآن ⚡',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                              fontFamily: 'Cairo',
-                            ),
-                          ),
-                        ),
+                    padding: const EdgeInsets.all(AppSpace.md),
+                    decoration: const BoxDecoration(color: AppColors.surface1, borderRadius: AppRadius.control),
+                    constraints: const BoxConstraints(maxHeight: 200),
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('الجديد', style: AppText.label.copyWith(color: tone)),
+                          const SizedBox(height: AppSpace.xs),
+                          Text(releaseNotes, style: AppText.bodySm),
+                        ],
                       ),
-                      
-                      // زر التأجيل (فقط في حال لم يكن التحديث إجبارياً)
-                      if (!isMandatory) ...[
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: () => Navigator.of(context).pop(),
-                            style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              side: BorderSide(
-                                color: isDark ? Colors.grey[700]! : Colors.grey[300]!,
-                              ),
-                            ),
-                            child: Text(
-                              'لا حقاً',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold,
-                                color: isDark ? Colors.grey[400] : Colors.grey[600],
-                                fontFamily: 'Cairo',
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
+                    ),
                   ),
                 ],
-              ),
+              ],
             ),
+            actionsPadding: const EdgeInsets.fromLTRB(AppSpace.xl, 0, AppSpace.xl, AppSpace.xl),
+            actions: [
+              if (!isMandatory) TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('لاحقاً')),
+              FilledButton.icon(
+                onPressed: () async {
+                  if (downloadUrl.isNotEmpty) {
+                    final Uri uri = Uri.parse(downloadUrl);
+                    if (await canLaunchUrl(uri)) {
+                      await launchUrl(uri, mode: LaunchMode.externalApplication);
+                    }
+                  }
+                },
+                icon: const Icon(Icons.download_rounded),
+                label: const Text('تحديث الآن'),
+              ),
+            ],
           ),
         );
       },

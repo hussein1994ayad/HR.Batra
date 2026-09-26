@@ -1,14 +1,16 @@
 // =========================================================================
-// نظام HR Pro v6.0 - إدارة أوقات العمل للأفرع (Branch Work Schedules)
+// HR Pro — أوقات دوام الأفرع: الأيام، البداية والنهاية، السماحية والتذكير
 // =========================================================================
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
-import '../../core/services/supabase_service.dart';
-import '../../core/theme/app_theme.dart';
-import '../shared/widgets/glass_background.dart';
-import '../shared/widgets/glass_container.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
+
 import '../../core/routes/app_router.dart';
+import '../../core/services/supabase_service.dart';
+import '../shared/ui/ui.dart';
 
 class BranchScheduleScreen extends StatefulWidget {
   const BranchScheduleScreen({super.key});
@@ -19,10 +21,9 @@ class BranchScheduleScreen extends StatefulWidget {
 
 class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
   bool _isLoading = true;
+  bool _hasError = false;
   List<Map<String, dynamic>> _branches = [];
 
-  // أسماء أيام الأسبوع بالعربية
-  static const List<String> _dayNames = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
 
   @override
   void initState() {
@@ -31,8 +32,27 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
   }
 
   Future<void> _loadBranches() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
+
+    final user = SupabaseService.currentUser;
+    if (user == null) {
+      if (mounted) Navigator.pop(context);
+      return;
+    }
+
     try {
+      final employeeRes = await SupabaseService.client
+          .from('employees')
+          .select('role')
+          .eq('id', user.id)
+          .maybeSingle();
+
+      if (employeeRes == null || (employeeRes['role'] != 'admin' && employeeRes['role'] != 'manager')) {
+        if (mounted) Navigator.pop(context);
+        return;
+      }
+
       // جلب بيانات الأفرع وجداول العمل بالتوازي
       final results = await Future.wait([
         SupabaseService.client
@@ -41,18 +61,18 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
             .order('name'),
         SupabaseService.client
             .from('work_schedules')
-            .select('*')
+            .select()
             .isFilter('employee_id', null)
             .isFilter('department_id', null)
             .not('branch_id', 'is', null)
       ]);
 
-      final zones = results[0] as List<dynamic>;
-      final schedules = results[1] as List<dynamic>;
+      final zones = [for (final z in results[0] as List<dynamic>) Map<String, dynamic>.from(z as Map)];
+      final schedules = [for (final s in results[1] as List<dynamic>) Map<String, dynamic>.from(s as Map)];
 
       // دمج البيانات
       final List<Map<String, dynamic>> merged = [];
-      for (var zone in zones) {
+      for (final zone in zones) {
         final schedule = schedules.firstWhere(
           (s) => s['branch_id'] == zone['id'],
           orElse: () => <String, dynamic>{},
@@ -67,629 +87,310 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
 
       setState(() {
         _branches = merged;
+        _hasError = false;
       });
     } catch (e) {
       debugPrint('خطأ في تحميل الأفرع: $e');
+      if (mounted) setState(() => _hasError = true);
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  // إضافة أو تعديل جدول عمل فرع
   Future<void> _editSchedule(Map<String, dynamic> branch) async {
-    final schedule = branch['schedule'] as Map<String, dynamic>;
-    final bool hasSchedule = branch['has_schedule'];
-
-    // القيم الأولية
-    List<int> workDays = hasSchedule
-        ? List<int>.from(schedule['work_days'] ?? [0, 1, 2, 3, 4, 6])
-        : [0, 1, 2, 3, 4, 6]; // كل الأيام ما عدا الجمعة (5)
-    TimeOfDay shiftStart = hasSchedule
-        ? _parseTime(schedule['check_in_time'] ?? '08:00:00')
-        : const TimeOfDay(hour: 8, minute: 0);
-    TimeOfDay shiftEnd = hasSchedule
-        ? _parseTime(schedule['check_out_time'] ?? '16:00:00')
-        : const TimeOfDay(hour: 16, minute: 0);
-    int reminderMinutes = 5; // القيمة الافتراضية
-    int graceMinutes = hasSchedule
-        ? (schedule['grace_period_minutes'] ?? 15)
-        : 15;
-
-    await showModalBottomSheet(
+    final saved = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            return Container(
-              height: MediaQuery.of(context).size.height * 0.85,
-              decoration: BoxDecoration(
-                color: AppTheme.darkSurfaceHigh,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-                border: Border.all(color: AppTheme.neonCyan.withValues(alpha: 0.2)),
-              ),
-              child: Column(
-                children: [
-                  // المقبض العلوي
-                  Container(
-                    margin: const EdgeInsets.only(top: 12),
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.white24,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                  // العنوان
-                  Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: AppTheme.neonCyan.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: const Icon(Icons.schedule_rounded, color: AppTheme.neonCyan, size: 22),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'أوقات عمل: ${branch['zone_name']}',
-                                style: const TextStyle(
-                                  fontFamily: 'Cairo',
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 15,
-                                  color: Colors.white,
-                                ),
-                              ),
-                              Text(
-                                hasSchedule ? 'تعديل الجدول الحالي' : 'إعداد جدول جديد',
-                                style: TextStyle(
-                                  fontFamily: 'Cairo',
-                                  fontSize: 11,
-                                  color: Colors.white.withValues(alpha: 0.5),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const Divider(color: Colors.white10, height: 1),
-                  // المحتوى
-                  Expanded(
-                    child: ListView(
-                      padding: const EdgeInsets.all(20),
-                      children: [
-                        // أيام العمل
-                        const Text('أيام العمل', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
-                        const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: List.generate(7, (dayIndex) {
-                            final isSelected = workDays.contains(dayIndex);
-                            final isFriday = dayIndex == 5;
-                            return GestureDetector(
-                              onTap: () {
-                                setModalState(() {
-                                  if (isSelected) {
-                                    workDays.remove(dayIndex);
-                                  } else {
-                                    workDays.add(dayIndex);
-                                    workDays.sort();
-                                  }
-                                });
-                              },
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 200),
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                                decoration: BoxDecoration(
-                                  color: isSelected
-                                      ? (isFriday ? AppTheme.warningOrange.withValues(alpha: 0.2) : AppTheme.neonCyan.withValues(alpha: 0.2))
-                                      : Colors.white.withValues(alpha: 0.05),
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: isSelected
-                                        ? (isFriday ? AppTheme.warningOrange : AppTheme.neonCyan)
-                                        : Colors.white12,
-                                    width: isSelected ? 1.5 : 1,
-                                  ),
-                                ),
-                                child: Text(
-                                  _dayNames[dayIndex],
-                                  style: TextStyle(
-                                    fontFamily: 'Cairo',
-                                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                                    fontSize: 11,
-                                    color: isSelected
-                                        ? (isFriday ? AppTheme.warningOrange : AppTheme.neonCyan)
-                                        : Colors.white38,
-                                  ),
-                                ),
-                              ),
-                            );
-                          }),
-                        ),
-                        const SizedBox(height: 24),
-
-                        // أوقات الدوام
-                        const Text('أوقات الدوام', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _buildTimePicker(
-                                label: 'بداية الدوام',
-                                time: shiftStart,
-                                icon: Icons.login_rounded,
-                                color: AppTheme.successGreen,
-                                onTap: () async {
-                                  final picked = await showTimePicker(
-                                    context: context,
-                                    initialTime: shiftStart,
-                                    builder: (ctx, child) {
-                                      return Theme(
-                                        data: ThemeData.dark().copyWith(
-                                          colorScheme: const ColorScheme.dark(
-                                            primary: AppTheme.neonCyan,
-                                            surface: AppTheme.darkSurfaceHigh,
-                                          ),
-                                        ),
-                                        child: child!,
-                                      );
-                                    },
-                                  );
-                                  if (picked != null) {
-                                    setModalState(() => shiftStart = picked);
-                                  }
-                                },
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: _buildTimePicker(
-                                label: 'نهاية الدوام',
-                                time: shiftEnd,
-                                icon: Icons.logout_rounded,
-                                color: AppTheme.dangerRed,
-                                onTap: () async {
-                                  final picked = await showTimePicker(
-                                    context: context,
-                                    initialTime: shiftEnd,
-                                    builder: (ctx, child) {
-                                      return Theme(
-                                        data: ThemeData.dark().copyWith(
-                                          colorScheme: const ColorScheme.dark(
-                                            primary: AppTheme.neonCyan,
-                                            surface: AppTheme.darkSurfaceHigh,
-                                          ),
-                                        ),
-                                        child: child!,
-                                      );
-                                    },
-                                  );
-                                  if (picked != null) {
-                                    setModalState(() => shiftEnd = picked);
-                                  }
-                                },
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 24),
-
-                        // التذكير وفترة السماح
-                        const Text('إعدادات التذكير', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
-                        const SizedBox(height: 12),
-                        GlassContainer(
-                          padding: const EdgeInsets.all(16),
-                          borderRadius: 16,
-                          opacity: 0.08,
-                          child: Column(
-                            children: [
-                              Row(
-                                children: [
-                                  const Icon(Icons.notifications_active_rounded, color: AppTheme.warningOrange, size: 18),
-                                  const SizedBox(width: 8),
-                                  const Text('إرسال التذكير بعد بداية الدوام بـ', style: TextStyle(fontFamily: 'Cairo', fontSize: 11, color: Colors.white70)),
-                                  const Spacer(),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: AppTheme.warningOrange.withValues(alpha: 0.15),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: DropdownButton<int>(
-                                      value: reminderMinutes,
-                                      dropdownColor: AppTheme.darkSurfaceHigh,
-                                      underline: const SizedBox(),
-                                      isDense: true,
-                                      style: const TextStyle(fontFamily: 'Cairo', fontSize: 12, color: AppTheme.warningOrange, fontWeight: FontWeight.bold),
-                                      items: [5, 10, 15, 30].map((m) => DropdownMenuItem(value: m, child: Text('$m د'))).toList(),
-                                      onChanged: (v) => setModalState(() => reminderMinutes = v!),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 16),
-                              Row(
-                                children: [
-                                  const Icon(Icons.timer_rounded, color: AppTheme.neonCyan, size: 18),
-                                  const SizedBox(width: 8),
-                                  const Text('فترة السماح بالتأخير', style: TextStyle(fontFamily: 'Cairo', fontSize: 11, color: Colors.white70)),
-                                  const Spacer(),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: AppTheme.neonCyan.withValues(alpha: 0.15),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: DropdownButton<int>(
-                                      value: graceMinutes,
-                                      dropdownColor: AppTheme.darkSurfaceHigh,
-                                      underline: const SizedBox(),
-                                      isDense: true,
-                                      style: const TextStyle(fontFamily: 'Cairo', fontSize: 12, color: AppTheme.neonCyan, fontWeight: FontWeight.bold),
-                                      items: [5, 10, 15, 20, 30].map((m) => DropdownMenuItem(value: m, child: Text('$m د'))).toList(),
-                                      onChanged: (v) => setModalState(() => graceMinutes = v!),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  // زر الحفظ
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-                    child: SizedBox(
-                      width: double.infinity,
-                      height: 50,
-                      child: ElevatedButton(
-                        onPressed: () async {
-                          try {
-                            final data = {
-                              'branch_id': branch['zone_id'],
-                              'name': 'دوام فرع ${branch['zone_name']}',
-                              'work_days': workDays,
-                              'check_in_time': '${shiftStart.hour.toString().padLeft(2, '0')}:${shiftStart.minute.toString().padLeft(2, '0')}:00',
-                              'check_out_time': '${shiftEnd.hour.toString().padLeft(2, '0')}:${shiftEnd.minute.toString().padLeft(2, '0')}:00',
-                              'grace_period_minutes': graceMinutes,
-                            };
-
-                            if (hasSchedule) {
-                              await SupabaseService.client
-                                  .from('work_schedules')
-                                  .update(data)
-                                  .eq('id', schedule['id']);
-                            } else {
-                              await SupabaseService.client
-                                  .from('work_schedules')
-                                  .insert(data);
-                            }
-
-                            if (mounted) {
-                              Navigator.pop(context);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('تم حفظ جدول العمل بنجاح ✅', style: TextStyle(fontFamily: 'Cairo')),
-                                  backgroundColor: AppTheme.successGreen,
-                                ),
-                              );
-                              _loadBranches();
-                            }
-                          } catch (e) {
-                            debugPrint('خطأ في حفظ الجدول: $e');
-                            if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('خطأ: $e', style: const TextStyle(fontFamily: 'Cairo')),
-                                  backgroundColor: AppTheme.dangerRed,
-                                ),
-                              );
-                            }
-                          }
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppTheme.neonCyan,
-                          foregroundColor: Colors.black,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                          elevation: 0,
-                        ),
-                        child: const Text(
-                          'حفظ جدول العمل',
-                          style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 15),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (_) => _ScheduleEditor(branch: branch),
     );
-  }
-
-  Widget _buildTimePicker({
-    required String label,
-    required TimeOfDay time,
-    required IconData icon,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    int hour = time.hour;
-    final String period = hour >= 12 ? 'PM' : 'AM';
-    hour = hour % 12;
-    if (hour == 0) hour = 12;
-    final String minuteStr = time.minute.toString().padLeft(2, '0');
-    final String formattedTime = '$hour:$minuteStr $period';
-
-    return GestureDetector(
-      onTap: onTap,
-      child: GlassContainer(
-        padding: const EdgeInsets.all(14),
-        borderRadius: 14,
-        opacity: 0.08,
-        borderColor: color.withValues(alpha: 0.3),
-        child: Column(
-          children: [
-            Icon(icon, color: color, size: 20),
-            const SizedBox(height: 6),
-            Text(label, style: TextStyle(fontFamily: 'Cairo', fontSize: 10, color: Colors.white.withValues(alpha: 0.5))),
-            const SizedBox(height: 4),
-            Text(
-              formattedTime,
-              style: TextStyle(fontFamily: 'Cairo', fontSize: 20, fontWeight: FontWeight.bold, color: color),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  TimeOfDay _parseTime(String timeStr) {
-    final parts = timeStr.split(':');
-    return TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
+    if (saved == true && mounted) {
+      AppSnack.success(context, 'حُفظ جدول الدوام');
+      unawaited(_loadBranches());
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return GlassBackground(
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-            onPressed: () => Navigator.pop(context),
-          ),
-          title: const Text(
-            'أوقات عمل الأفرع ⏰',
-            style: TextStyle(
-              fontFamily: 'Cairo',
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
-              color: Colors.white,
-              shadows: [Shadow(color: AppTheme.neonCyan, blurRadius: 10)],
+    final List<Widget> content;
+    if (_isLoading && _branches.isEmpty) {
+      content = const [SkeletonList(count: 3, itemHeight: 140)];
+    } else if (_hasError && _branches.isEmpty) {
+      content = [ErrorView(onRetry: _loadBranches)];
+    } else if (_branches.isEmpty) {
+      content = [
+        EmptyView(
+          title: 'لا توجد أفرع',
+          message: 'أضف الأفرع ومواقعها أولاً، ثم حدد أوقات دوامها هنا.',
+          icon: Icons.store_rounded,
+          actionLabel: 'إدارة الأفرع',
+          onAction: () => context.push(AppRoutes.adminBranchManagement),
+        ),
+      ];
+    } else {
+      final missing = _branches.where((b) => b['has_schedule'] != true).length;
+      content = [
+        if (missing > 0)
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppSpace.md),
+            child: AppCard(
+              tone: AppTone.warning,
+              child: Row(
+                children: [
+                  const Icon(Icons.warning_amber_rounded, color: AppColors.warning),
+                  const SizedBox(width: AppSpace.md),
+                  Expanded(child: Text('$missing ${missing == 1 ? 'فرع' : 'أفرع'} بدون جدول دوام — التأخير والغياب لا يُحسب لموظفيها.', style: AppText.bodySm.copyWith(color: AppColors.textPrimary))),
+                ],
+              ),
             ),
           ),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.map_rounded, color: AppTheme.successGreen),
-              tooltip: 'إدارة مواقع الأفرع',
-              onPressed: () {
-                context.push(AppRoutes.adminBranchManagement);
-              },
-            ),
-          ],
-        ),
-        body: _isLoading
-            ? const Center(child: CircularProgressIndicator(color: AppTheme.neonCyan))
-            : _branches.isEmpty
-                ? Center(
-                    child: GlassContainer(
-                      padding: const EdgeInsets.all(32),
-                      margin: const EdgeInsets.all(24),
-                      borderRadius: 24,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.location_off_rounded, color: AppTheme.warningOrange, size: 54),
-                          const SizedBox(height: 16),
-                          const Text(
-                            'لا توجد أفرع مسجلة حالياً',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(fontSize: 14, color: Colors.white70, fontWeight: FontWeight.bold, fontFamily: 'Cairo'),
-                          ),
-                          const SizedBox(height: 8),
-                          const Text(
-                            'يرجى إضافة أفرع (مناطق جيوفينس) أولاً من قاعدة البيانات',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(fontSize: 11, color: Colors.white38, fontFamily: 'Cairo'),
-                          ),
-                        ],
-                      ),
-                    ),
-                  )
-                : RefreshIndicator(
-                    onRefresh: _loadBranches,
-                    color: AppTheme.neonCyan,
-                    backgroundColor: AppTheme.darkSurface,
-                    child: ListView.builder(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-                      itemCount: _branches.length,
-                      itemBuilder: (context, index) {
-                        final branch = _branches[index];
-                        final hasSchedule = branch['has_schedule'];
-                        final schedule = branch['schedule'] as Map<String, dynamic>;
-
-                        return GlassContainer(
-                          margin: const EdgeInsets.only(bottom: 14),
-                          padding: const EdgeInsets.all(16),
-                          borderRadius: 20,
-                          opacity: 0.08,
-                          borderColor: hasSchedule
-                              ? AppTheme.successGreen.withValues(alpha: 0.25)
-                              : AppTheme.warningOrange.withValues(alpha: 0.25),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(8),
-                                    decoration: BoxDecoration(
-                                      color: (hasSchedule ? AppTheme.successGreen : AppTheme.warningOrange).withValues(alpha: 0.15),
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    child: Icon(
-                                      hasSchedule ? Icons.business_rounded : Icons.warning_amber_rounded,
-                                      color: hasSchedule ? AppTheme.successGreen : AppTheme.warningOrange,
-                                      size: 20,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          branch['zone_name'] ?? 'فرع غير مسمى',
-                                          style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white),
-                                        ),
-                                        Text(
-                                          hasSchedule ? 'الجدول مُعَد ✅' : 'بدون جدول عمل ⚠️',
-                                          style: TextStyle(
-                                            fontFamily: 'Cairo',
-                                            fontSize: 10,
-                                            color: hasSchedule ? AppTheme.successGreen : AppTheme.warningOrange,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  IconButton(
-                                    icon: Icon(
-                                      hasSchedule ? Icons.edit_rounded : Icons.add_circle_outline_rounded,
-                                      color: AppTheme.neonCyan,
-                                    ),
-                                    onPressed: () => _editSchedule(branch),
-                                  ),
-                                ],
-                              ),
-                              if (hasSchedule) ...[
-                                const SizedBox(height: 12),
-                                const Divider(color: Colors.white10, height: 1),
-                                const SizedBox(height: 12),
-                                // عرض أوقات الدوام
-                                Row(
-                                  children: [
-                                    _buildTimeChip(
-                                      'الدخول',
-                                      _formatTimeStr(schedule['check_in_time'] ?? '08:00:00'),
-                                      AppTheme.successGreen,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    _buildTimeChip(
-                                      'الخروج',
-                                      _formatTimeStr(schedule['check_out_time'] ?? '16:00:00'),
-                                      AppTheme.dangerRed,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    _buildTimeChip(
-                                      'التذكير بعد',
-                                      '${schedule['reminder_minutes_after'] ?? 5} د',
-                                      AppTheme.warningOrange,
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 10),
-                                // عرض أيام العمل
-                                Wrap(
-                                  spacing: 4,
-                                  children: List.generate(7, (d) {
-                                    final List<dynamic> days = schedule['work_days'] ?? [];
-                                    final isWork = days.contains(d);
-                                    return Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                      decoration: BoxDecoration(
-                                        color: isWork
-                                            ? AppTheme.neonCyan.withValues(alpha: 0.15)
-                                            : AppTheme.dangerRed.withValues(alpha: 0.08),
-                                        borderRadius: BorderRadius.circular(6),
-                                        border: Border.all(
-                                          color: isWork ? AppTheme.neonCyan.withValues(alpha: 0.3) : Colors.white10,
-                                        ),
-                                      ),
-                                      child: Text(
-                                        _dayNames[d].substring(0, _dayNames[d].length > 4 ? 4 : _dayNames[d].length),
-                                        style: TextStyle(
-                                          fontFamily: 'Cairo',
-                                          fontSize: 9,
-                                          fontWeight: FontWeight.bold,
-                                          color: isWork ? AppTheme.neonCyan : Colors.white24,
-                                        ),
-                                      ),
-                                    );
-                                  }),
-                                ),
-                              ],
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-      ),
-    );
-  }
-
-  Widget _buildTimeChip(String label, String value, Color color) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 6),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Column(
-          children: [
-            Text(label, style: TextStyle(fontFamily: 'Cairo', fontSize: 8, color: color.withValues(alpha: 0.7))),
-            Text(value, style: TextStyle(fontFamily: 'Cairo', fontSize: 12, fontWeight: FontWeight.bold, color: color)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  String _formatTimeStr(String timeStr) {
-    try {
-      final parts = timeStr.split(':');
-      int hour = int.parse(parts[0]);
-      final int minute = int.parse(parts[1]);
-      final String period = hour >= 12 ? 'PM' : 'AM';
-      
-      hour = hour % 12;
-      if (hour == 0) hour = 12;
-      
-      final String minuteStr = minute.toString().padLeft(2, '0');
-      return '$hour:$minuteStr $period';
-    } catch (e) {
-      return timeStr;
+        for (var i = 0; i < _branches.length; i++)
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppSpace.md),
+            child: FadeSlideIn(index: i, child: _branchCard(_branches[i])),
+          ),
+      ];
     }
+
+    return AppPage(
+      title: 'أوقات الدوام',
+      onRefresh: _loadBranches,
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.map_rounded),
+          tooltip: 'مواقع الأفرع',
+          onPressed: () => context.push(AppRoutes.adminBranchManagement),
+        ),
+      ],
+      slivers: [SliverList.list(children: content)],
+    );
+  }
+
+  Widget _branchCard(Map<String, dynamic> branch) {
+    final hasSchedule = branch['has_schedule'] == true;
+    final schedule = branch['schedule'] as Map<String, dynamic>;
+    final days = [for (final d in (schedule['work_days'] as List<dynamic>? ?? const [])) (d as num).toInt()];
+    return AppCard(
+      onTap: () => _editSchedule(branch),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              ToneIcon(hasSchedule ? Icons.store_rounded : Icons.schedule_rounded, tone: hasSchedule ? AppTone.success : AppTone.warning),
+              const SizedBox(width: AppSpace.md),
+              Expanded(child: Text((branch['zone_name'] ?? 'فرع').toString(), style: AppText.subtitle, maxLines: 1, overflow: TextOverflow.ellipsis)),
+              if (hasSchedule)
+                const StatusBadge('مُعدّ', tone: AppTone.success, dot: true)
+              else
+                AppButton(label: 'إعداد', icon: Icons.add_rounded, size: AppButtonSize.small, onPressed: () => _editSchedule(branch)),
+            ],
+          ),
+          if (hasSchedule) ...[
+            const SizedBox(height: AppSpace.md),
+            Wrap(
+              spacing: AppSpace.lg,
+              runSpacing: AppSpace.xs,
+              children: [
+                _Info(Icons.login_rounded, 'الدخول', Fmt.timeOfDay(schedule['check_in_time']?.toString())),
+                _Info(Icons.logout_rounded, 'الخروج', Fmt.timeOfDay(schedule['check_out_time']?.toString())),
+                _Info(Icons.timer_outlined, 'السماحية', '${schedule['grace_period_minutes'] ?? 15} د'),
+                _Info(Icons.notifications_active_outlined, 'التذكير بعد', '${schedule['reminder_minutes_after'] ?? 5} د'),
+              ],
+            ),
+            const SizedBox(height: AppSpace.md),
+            _DaysRow(days: days),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _Info extends StatelessWidget {
+  const _Info(this.icon, this.label, this.value);
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: AppColors.textMuted),
+          const SizedBox(width: AppSpace.xs),
+          Text('$label ', style: AppText.caption),
+          Text(value, style: AppText.bodySm.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
+        ],
+      );
+}
+
+/// أيام الأسبوع (0 = الأحد ... 6 = السبت) كدوائر صغيرة.
+class _DaysRow extends StatelessWidget {
+  const _DaysRow({required this.days});
+  final List<int> days;
+  static const _short = ['أحد', 'اثنين', 'ثلاثاء', 'أربعاء', 'خميس', 'جمعة', 'سبت'];
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: AppSpace.xs,
+      runSpacing: AppSpace.xs,
+      children: [
+        for (var d = 0; d < 7; d++)
+          StatusBadge(_short[d], tone: days.contains(d) ? AppTone.brand : AppTone.neutral),
+      ],
+    );
+  }
+}
+
+/// نافذة تعديل جدول دوام فرع.
+class _ScheduleEditor extends StatefulWidget {
+  const _ScheduleEditor({required this.branch});
+  final Map<String, dynamic> branch;
+
+  @override
+  State<_ScheduleEditor> createState() => _ScheduleEditorState();
+}
+
+class _ScheduleEditorState extends State<_ScheduleEditor> {
+  static const _dayNames = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+
+  late final Map<String, dynamic> _schedule = widget.branch['schedule'] as Map<String, dynamic>;
+  late final bool _hasSchedule = widget.branch['has_schedule'] == true;
+  late final List<int> _workDays = _hasSchedule
+      ? [for (final d in (_schedule['work_days'] as List<dynamic>? ?? const [0, 1, 2, 3, 4, 6])) (d as num).toInt()]
+      : [0, 1, 2, 3, 4, 6]; // كل الأيام ما عدا الجمعة (5)
+  late TimeOfDay _start = _parse(_schedule['check_in_time']?.toString(), const TimeOfDay(hour: 8, minute: 0));
+  late TimeOfDay _end = _parse(_schedule['check_out_time']?.toString(), const TimeOfDay(hour: 16, minute: 0));
+  late int _grace = (_schedule['grace_period_minutes'] as num? ?? 15).toInt();
+  late int _reminder = (_schedule['reminder_minutes_after'] as num? ?? 5).toInt();
+  bool _saving = false;
+
+  static TimeOfDay _parse(String? s, TimeOfDay fallback) {
+    final p = s?.split(':');
+    if (p == null || p.length < 2) return fallback;
+    return TimeOfDay(hour: int.tryParse(p[0]) ?? fallback.hour, minute: int.tryParse(p[1]) ?? fallback.minute);
+  }
+
+  static String _db(TimeOfDay t) => '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}:00';
+  static String _label(TimeOfDay t) => Fmt.time(DateTime(2000, 1, 1, t.hour, t.minute));
+
+  int get _minutes => (_end.hour * 60 + _end.minute) - (_start.hour * 60 + _start.minute);
+
+  Future<void> _pick(bool start) async {
+    final picked = await showTimePicker(context: context, initialTime: start ? _start : _end, helpText: start ? 'بداية الدوام' : 'نهاية الدوام');
+    if (picked != null) setState(() => start ? _start = picked : _end = picked);
+  }
+
+  Future<void> _save() async {
+    if (_minutes <= 0) {
+      AppSnack.error(context, 'وقت البداية لازم يكون قبل وقت النهاية');
+      return;
+    }
+    if (_workDays.isEmpty) {
+      AppSnack.error(context, 'اختر يوم عمل واحد على الأقل');
+      return;
+    }
+    setState(() => _saving = true);
+    try {
+      final data = {
+        'branch_id': widget.branch['zone_id'],
+        'name': 'دوام فرع ${widget.branch['zone_name']}',
+        'work_days': _workDays..sort(),
+        'check_in_time': _db(_start),
+        'check_out_time': _db(_end),
+        'grace_period_minutes': _grace,
+        'reminder_minutes_after': _reminder,
+      };
+      Future<void> write(Map<String, dynamic> row) => _hasSchedule
+          ? SupabaseService.client.from('work_schedules').update(row).eq('id', _schedule['id'] as Object)
+          : SupabaseService.client.from('work_schedules').insert(row);
+      try {
+        await write(data);
+      } on PostgrestException catch (e) {
+        // قاعدة بيانات قديمة بدون عمود التذكير (قبل migration 20260926000000): نحفظ الباقي
+        if (!e.message.contains('reminder_minutes_after')) rethrow;
+        await write(Map.of(data)..remove('reminder_minutes_after'));
+      }
+      if (mounted) Navigator.pop(context, true);
+    } catch (e) {
+      debugPrint('خطأ في حفظ الجدول: $e');
+      if (mounted) {
+        AppSnack.error(context, 'تعذّر الحفظ: $e');
+        setState(() => _saving = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hours = _minutes > 0 ? '${_minutes ~/ 60} س${_minutes % 60 > 0 ? ' ${_minutes % 60} د' : ''}' : '—';
+    return Padding(
+      padding: EdgeInsets.fromLTRB(AppSpace.xl, 0, AppSpace.xl, AppSpace.xl + MediaQuery.viewInsetsOf(context).bottom),
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('دوام ${widget.branch['zone_name']}', style: AppText.title),
+            Text(_hasSchedule ? 'تعديل الجدول الحالي' : 'جدول جديد', style: AppText.caption),
+            const SizedBox(height: AppSpace.lg),
+            Text('أيام العمل', style: AppText.bodySm.copyWith(fontWeight: FontWeight.w700)),
+            const SizedBox(height: AppSpace.sm),
+            Wrap(
+              spacing: AppSpace.sm,
+              children: [
+                for (var d = 0; d < 7; d++)
+                  FilterChip(
+                    label: Text(_dayNames[d]),
+                    selected: _workDays.contains(d),
+                    showCheckmark: false,
+                    selectedColor: AppColors.brandContainer,
+                    labelStyle: AppText.bodySm.copyWith(
+                      color: _workDays.contains(d) ? AppColors.onBrandContainer : AppColors.textSecondary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    onSelected: (on) {
+                      AppHaptics.select();
+                      setState(() => on ? _workDays.add(d) : _workDays.remove(d));
+                    },
+                  ),
+              ],
+            ),
+            const SizedBox(height: AppSpace.lg),
+            Row(
+              children: [
+                Expanded(child: AppPickerField(label: 'بداية الدوام', value: _label(_start), icon: Icons.login_rounded, onTap: () => _pick(true))),
+                const SizedBox(width: AppSpace.md),
+                Expanded(child: AppPickerField(label: 'نهاية الدوام', value: _label(_end), icon: Icons.logout_rounded, onTap: () => _pick(false))),
+              ],
+            ),
+            const SizedBox(height: AppSpace.sm),
+            Text('مدة الدوام: $hours', style: AppText.caption.copyWith(color: _minutes > 0 ? AppColors.textMuted : AppColors.danger)),
+            const SizedBox(height: AppSpace.lg),
+            AppChoiceChips<int>(
+              label: 'سماحية التأخير',
+              scrollable: true,
+              value: _grace,
+              options: [for (final m in const [0, 5, 10, 15, 20, 30]) (m, m == 0 ? 'بدون' : '$m د', null)],
+              onChanged: (v) => setState(() => _grace = v),
+            ),
+            const SizedBox(height: AppSpace.md),
+            AppChoiceChips<int>(
+              label: 'تذكير البصمة بعد',
+              scrollable: true,
+              value: _reminder,
+              options: [for (final m in const [5, 10, 15, 30]) (m, '$m د', null)],
+              onChanged: (v) => setState(() => _reminder = v),
+            ),
+            const SizedBox(height: AppSpace.xs),
+            const Text('يوصل للموظف إشعار إذا ما بصم بعد بداية أو نهاية الدوام بهذه المدة.', style: AppText.caption),
+            const SizedBox(height: AppSpace.xl),
+            AppButton(label: 'حفظ الجدول', icon: Icons.check_rounded, size: AppButtonSize.large, expand: true, loading: _saving, onPressed: _save),
+          ],
+        ),
+      ),
+    );
   }
 }

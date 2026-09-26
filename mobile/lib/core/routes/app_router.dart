@@ -4,24 +4,26 @@
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../services/supabase_service.dart';
-import '../services/auth_service.dart';
-import '../theme/app_theme.dart';
-import '../../presentation/shared/widgets/app_widgets.dart';
-import '../../presentation/auth/login_screen.dart';
+
+import '../../core/design/design.dart';
 import '../../presentation/auth/change_password_screen.dart';
-import '../../presentation/employee/main_layout.dart';
-import '../../presentation/employee/directory_screen.dart';
-import '../../presentation/employee/notifications_screen.dart';
-import '../../presentation/employee/admin_dashboard_screen.dart';
-import '../../presentation/employee/trash_screen.dart';
-import '../../presentation/employee/storage_stats_screen.dart';
-import '../../presentation/employee/branch_schedule_screen.dart';
-import '../../presentation/employee/employee_management_screen.dart';
-import '../../presentation/employee/branch_management_screen.dart';
+import '../../presentation/auth/login_screen.dart';
+import '../../presentation/employee/admin_dashboard/admin_dashboard_screen.dart';
+import '../../presentation/employee/admin_live_tracking_screen.dart';
+import '../../presentation/employee/admin_loans/admin_loans_screen.dart';
 import '../../presentation/employee/announcement_screen.dart';
 import '../../presentation/employee/attendance_report_screen.dart';
+import '../../presentation/employee/branch_management_screen.dart';
+import '../../presentation/employee/branch_schedule_screen.dart';
+import '../../presentation/employee/directory_screen.dart';
+import '../../presentation/employee/employee_management_screen.dart';
+import '../../presentation/employee/main_layout.dart';
+import '../../presentation/employee/notifications_screen.dart';
 import '../../presentation/employee/payslips_screen.dart';
+import '../../presentation/employee/storage_stats_screen.dart';
+import '../../presentation/employee/trash_screen.dart';
+import '../services/auth_service.dart';
+import '../services/supabase_service.dart';
 
 // تعريف المسارات كمسميات
 class AppRoutes {
@@ -38,6 +40,8 @@ class AppRoutes {
   static const String employeeNotifications = '/employee/notifications';
   static const String employeePayslips = '/employee/payslips';
   static const String adminDashboard = '/admin/dashboard';
+  static const String adminLoans = '/admin/loans';
+  static const String adminTracking = '/admin/tracking';
   static const String adminTrash = '/admin/trash';
   static const String adminStorage = '/admin/storage';
   static const String adminBranchSchedule = '/admin/branch-schedule';
@@ -65,6 +69,13 @@ final GoRouter appRouter = GoRouter(
       return AppRoutes.employeeHome;
     }
     
+    if (loggedIn && state.matchedLocation.startsWith('/admin')) {
+      final role = AuthService.currentUserRole;
+      if (role != 'admin' && role != 'manager') {
+        return AppRoutes.employeeHome;
+      }
+    }
+
     return null;
   },
   
@@ -97,7 +108,7 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: AppRoutes.employeeHome,
       builder: (BuildContext context, GoRouterState state) {
-        return const MainLayout(initialTab: 0);
+        return const MainLayout();
       },
     ),
     
@@ -206,10 +217,24 @@ final GoRouter appRouter = GoRouter(
         return const AttendanceReportScreen();
       },
     ),
+    
+    GoRoute(
+      path: AppRoutes.adminLoans,
+      builder: (BuildContext context, GoRouterState state) {
+        return const AdminLoansManagementScreen();
+      },
+    ),
+    
+    GoRoute(
+      path: AppRoutes.adminTracking,
+      builder: (BuildContext context, GoRouterState state) {
+        return const AdminLiveTrackingScreen();
+      },
+    ),
   ],
 );
 
-// Splash screen: shown only while the saved session is checked.
+// شاشة البداية الذكية والمتحركة (Splash Screen Component)
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -221,74 +246,49 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    // Navigate after the first frame; there is no artificial delay, the
-    // native launch screen already covers start-up.
-    WidgetsBinding.instance.addPostFrameCallback((_) => _checkAuth());
+    _checkAuth();
   }
 
   Future<void> _checkAuth() async {
+    // تشغيل فحص الجلسة بسرعة فائقة وسلاسة دون تأخير مصطنع
+    
     if (!mounted) return;
 
-    if (SupabaseService.isAuthenticated) {
-      // نتحقق من ضرورة تغيير كلمة المرور للموظف عند الدخول
-      final mustChange = await AuthService.checkMustChangePassword();
-      if (!mounted) return;
+    // يفحص انتهاء الجلسة، تعطيل الحساب، والجهاز المعتمد — ولا يعلق بدون إنترنت
+    final destination = await AuthService.resolveStartupDestination();
+    if (!mounted) return;
 
-      if (mustChange) {
+    switch (destination) {
+      case StartupDestination.login:
+        context.go(AppRoutes.login);
+      case StartupDestination.changePassword:
         context.go(AppRoutes.changePassword);
-      } else {
+      case StartupDestination.home:
         context.go(AppRoutes.employeeHome);
-      }
-    } else {
-      context.go(AppRoutes.login);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.darkBg,
+      backgroundColor: AppColors.bg,
       body: Center(
-        child: TweenAnimationBuilder<double>(
-          tween: Tween(begin: 0, end: 1),
-          duration: const Duration(milliseconds: 500),
-          curve: Curves.easeOutCubic,
-          builder: (context, t, child) => Opacity(
-            opacity: t,
-            child: Transform.scale(scale: 0.92 + 0.08 * t, child: child),
-          ),
-          child: const Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              BrandMark(size: 84),
-              SizedBox(height: 22),
-              Text(
-                'HR Pro',
-                style: TextStyle(
-                  fontFamily: AppTheme.fontFamily,
-                  fontSize: 28,
-                  fontWeight: FontWeight.w900,
-                  color: AppTheme.darkTextPrimary,
-                ),
-              ),
-              SizedBox(height: 4),
-              Text(
-                'نظام الموارد البشرية وإدارة الدوام',
-                style: TextStyle(
-                  fontFamily: AppTheme.fontFamily,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                  color: AppTheme.darkTextSecondary,
-                ),
-              ),
-              SizedBox(height: 36),
-              SizedBox(
-                width: 22,
-                height: 22,
-                child: CircularProgressIndicator(strokeWidth: 2.5),
-              ),
-            ],
-          ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 88,
+              height: 88,
+              decoration: BoxDecoration(color: AppColors.brandContainer, borderRadius: BorderRadius.circular(AppRadius.xl)),
+              child: const Icon(Icons.badge_rounded, size: 44, color: AppColors.brand),
+            ),
+            const SizedBox(height: AppSpace.xl),
+            const Text('HR Pro', style: AppText.headline),
+            const SizedBox(height: AppSpace.xs),
+            const Text('الدوام والإجازات والرواتب', style: AppText.bodySm),
+            const SizedBox(height: AppSpace.x4),
+            const SizedBox(width: 120, child: LinearProgressIndicator(minHeight: 3)),
+          ],
         ),
       ),
     );

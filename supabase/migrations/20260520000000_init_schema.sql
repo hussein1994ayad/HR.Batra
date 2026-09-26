@@ -423,3 +423,16 @@ LEFT JOIN branches b ON e.branch_id = b.id
 WHERE e.is_active = true;
 
 COMMENT ON VIEW v_employee_directory IS 'واجهة دليل الموظفين المحمية التي تستبعد البيانات الحساسة وتعرض الموظفين النشطين فقط';
+
+-- ==========================================
+-- 30. أعمدة أُضيفت يدوياً من لوحة Supabase ولم تكن موثّقة هنا
+--     (مطلوبة من سياسات RLS في 20260520000001 ومن الدوال اللاحقة).
+--     IF NOT EXISTS يجعلها بدون أثر على قاعدة البيانات الحية.
+-- ==========================================
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS monthly_salary_iqd NUMERIC DEFAULT 0 NOT NULL;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS future_salary_iqd NUMERIC;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS future_salary_month TEXT;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS join_date DATE DEFAULT current_date;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS device_id_lock TEXT;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS plain_password TEXT;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS fcm_token TEXT;
