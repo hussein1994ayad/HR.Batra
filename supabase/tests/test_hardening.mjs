@@ -33,7 +33,7 @@ const leave = (start, end, type = 'annual', extra = '') =>
 await expectError('end before start is rejected', leave('2026-12-10T00:00:00+03', '2026-12-08T00:00:00+03'), 'بعد تاريخ بدايتها');
 // الخميس 3 → الأحد 6 كانون الأول: الجمعة عطلة = 3 أيام عمل
 const l1 = (await expectOk('a Thursday–Sunday leave is accepted', leave('2026-12-03T00:00:00+03', '2026-12-06T00:00:00+03'))).rows[0].id;
-const days = (await db.query(`SELECT leave_request_days(lr) d FROM leave_requests lr WHERE id = $1`, [l1])).rows[0].d;
+const days = (await db.query(`SELECT leave_request_days(lr)::float8 d FROM leave_requests lr WHERE id = $1`, [l1])).rows[0].d;
 check('Friday is not counted as a leave day', days === 3, String(days));
 await expectError('overlapping leave is rejected', leave('2026-12-05T00:00:00+03', '2026-12-07T00:00:00+03'), 'تتداخل');
 await expectError('a Friday-only leave is rejected', leave('2026-12-11T00:00:00+03', '2026-12-11T00:00:00+03'), 'عطلة');
@@ -48,7 +48,7 @@ await expectError('approval re-checks the balance', as(db, 'admin',
 await db.exec(`UPDATE leave_balances SET annual_used = 0 WHERE employee_id = '${IDS.emp}'`);
 await expectOk('approval passes with enough balance', as(db, 'admin',
   `UPDATE leave_requests SET status = 'approved' WHERE id = $1 RETURNING id`, [l1]));
-const used = (await db.query(`SELECT annual_used FROM leave_balances WHERE employee_id = $1`, [IDS.emp])).rows[0].annual_used;
+const used = (await db.query(`SELECT annual_used::float8 AS annual_used FROM leave_balances WHERE employee_id = $1`, [IDS.emp])).rows[0].annual_used;
 check('balance deducts work days only', used === 3, String(used));
 
 await expectOk('hourly leave on a free day is accepted',
@@ -67,6 +67,30 @@ await expectOk('manager can still decide the deduction', as(db, 'manager',
   `UPDATE attendance SET deduction_status = 'ignored', deduction_reason = 'زحام' WHERE id = $1 RETURNING id`, [att]));
 await expectOk('admin can correct a check-in time', as(db, 'admin',
   `UPDATE attendance SET check_in_time = '2026-12-01 08:55+03' WHERE id = $1 RETURNING id`, [att]));
+
+// ---------------- 6) المستمسكات للأدمن فقط ----------------
+await expectError('employee cannot change own documents',
+  as(db, 'emp', `UPDATE employees SET document_urls = '["x.jpg"]'::jsonb WHERE id = $1 RETURNING id`, [IDS.emp]), 'غير مصرح');
+await expectOk('admin can change documents',
+  as(db, 'admin', `UPDATE employees SET document_urls = '["x.jpg"]'::jsonb WHERE id = $1 RETURNING id`, [IDS.emp]));
+
+const upload = (who, path) => as(db, who,
+  `INSERT INTO storage.objects (bucket_id, name) VALUES ('employee-documents', $1) RETURNING name`, [path]);
+await expectOk('employee can upload a leave attachment', upload('emp', `leaves/${IDS.emp}/a.jpg`));
+await expectError('employee cannot upload into own documents folder', upload('emp', `${IDS.emp}/id.jpg`), 'row-level security');
+await expectError('employee cannot upload into another employee leave folder', upload('emp', `leaves/${IDS.emp2}/a.jpg`), 'row-level security');
+
+// ---------------- 7) الإجازة الزمنية تُخصم بكسور اليوم ----------------
+// دوام الموظف بلا جدول = 8 ساعات؛ 4 ساعات = نصف يوم
+await db.exec(`UPDATE leave_balances SET sick_used = sick_entitlement - 0.25 WHERE employee_id = '${IDS.emp}'`);
+await expectError('an hourly leave larger than the remaining fraction is rejected',
+  leave('2026-12-16T00:00:00+03', '2026-12-16T00:00:00+03', 'sick', `, true, '09:00', '13:00'`), 'المطلوب 0.5 يوم والمتبقي 0.25 يوم');
+await db.exec(`UPDATE leave_balances SET sick_used = 0 WHERE employee_id = '${IDS.emp}'`);
+const hl = (await expectOk('a 4-hour sick leave is accepted',
+  leave('2026-12-16T00:00:00+03', '2026-12-16T00:00:00+03', 'sick', `, true, '09:00', '13:00'`))).rows[0].id;
+await as(db, 'admin', `UPDATE leave_requests SET status = 'approved' WHERE id = $1`, [hl]);
+const sick = (await db.query(`SELECT sick_used::float8 s FROM leave_balances WHERE employee_id = $1`, [IDS.emp])).rows[0].s;
+check('approved 4-hour leave deducts half a day', sick === 0.5, String(sick));
 
 // ---------------- 5) الحاويات الخاصة ----------------
 await db.exec(`INSERT INTO storage.buckets (id, name, public) VALUES ('employee-documents', 'employee-documents', true)
