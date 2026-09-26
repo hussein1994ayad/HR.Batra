@@ -96,6 +96,7 @@ Map<String, List<Map<String, dynamic>>> buildFixtures({String role = 'admin'}) {
         'check_in_time': '08:00:00',
         'check_out_time': '16:00:00',
         'grace_period_minutes': 15,
+        'reminder_minutes_after': 10,
         'work_days': [0, 1, 2, 3, 4, 6],
         'created_at': '2026-01-01T00:00:00Z',
       },

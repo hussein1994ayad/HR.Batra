@@ -99,4 +99,11 @@ await db.exec(`UPDATE employees SET is_active = false WHERE id = '${IDS.emp2}'`)
 await expectError('inactive employee cannot punch',
   as(db, 'emp2', `SELECT punch_attendance('check_out', ${IN[0]}, ${IN[1]})`), 'معطل');
 
+
+// --- reminder_minutes_after (schedule reminder setting) ---
+const rem = await db.query(`SELECT reminder_minutes_after FROM work_schedules LIMIT 1`);
+check('work_schedules.reminder_minutes_after defaults to 5', rem.rows[0]?.reminder_minutes_after === 5, JSON.stringify(rem.rows));
+await expectError('reminder minutes must be between 0 and 120',
+  db.query(`UPDATE work_schedules SET reminder_minutes_after = 500`), 'chk_work_schedules_reminder_minutes');
+
 done();
