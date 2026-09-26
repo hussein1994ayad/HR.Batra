@@ -19,6 +19,7 @@ import '../../core/services/file_upload_service.dart';
 import '../../core/services/storage_links.dart';
 import '../../core/services/supabase_service.dart';
 import '../../core/utils/arabic_format.dart';
+import '../../core/utils/error_text.dart';
 import '../../core/utils/input_formatters.dart';
 import '../shared/ui/ui.dart';
 
@@ -189,7 +190,7 @@ class _LoanRequestScreenState extends State<LoanRequestScreen> with SingleTicker
         unawaited(_loadLoansHistory());
       }
     } catch (e) {
-      if (mounted) AppSnack.error(context, 'تعذّر إرسال الطلب: $e');
+      if (mounted) AppSnack.error(context, 'تعذّر إرسال الطلب: ${errorText(e)}');
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }

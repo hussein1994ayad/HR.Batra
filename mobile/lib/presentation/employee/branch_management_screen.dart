@@ -13,6 +13,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../core/services/supabase_service.dart';
+import '../../core/utils/error_text.dart';
 import '../shared/ui/ui.dart';
 
 class BranchManagementScreen extends StatefulWidget {
@@ -260,7 +261,7 @@ class _BranchEditorState extends State<_BranchEditor> {
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
       if (mounted) {
-        AppSnack.error(context, 'تعذّر الحفظ: $e');
+        AppSnack.error(context, 'تعذّر الحفظ: ${errorText(e)}');
         setState(() => _saving = false);
       }
     }

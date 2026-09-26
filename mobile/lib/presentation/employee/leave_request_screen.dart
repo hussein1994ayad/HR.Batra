@@ -18,6 +18,7 @@ import 'package:uuid/uuid.dart';
 import '../../core/services/file_upload_service.dart';
 import '../../core/services/storage_links.dart';
 import '../../core/services/supabase_service.dart';
+import '../../core/utils/error_text.dart';
 import '../shared/ui/ui.dart';
 
 class LeaveRequestScreen extends StatefulWidget {
@@ -262,7 +263,7 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
         unawaited(_loadHistory());
       }
     } catch (e) {
-      if (mounted) AppSnack.error(context, 'تعذّر إرسال الطلب: $e');
+      if (mounted) AppSnack.error(context, 'تعذّر إرسال الطلب: ${errorText(e)}');
     } finally {
       if (mounted) setState(() => _isUploading = false);
     }

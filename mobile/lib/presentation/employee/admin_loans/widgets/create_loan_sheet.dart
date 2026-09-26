@@ -3,9 +3,9 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
-
 import '../../../../core/models/models.dart';
 import '../../../../core/utils/arabic_format.dart';
+import '../../../../core/utils/error_text.dart';
 import '../../../../core/utils/input_formatters.dart';
 import '../../../../data/repositories/loan_repository.dart';
 import '../../../shared/ui/ui.dart';
@@ -83,7 +83,7 @@ class _CreateLoanSheetState extends State<_CreateLoanSheet> {
       debugPrint('Error creating direct loan: $e');
       if (mounted) {
         setState(() => _saving = false);
-        _error('تعذّرت إضافة السلفة: $e');
+        _error('تعذّرت إضافة السلفة: ${errorText(e)}');
       }
     }
   }

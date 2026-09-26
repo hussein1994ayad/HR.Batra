@@ -43,7 +43,7 @@ class IosRegionMonitor {
         'supabaseUrl': supabaseUrl,
         'supabaseAnonKey': supabaseAnonKey,
         'employeeId': employeeId,
-        'accessToken': accessToken ?? supabaseAnonKey,
+        'accessToken': accessToken ?? '',
       });
     } catch (e) {
       debugPrint('IosRegionMonitor.configure error: $e');
@@ -73,6 +73,39 @@ class IosRegionMonitor {
       debugPrint('iOS: setCheckedIn($checkedIn)');
     } catch (e) {
       debugPrint('IosRegionMonitor.setCheckedIn error: $e');
+    }
+  }
+
+  /// توكن الجلسة الجديد بعد كل تجديد (صلاحيته ساعة)، حتى يرفع iOS المواقع بتوكن صالح.
+  static Future<void> updateAccessToken(String token) async {
+    if (!isSupported) return;
+    try {
+      await _channel.invokeMethod('updateAccessToken', {'accessToken': token});
+    } catch (e) {
+      debugPrint('IosRegionMonitor.updateAccessToken error: $e');
+    }
+  }
+
+  /// يرفع النقاط التي حفظها iOS لأن التوكن انتهى أو الشبكة انقطعت أثناء إغلاق التطبيق.
+  /// يُرفع فقط ما يخص المستخدم الحالي.
+  static Future<void> uploadPendingPoints() async {
+    if (!isSupported) return;
+    final userId = SupabaseService.currentUser?.id;
+    if (userId == null) return;
+    try {
+      final raw = await _channel.invokeMethod<List<dynamic>>('drainPendingPoints') ?? const [];
+      final rows = [
+        for (final p in raw)
+          if (p is Map && p['employee_id'] == userId)
+            {'employee_id': userId, 'latitude': p['latitude'], 'longitude': p['longitude'], 'timestamp': p['timestamp']},
+      ];
+      for (var i = 0; i < rows.length; i += 200) {
+        final end = i + 200 > rows.length ? rows.length : i + 200;
+        await SupabaseService.client.from('location_tracking').insert(rows.sublist(i, end));
+      }
+      if (rows.isNotEmpty) debugPrint('iOS: رُفعت ${rows.length} نقطة موقع محفوظة');
+    } catch (e) {
+      debugPrint('IosRegionMonitor.uploadPendingPoints error: $e');
     }
   }
 

@@ -8,6 +8,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/services/supabase_service.dart';
+import '../../core/utils/error_text.dart';
 import '../shared/ui/ui.dart';
 
 class AnnouncementScreen extends StatefulWidget {
@@ -123,7 +124,7 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
       }
     } catch (e) {
       debugPrint('Error sending announcement: $e');
-      if (mounted) AppSnack.error(context, 'تعذّر الإرسال: $e');
+      if (mounted) AppSnack.error(context, 'تعذّر الإرسال: ${errorText(e)}');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }

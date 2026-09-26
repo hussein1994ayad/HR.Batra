@@ -13,14 +13,10 @@ import UserNotifications
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
 
+    // طلب إذن الإشعارات يتم من Flutter بعد تسجيل الدخول (firebase_messaging)
+    // بنافذة واضحة للمستخدم. كان يُطلب هنا بصيغة provisional فتصل الإشعارات
+    // صامتة بدون صوت أو بانر، ومعه criticalAlert الذي يحتاج إذناً خاصاً من Apple.
     UNUserNotificationCenter.current().delegate = self
-    UNUserNotificationCenter.current().requestAuthorization(
-      options: [.alert, .badge, .sound, .provisional, .criticalAlert]
-    ) { granted, _ in
-      if granted {
-        DispatchQueue.main.async { application.registerForRemoteNotifications() }
-      }
-    }
     application.registerForRemoteNotifications()
 
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
@@ -65,7 +61,7 @@ import UserNotifications
           result(FlutterError(code: "BAD_ARGS", message: "configure needs args", details: nil))
           return
         }
-        let token = (args["accessToken"] as? String) ?? anon
+        let token = (args["accessToken"] as? String) ?? ""
         LocationMonitorIOS.shared.configure(
           supabaseUrl: url,
           supabaseAnonKey: anon,
@@ -97,6 +93,19 @@ import UserNotifications
       case "stopMonitoring":
         LocationMonitorIOS.shared.stopMonitoring()
         result(true)
+
+      case "updateAccessToken":
+        guard let args = call.arguments as? [String: Any],
+              let token = args["accessToken"] as? String
+        else {
+          result(FlutterError(code: "BAD_ARGS", message: "updateAccessToken needs accessToken", details: nil))
+          return
+        }
+        LocationMonitorIOS.shared.updateAccessToken(token)
+        result(true)
+
+      case "drainPendingPoints":
+        result(LocationMonitorIOS.shared.drainPendingPoints())
 
       default:
         result(FlutterMethodNotImplemented)

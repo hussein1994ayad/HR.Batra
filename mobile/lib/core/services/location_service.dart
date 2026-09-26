@@ -223,8 +223,9 @@ class LocationService {
   static Future<void> stopTracking() async {
     // Check-out: نخبر Swift إن الموظف طلع، فيتوقف المسار المستمر
     // (نبقي Region Monitoring نشط للأمان — دخول فرع بالغلط يُسجَّل)
+    // الانصراف يوقف كل تتبع iOS (لا مواقع خارج الدوام)
     try {
-      await IosRegionMonitor.setCheckedIn(false);
+      await IosRegionMonitor.stopMonitoring();
     } catch (_) {}
 
     try {

@@ -1,31 +1,24 @@
 // =========================================================================
-// HR Pro v6.0 - iOS Location Monitor (Multi-Mode Tracking)
+// HR Pro - iOS Location Monitor
 // =========================================================================
-// تصميم ذكي يحترم قيود Apple ويعطي أقصى تغطية ممكنة:
+// يسجّل مسار الموظف **بين بصمة الحضور وبصمة الانصراف فقط** — وهو المصرّح به
+// في سياسة الخصوصية. خارج الدوام لا يُجمع ولا يُرفع أي موقع.
 //
-// Mode A - REGION MONITORING (داخل فرع)
-//   • CLCircularRegion لكل فرع (max 20)
-//   • Significant Location Changes كنسخة احتياط
-//   • CLVisit لتسجيل التوقفات (توقف/غادر) — لا يحتاج التطبيق شغّال
-//   • بطارية منخفضة، بدون مؤشر أزرق
+// أثناء الدوام:
+//   • داخل الفرع: Region Monitoring + Significant Location Changes (بطارية منخفضة)
+//   • خارج الفرع: startUpdatingLocation (مسار متتابع كل 30م)
+//   • CLVisit يرصد التوقفات حتى لو التطبيق مقفول
 //
-// Mode B - CONTINUOUS PATH (خارج فرع، أثناء check-in)
-//   • startUpdatingLocation مع allowsBackgroundLocationUpdates
-//   • distance filter 30م — يعطي مسار متتابع
-//   • يشتغل ~10 دقيقة بعد إغلاق التطبيق (حد Apple)
-//   • بعد الـ 10 دقائق، SLC + CLVisit يحلّان محله
+// الرفع يتم مباشرة لـ Supabase (بدون Flutter engine) بتوكن الجلسة. إذا انتهت
+// صلاحية التوكن (ساعة) أو انقطعت الشبكة تُحفظ النقاط محلياً، ويرفعها تطبيق
+// Flutter عند الفتح القادم (drainPendingPoints).
 //
-// SWITCHING:
-//   • dxEnterRegion → Mode A (رجع للفرع، نكفي المسار المستمر)
-//   • didExitRegion  → Mode B (طلع من الفرع، نفعّل المسار المستمر)
-//
-// كل الأحداث تُرفع مباشرة لـ Supabase عبر URLSession (بدون Flutter engine)
+// مؤشر الموقع الأزرق ظاهر دائماً: التتبع مُعلَن للموظف وغير مخفي.
 // =========================================================================
 
 import Foundation
 import CoreLocation
 import UIKit
-import UserNotifications
 
 @objc class LocationMonitorIOS: NSObject, CLLocationManagerDelegate {
 
@@ -40,11 +33,18 @@ import UserNotifications
     private let kEmployeeId = "hr_employee_id"
     private let kAccessToken = "supabase_access_token"
     private let kActiveMonitoring = "hr_active_monitoring"
+    private let kCheckedIn = "hr_checked_in"
+    private let kPendingPoints = "hr_pending_location_points"
+    private let maxPendingPoints = 2000
 
     private var branchCache: [String: [String: Any]] = [:]
-    private var isCheckedIn: Bool = false
+    private var isCheckedIn: Bool {
+        get { userDefaults.bool(forKey: kCheckedIn) }
+        set { userDefaults.set(newValue, forKey: kCheckedIn) }
+    }
     private var isCurrentlyInsideAnyBranch: Bool = false
     private var continuousUpdatesActive: Bool = false
+    private let pendingQueue = DispatchQueue(label: "com.batra.hrpro.pending-points")
 
     override init() {
         super.init()
@@ -52,9 +52,7 @@ import UserNotifications
         locationManager.desiredAccuracy = kCLLocationAccuracyBest
         locationManager.allowsBackgroundLocationUpdates = true
         locationManager.pausesLocationUpdatesAutomatically = false
-        // ✅ إخفاء المؤشر الأزرق (يعمل فقط للتوزيع الخاص — Ad Hoc / Enterprise)
-        // لا يمكن للمستخدم رؤية "أنت تُتتبع" — Apple تسمح بهذا في Ad Hoc
-        locationManager.showsBackgroundLocationIndicator = false
+        locationManager.showsBackgroundLocationIndicator = true
     }
 
     // =====================================================================
@@ -73,8 +71,12 @@ import UserNotifications
         userDefaults.set(accessToken, forKey: kAccessToken)
     }
 
+    /// تحديث توكن الجلسة فقط (يُستدعى عند تجديد الجلسة في Flutter).
+    @objc func updateAccessToken(_ token: String) {
+        userDefaults.set(token, forKey: kAccessToken)
+    }
+
     @objc func startMonitoring(branches: [[String: Any]]) {
-        // احذف المناطق القديمة
         for region in locationManager.monitoredRegions {
             locationManager.stopMonitoring(for: region)
         }
@@ -89,9 +91,7 @@ import UserNotifications
             return
         }
 
-        // Mode A - Region Monitoring
-        let limited = branches.prefix(20)
-        for branch in limited {
+        for branch in branches.prefix(20) {
             guard let id = branch["id"] as? String,
                   let lat = branch["lat"] as? Double,
                   let lng = branch["lng"] as? Double
@@ -111,28 +111,18 @@ import UserNotifications
             branchCache[id] = ["name": name, "lat": lat, "lng": lng, "radius": radius]
         }
 
-        // مراقبة إضافية دائمة (تشتغل حتى لو التطبيق مقفول)
-        locationManager.startMonitoringSignificantLocationChanges()
-        locationManager.startMonitoringVisits() // CLVisit — رصد التوقفات
-
-        // فحص الحالة الحالية (داخل أم خارج فرع؟) لبدء Mode مناسب
-        checkCurrentBranchState()
-
         userDefaults.set(true, forKey: kActiveMonitoring)
-        NSLog("[HR Pro iOS] Monitoring active: \(limited.count) branches + SLC + Visits")
+        if isCheckedIn { startShiftTracking() }
+        NSLog("[HR Pro iOS] Monitoring \(branchCache.count) branches, checkedIn=\(isCheckedIn)")
     }
 
-    /// بلّغ الطبقة إن الموظف عمل check-in — نفعّل المسار المستمر
+    /// بصمة حضور → يبدأ التتبع. بصمة انصراف → يتوقف كل التتبع.
     @objc func setCheckedIn(_ checkedIn: Bool) {
         isCheckedIn = checkedIn
         if checkedIn {
-            // إذا كان خارج فرع → فعّل GPS المستمر لتسجيل المسار
-            if !isCurrentlyInsideAnyBranch {
-                startContinuousUpdates()
-            }
+            startShiftTracking()
         } else {
-            // Check-out → أوقف المسار المستمر (نبقي فقط SLC + Regions للأمان)
-            stopContinuousUpdates()
+            stopShiftTracking()
         }
     }
 
@@ -140,38 +130,55 @@ import UserNotifications
         for region in locationManager.monitoredRegions {
             locationManager.stopMonitoring(for: region)
         }
-        locationManager.stopMonitoringSignificantLocationChanges()
-        locationManager.stopMonitoringVisits()
-        stopContinuousUpdates()
+        stopShiftTracking()
         branchCache.removeAll()
         isCheckedIn = false
         userDefaults.set(false, forKey: kActiveMonitoring)
+        userDefaults.removeObject(forKey: kAccessToken)
         NSLog("[HR Pro iOS] Full stop — all monitoring cancelled")
     }
 
+    /// النقاط التي لم تُرفع (توكن منتهٍ أو بدون شبكة). تُفرَّغ بعد القراءة.
+    @objc func drainPendingPoints() -> [[String: Any]] {
+        return pendingQueue.sync {
+            let points = userDefaults.array(forKey: kPendingPoints) as? [[String: Any]] ?? []
+            userDefaults.removeObject(forKey: kPendingPoints)
+            return points
+        }
+    }
+
     // =====================================================================
-    // Mode Switching
+    // Shift tracking
     // =====================================================================
+
+    private func startShiftTracking() {
+        locationManager.startMonitoringSignificantLocationChanges()
+        locationManager.startMonitoringVisits()
+        // نعرف هل هو داخل فرع الآن لنقرر المسار المستمر
+        locationManager.requestLocation()
+        if !isCurrentlyInsideAnyBranch {
+            startContinuousUpdates()
+        }
+    }
+
+    private func stopShiftTracking() {
+        locationManager.stopMonitoringSignificantLocationChanges()
+        locationManager.stopMonitoringVisits()
+        stopContinuousUpdates()
+    }
 
     private func startContinuousUpdates() {
         if continuousUpdatesActive { return }
-        locationManager.distanceFilter = 30 // كل 30 متر
+        locationManager.distanceFilter = 30
         locationManager.desiredAccuracy = kCLLocationAccuracyBest
         locationManager.startUpdatingLocation()
         continuousUpdatesActive = true
-        NSLog("[HR Pro iOS] Mode B activated — continuous path tracking")
     }
 
     private func stopContinuousUpdates() {
         if !continuousUpdatesActive { return }
         locationManager.stopUpdatingLocation()
         continuousUpdatesActive = false
-        NSLog("[HR Pro iOS] Mode A activated — region monitoring only")
-    }
-
-    private func checkCurrentBranchState() {
-        // نستدعي requestLocation مرة واحدة لنعرف الحالة الحالية
-        locationManager.requestLocation()
     }
 
     // =====================================================================
@@ -179,62 +186,33 @@ import UserNotifications
     // =====================================================================
 
     func locationManager(_ manager: CLLocationManager, didEnterRegion region: CLRegion) {
-        NSLog("[HR Pro iOS] Enter region: \(region.identifier)")
         isCurrentlyInsideAnyBranch = true
-        handleRegionEvent(regionId: region.identifier, event: "enter")
-
-        // رجع لفرع → أوقف المسار المستمر (توفير بطارية)
-        if isCheckedIn {
-            stopContinuousUpdates()
-        }
+        if isCheckedIn { stopContinuousUpdates() }
     }
 
     func locationManager(_ manager: CLLocationManager, didExitRegion region: CLRegion) {
-        NSLog("[HR Pro iOS] Exit region: \(region.identifier)")
         isCurrentlyInsideAnyBranch = false
-        handleRegionEvent(regionId: region.identifier, event: "exit")
-
-        // خرج من فرع أثناء check-in → فعّل المسار المستمر
-        if isCheckedIn {
-            startContinuousUpdates()
-        }
+        if isCheckedIn { startContinuousUpdates() }
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        guard let loc = locations.last else { return }
-        // تجاهل النقاط غير الدقيقة (>100م)
+        guard isCheckedIn, let loc = locations.last else { return }
         if loc.horizontalAccuracy < 0 || loc.horizontalAccuracy > 100 { return }
 
         uploadLocationPoint(
             latitude: loc.coordinate.latitude,
             longitude: loc.coordinate.longitude,
-            accuracy: loc.horizontalAccuracy,
-            source: continuousUpdatesActive ? "continuous" : "slc"
+            timestamp: loc.timestamp
         )
-
-        // فحص حالة فرع كل نقطة (لو دخل/خرج ما التقطه Region Monitoring)
         updateBranchStateFromLocation(loc)
     }
 
-    /// CLVisit — Apple ترصد التوقفات (30+ دقيقة في نفس المكان)
-    /// يشتغل حتى لو التطبيق مقفول تماماً
     func locationManager(_ manager: CLLocationManager, didVisit visit: CLVisit) {
-        let event: String
-        let timestamp: Date
-        if visit.departureDate == Date.distantFuture {
-            event = "visit_arrival"
-            timestamp = visit.arrivalDate
-        } else {
-            event = "visit_departure"
-            timestamp = visit.departureDate
-        }
-        NSLog("[HR Pro iOS] Visit \(event) at \(visit.coordinate)")
-
+        guard isCheckedIn else { return }
+        let timestamp = visit.departureDate == Date.distantFuture ? visit.arrivalDate : visit.departureDate
         uploadLocationPoint(
             latitude: visit.coordinate.latitude,
             longitude: visit.coordinate.longitude,
-            accuracy: visit.horizontalAccuracy,
-            source: event,
             timestamp: timestamp
         )
     }
@@ -250,9 +228,7 @@ import UserNotifications
                   let lng = info["lng"] as? Double,
                   let radius = info["radius"] as? Double
             else { continue }
-            let center = CLLocation(latitude: lat, longitude: lng)
-            let distance = location.distance(from: center)
-            if distance <= radius {
+            if location.distance(from: CLLocation(latitude: lat, longitude: lng)) <= radius {
                 insideAny = true
                 break
             }
@@ -260,107 +236,71 @@ import UserNotifications
         if insideAny != isCurrentlyInsideAnyBranch {
             isCurrentlyInsideAnyBranch = insideAny
             if isCheckedIn {
-                if insideAny {
-                    stopContinuousUpdates()
-                } else {
-                    startContinuousUpdates()
-                }
+                if insideAny { stopContinuousUpdates() } else { startContinuousUpdates() }
             }
         }
     }
 
     // =====================================================================
-    // Supabase Direct Upload (yes, without Flutter engine)
+    // Upload (Supabase REST) with offline/expired-token buffer
     // =====================================================================
 
-    private func handleRegionEvent(regionId: String, event: String) {
-        guard let url = userDefaults.string(forKey: kSupabaseUrl),
-              let anon = userDefaults.string(forKey: kSupabaseAnonKey),
-              let employeeId = userDefaults.string(forKey: kEmployeeId)
-        else { return }
+    /// هل توكن الجلسة صالح لدقيقتين قادمتين على الأقل؟
+    private func tokenIsFresh(_ token: String) -> Bool {
+        let parts = token.split(separator: ".")
+        guard parts.count == 3 else { return false }
+        var payload = String(parts[1]).replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
+        while payload.count % 4 != 0 { payload += "=" }
+        guard let data = Data(base64Encoded: payload),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let exp = json["exp"] as? Double
+        else { return false }
+        return Date(timeIntervalSince1970: exp).timeIntervalSinceNow > 120
+    }
 
-        let branch = branchCache[regionId] ?? [:]
-        let branchName = branch["name"] as? String ?? "فرع"
-        let title = event == "enter" ? "دخول فرع \(branchName)" : "خروج من فرع \(branchName)"
-        let body = "تم رصد \(event == "enter" ? "دخولك إلى" : "خروجك من") فرع \(branchName)"
-
-        insertNotification(
-            supabaseUrl: url, anonKey: anon, employeeId: employeeId,
-            title: title, body: body, type: "attendance"
-        )
-
-        if event == "enter",
-           let lat = branch["lat"] as? Double,
-           let lng = branch["lng"] as? Double {
-            uploadLocationPoint(latitude: lat, longitude: lng, accuracy: 100.0, source: "region_enter")
+    private func bufferPoint(_ point: [String: Any]) {
+        pendingQueue.async {
+            var points = self.userDefaults.array(forKey: self.kPendingPoints) as? [[String: Any]] ?? []
+            points.append(point)
+            if points.count > self.maxPendingPoints {
+                points.removeFirst(points.count - self.maxPendingPoints)
+            }
+            self.userDefaults.set(points, forKey: self.kPendingPoints)
         }
     }
 
-    private func insertNotification(
-        supabaseUrl: String, anonKey: String, employeeId: String,
-        title: String, body: String, type: String
-    ) {
-        let endpoint = "\(supabaseUrl)/rest/v1/notifications"
-        guard let requestUrl = URL(string: endpoint) else { return }
-
-        var request = URLRequest(url: requestUrl)
-        request.httpMethod = "POST"
-        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.addValue(anonKey, forHTTPHeaderField: "apikey")
-        request.addValue(
-            "Bearer \(userDefaults.string(forKey: kAccessToken) ?? anonKey)",
-            forHTTPHeaderField: "Authorization"
-        )
-        request.addValue("return=minimal", forHTTPHeaderField: "Prefer")
-
-        let payload: [String: Any] = [
+    private func uploadLocationPoint(latitude: Double, longitude: Double, timestamp: Date) {
+        guard let employeeId = userDefaults.string(forKey: kEmployeeId) else { return }
+        let point: [String: Any] = [
             "employee_id": employeeId,
-            "title": title,
-            "body": body,
-            "type": type,
+            "latitude": latitude,
+            "longitude": longitude,
+            "timestamp": ISO8601DateFormatter().string(from: timestamp),
         ]
-        request.httpBody = try? JSONSerialization.data(withJSONObject: payload)
 
-        URLSession.shared.dataTask(with: request) { _, response, error in
-            if let error = error {
-                NSLog("[HR Pro iOS] Notif upload failed: \(error.localizedDescription)")
-            } else if let http = response as? HTTPURLResponse {
-                NSLog("[HR Pro iOS] Notif upload status: \(http.statusCode)")
-            }
-        }.resume()
-    }
-
-    private func uploadLocationPoint(
-        latitude: Double, longitude: Double, accuracy: Double,
-        source: String, timestamp: Date = Date()
-    ) {
         guard let url = userDefaults.string(forKey: kSupabaseUrl),
               let anon = userDefaults.string(forKey: kSupabaseAnonKey),
-              let employeeId = userDefaults.string(forKey: kEmployeeId)
-        else { return }
-
-        let endpoint = "\(url)/rest/v1/location_tracking"
-        guard let requestUrl = URL(string: endpoint) else { return }
+              let token = userDefaults.string(forKey: kAccessToken),
+              tokenIsFresh(token),
+              let requestUrl = URL(string: "\(url)/rest/v1/location_tracking")
+        else {
+            bufferPoint(point)
+            return
+        }
 
         var request = URLRequest(url: requestUrl)
         request.httpMethod = "POST"
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
         request.addValue(anon, forHTTPHeaderField: "apikey")
-        request.addValue(
-            "Bearer \(userDefaults.string(forKey: kAccessToken) ?? anon)",
-            forHTTPHeaderField: "Authorization"
-        )
+        request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.addValue("return=minimal", forHTTPHeaderField: "Prefer")
+        request.httpBody = try? JSONSerialization.data(withJSONObject: point)
 
-        let iso = ISO8601DateFormatter().string(from: timestamp)
-        let payload: [String: Any] = [
-            "employee_id": employeeId,
-            "latitude": latitude,
-            "longitude": longitude,
-            "timestamp": iso,
-        ]
-        request.httpBody = try? JSONSerialization.data(withJSONObject: payload)
-
-        URLSession.shared.dataTask(with: request) { _, _, _ in }.resume()
+        URLSession.shared.dataTask(with: request) { [weak self] _, response, error in
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            if error != nil || !(200..<300).contains(status) {
+                self?.bufferPoint(point)
+            }
+        }.resume()
     }
 }

@@ -15,6 +15,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import 'core/providers/app_container.dart';
 import 'core/routes/app_router.dart';
+import 'core/services/ios_region_monitor.dart';
 import 'core/services/location_service.dart';
 import 'core/services/notification_service.dart';
 import 'core/services/supabase_service.dart';
@@ -80,6 +81,22 @@ void main() async {
       await NotificationService.init();
     }),
   ]);
+
+  // iOS: توكن الجلسة يتجدد كل ساعة؛ نمرره لطبقة الموقع الأصلية، ونرفع أي نقاط
+  // حفظتها وهي بدون توكن صالح.
+  if (IosRegionMonitor.isSupported) {
+    try {
+      SupabaseService.client.auth.onAuthStateChange.listen((event) {
+        final token = event.session?.accessToken;
+        if (token != null) {
+          unawaited(IosRegionMonitor.updateAccessToken(token));
+          unawaited(IosRegionMonitor.uploadPendingPoints());
+        }
+      });
+    } catch (e) {
+      debugPrint('⚠️ iOS token bridge: $e');
+    }
+  }
 
   // 3. تشغيل التطبيق فوراً — بدون انتظار خدمة الموقع
   runApp(

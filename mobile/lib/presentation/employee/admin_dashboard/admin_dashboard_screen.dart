@@ -10,9 +10,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-
 import '../../../core/models/models.dart';
 import '../../../core/routes/app_router.dart';
+import '../../../core/utils/error_text.dart';
 import '../../../data/repositories/admin_actions_repository.dart';
 import '../../../data/repositories/admin_dashboard_repository.dart';
 import '../../../data/repositories/role_repository.dart';
@@ -106,7 +106,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
       await _load();
     } catch (e) {
       debugPrint('Admin action failed: $e');
-      _toast('فشل تنفيذ العملية: $e', AppColors.danger);
+      _toast('فشل تنفيذ العملية: ${errorText(e)}', AppColors.danger);
     } finally {
       if (mounted) setState(() => _busyKey = null);
     }
