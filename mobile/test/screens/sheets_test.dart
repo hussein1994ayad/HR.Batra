@@ -6,6 +6,7 @@ import 'package:hr_pro/presentation/employee/admin_dashboard/admin_dashboard_scr
 import 'package:hr_pro/presentation/employee/admin_loans/admin_loans_screen.dart';
 import 'package:hr_pro/presentation/employee/admin_loans/widgets/loan_card.dart';
 import 'package:hr_pro/presentation/employee/branch_management_screen.dart';
+import 'package:hr_pro/presentation/employee/employee_management_screen.dart';
 import 'package:hr_pro/presentation/employee/branch_schedule_screen.dart';
 
 import '../support/harness.dart';
@@ -57,6 +58,24 @@ void main() {
       await _settle(tester);
       expect(find.text('حفظ الجدول'), findsOneWidget);
       await capture(tester, 'sheet_schedule_editor');
+      await disposeScreen(tester);
+    });
+
+    testWidgets('add employee sheet @${scale}x', (tester) async {
+      await pumpScreen(tester, const EmployeeManagementScreen(), device: _small, textScale: scale);
+      await tester.tap(find.byType(FloatingActionButton));
+      await _settle(tester);
+      expect(find.text('إنشاء الحساب'), findsOneWidget);
+      await capture(tester, 'sheet_add_employee');
+      await disposeScreen(tester);
+    });
+
+    testWidgets('employee profile sheet @${scale}x', (tester) async {
+      await pumpScreen(tester, const EmployeeManagementScreen(), device: _small, textScale: scale);
+      await tester.tap(find.text('علي كريم'));
+      await _settle(tester);
+      expect(find.text('اتصال'), findsOneWidget);
+      await capture(tester, 'sheet_employee_profile');
       await disposeScreen(tester);
     });
 
