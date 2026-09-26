@@ -270,72 +270,25 @@ class _SplashScreenState extends State<SplashScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     return Scaffold(
-      body: Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: isDark
-                ? [AppColors.surface1, AppColors.surface2]
-                : [const Color(0xFFF8FAFC), const Color(0xFFE2E8F0)],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-          ),
-        ),
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: isDark ? AppColors.surface2 : AppColors.textPrimary,
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.brandStrong.withAlpha(50),
-                      blurRadius: 24,
-                      spreadRadius: 4,
-                    )
-                  ],
-                ),
-                child: const Icon(Icons.business_center, size: 72, color: AppColors.brandStrong),
-              ),
-              const SizedBox(height: 24),
-              const Text(
-                'HR Pro v6.0',
-                style: TextStyle(
-                  fontSize: 26, 
-                  fontWeight: FontWeight.w900, 
-                  color: AppColors.brandStrong,
-                  fontFamily: 'Cairo',
-                  letterSpacing: 1.1,
-                ),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'نظام الموارد البشرية وإدارة الدوام المتقدم',
-                style: TextStyle(
-                  fontSize: 12, 
-                  color: AppColors.textMuted,
-                  fontFamily: 'Cairo',
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const SizedBox(height: 48),
-              const SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(
-                  color: AppColors.brandStrong,
-                  strokeWidth: 3,
-                ),
-              ),
-            ],
-          ),
+      backgroundColor: AppColors.bg,
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 88,
+              height: 88,
+              decoration: BoxDecoration(color: AppColors.brandContainer, borderRadius: BorderRadius.circular(AppRadius.xl)),
+              child: const Icon(Icons.badge_rounded, size: 44, color: AppColors.brand),
+            ),
+            const SizedBox(height: AppSpace.xl),
+            const Text('HR Pro', style: AppText.headline),
+            const SizedBox(height: AppSpace.xs),
+            const Text('الدوام والإجازات والرواتب', style: AppText.bodySm),
+            const SizedBox(height: AppSpace.x4),
+            const SizedBox(width: 120, child: LinearProgressIndicator(minHeight: 3)),
+          ],
         ),
       ),
     );

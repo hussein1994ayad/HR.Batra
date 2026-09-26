@@ -90,177 +90,79 @@ class OtaService {
     }
   }
 
-  /// إظهار نافذة التنبيه للتحديث (حوار غير قابل للإلغاء في حال التحديث الإجباري)
+  /// نافذة التحديث (لا تُغلق إذا كان التحديث إجبارياً).
   static void showUpdatePrompt(BuildContext context, Map<String, dynamic> updateInfo) {
     final bool isMandatory = (updateInfo['is_mandatory'] ?? false) as bool;
     final String latestVersion = (updateInfo['latest_version'] ?? '1.0.0') as String;
     final String releaseNotes = (updateInfo['release_notes'] ?? '') as String;
     final String downloadUrl = (updateInfo['download_url'] ?? '') as String;
+    final Color tone = isMandatory ? AppColors.warning : AppColors.brand;
+    final Color toneBg = isMandatory ? AppColors.warningContainer : AppColors.brandContainer;
 
-    showDialog<dynamic>(
+    showDialog<void>(
       context: context,
-      barrierDismissible: !isMandatory, // منع الإغلاق بالنقر في الخارج للمجبر
+      barrierDismissible: !isMandatory,
       builder: (BuildContext context) {
-        final isDark = Theme.of(context).brightness == Brightness.dark;
-        
         return PopScope(
-          canPop: !isMandatory, // منع الرجوع بزر الهاتف الخلفي للمجبر
-          child: Dialog(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(24),
-            ),
-            elevation: 16,
-            backgroundColor: isDark ? AppColors.surface2 : AppColors.textPrimary,
-            child: Padding(
-              padding: const EdgeInsets.all(24.0),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // أيقونة التحديث اللامعة
-                  Center(
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: isMandatory 
-                            ? AppColors.danger.withAlpha(25) 
-                            : AppColors.brandStrong.withAlpha(25),
-                      ),
-                      child: Icon(
-                        isMandatory ? Icons.system_update_alt : Icons.cloud_download,
-                        size: 48,
-                        color: isMandatory ? AppColors.danger : AppColors.brandStrong,
-                      ),
-                    ),
+          canPop: !isMandatory,
+          child: AlertDialog(
+            contentPadding: const EdgeInsets.fromLTRB(AppSpace.xxl, AppSpace.xxl, AppSpace.xxl, AppSpace.md),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Center(
+                  child: Container(
+                    width: 72,
+                    height: 72,
+                    decoration: BoxDecoration(color: toneBg, shape: BoxShape.circle),
+                    child: Icon(Icons.system_update_rounded, size: 36, color: tone),
                   ),
-                  const SizedBox(height: 16),
-                  
-                  // عنوان التحديث
-                  Text(
-                    isMandatory ? 'تحديث إجباري مطلوب' : 'يتوفر إصدار جديد للتطبيق',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w900,
-                      color: isMandatory ? AppColors.danger : AppColors.brandStrong,
-                      fontFamily: 'Cairo',
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  
-                  // معلومات الإصدار
-                  Text(
-                    'الإصدار المتاح: v$latestVersion',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: isDark ? AppColors.textMuted : AppColors.textMuted,
-                      fontFamily: 'Cairo',
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  
-                  // تفاصيل التحديث
+                ),
+                const SizedBox(height: AppSpace.lg),
+                Text(isMandatory ? 'تحديث مطلوب' : 'إصدار جديد متوفر', textAlign: TextAlign.center, style: AppText.title),
+                const SizedBox(height: AppSpace.xs),
+                Text(
+                  isMandatory ? 'لازم تحدّث حتى تكمل استعمال التطبيق · v$latestVersion' : 'الإصدار v$latestVersion',
+                  textAlign: TextAlign.center,
+                  style: AppText.bodySm,
+                ),
+                if (releaseNotes.isNotEmpty) ...[
+                  const SizedBox(height: AppSpace.lg),
                   Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: isDark ? AppColors.surface1 : AppColors.textMuted,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'ملاحظات الإصدار الجديد:',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.brandStrong,
-                            fontFamily: 'Cairo',
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          releaseNotes,
-                          style: TextStyle(
-                            fontSize: 12,
-                            height: 1.5,
-                            color: isDark ? AppColors.textMuted : AppColors.textMuted,
-                            fontFamily: 'Cairo',
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  
-                  // أزرار التحكم
-                  Row(
-                    children: [
-                      // زر التحديث الفوري
-                      Expanded(
-                        child: ElevatedButton(
-                          onPressed: () async {
-                            if (downloadUrl.isNotEmpty) {
-                              final Uri uri = Uri.parse(downloadUrl);
-                              if (await canLaunchUrl(uri)) {
-                                await launchUrl(uri, mode: LaunchMode.externalApplication);
-                              }
-                            }
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: isMandatory ? AppColors.danger : AppColors.brandStrong,
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          child: const Text(
-                            'تحديث الآن',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.textPrimary,
-                              fontFamily: 'Cairo',
-                            ),
-                          ),
-                        ),
+                    padding: const EdgeInsets.all(AppSpace.md),
+                    decoration: const BoxDecoration(color: AppColors.surface1, borderRadius: AppRadius.control),
+                    constraints: const BoxConstraints(maxHeight: 200),
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('الجديد', style: AppText.label.copyWith(color: tone)),
+                          const SizedBox(height: AppSpace.xs),
+                          Text(releaseNotes, style: AppText.bodySm),
+                        ],
                       ),
-                      
-                      // زر التأجيل (فقط في حال لم يكن التحديث إجبارياً)
-                      if (!isMandatory) ...[
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: () => Navigator.of(context).pop(),
-                            style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              side: BorderSide(
-                                color: isDark ? AppColors.textMuted : AppColors.textMuted,
-                              ),
-                            ),
-                            child: Text(
-                              'لا حقاً',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold,
-                                color: isDark ? AppColors.textMuted : AppColors.textMuted,
-                                fontFamily: 'Cairo',
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
+                    ),
                   ),
                 ],
-              ),
+              ],
             ),
+            actionsPadding: const EdgeInsets.fromLTRB(AppSpace.xl, 0, AppSpace.xl, AppSpace.xl),
+            actions: [
+              if (!isMandatory) TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('لاحقاً')),
+              FilledButton.icon(
+                onPressed: () async {
+                  if (downloadUrl.isNotEmpty) {
+                    final Uri uri = Uri.parse(downloadUrl);
+                    if (await canLaunchUrl(uri)) {
+                      await launchUrl(uri, mode: LaunchMode.externalApplication);
+                    }
+                  }
+                },
+                icon: const Icon(Icons.download_rounded),
+                label: const Text('تحديث الآن'),
+              ),
+            ],
           ),
         );
       },
