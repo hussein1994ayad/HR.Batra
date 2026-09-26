@@ -158,7 +158,7 @@ test.describe('workflows', () => {
     });
   });
 
-  test('opens the add-employee form from the overview and masks passwords', async ({ page }) => {
+  test('opens the add-employee form from the overview and never shows passwords', async ({ page }) => {
     await mockSupabase(page);
     await page.goto('/dashboard');
     await page.getByRole('link', { name: 'إضافة موظف' }).first().click();
@@ -166,10 +166,11 @@ test.describe('workflows', () => {
     await page.keyboard.press('Escape');
     await expect(page.getByRole('dialog')).toBeHidden();
 
+    // كلمات السر لا تُحفظ مقروءة ولا تُعرض (حتى لو رجعها السيرفر القديم)
     const row = page.locator('tr', { hasText: 'زينب علي' });
+    await expect(row).toBeVisible();
     await expect(row).not.toContainText('Zz123456');
-    await row.getByTitle('إظهار').click();
-    await expect(row).toContainText('Zz123456');
+    await expect(row.getByTitle('إظهار')).toHaveCount(0);
   });
 
   test('approves a pending device', async ({ page }) => {

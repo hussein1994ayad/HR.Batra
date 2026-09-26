@@ -61,6 +61,8 @@ const off = await db.query(`SELECT check_in_offline FROM attendance WHERE employ
 check('offline flag stored', off.rows[0]?.check_in_offline === true);
 
 // branch schedule 08:00 + 15 min grace: yesterday 09:00 Baghdad → late
+// (يوم نظيف: البصمة الأوفلاين قبل 30 دقيقة تقع على أمس إذا شُغّل الفحص بعد منتصف الليل)
+await db.exec(`DELETE FROM attendance WHERE employee_id = '${IDS.emp2}'`);
 const y9 = (await db.query(`SELECT ((((now() AT TIME ZONE 'Asia/Baghdad')::date - 1) + time '09:00') AT TIME ZONE 'Asia/Baghdad') AS t`)).rows[0].t.toISOString();
 r = await punch('emp2', 'check_in', IN, `, NULL, false, '${y9}'`);
 check('check-in after grace period is late', r.ok && r.status === 'late', JSON.stringify(r));
