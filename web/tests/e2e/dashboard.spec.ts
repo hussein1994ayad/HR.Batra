@@ -35,7 +35,8 @@ test.describe('overview', () => {
     await mockSupabase(page);
     await page.goto('/dashboard');
 
-    await expect(page.getByRole('heading', { name: /حسين/ })).toBeVisible();
+    // داخل محتوى الصفحة فقط: اسم المستخدم أسفل القائمة الجانبية (h4) يظهر بعد تحميل الجلسة
+    await expect(page.getByRole('main').getByRole('heading', { name: /صباح الخير|مساء الخير|أهلاً/ }).filter({ hasText: 'حسين' })).toBeVisible();
     // One of three active employees checked in; the other two are due and absent.
     await expect(page.getByText('نسبة الحضور')).toBeVisible();
     await expect(page.locator('#absent-section')).toContainText('مصطفى حسن');
@@ -46,7 +47,8 @@ test.describe('overview', () => {
   test('quick navigator (Ctrl+K) jumps to a page', async ({ page }) => {
     await mockSupabase(page);
     await page.goto('/dashboard');
-    await expect(page.getByRole('heading', { name: /حسين/ })).toBeVisible();
+    // داخل محتوى الصفحة فقط: اسم المستخدم أسفل القائمة الجانبية (h4) يظهر بعد تحميل الجلسة
+    await expect(page.getByRole('main').getByRole('heading', { name: /صباح الخير|مساء الخير|أهلاً/ }).filter({ hasText: 'حسين' })).toBeVisible();
     await page.keyboard.press('Control+k');
     await page.getByPlaceholder('ابحث عن صفحة أو قسم...').fill('الرواتب');
     await page.keyboard.press('Enter');
@@ -95,7 +97,7 @@ for (const p of PAGES) {
     const errors = collectPageErrors(page);
     await mockSupabase(page);
     await page.goto(p.path);
-    await expect(page.getByRole('heading', { level: 2, name: p.heading })).toBeVisible();
+    await expect(page.getByRole('main').getByRole('heading', { level: 2, name: p.heading, exact: true })).toBeVisible();
     await expect(page.locator('[aria-current="page"]').first()).toBeVisible();
     expect(errors).toEqual([]);
   });
