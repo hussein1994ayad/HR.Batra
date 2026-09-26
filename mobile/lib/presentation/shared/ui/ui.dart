@@ -9,5 +9,6 @@ export 'app_data.dart';
 export 'app_filters.dart';
 export 'app_inputs.dart';
 export 'app_layout.dart';
+export 'app_map.dart';
 export 'app_overlays.dart';
 export 'app_states.dart';

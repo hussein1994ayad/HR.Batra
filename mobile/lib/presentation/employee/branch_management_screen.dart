@@ -189,7 +189,7 @@ class _MiniMap extends StatelessWidget {
     return FlutterMap(
       options: MapOptions(initialCenter: point, initialZoom: 15, backgroundColor: AppColors.surface2, interactionOptions: const InteractionOptions(flags: InteractiveFlag.none)),
       children: [
-        TileLayer(urlTemplate: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png', subdomains: const ['a', 'b', 'c', 'd'], userAgentPackageName: 'com.hrpro.app'),
+        appMapTiles(),
         CircleLayer(circles: [
           CircleMarker(point: point, radius: radius, useRadiusInMeter: true, color: AppColors.brand.withValues(alpha: 0.2), borderColor: AppColors.brand, borderStrokeWidth: 1.5),
         ]),
@@ -318,7 +318,7 @@ class _BranchEditorState extends State<_BranchEditor> {
                           onTap: (_, point) => setState(() => _location = point),
                         ),
                         children: [
-                          TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', userAgentPackageName: 'com.hr.pro'),
+                          appMapTiles(),
                           CircleLayer(circles: [
                             CircleMarker(
                               point: _location,

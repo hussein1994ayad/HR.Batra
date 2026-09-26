@@ -494,11 +494,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       mapController: _mapController,
       options: MapOptions(initialCenter: LatLng(_branchLat, _branchLng), initialZoom: 15.0, backgroundColor: AppColors.surface1),
       children: [
-        TileLayer(
-          urlTemplate: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
-          subdomains: const ['a', 'b', 'c', 'd'],
-          userAgentPackageName: 'com.hrpro.app',
-        ),
+        appMapTiles(),
         CircleLayer(
           circles: [
             CircleMarker(

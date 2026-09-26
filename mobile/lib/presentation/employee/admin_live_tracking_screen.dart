@@ -508,7 +508,7 @@ class _TrackingMap extends StatelessWidget {
         mapController: controller,
         options: MapOptions(initialCenter: center, initialZoom: 13.5, minZoom: 4, maxZoom: 18, backgroundColor: AppColors.surface2),
         children: [
-          TileLayer(urlTemplate: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png', subdomains: const ['a', 'b', 'c', 'd'], userAgentPackageName: 'com.batra.hrpro'),
+          appMapTiles(),
           CircleLayer(
             circles: [
               for (final b in branches)

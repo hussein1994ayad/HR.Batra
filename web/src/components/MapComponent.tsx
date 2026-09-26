@@ -101,8 +101,10 @@ export default function MapComponent({
       attributionControl: false,
     });
 
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png', {
+    // OpenStreetMap: free, no API key (Carto now requires one). Darkened via CSS.
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 22,
+      className: 'map-tiles-dark',
       maxNativeZoom: 19,
     }).addTo(map);
 
