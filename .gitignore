@@ -12,3 +12,8 @@ test_*.json
 mobile/android/key.properties
 *.jks
 *.keystore
+
+# لقطات الشاشة المؤقتة أثناء العمل
+mobile/design/screenshots/wip/
+# ملفات Supabase CLI المحلية
+supabase/.temp/
