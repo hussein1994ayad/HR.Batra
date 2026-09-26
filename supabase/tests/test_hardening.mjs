@@ -68,17 +68,33 @@ await expectOk('manager can still decide the deduction', as(db, 'manager',
 await expectOk('admin can correct a check-in time', as(db, 'admin',
   `UPDATE attendance SET check_in_time = '2026-12-01 08:55+03' WHERE id = $1 RETURNING id`, [att]));
 
-// ---------------- 6) المستمسكات للأدمن فقط ----------------
-await expectError('employee cannot change own documents',
-  as(db, 'emp', `UPDATE employees SET document_urls = '["x.jpg"]'::jsonb WHERE id = $1 RETURNING id`, [IDS.emp]), 'غير مصرح');
-await expectOk('admin can change documents',
-  as(db, 'admin', `UPDATE employees SET document_urls = '["x.jpg"]'::jsonb WHERE id = $1 RETURNING id`, [IDS.emp]));
+// ---------------- 6) المستمسكات: الموظف يضيف فقط، الأدمن يعدّل ويحذف ----------------
+const docUrl = (emp, f) => `https://x.supabase.co/storage/v1/object/public/employee-documents/${emp}/${f}`;
+const setDocs = (who, urls) => as(db, who,
+  `UPDATE employees SET document_urls = $1::jsonb WHERE id = $2 RETURNING id`, [JSON.stringify(urls), IDS.emp]);
+
+await expectOk('admin sets the documents', setDocs('admin', [docUrl(IDS.emp, 'passport.jpg')]));
+await expectOk('employee can add a document from own folder',
+  setDocs('emp', [docUrl(IDS.emp, 'passport.jpg'), docUrl(IDS.emp, 'id.jpg')]));
+await expectError('employee cannot delete a document',
+  setDocs('emp', [docUrl(IDS.emp, 'id.jpg')]), 'تقدر تضيف مستمسكات فقط');
+await expectError('employee cannot replace a document',
+  setDocs('emp', [docUrl(IDS.emp, 'passport2.jpg'), docUrl(IDS.emp, 'id.jpg')]), 'تقدر تضيف مستمسكات فقط');
+await expectError('employee cannot add someone else\'s file',
+  setDocs('emp', [docUrl(IDS.emp, 'passport.jpg'), docUrl(IDS.emp, 'id.jpg'), docUrl(IDS.emp2, 'x.jpg')]), 'تقدر تضيف مستمسكات فقط');
+await expectOk('admin can delete a document', setDocs('admin', [docUrl(IDS.emp, 'id.jpg')]));
 
 const upload = (who, path) => as(db, who,
   `INSERT INTO storage.objects (bucket_id, name) VALUES ('employee-documents', $1) RETURNING name`, [path]);
 await expectOk('employee can upload a leave attachment', upload('emp', `leaves/${IDS.emp}/a.jpg`));
-await expectError('employee cannot upload into own documents folder', upload('emp', `${IDS.emp}/id.jpg`), 'row-level security');
+await expectOk('employee can upload into own documents folder', upload('emp', `${IDS.emp}/new.jpg`));
+await expectError('employee cannot upload into another employee folder', upload('emp', `${IDS.emp2}/x.jpg`), 'row-level security');
 await expectError('employee cannot upload into another employee leave folder', upload('emp', `leaves/${IDS.emp2}/a.jpg`), 'row-level security');
+await expectError('employee cannot delete a stored file', as(db, 'emp',
+  `DELETE FROM storage.objects WHERE name = $1 RETURNING name`, [`${IDS.emp}/new.jpg`]).then((r) => {
+  if (r.rows.length === 0) throw new Error('row-level security: nothing deleted');
+  return r;
+}), 'row-level security');
 
 // ---------------- 7) الإجازة الزمنية تُخصم بكسور اليوم ----------------
 // دوام الموظف بلا جدول = 8 ساعات؛ 4 ساعات = نصف يوم

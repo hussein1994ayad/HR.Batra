@@ -22,6 +22,7 @@ import '../../core/services/notification_service.dart';
 import '../../core/services/share_helper.dart';
 import '../../core/services/storage_links.dart';
 import '../../core/services/supabase_service.dart';
+import '../../core/utils/error_text.dart';
 import '../shared/ui/ui.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -45,6 +46,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   bool _isLoading = true;
   bool _isUploadingAvatar = false;
+  bool _isUploadingDoc = false;
   bool _deletionBusy = false;
   String _appVersion = '';
 
@@ -169,6 +171,43 @@ class _SettingsScreenState extends State<SettingsScreen> {
       }
     } finally {
       if (mounted) setState(() => _isUploadingAvatar = false);
+    }
+  }
+
+  // إضافة مستمسك: الموظف يضيف فقط، والتعديل أو الحذف من قسم الموارد البشرية
+  Future<void> _addDocument() async {
+    final user = SupabaseService.currentUser;
+    if (user == null) return;
+    final picked = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 80);
+    if (picked == null) return;
+    if (!mounted) return;
+    final ok = await showAppConfirm(
+      context,
+      title: 'إضافة المستمسك؟',
+      message: 'بعد الإضافة ما تكدر تحذفه أو تغيّره بنفسك؛ التعديل من قسم الموارد البشرية.',
+      confirmLabel: 'إضافة',
+    );
+    if (!ok) return;
+
+    setState(() => _isUploadingDoc = true);
+    try {
+      final file = File(picked.path);
+      final ext = file.path.split('.').last;
+      final url = await FileUploadService.uploadFile(
+        file: file,
+        bucketName: 'employee-documents',
+        remotePath: '${user.id}/${DateTime.now().millisecondsSinceEpoch}.$ext',
+      );
+      final updated = [..._documentUrls, url];
+      await SupabaseService.client.from('employees').update({'document_urls': updated}).eq('id', user.id);
+      if (mounted) {
+        setState(() => _documentUrls = updated);
+        AppSnack.success(context, 'انضاف المستمسك');
+      }
+    } catch (e) {
+      if (mounted) AppSnack.error(context, 'تعذّرت الإضافة: ${errorText(e)}');
+    } finally {
+      if (mounted) setState(() => _isUploadingDoc = false);
     }
   }
 
@@ -488,40 +527,62 @@ class _SettingsScreenState extends State<SettingsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (_documentUrls.isEmpty)
-            const Text('لا توجد مستمسكات مرفوعة بعد.', style: AppText.caption)
-          else
-            Wrap(
-              spacing: AppSpace.md,
-              runSpacing: AppSpace.md,
-              children: [
-                for (final url in _documentUrls)
-                  Semantics(
-                    button: true,
-                    label: 'فتح وثيقة',
-                    child: InkWell(
-                      onTap: () => _previewDocument(url),
+          Wrap(
+            spacing: AppSpace.md,
+            runSpacing: AppSpace.md,
+            children: [
+              for (final url in _documentUrls)
+                Semantics(
+                  button: true,
+                  label: 'فتح وثيقة',
+                  child: InkWell(
+                    onTap: () => _previewDocument(url),
+                    borderRadius: AppRadius.control,
+                    child: ClipRRect(
                       borderRadius: AppRadius.control,
-                      child: ClipRRect(
-                        borderRadius: AppRadius.control,
-                        child: Container(
-                          width: 72,
-                          height: 72,
-                          color: AppColors.surface2,
-                          child: SignedNetworkImage(
-                            url,
-                            fit: BoxFit.cover,
-                            cacheWidth: 216,
-                            errorBuilder: (_, __, ___) => const Icon(Icons.picture_as_pdf_rounded, color: AppColors.accent),
-                          ),
+                      child: Container(
+                        width: 72,
+                        height: 72,
+                        color: AppColors.surface2,
+                        child: SignedNetworkImage(
+                          url,
+                          fit: BoxFit.cover,
+                          cacheWidth: 216,
+                          errorBuilder: (_, __, ___) => const Icon(Icons.picture_as_pdf_rounded, color: AppColors.accent),
                         ),
                       ),
                     ),
                   ),
-              ],
-            ),
+                ),
+              Semantics(
+                button: true,
+                label: 'إضافة مستمسك',
+                child: InkWell(
+                  onTap: _isUploadingDoc ? null : _addDocument,
+                  borderRadius: AppRadius.control,
+                  child: Container(
+                    width: 72,
+                    height: 72,
+                    decoration: BoxDecoration(
+                      borderRadius: AppRadius.control,
+                      border: Border.all(color: AppColors.borderStrong),
+                    ),
+                    child: _isUploadingDoc
+                        ? const Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)))
+                        : const Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.add_rounded, color: AppColors.brand),
+                              Text('إضافة', style: AppText.caption),
+                            ],
+                          ),
+                  ),
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: AppSpace.md),
-          const Text('لإضافة أو تغيير المستمسكات راجع قسم الموارد البشرية.', style: AppText.caption),
+          const Text('تقدر تضيف مستمسكات جديدة؛ تعديلها أو حذفها من قسم الموارد البشرية.', style: AppText.caption),
         ],
       ),
     );

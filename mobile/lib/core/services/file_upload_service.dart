@@ -27,8 +27,7 @@ class FileUploadService {
         .from(bucketName)
         .upload(
           remotePath, 
-          processedFile, 
-          fileOptions: const FileOptions(upsert: true)
+          processedFile
         );
 
     // استخراج الرابط العام للملف

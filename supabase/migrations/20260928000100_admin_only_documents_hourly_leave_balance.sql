@@ -1,8 +1,8 @@
 -- =====================================================================
--- 1) المستمسكات يغيّرها الأدمن فقط
---    الموظف يغيّر رقم هاتفه وصورته فقط. المستمسكات (هويات، عقود…) تعدَّل
---    من إدارة الموظفين. الموظف يبقى يرفع مرفقات إجازاته (leaves/<id>/...)،
---    وكانت سياسة الرفع تمنعه منها لأنها تشترط أن يبدأ المسار بمعرّفه.
+-- 1) المستمسكات: الموظف يضيف فقط، والأدمن وحده يعدّل أو يحذف
+--    الموظف يقدر يضيف مستمسكات جديدة لملفه (في مجلده <id>/...) ويرفع مرفقات
+--    إجازاته (leaves/<id>/...)، لكن لا يحذف ولا يستبدل أي ملف موجود.
+--    سياسة الرفع القديمة كانت تمنع مرفقات الإجازات بالغلط.
 --
 -- 2) الإجازة الزمنية تُخصم من الرصيد
 --    الرصيد صار بكسور اليوم: ساعات الإجازة ÷ ساعات دوام الموظف
@@ -36,11 +36,24 @@ BEGIN
      OR NEW.future_salary_iqd IS DISTINCT FROM OLD.future_salary_iqd
      OR NEW.future_salary_month IS DISTINCT FROM OLD.future_salary_month
      OR NEW.device_id_lock IS DISTINCT FROM OLD.device_id_lock
-     OR NEW.document_urls IS DISTINCT FROM OLD.document_urls
      OR NEW.created_at IS DISTINCT FROM OLD.created_at
      OR (NEW.must_change_password AND NOT COALESCE(OLD.must_change_password, false))
   THEN
     RAISE EXCEPTION 'غير مصرح: هذه البيانات يعدّلها قسم الموارد البشرية فقط.' USING ERRCODE = '42501';
+  END IF;
+
+  -- المستمسكات: إضافة فقط. كل القديمة تبقى، والجديدة من مجلد الموظف نفسه.
+  IF NEW.document_urls IS DISTINCT FROM OLD.document_urls THEN
+    IF NOT (COALESCE(NEW.document_urls, '[]'::jsonb) @> COALESCE(OLD.document_urls, '[]'::jsonb))
+       OR EXISTS (
+         SELECT 1
+         FROM jsonb_array_elements_text(COALESCE(NEW.document_urls, '[]'::jsonb)) AS u(url)
+         WHERE NOT (COALESCE(OLD.document_urls, '[]'::jsonb) ? u.url)
+           AND position('/employee-documents/' || OLD.id::text || '/' IN u.url) = 0
+       )
+    THEN
+      RAISE EXCEPTION 'غير مصرح: تقدر تضيف مستمسكات فقط، والحذف أو التعديل من قسم الموارد البشرية.' USING ERRCODE = '42501';
+    END IF;
   END IF;
   RETURN NEW;
 END;
@@ -57,7 +70,17 @@ BEGIN
   DROP POLICY IF EXISTS "Employees can delete own employee-documents" ON storage.objects;
   DROP POLICY IF EXISTS "Employees can upload own leave attachments" ON storage.objects;
 
-  -- الأدمن يدير الحاوية كاملة عبر "Admins can manage employee-documents"
+  DROP POLICY IF EXISTS "Employees can add own documents" ON storage.objects;
+
+  -- الأدمن يدير الحاوية كاملة عبر "Admins can manage employee-documents".
+  -- الموظف: رفع فقط (بدون تعديل أو حذف) في مجلده أو مجلد مرفقات إجازاته.
+  CREATE POLICY "Employees can add own documents"
+    ON storage.objects FOR INSERT TO authenticated
+    WITH CHECK (
+      bucket_id = 'employee-documents'
+      AND (storage.foldername(name))[1] = auth.uid()::text
+    );
+
   CREATE POLICY "Employees can upload own leave attachments"
     ON storage.objects FOR INSERT TO authenticated
     WITH CHECK (
