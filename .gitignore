@@ -17,3 +17,6 @@ mobile/android/key.properties
 mobile/design/screenshots/wip/
 # ملفات Supabase CLI المحلية
 supabase/.temp/
+
+# نسخة base64 من مفتاح التوقيع (لـ GitHub Secrets) — لا تُرفع
+*.jks.base64

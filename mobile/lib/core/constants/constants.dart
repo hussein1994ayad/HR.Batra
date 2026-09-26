@@ -33,6 +33,12 @@ class AppConstants {
   static const String currency = 'د.ع'; // العملة: دينار عراقي
   static const String appName = 'HR Pro';
 
+  /// صفحة سياسة الخصوصية (مطلوبة لمتجري Apple و Google)
+  static const String privacyPolicyUrl = String.fromEnvironment(
+    'PRIVACY_POLICY_URL',
+    defaultValue: 'https://batra-hr-pro.surge.sh/privacy',
+  );
+
   /// تنسيق مبلغ مالي بفواصل الآلاف (نقاط) + رمز العملة.
   static String formatMoney(num amount) {
     final String str = amount.round().toString();

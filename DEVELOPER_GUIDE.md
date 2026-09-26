@@ -486,23 +486,29 @@ cd supabase/tests && npm test
 
 ## ملاحظات مهمة للمطور
 
-### نمط Dark Mode فقط
-التطبيق مصمم للـ Dark Mode فقط. لا تضف ألواناً ثابتة (مثل `Colors.black`)، استخدم دائماً ألوان من `AppTheme`:
+### التصميم: داكن فقط، ومن نظام التصميم فقط
+التطبيق بالوضع الداكن فقط. لا تكتب ألواناً أو أحجاماً مباشرة في الشاشات — استعمل رموز التصميم
+ومكوّنات الواجهة (التفاصيل والأمثلة في `mobile/DESIGN.md`):
 ```dart
-import '../../core/theme/app_theme.dart';
+import '../shared/ui/ui.dart';
 // ثم:
-color: AppTheme.neonCyan   // أزرق فاتح
-color: AppTheme.neonPink   // وردي
-color: AppTheme.successGreen
-color: AppTheme.dangerRed
+color: AppColors.brand     // لون الهوية
+color: AppColors.success   // نجاح / حاضر
+color: AppColors.danger    // خطأ / غائب
+AppCard(child: ...), AppButton(label: ..., onPressed: ...), AppSnack.success(context, '...')
 ```
+قبل الدمج: `flutter analyze` بدون أي ملاحظة، و `flutter test` (يشمل فحص كل الشاشات على كل
+المقاسات: `test/screens/responsive_test.dart`).
 
-### التتبع مخفي عن الموظفين
-يُسمح بتتبع موقع الموظف في الخلفية لأغراض الحضور. **لا تُضف إشعارات تكشف التتبع للموظف.** مخالفات السياج الجغرافي تُكتب في `geofence_violations` للأدمن فقط.
+### تتبع الموقع: مُعلَن للموظف
+التتبع يعمل أثناء ساعات الدوام فقط ولأغراض الحضور، وهو مذكور للموظف في شاشة البصمة وفي سياسة
+الخصوصية (`web/src/app/privacy/page.tsx`، ورابطها في إعدادات التطبيق). أنظمة Android و iOS تُظهر
+مؤشر استعمال الموقع في الخلفية — لا تحاول إخفاءه، فهذا مخالف لسياسات Apple و Google وقد يمنع
+نشر التطبيق. مخالفات السياج الجغرافي تُكتب في `geofence_violations` للإدارة.
 
 ### التوزيع
 التطبيق للتوزيع الخاص (Ad Hoc) فقط — **ليس في متجر Google Play أو App Store**.
 
 ---
 
-*آخر تحديث: سبتمبر 2026 — HR Pro v6.0*
+*آخر تحديث: أيلول 2026 — HR Pro 2.0.0 (التصميم الجديد)*

@@ -72,14 +72,6 @@
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>يحتاج التطبيق للوصول إلى معرض الصور لحفظ كشوف الرواتب والوثائق الرسمية على هاتفك.</string>
 
-	<!-- Face ID / Touch ID (for future biometric login) -->
-	<key>NSFaceIDUsageDescription</key>
-	<string>يستخدم التطبيق Face ID لتسريع تسجيل الدخول الآمن دون كتابة كلمة المرور في كل مرة.</string>
-
-	<!-- Motion (for step detection / activity, optional future use) -->
-	<key>NSMotionUsageDescription</key>
-	<string>يستخدم التطبيق مستشعرات الحركة لتحسين دقة تحديد نشاط الحضور.</string>
-
 	<!-- Speech / microphone / contacts / calendar — NOT USED, so we omit them -->
 
 	<!-- ================================================================

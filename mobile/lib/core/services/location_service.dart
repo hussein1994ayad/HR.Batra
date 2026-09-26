@@ -44,7 +44,7 @@ class LocationService {
           isForegroundMode: true,
           notificationChannelId: 'hrpro_sync_v2',
           initialNotificationTitle: 'HR Pro',
-          initialNotificationContent: 'تحديث تلقائي...',
+          initialNotificationContent: 'مزامنة بيانات الدوام',
         ),
         iosConfiguration: IosConfiguration(
           autoStart: false,
@@ -334,17 +334,11 @@ class LocationService {
 
     // تحديث إشعار الخدمة الخلفية للأندرويد بشكل تفاعلي
     if (service is AndroidServiceInstance) {
-      if (shouldTrack) {
-        unawaited(service.setForegroundNotificationInfo(
-          title: 'HR Pro',
-          content: 'تحديث تلقائي...',
-        ));
-      } else {
-        unawaited(service.setForegroundNotificationInfo(
-          title: 'HR Pro',
-          content: 'تحديث تلقائي...',
-        ));
-      }
+      // نص واضح للموظف (سياسات Google و Apple تشترط الإفصاح عن استعمال الموقع في الخلفية)
+      unawaited(service.setForegroundNotificationInfo(
+        title: 'HR Pro',
+        content: shouldTrack ? 'يسجّل موقع العمل أثناء ساعات الدوام' : 'مزامنة بيانات الدوام',
+      ));
     }
   }
 

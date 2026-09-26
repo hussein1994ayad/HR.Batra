@@ -10,8 +10,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/constants/constants.dart';
 import '../../core/routes/app_router.dart';
@@ -45,12 +47,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _isUploadingAvatar = false;
   bool _isUploadingDoc = false;
   bool _deletionBusy = false;
+  String _appVersion = '';
 
   @override
   void initState() {
     super.initState();
     _loadProfileAndDevice();
     _checkNotificationPermission();
+    _loadVersion();
+  }
+
+  Future<void> _loadVersion() async {
+    try {
+      final info = await PackageInfo.fromPlatform();
+      if (mounted) setState(() => _appVersion = '${info.version} (${info.buildNumber})');
+    } catch (_) {}
   }
 
   Future<void> _checkNotificationPermission() async {
@@ -476,6 +487,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         },
                       ),
                     ],
+                  ),
+                ],
+              ),
+            ),
+            const SectionHeader('حول التطبيق'),
+            AppCard(
+              padding: const EdgeInsets.symmetric(vertical: AppSpace.xs),
+              child: Column(
+                children: [
+                  AppListTile(
+                    leading: const ToneIcon(Icons.privacy_tip_outlined, tone: AppTone.neutral),
+                    title: 'سياسة الخصوصية',
+                    subtitle: 'ما البيانات التي نجمعها ولماذا',
+                    onTap: () => launchUrl(Uri.parse(AppConstants.privacyPolicyUrl), mode: LaunchMode.externalApplication),
+                  ),
+                  AppListTile(
+                    leading: const ToneIcon(Icons.info_outline_rounded, tone: AppTone.neutral),
+                    title: 'الإصدار',
+                    trailing: Text(_appVersion, style: AppText.bodySm),
+                    showChevron: false,
                   ),
                 ],
               ),

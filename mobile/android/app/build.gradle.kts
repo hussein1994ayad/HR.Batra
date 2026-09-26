@@ -13,10 +13,12 @@ plugins {
 // في CI تُكتب هذه الملفات من GitHub Secrets قبل البناء.
 val keystoreProperties = Properties()
 val keystorePropertiesFile = rootProject.file("key.properties")
-val hasReleaseKeystore = keystorePropertiesFile.exists()
-if (hasReleaseKeystore) {
+if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
+// التوقيع الرسمي فقط إذا وُجد key.properties وملف المفتاح الذي يشير إليه فعلاً
+val hasReleaseKeystore = keystorePropertiesFile.exists() &&
+    (keystoreProperties["storeFile"] as String?)?.let { file(it).exists() } == true
 
 android {
     namespace = "com.batra.hrpro.hr_pro"
@@ -60,7 +62,7 @@ android {
             signingConfig = if (hasReleaseKeystore) {
                 signingConfigs.getByName("release")
             } else {
-                logger.warn("⚠️ android/key.properties غير موجود — نسخة release موقّعة بمفتاح debug.")
+                logger.warn("⚠️ مفتاح التوقيع الرسمي غير موجود (key.properties أو ملف .jks) — نسخة release موقّعة بمفتاح debug للتجربة فقط.")
                 signingConfigs.getByName("debug")
             }
             isMinifyEnabled = true
