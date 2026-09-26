@@ -262,10 +262,34 @@ Deno.serve(async (req: Request) => {
       })
     );
 
+    // Tokens Firebase no longer recognises (app uninstalled/reinstalled, old
+    // builds) are removed so later pushes don't keep fanning out to them.
+    const deadTokens = tokens.filter((_, i) => {
+      const r = results[i];
+      if (r.status !== "fulfilled") return false;
+      const code = r.value.result?.error?.details?.find?.((d: { errorCode?: string }) => d.errorCode)?.errorCode;
+      return r.value.status === 404 || code === "UNREGISTERED";
+    });
+    if (deadTokens.length > 0) {
+      const inList = deadTokens.map((t) => `"${t.replace(/"/g, "")}"`).join(",");
+      const headers = { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}`, "Content-Type": "application/json" };
+      await Promise.allSettled([
+        fetch(`${supabaseUrl}/rest/v1/fcm_tokens?token=in.(${encodeURIComponent(inList)})`, { method: "DELETE", headers }),
+        fetch(`${supabaseUrl}/rest/v1/device_tokens?token=in.(${encodeURIComponent(inList)})`, { method: "DELETE", headers }),
+        fetch(`${supabaseUrl}/rest/v1/employees?id=eq.${record.employee_id}&fcm_token=in.(${encodeURIComponent(inList)})`, {
+          method: "PATCH",
+          headers,
+          body: JSON.stringify({ fcm_token: null }),
+        }),
+      ]);
+      console.log(`Removed ${deadTokens.length} unregistered token(s) for employee ${record.employee_id}`);
+    }
+
+    const delivered = results.filter((r) => r.status === "fulfilled" && r.value.status === 200).length;
     const successful = results.filter(r => r.status === 'fulfilled').length;
     const failed = results.filter(r => r.status === 'rejected').length;
 
-    return new Response(JSON.stringify({ status: "processed", successful, failed, details: results }), {
+    return new Response(JSON.stringify({ status: "processed", delivered, removed: deadTokens.length, successful, failed, details: results }), {
       headers: { "Content-Type": "application/json" },
     });
   } catch (error: unknown) {
