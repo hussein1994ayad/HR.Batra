@@ -56,37 +56,26 @@ class DashboardFiltersBar extends StatelessWidget {
     }
   }
 
-  Future<String?> _pick(BuildContext context, String title, List<(String id, String label)> options, String current) {
-    return showAppSheet<String>(
-      context,
-      title: title,
-      builder: (ctx) => _SearchableOptions(options: options, current: current),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final branchEmployees = employees.where((e) => filter.branchId == 'all' || e.branchId == filter.branchId).toList();
     final branchName = branches.where((b) => b.id == filter.branchId).firstOrNull?.name;
     final employeeName = employees.where((e) => e.id == filter.employeeId).firstOrNull?.fullName;
 
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(horizontal: AppSpace.page),
-      child: Row(
-        children: [
-          _FilterPill(
+    return AppFilterBar(
+      children: [
+          AppFilterPill(
             icon: Icons.event_rounded,
             label: filter.date == null ? 'اختر التاريخ' : Fmt.dateWithDay(filter.date),
             active: filter.date != null,
             onTap: () => _pickDate(context),
           ),
-          _FilterPill(
+          AppFilterPill(
             icon: Icons.store_rounded,
             label: branchName ?? 'كل الفروع',
             active: filter.branchId != 'all',
             onTap: () async {
-              final branchId = await _pick(context, 'الفرع', [('all', 'كل الفروع'), for (final b in branches) (b.id, b.name)], filter.branchId);
+              final branchId = await showAppOptions(context, title: 'الفرع', current: filter.branchId, options: [('all', 'كل الفروع'), for (final b in branches) (b.id, b.name)]);
               if (branchId == null) return;
               // الموظف المختار من فرع آخر يُلغى اختياره
               final emp = employees.where((e) => e.id == filter.employeeId).firstOrNull;
@@ -94,17 +83,12 @@ class DashboardFiltersBar extends StatelessWidget {
               onChanged(DashboardFilter(branchId: branchId, employeeId: keepEmployee ? filter.employeeId : 'all', date: filter.date));
             },
           ),
-          _FilterPill(
+          AppFilterPill(
             icon: Icons.person_rounded,
             label: employeeName ?? 'كل الموظفين',
             active: filter.employeeId != 'all',
             onTap: () async {
-              final employeeId = await _pick(
-                context,
-                'الموظف',
-                [('all', 'كل الموظفين'), for (final e in branchEmployees) (e.id, e.fullName)],
-                filter.employeeId,
-              );
+              final employeeId = await showAppOptions(context, title: 'الموظف', current: filter.employeeId, options: [('all', 'كل الموظفين'), for (final e in branchEmployees) (e.id, e.fullName)]);
               if (employeeId != null) onChanged(DashboardFilter(branchId: filter.branchId, employeeId: employeeId, date: filter.date));
             },
           ),
@@ -115,76 +99,7 @@ class DashboardFiltersBar extends StatelessWidget {
               label: const Text('إعادة ضبط'),
             ),
         ],
-      ),
     );
   }
 }
 
-class _FilterPill extends StatelessWidget {
-  const _FilterPill({required this.icon, required this.label, required this.active, required this.onTap});
-
-  final IconData icon;
-  final String label;
-  final bool active;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsetsDirectional.only(end: AppSpace.sm),
-      child: ActionChip(
-        avatar: Icon(icon, size: 16, color: active ? AppColors.onBrandContainer : AppColors.textSecondary),
-        label: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ConstrainedBox(constraints: const BoxConstraints(maxWidth: 160), child: Text(label, overflow: TextOverflow.ellipsis)),
-            const SizedBox(width: 2),
-            Icon(Icons.expand_more_rounded, size: 16, color: active ? AppColors.onBrandContainer : AppColors.textMuted),
-          ],
-        ),
-        labelStyle: AppText.bodySm.copyWith(color: active ? AppColors.onBrandContainer : AppColors.textPrimary, fontWeight: FontWeight.w700),
-        backgroundColor: active ? AppColors.brandContainer : AppColors.surface2,
-        side: BorderSide(color: active ? AppColors.brand.withValues(alpha: 0.5) : AppColors.border),
-        onPressed: onTap,
-      ),
-    );
-  }
-}
-
-/// قائمة اختيار مع بحث (للموظفين والفروع).
-class _SearchableOptions extends StatefulWidget {
-  const _SearchableOptions({required this.options, required this.current});
-  final List<(String id, String label)> options;
-  final String current;
-
-  @override
-  State<_SearchableOptions> createState() => _SearchableOptionsState();
-}
-
-class _SearchableOptionsState extends State<_SearchableOptions> {
-  String _q = '';
-
-  @override
-  Widget build(BuildContext context) {
-    final items = widget.options.where((o) => _q.isEmpty || o.$2.contains(_q)).toList();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (widget.options.length > 8) ...[
-          TextField(
-            decoration: const InputDecoration(hintText: 'بحث', prefixIcon: Icon(Icons.search_rounded)),
-            onChanged: (v) => setState(() => _q = v.trim()),
-          ),
-          const SizedBox(height: AppSpace.sm),
-        ],
-        for (final o in items)
-          AppListTile(
-            dense: true,
-            title: o.$2,
-            trailing: o.$1 == widget.current ? const Icon(Icons.check_rounded, color: AppColors.brand) : null,
-            onTap: () => Navigator.pop(context, o.$1),
-          ),
-      ],
-    );
-  }
-}
