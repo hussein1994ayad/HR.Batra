@@ -70,7 +70,7 @@ void main() async {
     Future(() async {
       try {
         final options = DefaultFirebaseOptions.currentPlatform;
-        if (options.appId.startsWith('PLACEHOLDER')) {
+        if (options.appId.startsWith('PLACEHOLDER') || options.apiKey.startsWith('PLACEHOLDER')) {
           debugPrint('⚠️ Firebase غير مضبوط لهذه المنصة — إشعارات Push معطلة.');
         } else {
           await Firebase.initializeApp(options: options);

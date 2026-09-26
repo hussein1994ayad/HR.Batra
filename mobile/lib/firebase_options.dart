@@ -69,16 +69,17 @@ class DefaultFirebaseOptions {
   // ==========================================================================
   // القيم تُمرَّر وقت البناء (CI أو محلياً) حتى لا تُحفظ في المستودع:
   //   flutter build ipa --dart-define=FIREBASE_IOS_APP_ID=1:667500759230:ios:xxxx   //                     --dart-define=FIREBASE_IOS_API_KEY=AIza...
-  // بدونها يبقى appId بقيمة PLACEHOLDER فيتخطى main.dart تهيئة Firebase على iOS
+  // بدونها يبقى apiKey بقيمة PLACEHOLDER فيتخطى main.dart تهيئة Firebase على iOS
   // (التذكيرات المحلية تعمل، إشعارات Push لا تعمل).
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: String.fromEnvironment(
       'FIREBASE_IOS_API_KEY',
-      defaultValue: 'AIzaSyBwvQ0QtWRhLT4paKLo1ZFfW4t9lJgqr88',
+      // مفتاح iOS (iOS key auto created by Firebase) يُمرَّر وقت البناء من GitHub Secrets
+      defaultValue: 'PLACEHOLDER_IOS_API_KEY',
     ),
     appId: String.fromEnvironment(
       'FIREBASE_IOS_APP_ID',
-      defaultValue: 'PLACEHOLDER_IOS_APP_ID_REPLACE_BEFORE_BUILDING_IOS',
+      defaultValue: '1:667500759230:ios:aa5e0ba985e1ee2f4df6ef',
     ),
     messagingSenderId: '667500759230',
     projectId: 'hr-pro-batra',

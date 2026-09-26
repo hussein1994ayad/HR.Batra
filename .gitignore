@@ -20,3 +20,6 @@ supabase/.temp/
 
 # نسخة base64 من مفتاح التوقيع (لـ GitHub Secrets) — لا تُرفع
 *.jks.base64
+
+# Firebase iOS config (من Firebase Console — يُمرَّر في CI كـ Secret)
+mobile/ios/Runner/GoogleService-Info.plist
