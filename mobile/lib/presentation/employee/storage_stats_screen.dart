@@ -4,10 +4,11 @@
 // =========================================================================
 
 import 'package:flutter/material.dart';
-import '../../core/design/design.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../core/routes/app_router.dart';
 import '../../core/services/supabase_service.dart';
-import '../shared/widgets/glass_background.dart';
-import '../shared/widgets/glass_container.dart';
+import '../shared/ui/ui.dart';
 
 class StorageStatsScreen extends StatefulWidget {
   const StorageStatsScreen({super.key});
@@ -18,6 +19,7 @@ class StorageStatsScreen extends StatefulWidget {
 
 class _StorageStatsScreenState extends State<StorageStatsScreen> {
   bool _isLoading = true;
+  bool _hasError = false;
   double _trashSizeBytes = 0;
   
   double _avatarBytes = 0;
@@ -59,7 +61,8 @@ class _StorageStatsScreenState extends State<StorageStatsScreen> {
       double others = 0;
 
       if (statsData != null && statsData is List) {
-        for (final stat in statsData) {
+        for (final raw in statsData) {
+          final stat = Map<String, dynamic>.from(raw as Map);
           final bucket = stat['bucket_name']?.toString();
           final size = (stat['total_size'] as num?)?.toDouble() ?? 0.0;
           if (bucket == 'avatars') {
@@ -81,10 +84,12 @@ class _StorageStatsScreenState extends State<StorageStatsScreen> {
           _documentBytes = documents;
           _pledgeBytes = pledges;
           _otherBytes = others;
+          _hasError = false;
         });
       }
     } catch (e) {
       debugPrint('خطأ في تحميل إحصائيات التخزين: $e');
+      if (mounted) setState(() => _hasError = true);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -98,301 +103,108 @@ class _StorageStatsScreenState extends State<StorageStatsScreen> {
     return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
   }
 
+
   @override
   Widget build(BuildContext context) {
-    // مجموع المساحة المستخدمة الكلية
-    final double totalUsedBytes = _avatarBytes + _documentBytes + _pledgeBytes + _otherBytes + _trashSizeBytes;
-    final double usageRatio = totalUsedBytes / _maxCapacityBytes;
-    final double usagePercentage = usageRatio * 100;
-    
-    // التحذير عند تخطي 80%
-    final bool isWarning = usageRatio >= 0.8;
+    final total = _avatarBytes + _documentBytes + _pledgeBytes + _otherBytes + _trashSizeBytes;
+    final ratio = (total / _maxCapacityBytes).clamp(0.0, 1.0);
+    final tone = ratio >= 0.9
+        ? AppTone.danger
+        : ratio >= 0.8
+            ? AppTone.warning
+            : AppTone.brand;
 
-    return GlassBackground(
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textPrimary),
-            onPressed: () => Navigator.pop(context),
-          ),
-          centerTitle: true,
-          title: const Text(
-            'تحليلات التخزين السحابي',
-            style: TextStyle(
-              fontFamily: 'Cairo', 
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
-              color: AppColors.textPrimary,
-            ),
+    final List<Widget> content;
+    if (_isLoading && total == 0) {
+      content = const [Skeleton(height: 160, radius: AppRadius.md), SizedBox(height: AppSpace.lg), SkeletonList(count: 4, itemHeight: 64)];
+    } else if (_hasError && total == 0) {
+      content = [ErrorView(onRetry: _loadStorageData)];
+    } else {
+      final rows = [
+        (Icons.person_rounded, 'الصور الشخصية', _avatarBytes, AppTone.info),
+        (Icons.description_rounded, 'وثائق الموظفين', _documentBytes, AppTone.brand),
+        (Icons.draw_rounded, 'تعهدات السلف', _pledgeBytes, AppTone.warning),
+        (Icons.folder_rounded, 'ملفات أخرى', _otherBytes, AppTone.accent),
+        (Icons.delete_outline_rounded, 'سلة المحذوفات', _trashSizeBytes, AppTone.danger),
+      ];
+      content = [
+        AppCard(
+          padding: const EdgeInsets.all(AppSpace.xl),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text('المساحة المستخدمة', style: AppText.bodySm),
+              const SizedBox(height: AppSpace.xs),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(_formatBytes(total), style: AppText.display.copyWith(color: tone.color, fontSize: 30)),
+                  const SizedBox(width: AppSpace.sm),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Text('من ${_formatBytes(_maxCapacityBytes)}', style: AppText.bodySm),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpace.md),
+              AppProgressBar(value: ratio, tone: tone, height: 10),
+              const SizedBox(height: AppSpace.sm),
+              Text(
+                ratio >= 0.8
+                    ? 'المساحة قاربت على الامتلاء (${(ratio * 100).toStringAsFixed(1)}%). نظّف سلة المحذوفات أو الملفات القديمة.'
+                    : 'مستخدم ${(ratio * 100).toStringAsFixed(1)}% من المساحة المجانية.',
+                style: AppText.caption.copyWith(color: ratio >= 0.8 ? tone.color : null),
+              ),
+            ],
           ),
         ),
-        body: _isLoading
-            ? const Center(
-                child: CircularProgressIndicator(
-                  color: AppColors.brand,
-                ),
-              )
-            : SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // بطاقة التخزين الإجمالية الإبداعية
-                    GlassContainer(
-                      padding: const EdgeInsets.all(24),
-                      borderColor: isWarning 
-                          ? AppColors.danger.withValues(alpha: 0.5) 
-                          : AppColors.brand.withValues(alpha: 0.3),
-                      boxShadow: [
-                        BoxShadow(
-                          color: (isWarning ? AppColors.danger : AppColors.brand).withValues(alpha: 0.08),
-                          blurRadius: 16,
-                          offset: const Offset(0, 8),
-                        )
-                      ],
-                      child: Column(
-                        children: [
-                          const Text(
-                            'إجمالي المساحة المستخدمة',
-                            style: TextStyle(
-                              fontFamily: 'Cairo',
-                              fontSize: 13,
-                              color: AppColors.textMuted,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            _formatBytes(totalUsedBytes),
-                            style: TextStyle(
-                              fontFamily: 'Cairo',
-                              fontSize: 32,
-                              fontWeight: FontWeight.w900,
-                              color: isWarning ? AppColors.danger : AppColors.brand,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'من أصل ${_formatBytes(_maxCapacityBytes)} المتاحة في الباقة',
-                            style: TextStyle(
-                              fontFamily: 'Cairo',
-                              fontSize: 11,
-                              color: AppColors.textPrimary.withValues(alpha: 0.4),
-                            ),
-                          ),
-                          const SizedBox(height: 24),
-                          
-                          // مؤشر شريط التقدم العصري
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
-                            child: SizedBox(
-                              height: 10,
-                              child: LinearProgressIndicator(
-                                value: usageRatio.clamp(0.0, 1.0),
-                                backgroundColor: AppColors.textPrimary.withValues(alpha: 0.1),
-                                color: isWarning ? AppColors.danger : AppColors.brand,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                '${usagePercentage.toStringAsFixed(1)}% مستهلك',
-                                style: TextStyle(
-                                  fontFamily: 'Cairo',
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold,
-                                  color: isWarning ? AppColors.danger : AppColors.brand,
-                                ),
-                              ),
-                              Text(
-                                'المتبقي: ${_formatBytes(_maxCapacityBytes - totalUsedBytes)}',
-                                style: TextStyle(
-                                  fontFamily: 'Cairo',
-                                  fontSize: 11,
-                                  color: AppColors.textPrimary.withValues(alpha: 0.5),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    
-                    // كرت التحذير المتقدم
-                    if (isWarning) ...[
-                      GlassContainer(
-                        padding: const EdgeInsets.all(16),
-                        borderColor: AppColors.danger.withValues(alpha: 0.4),
-                        child: Row(
+        const SectionHeader('التفاصيل'),
+        AppCard(
+          padding: const EdgeInsets.symmetric(vertical: AppSpace.sm),
+          child: Column(
+            children: [
+              for (final (icon, label, bytes, rowTone) in rows)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg, vertical: AppSpace.sm),
+                  child: Row(
+                    children: [
+                      ToneIcon(icon, tone: rowTone, size: 36),
+                      const SizedBox(width: AppSpace.md),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            const Icon(Icons.warning_amber_rounded, color: AppColors.danger, size: 36),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text(
-                                    'تحذير: التخزين يوشك على الامتلاء!',
-                                    style: TextStyle(
-                                      fontFamily: 'Cairo',
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 13,
-                                      color: AppColors.danger,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    'لقد تجاوزت نسبة استهلاك المساحة 80%. يرجى إفراغ سلة المحذوفات أو تقليص مساحات الوثائق لتفادي توقف الخدمة.',
-                                    style: TextStyle(
-                                      fontFamily: 'Cairo',
-                                      fontSize: 11,
-                                      color: AppColors.textPrimary.withValues(alpha: 0.7),
-                                      height: 1.4,
-                                    ),
-                                  ),
-                                ],
-                              ),
+                            Row(
+                              children: [
+                                Expanded(child: Text(label, style: AppText.bodySm.copyWith(color: AppColors.textPrimary), overflow: TextOverflow.ellipsis)),
+                                Text(_formatBytes(bytes), style: AppText.bodySm.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
+                              ],
                             ),
+                            const SizedBox(height: AppSpace.xs),
+                            AppProgressBar(value: total == 0 ? 0 : bytes / total, tone: rowTone, height: 5),
                           ],
                         ),
                       ),
-                      const SizedBox(height: 24),
                     ],
-
-                    // توزيع المساحة لكل فئة
-                    const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 4),
-                      child: Text(
-                        'توزيع الملفات حسب الفئة',
-                        style: TextStyle(
-                          fontFamily: 'Cairo',
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    
-                    _buildCategoryRow('الصورة الشخصية (Avatars)', _avatarBytes, totalUsedBytes, AppColors.brand, Icons.person),
-                    _buildCategoryRow('المستندات والوثائق', _documentBytes, totalUsedBytes, AppColors.brand, Icons.description),
-                    _buildCategoryRow('تعهدات السلف (Pledges)', _pledgeBytes, totalUsedBytes, AppColors.warning, Icons.monetization_on),
-                    _buildCategoryRow('سلة المحذوفات مؤقتاً', _trashSizeBytes, totalUsedBytes, AppColors.danger, Icons.delete),
-                    _buildCategoryRow('أخرى والنسخ الاحتياطية', _otherBytes, totalUsedBytes, AppColors.accent, Icons.devices_other),
-                    
-                    const SizedBox(height: 24),
-                    
-                    // زر تحديث فوري وإفراغ السلة
-                    ElevatedButton.icon(
-                      onPressed: _loadStorageData,
-                      icon: const Icon(Icons.refresh, color: AppColors.textPrimary),
-                      label: const Text(
-                        'تحديث التحليلات المباشرة',
-                        style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: AppColors.textPrimary),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.brand,
-                        shadowColor: AppColors.brand.withValues(alpha: 0.3),
-                        elevation: 8,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
-      ),
-    );
-  }
-
-  // صف تصنيف الملفات بنظام زجاجي متكامل
-  Widget _buildCategoryRow(String title, double bytes, double totalBytes, Color color, IconData icon) {
-    final double percentage = totalBytes > 0 ? (bytes / totalBytes) * 100 : 0.0;
-
-    return GlassContainer(
-      margin: const EdgeInsets.only(bottom: 14),
-      padding: const EdgeInsets.all(14),
-      borderColor: color.withValues(alpha: 0.25),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.15),
-              shape: BoxShape.circle,
-              border: Border.all(color: color.withValues(alpha: 0.3), width: 1.5),
-            ),
-            child: Icon(icon, color: color, size: 20),
+            ],
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Text(
-                      title,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontFamily: 'Cairo',
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                    ),
-                    Text(
-                      '${percentage.toStringAsFixed(1)}%',
-                      style: TextStyle(
-                        fontFamily: 'Cairo',
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
-                        color: color,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      _formatBytes(bytes),
-                      style: TextStyle(
-                        fontFamily: 'Cairo',
-                        fontSize: 11,
-                        color: AppColors.textPrimary.withValues(alpha: 0.5),
-                      ),
-                    ),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(6),
-                      child: SizedBox(
-                        width: 100,
-                        height: 5,
-                        child: LinearProgressIndicator(
-                          value: (bytes / totalBytes).clamp(0.0, 1.0),
-                          backgroundColor: AppColors.textPrimary.withValues(alpha: 0.08),
-                          color: color,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
+        ),
+        const SizedBox(height: AppSpace.lg),
+        AppButton.secondary(
+          label: 'فتح سلة المحذوفات',
+          icon: Icons.delete_sweep_rounded,
+          expand: true,
+          onPressed: () => context.push(AppRoutes.adminTrash),
+        ),
+      ];
+    }
+
+    return AppPage(
+      title: 'التخزين',
+      onRefresh: _loadStorageData,
+      slivers: [SliverList.list(children: content)],
     );
   }
 }
