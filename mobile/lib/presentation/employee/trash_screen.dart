@@ -1,16 +1,13 @@
 // =========================================================================
-// نظام HR Pro v6.0 - شاشة سلة المحذوفات للملفات (Trash / Recycle Bin Screen)
+// HR Pro — سلة المحذوفات: الملفات المحذوفة مؤقتاً مع الاستعادة أو الحذف النهائي
 // =========================================================================
 
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
-import '../../core/design/design.dart';
 import '../../core/services/supabase_service.dart';
-import '../shared/widgets/glass_background.dart';
-import '../shared/widgets/glass_container.dart';
+import '../shared/ui/ui.dart';
 
 class TrashScreen extends StatefulWidget {
   const TrashScreen({super.key});
@@ -21,6 +18,7 @@ class TrashScreen extends StatefulWidget {
 
 class _TrashScreenState extends State<TrashScreen> {
   bool _isLoading = true;
+  bool _hasError = false;
   List<Map<String, dynamic>> _deletedFiles = [];
 
   @override
@@ -39,17 +37,20 @@ class _TrashScreenState extends State<TrashScreen> {
           .isFilter('restored_at', null)
           .order('deleted_at', ascending: false);
 
+      if (!mounted) return;
       setState(() {
         _deletedFiles = List<Map<String, dynamic>>.from(data);
+        _hasError = false;
       });
     } catch (e) {
       debugPrint('خطأ في جلب بيانات سلة المحذوفات: $e');
+      if (mounted) setState(() => _hasError = true);
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  // تحديد اسم الباكت بناءً على نوع الملف
+  // اسم الـ bucket حسب نوع الملف
   String _getBucketName(String fileType) {
     switch (fileType) {
       case 'avatar':
@@ -65,7 +66,6 @@ class _TrashScreenState extends State<TrashScreen> {
     }
   }
 
-  // ترجمة نوع الملف للغة العربية
   String _getFileTypeName(String fileType) {
     switch (fileType) {
       case 'avatar':
@@ -81,43 +81,27 @@ class _TrashScreenState extends State<TrashScreen> {
     }
   }
 
-  // استعادة ملف محذوف
+  // استعادة ملف محذوف (وسمه كمسترجع)
   Future<void> _restoreFile(Map<String, dynamic> fileRow) async {
     final String fileId = fileRow['id'] as String;
 
     setState(() => _isLoading = true);
     try {
-      // تحديث حقل تاريخ الاستعادة في قاعدة البيانات لوسمه كمسترجع
-      await SupabaseService.client
-          .from('deleted_files')
-          .update({
-            'restored_at': DateTime.now().toUtc().toIso8601String(),
-          })
-          .eq('id', fileId);
+      await SupabaseService.client.from('deleted_files').update({
+        'restored_at': DateTime.now().toUtc().toIso8601String(),
+      }).eq('id', fileId);
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('تم استعادة الملف بنجاح', style: TextStyle(fontFamily: 'Cairo')),
-            backgroundColor: AppColors.success,
-          ),
-        );
-      }
+      if (mounted) AppSnack.success(context, 'استُعيد الملف');
       unawaited(_loadTrashFiles());
     } catch (e) {
-      setState(() => _isLoading = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('فشل استعادة الملف: $e', style: const TextStyle(fontFamily: 'Cairo')),
-            backgroundColor: AppColors.danger,
-          ),
-        );
+        setState(() => _isLoading = false);
+        AppSnack.error(context, 'تعذّرت الاستعادة: $e');
       }
     }
   }
 
-  // إتلاف وحذف ملف نهائياً
+  // حذف ملف نهائياً من التخزين ومن السجل
   Future<void> _permanentDeleteFile(Map<String, dynamic> fileRow) async {
     final String fileId = fileRow['id'] as String;
     final String filePath = fileRow['file_path'] as String;
@@ -126,444 +110,133 @@ class _TrashScreenState extends State<TrashScreen> {
 
     setState(() => _isLoading = true);
     try {
-      // 1. حذف الملف نهائياً من Supabase Storage
       await SupabaseService.client.storage.from(bucket).remove([filePath]);
+      await SupabaseService.client.from('deleted_files').delete().eq('id', fileId);
 
-      // 2. حذف السجل تماماً من جدول سلة المحذوفات
-      await SupabaseService.client
-          .from('deleted_files')
-          .delete()
-          .eq('id', fileId);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('تم إتلاف الملف وحذفه نهائياً', style: TextStyle(fontFamily: 'Cairo')),
-            backgroundColor: AppColors.onStatus,
-          ),
-        );
-      }
+      if (mounted) AppSnack.success(context, 'حُذف الملف نهائياً');
       unawaited(_loadTrashFiles());
     } catch (e) {
-      setState(() => _isLoading = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('فشل في إتلاف الملف: $e', style: const TextStyle(fontFamily: 'Cairo')),
-            backgroundColor: AppColors.danger,
-          ),
-        );
+        setState(() => _isLoading = false);
+        AppSnack.error(context, 'تعذّر الحذف: $e');
       }
     }
   }
 
-  // تنسيق الحجم بالـ KB/MB
-  String _formatBytes(dynamic bytes) {
-    if (bytes == null) return 'غير محدد';
-    final int b = bytes as int;
+  static String _formatBytes(Object? bytes) {
+    if (bytes is! num) return 'غير محدد';
+    final b = bytes.toInt();
     if (b < 1024) return '$b B';
     if (b < 1024 * 1024) return '${(b / 1024).toStringAsFixed(1)} KB';
     return '${(b / (1024 * 1024)).toStringAsFixed(1)} MB';
   }
 
-  Widget _buildDetailColumn(String label, String value) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 10,
-            color: AppColors.textPrimary.withValues(alpha: 0.4),
-            fontFamily: 'Cairo',
-          ),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.bold,
-            fontFamily: 'Cairo',
-            color: AppColors.textPrimary,
-          ),
-        ),
-      ],
+  Future<void> _confirmDelete(Map<String, dynamic> file) async {
+    final ok = await showAppConfirm(
+      context,
+      title: 'حذف نهائي؟',
+      message: 'راح ينحذف الملف من السيرفر وما يمكن استرجاعه أبداً.',
+      confirmLabel: 'حذف نهائي',
+      destructive: true,
     );
-  }
-
-  void _showDeleteConfirmationDialog(BuildContext context, Map<String, dynamic> file) {
-    showDialog<dynamic>(
-      context: context,
-      barrierColor: AppColors.onStatus.withValues(alpha: 0.6),
-      builder: (context) => Dialog(
-        backgroundColor: Colors.transparent,
-        child: GlassContainer(
-          padding: const EdgeInsets.all(24),
-            borderColor: AppColors.danger.withValues(alpha: 0.4),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.danger.withValues(alpha: 0.12),
-                blurRadius: 24,
-              )
-            ],
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppColors.danger.withValues(alpha: 0.15),
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: AppColors.danger.withValues(alpha: 0.35),
-                      width: 1.5,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.danger.withValues(alpha: 0.2),
-                        blurRadius: 10,
-                      )
-                    ],
-                  ),
-                  child: const Icon(
-                    Icons.warning_amber_rounded,
-                    color: AppColors.danger,
-                    size: 32,
-                  ),
-                ),
-                const SizedBox(height: 18),
-                const Text(
-                  'إتلاف وحذف نهائي؟',
-                  style: TextStyle(
-                    fontFamily: 'Cairo',
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  'هل أنت متأكد من رغبتك في حذف هذا الملف بشكل نهائي وتام من الخوادم؟ لا يمكن التراجع عن هذا الإجراء.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontFamily: 'Cairo',
-                    fontSize: 13,
-                    color: AppColors.textPrimary.withValues(alpha: 0.8),
-                    height: 1.5,
-                  ),
-                ),
-                const SizedBox(height: 24),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        style: OutlinedButton.styleFrom(
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          side: BorderSide(color: AppColors.textPrimary.withValues(alpha: 0.2)),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
-                        child: const Text(
-                          'إلغاء',
-                          style: TextStyle(
-                            fontFamily: 'Cairo',
-                            color: AppColors.textSecondary,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Container(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppColors.danger.withValues(alpha: 0.25),
-                              blurRadius: 8,
-                              offset: const Offset(0, 3),
-                            )
-                          ],
-                        ),
-                        child: ElevatedButton(
-                          onPressed: () {
-                            Navigator.of(context).pop();
-                            _permanentDeleteFile(file);
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.danger,
-                            elevation: 0,
-                            shadowColor: Colors.transparent,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                          ),
-                          child: const Text(
-                            'إتلاف نهائي',
-                            style: TextStyle(
-                              fontFamily: 'Cairo',
-                              color: AppColors.textPrimary,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-    );
+    if (ok) await _permanentDeleteFile(file);
   }
 
   @override
   Widget build(BuildContext context) {
-    return GlassBackground(
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textPrimary),
-            onPressed: () => Navigator.pop(context),
+    final List<Widget> content;
+    if (_isLoading && _deletedFiles.isEmpty) {
+      content = const [SkeletonList(count: 4, itemHeight: 120)];
+    } else if (_hasError && _deletedFiles.isEmpty) {
+      content = [ErrorView(onRetry: _loadTrashFiles)];
+    } else if (_deletedFiles.isEmpty) {
+      content = const [EmptyView(title: 'السلة فارغة', message: 'الملفات المحذوفة تبقى هنا 30 يوماً قبل حذفها تلقائياً.', icon: Icons.delete_outline_rounded, tone: AppTone.success)];
+    } else {
+      content = [
+        AppCard(
+          tone: AppTone.info,
+          padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg, vertical: AppSpace.md),
+          child: Row(
+            children: [
+              const Icon(Icons.info_outline_rounded, color: AppColors.info, size: 20),
+              const SizedBox(width: AppSpace.sm),
+              Expanded(child: Text('${_deletedFiles.length} ملف — تُحذف تلقائياً بعد انتهاء المدة.', style: AppText.bodySm.copyWith(color: AppColors.textPrimary))),
+            ],
           ),
-          title: const Text(
-            'سلة المحذوفات للملفات',
-            style: TextStyle(
-              fontFamily: 'Cairo',
-              fontWeight: FontWeight.bold,
-              color: AppColors.textPrimary,
-            ),
-          ),
-          centerTitle: true,
         ),
-        body: _isLoading
-            ? const Center(
-                child: CircularProgressIndicator(
-                  color: AppColors.brand,
-                ),
-              )
-            : _deletedFiles.isEmpty
-                ? Center(
-                    child: GlassContainer(
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-                      margin: const EdgeInsets.all(24),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.delete_outline_rounded,
-                            size: 64,
-                            color: AppColors.textPrimary.withValues(alpha: 0.4),
-                          ),
-                          const SizedBox(height: 16),
-                          const Text(
-                            'سلة المحذوفات فارغة حالياً',
-                            style: TextStyle(
-                              fontFamily: 'Cairo',
-                              fontSize: 16,
-                              color: AppColors.textPrimary,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'يتم الاحتفاظ بالملفات المحذوفة هنا لمدة 30 يوماً فقط لتسهيل استعادتها قبل إتلافها بالكامل.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontFamily: 'Cairo',
-                              fontSize: 12,
-                              color: AppColors.textPrimary.withValues(alpha: 0.5),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    itemCount: _deletedFiles.length,
-                    itemBuilder: (context, index) {
-                      final file = _deletedFiles[index];
-                      final String filename = file['file_path'].split('/').last as String;
-                      final String deletedByName = (file['employees']?['full_name'] ?? 'غير معروف') as String;
-                      final DateTime deletedAt = DateTime.parse(file['deleted_at'] as String).toLocal();
-                      final DateTime expiryDate = DateTime.parse(file['scheduled_deletion_date'] as String).toLocal();
-                      final daysLeft = expiryDate.difference(DateTime.now()).inDays;
-                      final warningColor = daysLeft <= 5 ? AppColors.danger : AppColors.warning;
+        const SizedBox(height: AppSpace.md),
+        for (var i = 0; i < _deletedFiles.length; i++)
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppSpace.md),
+            child: FadeSlideIn(index: i, child: _fileCard(_deletedFiles[i])),
+          ),
+      ];
+    }
+    return AppPage(
+      title: 'سلة المحذوفات',
+      onRefresh: _loadTrashFiles,
+      slivers: [SliverList.list(children: content)],
+    );
+  }
 
-                      return GlassContainer(
-                        margin: const EdgeInsets.only(bottom: 16),
-                        borderRadius: 20,
-                        borderColor: warningColor.withValues(alpha: 0.4),
-                        boxShadow: [
-                          BoxShadow(
-                            color: warningColor.withValues(alpha: 0.06),
-                            blurRadius: 12,
-                            offset: const Offset(0, 4),
-                          )
-                        ],
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(10),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.brand.withValues(alpha: 0.15),
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color: AppColors.brand.withValues(alpha: 0.35),
-                                      width: 1.5,
-                                    ),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: AppColors.brand.withValues(alpha: 0.2),
-                                        blurRadius: 8,
-                                      )
-                                    ],
-                                  ),
-                                  child: const Icon(Icons.insert_drive_file_outlined, color: AppColors.brand, size: 22),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        filename,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 14,
-                                          fontFamily: 'Cairo',
-                                          color: AppColors.textPrimary,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        'النوع: ${_getFileTypeName(file['file_type'] as String)}',
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          color: AppColors.textPrimary.withValues(alpha: 0.5),
-                                          fontFamily: 'Cairo',
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                  decoration: BoxDecoration(
-                                    color: warningColor.withValues(alpha: 0.15),
-                                    borderRadius: BorderRadius.circular(10),
-                                    border: Border.all(
-                                      color: warningColor.withValues(alpha: 0.4),
-                                    ),
-                                  ),
-                                  child: Text(
-                                    'متبقي $daysLeft يوم',
-                                    style: TextStyle(
-                                      color: warningColor,
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
-                                      fontFamily: 'Cairo',
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            Container(
-                              height: 1,
-                              color: AppColors.textPrimary.withValues(alpha: 0.08),
-                            ),
-                            const SizedBox(height: 12),
-                            
-                            // تفاصيل الحجم وتاريخ الحذف
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                _buildDetailColumn('تاريخ الحذف', DateFormat('yyyy/MM/dd h:mm a').format(deletedAt)),
-                                _buildDetailColumn('حجم الملف', _formatBytes(file['file_size_bytes'])),
-                                _buildDetailColumn('بواسطة', deletedByName),
-                              ],
-                            ),
-                            const SizedBox(height: 16),
-                            
-                            // أزرار العمليات
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Container(
-                                    decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(12),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: AppColors.success.withValues(alpha: 0.2),
-                                          blurRadius: 8,
-                                          offset: const Offset(0, 3),
-                                        )
-                                      ],
-                                    ),
-                                    child: ElevatedButton.icon(
-                                      onPressed: () => _restoreFile(file),
-                                      icon: const Icon(Icons.settings_backup_restore_rounded, size: 16, color: AppColors.textPrimary),
-                                      label: const Text(
-                                        'استعادة الملف',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          fontFamily: 'Cairo',
-                                          fontWeight: FontWeight.bold,
-                                          color: AppColors.textPrimary,
-                                        ),
-                                      ),
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: AppColors.success,
-                                        elevation: 0,
-                                        shadowColor: Colors.transparent,
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                        padding: const EdgeInsets.symmetric(vertical: 12),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: OutlinedButton.icon(
-                                    onPressed: () => _showDeleteConfirmationDialog(context, file),
-                                    icon: const Icon(Icons.delete_forever_rounded, size: 16, color: AppColors.danger),
-                                    label: const Text(
-                                      'إتلاف نهائي',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        fontFamily: 'Cairo',
-                                        fontWeight: FontWeight.bold,
-                                        color: AppColors.danger,
-                                      ),
-                                    ),
-                                    style: OutlinedButton.styleFrom(
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                      side: const BorderSide(color: AppColors.danger, width: 1.2),
-                                      padding: const EdgeInsets.symmetric(vertical: 12),
-                                      backgroundColor: AppColors.danger.withValues(alpha: 0.04),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
+  Widget _fileCard(Map<String, dynamic> file) {
+    final type = (file['file_type'] ?? '').toString();
+    final filename = (file['file_path'] ?? '').toString().split('/').last;
+    final employees = file['employees'];
+    final deletedBy = employees is Map ? (employees['full_name'] ?? 'غير معروف').toString() : 'غير معروف';
+    final deletedAt = DateTime.tryParse(file['deleted_at']?.toString() ?? '');
+    final expiry = DateTime.tryParse(file['scheduled_deletion_date']?.toString() ?? '')?.toLocal();
+    final daysLeft = expiry?.difference(DateTime.now()).inDays;
+    final icon = switch (type) {
+      'avatar' => Icons.person_rounded,
+      'pledge' => Icons.draw_rounded,
+      'logo' => Icons.business_rounded,
+      _ => Icons.description_rounded,
+    };
+    final busy = _isLoading;
+
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              ToneIcon(icon, tone: AppTone.neutral),
+              const SizedBox(width: AppSpace.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(_getFileTypeName(type), style: AppText.subtitle),
+                    Text(filename, style: AppText.caption, maxLines: 1, overflow: TextOverflow.ellipsis, textDirection: TextDirection.ltr),
+                  ],
+                ),
+              ),
+              if (daysLeft != null)
+                StatusBadge(daysLeft <= 0 ? 'اليوم' : 'باقي ${Fmt.days(daysLeft)}', tone: daysLeft <= 5 ? AppTone.danger : AppTone.warning),
+            ],
+          ),
+          const SizedBox(height: AppSpace.sm),
+          KeyValueRow('حذفه', deletedBy),
+          KeyValueRow('وقت الحذف', deletedAt == null ? '—' : Fmt.relative(deletedAt)),
+          KeyValueRow('الحجم', _formatBytes(file['file_size_bytes'])),
+          const SizedBox(height: AppSpace.sm),
+          Row(
+            children: [
+              Expanded(child: AppButton.secondary(label: 'استعادة', icon: Icons.settings_backup_restore_rounded, size: AppButtonSize.small, onPressed: busy ? null : () => _restoreFile(file))),
+              const SizedBox(width: AppSpace.sm),
+              Expanded(
+                child: AppButton(
+                  label: 'حذف نهائي',
+                  icon: Icons.delete_forever_rounded,
+                  variant: AppButtonVariant.dangerGhost,
+                  size: AppButtonSize.small,
+                  onPressed: busy ? null : () => _confirmDelete(file),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

@@ -262,7 +262,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             AppButton(
               label: 'حذف الوثيقة',
               icon: Icons.delete_outline_rounded,
-              variant: AppButtonVariant.ghost,
+              variant: AppButtonVariant.dangerGhost,
               expand: true,
               onPressed: () {
                 Navigator.pop(ctx);
@@ -486,7 +486,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             AppButton(
               label: 'طلب حذف الحساب',
               icon: Icons.person_remove_outlined,
-              variant: AppButtonVariant.ghost,
+              variant: AppButtonVariant.dangerGhost,
               expand: true,
               loading: _deletionBusy,
               onPressed: _handleDeleteAccountRequest,

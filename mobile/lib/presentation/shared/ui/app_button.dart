@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/design/design.dart';
 
-enum AppButtonVariant { primary, secondary, ghost, danger, success, warning }
+enum AppButtonVariant { primary, secondary, ghost, dangerGhost, danger, success, warning }
 
 enum AppButtonSize { small, medium, large }
 
@@ -55,6 +55,7 @@ class AppButton extends StatelessWidget {
         AppButtonVariant.primary => (AppColors.brand, AppColors.onBrand, BorderSide.none),
         AppButtonVariant.secondary => (AppColors.surface2, AppColors.textPrimary, const BorderSide(color: AppColors.borderStrong)),
         AppButtonVariant.ghost => (Colors.transparent, AppColors.brand, BorderSide.none),
+        AppButtonVariant.dangerGhost => (Colors.transparent, AppColors.danger, BorderSide.none),
         AppButtonVariant.danger => (AppColors.danger, AppColors.onStatus, BorderSide.none),
         AppButtonVariant.success => (AppColors.success, AppColors.onStatus, BorderSide.none),
         AppButtonVariant.warning => (AppColors.warning, AppColors.onStatus, BorderSide.none),
@@ -102,7 +103,7 @@ class AppButton extends StatelessWidget {
       style: TextButton.styleFrom(
         backgroundColor: bg,
         foregroundColor: fg,
-        disabledBackgroundColor: variant == AppButtonVariant.ghost ? Colors.transparent : AppColors.surface2,
+        disabledBackgroundColor: variant == AppButtonVariant.ghost || variant == AppButtonVariant.dangerGhost ? Colors.transparent : AppColors.surface2,
         disabledForegroundColor: loading ? fg : AppColors.textDisabled,
         minimumSize: Size(size == AppButtonSize.small ? 0 : 64, _height),
         padding: EdgeInsets.symmetric(horizontal: size == AppButtonSize.small ? AppSpace.md : AppSpace.xl),
