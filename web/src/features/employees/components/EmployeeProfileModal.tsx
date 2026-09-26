@@ -6,6 +6,7 @@ import type { Employee } from '@/lib/db-types';
 import { Avatar, Badge, Button, EmptyState, IconButton, Modal, type Tone } from '@/components/ui';
 import { formatIQD } from '@/lib/format';
 import { openStorageUrl, resolveStorageUrl } from '@/lib/signed-urls';
+import { LeaveBalanceCard } from './LeaveBalanceCard';
 
 const ROLE_META: Record<string, { label: string; tone: Tone }> = {
   admin: { label: 'مدير عام', tone: 'rose' },
@@ -66,6 +67,8 @@ export function EmployeeProfileModal({ profileEmployee: emp, onClose, onEdit, on
         <Detail label="قفل الهاتف">{emp.device_id_lock ? 'مقفل على جهاز' : 'غير مقيد'}</Detail>
         <Detail label="تاريخ المباشرة"><span dir="ltr">{emp.join_date || '—'}</span></Detail>
       </div>
+
+      <LeaveBalanceCard employeeId={emp.id} />
 
       <div className="flex items-center justify-between mb-3">
         <h4 className="text-sm font-bold text-white flex items-center gap-2">

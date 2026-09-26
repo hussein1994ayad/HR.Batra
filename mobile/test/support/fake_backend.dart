@@ -42,6 +42,10 @@ class FakeBackend {
     }
     if (path.startsWith('/rest/v1/rpc/')) {
       final rows = tables['rpc:${path.substring('/rest/v1/rpc/'.length)}'];
+      // RPC يرجع كائناً واحداً (jsonb): صف واحد فيه '__single'
+      if (rows != null && rows.length == 1 && rows.first.containsKey('__single')) {
+        return http.Response(jsonEncode({...rows.first}..remove('__single')), 200, headers: _json);
+      }
       return http.Response(rows == null ? 'null' : jsonEncode(rows), 200, headers: _json);
     }
     if (path.startsWith('/rest/v1/')) {

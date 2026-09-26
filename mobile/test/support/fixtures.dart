@@ -86,6 +86,16 @@ Map<String, List<Map<String, dynamic>>> buildFixtures({String role = 'admin'}) {
     'rpc:get_employee_directory': [
       for (final e in employees) {...e, 'branch_name': 'فرع المنصور', 'department_name': 'المبيعات', 'document_urls': <String>[]},
     ],
+    'rpc:get_leave_balance': [
+      {
+        '__single': true,
+        'year': 2026,
+        'month': '2026-09',
+        'annual': {'entitlement': 21, 'used': 5, 'pending': 1, 'left': 15},
+        'sick': {'entitlement': 15, 'used': 2, 'pending': 0, 'left': 13},
+        'hourly': {'allowance_hours': 8, 'used_hours': 2.5, 'pending_hours': 0, 'left_hours': 5.5},
+      },
+    ],
     'branches': [_branch],
     'attendance': attendance,
     'work_schedules': [

@@ -64,6 +64,75 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
     _tabController = TabController(length: 2, vsync: this);
     _loadHistory();
     _loadLeaveTypes();
+    _loadBalance();
+  }
+
+  // رصيد الموظف: السنوية والمرضية لهذه السنة، والزمنيات لهذا الشهر (get_leave_balance)
+  Map<String, dynamic>? _balance;
+
+  Future<void> _loadBalance() async {
+    try {
+      final data = await SupabaseService.client.rpc<dynamic>('get_leave_balance');
+      if (mounted && data is Map) setState(() => _balance = Map<String, dynamic>.from(data));
+    } catch (e) {
+      debugPrint('Error loading leave balance: $e');
+    }
+  }
+
+  static String _fmt(Object? v) {
+    final n = (v as num?)?.toDouble() ?? 0;
+    return n == n.roundToDouble() ? n.round().toString() : n.toStringAsFixed(1);
+  }
+
+  Widget _buildBalanceCard() {
+    final b = _balance;
+    if (b == null) return const SizedBox.shrink();
+    final annual = Map<String, dynamic>.from(b['annual'] as Map);
+    final sick = Map<String, dynamic>.from(b['sick'] as Map);
+    final hourly = Map<String, dynamic>.from(b['hourly'] as Map);
+
+    Widget item(String label, Object? left, Object? total, String unit, bool active) => Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(AppSpace.sm),
+        decoration: BoxDecoration(
+          color: active ? AppColors.brand.withValues(alpha: 0.12) : AppColors.surface2,
+          borderRadius: AppRadius.control,
+          border: Border.all(color: active ? AppColors.brand : AppColors.border),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label, style: AppText.caption),
+            const SizedBox(height: 2),
+            Text('${_fmt(left)} $unit', style: AppText.label.copyWith(color: AppColors.textPrimary)),
+            Text('من ${_fmt(total)}', style: AppText.caption),
+          ],
+        ),
+      ),
+    );
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpace.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('رصيدك المتبقي', style: AppText.bodySm.copyWith(fontWeight: FontWeight.w700)),
+          const SizedBox(height: AppSpace.sm),
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                item('السنوية (${b['year']})', annual['left'], annual['entitlement'], 'يوم', !_isHourly && _leaveType == 'annual'),
+                const SizedBox(width: AppSpace.sm),
+                item('المرضية', sick['left'], sick['entitlement'], 'يوم', !_isHourly && _leaveType == 'sick'),
+                const SizedBox(width: AppSpace.sm),
+                item('زمنيات الشهر', hourly['left_hours'], hourly['allowance_hours'], 'ساعة', _isHourly),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -79,11 +148,7 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
     if (user == null) return;
 
     try {
-      final data = await SupabaseService.client
-          .from('leave_requests')
-          .select()
-          .eq('employee_id', user.id)
-          .order('created_at', ascending: false);
+      final data = await SupabaseService.client.from('leave_requests').select().eq('employee_id', user.id).order('created_at', ascending: false);
 
       if (!mounted) return;
       setState(() {
@@ -110,10 +175,7 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
           final List<Map<String, String>> mappedTypes = [];
           for (final t in typesList) {
             final typeMap = t as Map<String, dynamic>;
-            mappedTypes.add({
-              'id': typeMap['id']?.toString() ?? '',
-              'name': typeMap['name']?.toString() ?? '',
-            });
+            mappedTypes.add({'id': typeMap['id']?.toString() ?? '', 'name': typeMap['name']?.toString() ?? ''});
           }
           if (mappedTypes.isNotEmpty && mounted) {
             setState(() {
@@ -224,11 +286,7 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
         final fileExtension = _attachmentFile!.path.split('.').last;
         final remotePath = 'leaves/${user.id}/$uniqueId.$fileExtension';
 
-        attachmentUrl = await FileUploadService.uploadFile(
-          file: _attachmentFile!,
-          bucketName: 'employee-documents',
-          remotePath: remotePath,
-        );
+        attachmentUrl = await FileUploadService.uploadFile(file: _attachmentFile!, bucketName: 'employee-documents', remotePath: remotePath);
       }
 
       // 2. أوقات الإجازة الساعية
@@ -259,6 +317,7 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
       if (mounted) {
         AppSnack.success(context, 'وصل طلبك للإدارة، وراح يوصلك إشعار بالقرار.');
         _resetForm();
+        unawaited(_loadBalance());
         _tabController.animateTo(1);
         unawaited(_loadHistory());
       }
@@ -297,7 +356,10 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   const Flexible(child: Text('طلباتي', overflow: TextOverflow.ellipsis)),
-                  if (pending > 0) ...[const SizedBox(width: AppSpace.xs), Badge(label: Text('$pending'), backgroundColor: AppColors.warning, textColor: AppColors.onStatus)],
+                  if (pending > 0) ...[
+                    const SizedBox(width: AppSpace.xs),
+                    Badge(label: Text('$pending'), backgroundColor: AppColors.warning, textColor: AppColors.onStatus),
+                  ],
                 ],
               ),
             ),
@@ -324,6 +386,7 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          _buildBalanceCard(),
           AppChoiceChips<String>(
             label: 'نوع الإجازة',
             value: _leaveType,
@@ -349,9 +412,13 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
           if (!_isHourly)
             Row(
               children: [
-                Expanded(child: AppPickerField(label: 'من', value: Fmt.date(_startDate), onTap: () => _selectDate(true))),
+                Expanded(
+                  child: AppPickerField(label: 'من', value: Fmt.date(_startDate), onTap: () => _selectDate(true)),
+                ),
                 const SizedBox(width: AppSpace.md),
-                Expanded(child: AppPickerField(label: 'إلى', value: Fmt.date(_endDate), onTap: () => _selectDate(false))),
+                Expanded(
+                  child: AppPickerField(label: 'إلى', value: Fmt.date(_endDate), onTap: () => _selectDate(false)),
+                ),
               ],
             )
           else ...[
@@ -359,9 +426,13 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
             const SizedBox(height: AppSpace.md),
             Row(
               children: [
-                Expanded(child: AppPickerField(label: 'من الساعة', value: _fmtTod(_startHour), icon: Icons.schedule_rounded, onTap: () => _selectTime(true))),
+                Expanded(
+                  child: AppPickerField(label: 'من الساعة', value: _fmtTod(_startHour), icon: Icons.schedule_rounded, onTap: () => _selectTime(true)),
+                ),
                 const SizedBox(width: AppSpace.md),
-                Expanded(child: AppPickerField(label: 'إلى الساعة', value: _fmtTod(_endHour), icon: Icons.schedule_rounded, onTap: () => _selectTime(false))),
+                Expanded(
+                  child: AppPickerField(label: 'إلى الساعة', value: _fmtTod(_endHour), icon: Icons.schedule_rounded, onTap: () => _selectTime(false)),
+                ),
               ],
             ),
           ],
@@ -374,7 +445,12 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
               children: [
                 const Icon(Icons.event_available_rounded, color: AppColors.brand, size: 20),
                 const SizedBox(width: AppSpace.sm),
-                Expanded(child: Text(_durationSummary, style: AppText.bodySm.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w700))),
+                Expanded(
+                  child: Text(
+                    _durationSummary,
+                    style: AppText.bodySm.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w700),
+                  ),
+                ),
               ],
             ),
           ),
@@ -408,7 +484,10 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
             padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg, vertical: AppSpace.md),
             child: Row(
               children: [
-                Icon(_attachmentFile != null ? Icons.task_alt_rounded : Icons.add_photo_alternate_outlined, color: _attachmentFile != null ? AppColors.success : AppColors.brand),
+                Icon(
+                  _attachmentFile != null ? Icons.task_alt_rounded : Icons.add_photo_alternate_outlined,
+                  color: _attachmentFile != null ? AppColors.success : AppColors.brand,
+                ),
                 const SizedBox(width: AppSpace.md),
                 Expanded(
                   child: Text(
@@ -446,10 +525,12 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
       return const Padding(padding: EdgeInsets.all(AppSpace.page), child: SkeletonList(count: 4));
     }
     if (_historyError && _leaveHistory.isEmpty) {
-      return ErrorView(onRetry: () {
-        setState(() => _isLoadingHistory = true);
-        _loadHistory();
-      });
+      return ErrorView(
+        onRetry: () {
+          setState(() => _isLoadingHistory = true);
+          _loadHistory();
+        },
+      );
     }
     final items = _historyFilter == 'all' ? _leaveHistory : _leaveHistory.where((r) => r['status'] == _historyFilter).toList();
 
@@ -463,12 +544,7 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
             scrollable: true,
             value: _historyFilter,
             onChanged: (v) => setState(() => _historyFilter = v),
-            options: const [
-              ('all', 'الكل', null),
-              ('pending', 'قيد المراجعة', null),
-              ('approved', 'مقبولة', null),
-              ('rejected', 'مرفوضة', null),
-            ],
+            options: const [('all', 'الكل', null), ('pending', 'قيد المراجعة', null), ('approved', 'مقبولة', null), ('rejected', 'مرفوضة', null)],
           ),
           const SizedBox(height: AppSpace.md),
           if (items.isEmpty)
@@ -483,7 +559,12 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
             for (var i = 0; i < items.length; i++)
               Padding(
                 padding: const EdgeInsets.only(bottom: AppSpace.md),
-                child: FadeSlideIn(index: i, child: ContentWidth(child: _LeaveCard(req: items[i], typeName: _typeLabel(items[i]['leave_type'])))),
+                child: FadeSlideIn(
+                  index: i,
+                  child: ContentWidth(
+                    child: _LeaveCard(req: items[i], typeName: _typeLabel(items[i]['leave_type'])),
+                  ),
+                ),
               ),
         ],
       ),
@@ -564,8 +645,8 @@ class _LeaveCard extends StatelessWidget {
     final period = isHourly
         ? '${Fmt.date(start)} · ${Fmt.timeOfDay(req['start_hour']?.toString())} - ${Fmt.timeOfDay(req['end_hour']?.toString())}'
         : (start != null && end != null && Fmt.date(start) == Fmt.date(end))
-            ? Fmt.dateWithDay(start)
-            : '${Fmt.date(start)} إلى ${Fmt.date(end)}';
+        ? Fmt.dateWithDay(start)
+        : '${Fmt.date(start)} إلى ${Fmt.date(end)}';
 
     return AppCard(
       child: Column(

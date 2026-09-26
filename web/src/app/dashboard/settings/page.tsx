@@ -69,6 +69,7 @@ interface SettingsData {
   cycleEndDay: number;
   defaultAnnual: number;
   defaultSick: number;
+  hourlyMonthlyHours: number;
   leaveTypes: LeaveTypeOption[];
   announcements: Announcement[];
   schedules: WorkSchedule[];
@@ -108,6 +109,7 @@ async function fetchSettings(): Promise<SettingsData> {
     cycleEndDay: payroll.data?.value?.cycle_end_day || 24,
     defaultAnnual: lp?.default_annual || 21,
     defaultSick: lp?.default_sick || 15,
+    hourlyMonthlyHours: lp?.hourly_monthly_hours ?? 8,
     leaveTypes: lp?.active_types?.length ? lp.active_types : DEFAULT_LEAVE_TYPES,
     announcements: (ann.data ?? []) as Announcement[],
     schedules: (ws.data ?? []) as WorkSchedule[],
@@ -179,6 +181,7 @@ function GeneralSettings({ initial, onSaved }: { initial: SettingsData; onSaved:
   const [cycleEnd, setCycleEnd] = useState(initial.cycleEndDay);
   const [defaultAnnual, setDefaultAnnual] = useState(initial.defaultAnnual);
   const [defaultSick, setDefaultSick] = useState(initial.defaultSick);
+  const [hourlyMonthlyHours, setHourlyMonthlyHours] = useState(initial.hourlyMonthlyHours);
   const [leaveTypes, setLeaveTypes] = useState<LeaveTypeOption[]>(initial.leaveTypes);
   const [newTypeName, setNewTypeName] = useState('');
   const [newTypeId, setNewTypeId] = useState('');
@@ -222,7 +225,12 @@ function GeneralSettings({ initial, onSaved }: { initial: SettingsData; onSaved:
         },
         {
           key: 'leave_policy',
-          value: { default_annual: Number(defaultAnnual), default_sick: Number(defaultSick), active_types: leaveTypes },
+          value: {
+            default_annual: Number(defaultAnnual),
+            default_sick: Number(defaultSick),
+            hourly_monthly_hours: Number(hourlyMonthlyHours),
+            active_types: leaveTypes,
+          },
           description: 'سياسة الإجازات العامة وأنواعها المتاحة بالشركة',
         },
         {
@@ -302,13 +310,25 @@ function GeneralSettings({ initial, onSaved }: { initial: SettingsData; onSaved:
         </Card>
 
         <Card>
-          <CardHeader icon={CalendarRange} tone="amber" title="سياسة الإجازات" description="الأرصدة الافتراضية للموظفين الجدد وأنواع الإجازات المتاحة" />
-          <div className="grid grid-cols-2 gap-4 mb-5">
+          <CardHeader icon={CalendarRange} tone="amber" title="سياسة الإجازات" description="رصيد كل الموظفين: السنوية والمرضية تتجدد كل سنة، والزمنيات كل شهر. تقدر تخصّص رصيد موظف من صفحة الموظفين." />
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">
             <Field label="رصيد الإجازة السنوية (يوم/سنة)">
               <Input type="number" min={0} required value={defaultAnnual} onChange={(e) => setDefaultAnnual(Number(e.target.value))} dir="ltr" className="text-left" />
             </Field>
             <Field label="رصيد الإجازة المرضية (يوم/سنة)">
               <Input type="number" min={0} required value={defaultSick} onChange={(e) => setDefaultSick(Number(e.target.value))} dir="ltr" className="text-left" />
+            </Field>
+            <Field label="الإجازات الزمنية (ساعة/شهر)">
+              <Input
+                type="number"
+                min={0}
+                step={0.5}
+                required
+                value={hourlyMonthlyHours}
+                onChange={(e) => setHourlyMonthlyHours(Number(e.target.value))}
+                dir="ltr"
+                className="text-left"
+              />
             </Field>
           </div>
           <p className="text-[11px] font-bold text-slate-400 mb-2">أنواع الإجازات</p>
