@@ -67,8 +67,8 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
             .not('branch_id', 'is', null)
       ]);
 
-      final zones = results[0] as List<dynamic>;
-      final schedules = results[1] as List<dynamic>;
+      final zones = [for (final z in results[0] as List<dynamic>) Map<String, dynamic>.from(z as Map)];
+      final schedules = [for (final s in results[1] as List<dynamic>) Map<String, dynamic>.from(s as Map)];
 
       // دمج البيانات
       final List<Map<String, dynamic>> merged = [];

@@ -654,7 +654,7 @@ class LocationService {
       final currentLatLng = LatLng(position.latitude, position.longitude);
 
       for (final assignment in _cachedGeofenceZones!) {
-        dynamic zoneRaw = assignment['geofence_zones'];
+        final Object? zoneRaw = assignment is Map ? assignment['geofence_zones'] : null;
         if (zoneRaw == null) continue;
 
         Map<String, dynamic>? zone;

@@ -40,7 +40,7 @@ class _StorageStatsScreenState extends State<StorageStatsScreen> {
     setState(() => _isLoading = true);
     try {
       // 1. حساب مجموع أحجام الملفات المحذوفة مؤقتاً من جدول deleted_files
-      final List<dynamic> trashData = await SupabaseService.client
+      final List<Map<String, dynamic>> trashData = await SupabaseService.client
           .from('deleted_files')
           .select('file_size_bytes')
           .isFilter('restored_at', null);
@@ -135,11 +135,11 @@ class _StorageStatsScreenState extends State<StorageStatsScreen> {
             children: [
               const Text('المساحة المستخدمة', style: AppText.bodySm),
               const SizedBox(height: AppSpace.xs),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
+              Wrap(
+                crossAxisAlignment: WrapCrossAlignment.end,
+                spacing: AppSpace.sm,
                 children: [
                   Text(_formatBytes(total), style: AppText.display.copyWith(color: tone.color, fontSize: 30)),
-                  const SizedBox(width: AppSpace.sm),
                   Padding(
                     padding: const EdgeInsets.only(bottom: 6),
                     child: Text('من ${_formatBytes(_maxCapacityBytes)}', style: AppText.bodySm),

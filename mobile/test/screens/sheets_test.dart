@@ -6,8 +6,8 @@ import 'package:hr_pro/presentation/employee/admin_dashboard/admin_dashboard_scr
 import 'package:hr_pro/presentation/employee/admin_loans/admin_loans_screen.dart';
 import 'package:hr_pro/presentation/employee/admin_loans/widgets/loan_card.dart';
 import 'package:hr_pro/presentation/employee/branch_management_screen.dart';
-import 'package:hr_pro/presentation/employee/employee_management_screen.dart';
 import 'package:hr_pro/presentation/employee/branch_schedule_screen.dart';
+import 'package:hr_pro/presentation/employee/employee_management_screen.dart';
 
 import '../support/harness.dart';
 
