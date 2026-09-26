@@ -14,4 +14,14 @@ void main() {
       await disposeScreen(tester);
     });
   }
+
+  // لقطات تابلت لأهم الشاشات: شريط تنقل جانبي وتخطيط عمودين
+  const tabletScreens = {'03_home', '04_attendance', '12_admin_dashboard'};
+  for (final s in kScreens.where((s) => tabletScreens.contains(s.name))) {
+    testWidgets('tablet landscape: ${s.name}', (tester) async {
+      await pumpScreen(tester, s.build(), role: s.role, device: kTabletLandscape);
+      await capture(tester, 'tablet_${s.name}');
+      await disposeScreen(tester);
+    });
+  }
 }

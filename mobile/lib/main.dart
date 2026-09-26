@@ -26,6 +26,16 @@ void main() async {
   // 1. ضمان استقرار المحرك ومعالجة كافة الأخطاء غير الملتقطة لمنع توقف التطبيق نهائياً
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Android: عرض من الحافة للحافة مع أشرطة نظام شفافة (iOS يعمل هكذا أصلاً)
+  unawaited(SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge));
+  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    systemNavigationBarColor: Colors.transparent,
+    systemNavigationBarContrastEnforced: false,
+    statusBarIconBrightness: Brightness.light,
+    systemNavigationBarIconBrightness: Brightness.light,
+  ));
+
   // خط Cairo مضمّن في assets/google_fonts — لا تحميل من خوادم Google وقت التشغيل
   GoogleFonts.config.allowRuntimeFetching = false;
   LicenseRegistry.addLicense(() async* {
