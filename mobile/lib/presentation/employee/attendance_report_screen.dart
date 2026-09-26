@@ -7,8 +7,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../core/design/design.dart';
 import '../../core/services/supabase_service.dart';
+import '../shared/ui/ui.dart';
 import '../shared/widgets/glass_background.dart';
 import '../shared/widgets/glass_container.dart';
 
@@ -457,10 +457,11 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(
-                              '${_selectedDateRange.start.month}/${_selectedDateRange.start.day} - ${_selectedDateRange.end.month}/${_selectedDateRange.end.day}',
+                            Flexible(child: Text(
+                              '${_selectedDateRange.start.day}/${_selectedDateRange.start.month} - ${_selectedDateRange.end.day}/${_selectedDateRange.end.month}',
+                              overflow: TextOverflow.ellipsis,
                               style: const TextStyle(fontFamily: 'Cairo', color: AppColors.textPrimary, fontSize: 12, fontWeight: FontWeight.bold),
-                            ),
+                            )),
                             const Icon(Icons.date_range_rounded, color: AppColors.warning, size: 18),
                           ],
                         ),
@@ -485,7 +486,7 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
 
             Expanded(
               child: _isLoading
-                  ? const Center(child: CircularProgressIndicator(color: AppColors.brand))
+                  ? const Padding(padding: EdgeInsets.all(AppSpace.page), child: SkeletonList())
                   : _records.isEmpty
                       ? const Center(child: Text('لا توجد بيانات لهذه الفترة أو الفلاتر', style: TextStyle(color: AppColors.textMuted, fontFamily: 'Cairo')))
                       : ListView.builder(
@@ -519,7 +520,7 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         Text((r['employee_name'] ?? 'مجهول') as String, style: const TextStyle(color: AppColors.textPrimary, fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 13)),
-                                        Text('${r['employee_code']} | ${r['work_date']}', style: const TextStyle(color: AppColors.textDisabled, fontSize: 10)),
+                                        Text('${r['employee_code'] ?? '—'} · ${r['work_date']}', style: const TextStyle(color: AppColors.textDisabled, fontSize: 10)),
                                       ],
                                     ),
                                   ),

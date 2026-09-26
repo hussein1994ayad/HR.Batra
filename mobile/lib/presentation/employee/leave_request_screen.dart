@@ -299,7 +299,7 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text('طلباتي'),
+                  const Flexible(child: Text('طلباتي', overflow: TextOverflow.ellipsis)),
                   if (pending > 0) ...[const SizedBox(width: AppSpace.xs), Badge(label: Text('$pending'), backgroundColor: AppColors.warning, textColor: AppColors.onStatus)],
                 ],
               ),

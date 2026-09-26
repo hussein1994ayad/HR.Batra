@@ -12,9 +12,9 @@ import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../core/design/design.dart';
 import '../../core/routes/app_router.dart';
 import '../../core/services/supabase_service.dart';
+import '../shared/ui/ui.dart';
 import '../shared/widgets/glass_background.dart';
 
 class AdminLiveTrackingScreen extends StatefulWidget {
@@ -578,7 +578,7 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
                                     children: [
                                       Icon(Icons.domain_rounded, color: AppColors.brand, size: 15),
                                       SizedBox(width: 6),
-                                      Text(' جميع الفروع والمواقع', style: TextStyle(fontFamily: 'Cairo', color: AppColors.textPrimary, fontSize: 11, fontWeight: FontWeight.bold)),
+                                      Flexible(child: Text(' جميع الفروع والمواقع', overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: 'Cairo', color: AppColors.textPrimary, fontSize: 11, fontWeight: FontWeight.bold))),
                                     ],
                                   ),
                                 ),
@@ -589,7 +589,7 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
                                       children: [
                                         const Icon(Icons.storefront_rounded, color: AppColors.success, size: 15),
                                         const SizedBox(width: 6),
-                                        Text('فرع: ${branch['name']}', style: const TextStyle(fontFamily: 'Cairo', color: AppColors.textPrimary, fontSize: 11)),
+                                        Flexible(child: Text('فرع: ${branch['name']}', overflow: TextOverflow.ellipsis, style: const TextStyle(fontFamily: 'Cairo', color: AppColors.textPrimary, fontSize: 11))),
                                       ],
                                     ),
                                   );
@@ -669,7 +669,7 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
           ),
         ),
         body: _isLoading
-            ? const Center(child: CircularProgressIndicator(color: AppColors.brand))
+            ? const Padding(padding: EdgeInsets.all(AppSpace.page), child: SkeletonList())
             : Stack(
                 children: [
                   // 1. خريطة OpenStreetMap التفاعلية مع خطوط المسار والإشارات
@@ -1017,13 +1017,21 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
+                Flexible(
+                  child: Text(
                   'الموظفون وموقف البصمة (${filtered.length})',
                   style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 12, color: AppColors.textPrimary),
+                  overflow: TextOverflow.ellipsis,
                 ),
-                Text(
-                  'اضغط على أي موظف لتحديده وتتبع مساره',
+                ),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                  'اضغط على موظف لتتبع مساره',
                   style: TextStyle(fontFamily: 'Cairo', fontSize: 10, color: AppColors.brand.withValues(alpha: 0.8)),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                ),
                 ),
               ],
             ),

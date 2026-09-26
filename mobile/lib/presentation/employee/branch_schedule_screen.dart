@@ -7,9 +7,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../core/design/design.dart';
 import '../../core/routes/app_router.dart';
 import '../../core/services/supabase_service.dart';
+import '../shared/ui/ui.dart';
 import '../shared/widgets/glass_background.dart';
 import '../shared/widgets/glass_container.dart';
 
@@ -313,7 +313,6 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
                         const SizedBox(height: 12),
                         GlassContainer(
                           padding: const EdgeInsets.all(16),
-                          borderRadius: 16,
                           child: Column(
                             children: [
                               Row(
@@ -464,7 +463,7 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
     required VoidCallback onTap,
   }) {
     int hour = time.hour;
-    final String period = hour >= 12 ? 'PM' : 'AM';
+    final String period = hour >= 12 ? 'م' : 'ص';
     hour = hour % 12;
     if (hour == 0) hour = 12;
     final String minuteStr = time.minute.toString().padLeft(2, '0');
@@ -516,7 +515,6 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
               fontWeight: FontWeight.bold,
               fontSize: 16,
               color: AppColors.textPrimary,
-              shadows: [Shadow(color: AppColors.brand, blurRadius: 10)],
             ),
           ),
           actions: [
@@ -530,7 +528,7 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
           ],
         ),
         body: _isLoading
-            ? const Center(child: CircularProgressIndicator(color: AppColors.brand))
+            ? const Padding(padding: EdgeInsets.all(AppSpace.page), child: SkeletonList())
             : _branches.isEmpty
                 ? const Center(
                     child: GlassContainer(
@@ -711,7 +709,7 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
       final parts = timeStr.split(':');
       int hour = int.parse(parts[0]);
       final int minute = int.parse(parts[1]);
-      final String period = hour >= 12 ? 'PM' : 'AM';
+      final String period = hour >= 12 ? 'م' : 'ص';
       
       hour = hour % 12;
       if (hour == 0) hour = 12;

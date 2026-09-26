@@ -126,12 +126,6 @@ class _StorageStatsScreenState extends State<StorageStatsScreen> {
               fontWeight: FontWeight.bold,
               fontSize: 16,
               color: AppColors.textPrimary,
-              shadows: [
-                Shadow(
-                  color: AppColors.brand,
-                  blurRadius: 10,
-                ),
-              ],
             ),
           ),
         ),
@@ -178,12 +172,6 @@ class _StorageStatsScreenState extends State<StorageStatsScreen> {
                               fontSize: 32,
                               fontWeight: FontWeight.w900,
                               color: isWarning ? AppColors.danger : AppColors.brand,
-                              shadows: [
-                                Shadow(
-                                  color: isWarning ? AppColors.danger : AppColors.brand,
-                                  blurRadius: 15,
-                                ),
-                              ],
                             ),
                           ),
                           const SizedBox(height: 4),
@@ -241,7 +229,6 @@ class _StorageStatsScreenState extends State<StorageStatsScreen> {
                     if (isWarning) ...[
                       GlassContainer(
                         padding: const EdgeInsets.all(16),
-                        borderRadius: 16,
                         borderColor: AppColors.danger.withValues(alpha: 0.4),
                         child: Row(
                           children: [
@@ -332,7 +319,6 @@ class _StorageStatsScreenState extends State<StorageStatsScreen> {
     return GlassContainer(
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(14),
-      borderRadius: 16,
       borderColor: color.withValues(alpha: 0.25),
       child: Row(
         children: [
@@ -353,14 +339,17 @@ class _StorageStatsScreenState extends State<StorageStatsScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
+                    Expanded(
+                      child: Text(
                       title,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         fontFamily: 'Cairo',
                         fontWeight: FontWeight.bold,
                         fontSize: 12,
                         color: AppColors.textPrimary,
                       ),
+                    ),
                     ),
                     Text(
                       '${percentage.toStringAsFixed(1)}%',

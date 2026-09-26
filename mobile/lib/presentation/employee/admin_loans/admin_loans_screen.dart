@@ -10,13 +10,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/design/design.dart';
 import '../../../core/logic/loan_rules.dart';
 import '../../../core/models/models.dart';
 import '../../../core/routes/app_router.dart';
 import '../../../core/services/excel_export_service.dart';
 import '../../../data/repositories/loan_repository.dart';
 import '../../../data/repositories/role_repository.dart';
+import '../../shared/ui/ui.dart';
 import '../../shared/widgets/glass_background.dart';
 import 'widgets/create_loan_sheet.dart';
 import 'widgets/loan_card.dart';
@@ -117,11 +117,8 @@ class _AdminLoansManagementScreenState extends State<AdminLoansManagementScreen>
         backgroundColor: Colors.transparent,
         floatingActionButton: FloatingActionButton.extended(
           heroTag: 'create_loan_admin_fab',
-          backgroundColor: AppColors.brandStrong,
-          foregroundColor: AppColors.textPrimary,
-          elevation: 4,
           icon: const Icon(Icons.add_circle_outline_rounded),
-          label: const Text('إضافة سلفة لموظف', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 13)),
+          label: const Text('سلفة لموظف'),
           onPressed: _createLoan,
         ),
         appBar: AppBar(
@@ -157,7 +154,7 @@ class _AdminLoansManagementScreenState extends State<AdminLoansManagementScreen>
           ),
         ),
         body: _isLoading
-            ? const Center(child: CircularProgressIndicator(color: AppColors.brand))
+            ? const Padding(padding: EdgeInsets.all(AppSpace.page), child: SkeletonList())
             : RefreshIndicator(
                 onRefresh: _load,
                 color: AppColors.brand,

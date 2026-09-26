@@ -232,7 +232,7 @@ class _Kpi extends StatelessWidget {
                 children: [
                   Text(title,
                       style: const TextStyle(fontFamily: 'Cairo', fontSize: 10, color: AppColors.textMuted),
-                      maxLines: 1,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis),
                   const SizedBox(height: 2),
                   FittedBox(

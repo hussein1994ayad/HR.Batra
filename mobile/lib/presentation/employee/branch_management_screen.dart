@@ -7,8 +7,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
-import '../../core/design/design.dart';
+
 import '../../core/services/supabase_service.dart';
+import '../shared/ui/ui.dart';
 import '../shared/widgets/glass_background.dart';
 import '../shared/widgets/glass_container.dart';
 
@@ -76,7 +77,7 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
                 border: Border.all(color: AppColors.brand.withValues(alpha: 0.2)),
               ),
               child: isSaving 
-                  ? const Center(child: CircularProgressIndicator(color: AppColors.brand))
+                  ? const Padding(padding: EdgeInsets.all(AppSpace.page), child: SkeletonList())
                   : Column(
                 children: [
                   Container(
@@ -311,7 +312,7 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
           ],
         ),
         body: _isLoading
-            ? const Center(child: CircularProgressIndicator(color: AppColors.brand))
+            ? const Padding(padding: EdgeInsets.all(AppSpace.page), child: SkeletonList())
             : _branches.isEmpty
                 ? const Center(child: Text('لا توجد أفرع مسجلة', style: TextStyle(color: AppColors.textMuted, fontFamily: 'Cairo')))
                 : ListView.builder(
@@ -322,7 +323,6 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
                       return GlassContainer(
                         margin: const EdgeInsets.only(bottom: 12),
                         padding: const EdgeInsets.all(16),
-                        borderRadius: 16,
                         child: Row(
                           children: [
                             Container(

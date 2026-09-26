@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/constants/constants.dart';
-import '../../../../core/design/design.dart';
 import '../../../../core/logic/loan_rules.dart';
 import '../../../../core/models/models.dart';
 import '../../../../core/utils/arabic_format.dart';
+import '../../../shared/ui/ui.dart';
 import 'loan_card.dart';
 
 /// يعرض التفاصيل الكاملة للسلفة في نافذة سفلية قابلة للسحب.
@@ -334,7 +334,7 @@ class _PledgePreview extends StatelessWidget {
                     errorBuilder: (_, __, ___) =>
                         const Center(child: Icon(Icons.broken_image_rounded, color: AppColors.textDisabled, size: 48)),
                     loadingBuilder: (_, child, progress) =>
-                        progress == null ? child : const Center(child: CircularProgressIndicator(color: AppColors.brand)),
+                        progress == null ? child : const Padding(padding: EdgeInsets.all(AppSpace.page), child: SkeletonList()),
                   ),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),

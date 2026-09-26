@@ -44,9 +44,12 @@ class LoanCard extends StatelessWidget {
         crossAxisAlignment: align,
         children: [
           Text(label, style: const TextStyle(fontFamily: 'Cairo', fontSize: 10, color: AppColors.textMuted)),
-          Text(
-            AppConstants.formatMoney(value),
-            style: TextStyle(fontFamily: 'Cairo', fontSize: 13, fontWeight: FontWeight.bold, color: color),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              AppConstants.formatMoney(value),
+              style: TextStyle(fontFamily: 'Cairo', fontSize: 13, fontWeight: FontWeight.bold, color: color),
+            ),
           ),
         ],
       );
@@ -102,9 +105,9 @@ class LoanCard extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                _amount('المبلغ الكلي', loan.amount, AppColors.textPrimary, CrossAxisAlignment.start),
-                _amount('المسدد', loan.paidAmount > 0 ? loan.paidAmount : 0, AppColors.success, CrossAxisAlignment.center),
-                _amount('المتبقي بذمته', loan.remainingAmount, AppColors.danger, CrossAxisAlignment.end),
+                Expanded(child: _amount('المبلغ الكلي', loan.amount, AppColors.textPrimary, CrossAxisAlignment.start)),
+                Expanded(child: _amount('المسدد', loan.paidAmount > 0 ? loan.paidAmount : 0, AppColors.success, CrossAxisAlignment.center)),
+                Expanded(child: _amount('المتبقي بذمته', loan.remainingAmount, AppColors.danger, CrossAxisAlignment.end)),
               ],
             ),
             const SizedBox(height: 10),

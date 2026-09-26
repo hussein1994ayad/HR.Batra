@@ -3,7 +3,6 @@
 // =========================================================================
 
 import 'dart:async';
-
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -16,9 +15,9 @@ import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
 
-import '../../core/design/design.dart';
 import '../../core/services/image_compression_service.dart';
 import '../../core/services/supabase_service.dart';
+import '../shared/ui/ui.dart';
 import '../shared/widgets/glass_background.dart';
 import '../shared/widgets/glass_container.dart';
 
@@ -185,7 +184,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                 border: Border.all(color: AppColors.brand.withValues(alpha: 0.2)),
               ),
               child: isSaving 
-                  ? const Center(child: CircularProgressIndicator(color: AppColors.brand))
+                  ? const Padding(padding: EdgeInsets.all(AppSpace.page), child: SkeletonList())
                   : Column(
                 children: [
                   Container(
@@ -391,7 +390,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                 border: Border.all(color: AppColors.brand.withValues(alpha: 0.2)),
               ),
               child: isSaving 
-                  ? const Center(child: CircularProgressIndicator(color: AppColors.brand))
+                  ? const Padding(padding: EdgeInsets.all(AppSpace.page), child: SkeletonList())
                   : Column(
                 children: [
                   Container(
@@ -1112,7 +1111,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
             ),
             Expanded(
               child: _isLoading
-                  ? const Center(child: CircularProgressIndicator(color: AppColors.brand))
+                  ? const Padding(padding: EdgeInsets.all(AppSpace.page), child: SkeletonList())
                   : filtered.isEmpty
                       ? const Center(child: Text('لا يوجد موظفون مطابقون لبحثك', style: TextStyle(color: AppColors.textMuted, fontFamily: 'Cairo')))
                       : ListView.builder(
@@ -1130,7 +1129,6 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                               child: GlassContainer(
                                 margin: const EdgeInsets.only(bottom: 12),
                                 padding: const EdgeInsets.all(16),
-                                borderRadius: 16,
                                 borderColor: (isActive as bool) ? AppColors.brand.withValues(alpha: 0.2) : AppColors.danger.withValues(alpha: 0.3),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,

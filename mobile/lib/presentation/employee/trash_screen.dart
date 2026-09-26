@@ -337,12 +337,6 @@ class _TrashScreenState extends State<TrashScreen> {
               fontFamily: 'Cairo',
               fontWeight: FontWeight.bold,
               color: AppColors.textPrimary,
-              shadows: [
-                Shadow(
-                  color: AppColors.brand,
-                  blurRadius: 10,
-                ),
-              ],
             ),
           ),
           centerTitle: true,

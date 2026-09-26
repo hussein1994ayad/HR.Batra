@@ -137,11 +137,11 @@ void main() {
     });
 
     test('late and early minutes follow the schedule, not a fixed 08:30', () {
-      final s = schedule(checkIn: '08:00:00', checkOut: '16:00:00');
+      final s = schedule();
       expect(lateMinutes(DateTime(2026, 9, 24, 8, 25), s), 25);
       expect(lateMinutes(DateTime(2026, 9, 24, 7, 55), s), 0);
       expect(lateMinutes(DateTime(2026, 9, 24, 9, 10), null), 10); // 09:00 بدون جدول
-      expect(earlyLeaveMinutes(DateTime(2026, 9, 24, 15, 0), s), 60);
+      expect(earlyLeaveMinutes(DateTime(2026, 9, 24, 15), s), 60);
       expect(suggestedPenalty('late', 25), 1250);
       expect(suggestedPenalty('absent', 0), kAbsencePenalty);
     });

@@ -169,7 +169,8 @@ class AppTheme {
       floatingActionButtonTheme: const FloatingActionButtonThemeData(
         backgroundColor: AppColors.brand,
         foregroundColor: AppColors.onBrand,
-        elevation: 2,
+        elevation: 1,
+        highlightElevation: 2,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(AppRadius.md))),
         extendedTextStyle: AppText.label,
       ),

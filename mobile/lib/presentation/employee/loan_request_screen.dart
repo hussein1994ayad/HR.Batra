@@ -215,7 +215,7 @@ class _LoanRequestScreenState extends State<LoanRequestScreen> with SingleTicker
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text('سلفي وأقساطي'),
+                  const Flexible(child: Text('سلفي وأقساطي', overflow: TextOverflow.ellipsis)),
                   if (active > 0) ...[const SizedBox(width: AppSpace.xs), Badge(label: Text('$active'), backgroundColor: AppColors.warning, textColor: AppColors.onStatus)],
                 ],
               ),

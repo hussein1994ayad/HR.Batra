@@ -40,10 +40,7 @@ class EmptyView extends StatelessWidget {
             ),
             const SizedBox(height: AppSpace.lg),
             Text(title, style: AppText.subtitle, textAlign: TextAlign.center),
-            if (message != null) ...[
-              const SizedBox(height: AppSpace.xs),
-              Text(message!, style: AppText.bodySm, textAlign: TextAlign.center),
-            ],
+            if (message != null) ...[const SizedBox(height: AppSpace.xs), Text(message!, style: AppText.bodySm, textAlign: TextAlign.center)],
             if (actionLabel != null && onAction != null) ...[
               const SizedBox(height: AppSpace.lg),
               AppButton.secondary(label: actionLabel!, onPressed: onAction, size: AppButtonSize.small),
@@ -57,7 +54,13 @@ class EmptyView extends StatelessWidget {
 
 /// حالة خطأ مع زر "إعادة المحاولة".
 class ErrorView extends StatelessWidget {
-  const ErrorView({super.key, this.title = 'تعذّر تحميل البيانات', this.message = 'تأكد من اتصالك بالإنترنت ثم حاول مرة ثانية.', this.onRetry, this.compact = false});
+  const ErrorView({
+    super.key,
+    this.title = 'تعذّر تحميل البيانات',
+    this.message = 'تأكد من اتصالك بالإنترنت ثم حاول مرة ثانية.',
+    this.onRetry,
+    this.compact = false,
+  });
 
   final String title;
   final String message;
@@ -135,35 +138,53 @@ class SkeletonList extends StatelessWidget {
     return Semantics(
       label: 'جاري التحميل',
       child: ExcludeSemantics(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (header) ...[
-              const Row(children: [Expanded(child: Skeleton(height: 88, radius: AppRadius.md)), SizedBox(width: AppSpace.md), Expanded(child: Skeleton(height: 88, radius: AppRadius.md))]),
-              const SizedBox(height: AppSpace.xl),
-            ],
-            for (var i = 0; i < count; i++) ...[
-              Container(
-                height: itemHeight,
-                padding: const EdgeInsets.all(AppSpace.md),
-                decoration: BoxDecoration(color: AppColors.surface1, borderRadius: AppRadius.card, border: Border.all(color: AppColors.border)),
-                child: const Row(
+        child: SingleChildScrollView(
+          physics: const NeverScrollableScrollPhysics(),
+          primary: false,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (header) ...[
+                const Row(
                   children: [
-                    Skeleton(width: 44, height: 44, radius: AppRadius.sm),
+                    Expanded(child: Skeleton(height: 88, radius: AppRadius.md)),
                     SizedBox(width: AppSpace.md),
-                    Expanded(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [Skeleton(width: 140), SizedBox(height: AppSpace.sm), Skeleton(width: 90, height: 10)],
-                      ),
-                    ),
+                    Expanded(child: Skeleton(height: 88, radius: AppRadius.md)),
                   ],
                 ),
-              ),
-              const SizedBox(height: AppSpace.md),
+                const SizedBox(height: AppSpace.xl),
+              ],
+              for (var i = 0; i < count; i++) ...[
+                Container(
+                  height: itemHeight,
+                  padding: const EdgeInsets.all(AppSpace.md),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface1,
+                    borderRadius: AppRadius.card,
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: const Row(
+                    children: [
+                      Skeleton(width: 44, height: 44, radius: AppRadius.sm),
+                      SizedBox(width: AppSpace.md),
+                      Expanded(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Skeleton(width: 140),
+                            SizedBox(height: AppSpace.sm),
+                            Skeleton(width: 90, height: 10),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: AppSpace.md),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -185,7 +206,10 @@ class FadeSlideIn extends StatelessWidget {
       tween: Tween(begin: 0, end: 1),
       duration: Duration(milliseconds: 220 + delay),
       curve: Interval(delay / (220 + delay), 1, curve: AppMotion.standard),
-      builder: (_, t, c) => Opacity(opacity: t, child: Transform.translate(offset: Offset(0, (1 - t) * 12), child: c)),
+      builder: (_, t, c) => Opacity(
+        opacity: t,
+        child: Transform.translate(offset: Offset(0, (1 - t) * 12), child: c),
+      ),
       child: child,
     );
   }
