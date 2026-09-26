@@ -209,7 +209,7 @@ Deno.serve(async (req: Request) => {
             android: {
               priority: "HIGH", // Case-sensitive uppercase HIGH is required!
               notification: {
-                channel_id: "hr_pro_channel_v6", // Target the new channel ID
+                channel_id: "hr_pro_channel_v7", // must match NotificationService.channelId in the app
                 sound: "special_chime", // Android custom sound
                 default_vibrate_timings: true,
                 default_light_settings: true,

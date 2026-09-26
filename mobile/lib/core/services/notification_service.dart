@@ -32,9 +32,9 @@ class NotificationService {
   static String lastError = '';
 
   // قنوات الإشعارات
-  static const String channelId = 'hr_pro_channel_v6';
+  static const String channelId = 'hr_pro_channel_v7';
   static const String channelName = 'HR Pro Notifications';
-  static const String reminderChannelId = 'hr_pro_attendance_reminders_v1';
+  static const String reminderChannelId = 'hr_pro_attendance_reminders_v2';
   static const String reminderChannelName = 'تذكيرات بصمة الدوام';
   static const String syncChannelId = 'hrpro_sync_v2';
   static const String syncChannelName = 'HR Pro Background Sync';
@@ -75,7 +75,11 @@ class NotificationService {
 
         // حذف القنوات القديمة
         try {
-          await androidPlugin.deleteNotificationChannel('hr_pro_channel_v5');
+          // القنوات القديمة أُنشئت بدون صوت (كان الملف يُحذف من نسخة الإصدار)، وأندرويد
+          // لا يغيّر صوت قناة بعد إنشائها؛ لذلك قنوات جديدة وحذف القديمة.
+          for (final old in ['hr_pro_channel_v5', 'hr_pro_channel_v6', 'hr_pro_attendance_reminders_v1']) {
+            await androidPlugin.deleteNotificationChannel(old);
+          }
           await androidPlugin.deleteNotificationChannel('hrpro_location_service');
         } catch (_) {}
 
