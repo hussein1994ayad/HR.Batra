@@ -41,7 +41,7 @@ test.describe('overview', () => {
     await expect(page.getByText('نسبة الحضور')).toBeVisible();
     await expect(page.locator('#absent-section')).toContainText('مصطفى حسن');
     await expect(page.getByText('Fake GPS')).toBeVisible();
-    expect(errors).toEqual([]);
+    expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([]);
   });
 
   test('quick navigator (Ctrl+K) jumps to a page', async ({ page }) => {
@@ -99,7 +99,7 @@ for (const p of PAGES) {
     await page.goto(p.path);
     await expect(page.getByRole('main').getByRole('heading', { level: 2, name: p.heading, exact: true })).toBeVisible();
     await expect(page.locator('[aria-current="page"]').first()).toBeVisible();
-    expect(errors).toEqual([]);
+    expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([]);
   });
 }
 
