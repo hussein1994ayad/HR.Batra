@@ -42,13 +42,13 @@ await expectError('more days than the balance is rejected',
 await expectOk('a non-balance leave type is not limited by the balance',
   leave('2027-01-03T00:00:00+03', '2027-01-20T00:00:00+03', 'other'));
 
-await db.exec(`UPDATE leave_balances SET annual_used = annual_entitlement - 1 WHERE employee_id = '${IDS.emp}'`);
+await db.exec(`UPDATE leave_balances SET annual_entitlement = 1 WHERE employee_id = '${IDS.emp}'`);
 await expectError('approval re-checks the balance', as(db, 'admin',
   `UPDATE leave_requests SET status = 'approved' WHERE id = $1 RETURNING id`, [l1]), 'رصيد الإجازة غير كافٍ');
-await db.exec(`UPDATE leave_balances SET annual_used = 0 WHERE employee_id = '${IDS.emp}'`);
+await db.exec(`UPDATE leave_balances SET annual_entitlement = NULL WHERE employee_id = '${IDS.emp}'`);
 await expectOk('approval passes with enough balance', as(db, 'admin',
   `UPDATE leave_requests SET status = 'approved' WHERE id = $1 RETURNING id`, [l1]));
-const used = (await db.query(`SELECT annual_used::float8 AS annual_used FROM leave_balances WHERE employee_id = $1`, [IDS.emp])).rows[0].annual_used;
+const used = Number((await db.query(`SELECT get_leave_balance($1, '2026-12-03') b`, [IDS.emp])).rows[0].b.annual.used);
 check('balance deducts work days only', used === 3, String(used));
 
 await expectOk('hourly leave on a free day is accepted',
@@ -96,17 +96,40 @@ await expectError('employee cannot delete a stored file', as(db, 'emp',
   return r;
 }), 'row-level security');
 
-// ---------------- 7) الإجازة الزمنية تُخصم بكسور اليوم ----------------
-// دوام الموظف بلا جدول = 8 ساعات؛ 4 ساعات = نصف يوم
-await db.exec(`UPDATE leave_balances SET sick_used = sick_entitlement - 0.25 WHERE employee_id = '${IDS.emp}'`);
-await expectError('an hourly leave larger than the remaining fraction is rejected',
-  leave('2026-12-16T00:00:00+03', '2026-12-16T00:00:00+03', 'sick', `, true, '09:00', '13:00'`), 'المطلوب 0.5 يوم والمتبقي 0.25 يوم');
-await db.exec(`UPDATE leave_balances SET sick_used = 0 WHERE employee_id = '${IDS.emp}'`);
-const hl = (await expectOk('a 4-hour sick leave is accepted',
+// ---------------- 7) الزمنيات: رصيد ساعات شهري من السياسة ----------------
+// السياسة الافتراضية 8 ساعات/شهر. في كانون الأول سبق طلب 09–11 و 12–13 = 3 ساعات.
+const hb = async () => (await db.query(`SELECT get_leave_balance($1, '2026-12-01') b`, [IDS.emp])).rows[0].b.hourly;
+check('pending hourly leaves reserve the monthly hours', Number((await hb()).left_hours) === 5, JSON.stringify(await hb()));
+await expectError('more hours than left this month is rejected',
+  leave('2026-12-16T00:00:00+03', '2026-12-16T00:00:00+03', 'sick', `, true, '08:00', '14:00'`), 'المطلوب 6 ساعة والمتبقي 5 ساعة');
+const hl = (await expectOk('a 4-hour leave fits',
   leave('2026-12-16T00:00:00+03', '2026-12-16T00:00:00+03', 'sick', `, true, '09:00', '13:00'`))).rows[0].id;
 await as(db, 'admin', `UPDATE leave_requests SET status = 'approved' WHERE id = $1`, [hl]);
-const sick = (await db.query(`SELECT sick_used::float8 s FROM leave_balances WHERE employee_id = $1`, [IDS.emp])).rows[0].s;
-check('approved 4-hour leave deducts half a day', sick === 0.5, String(sick));
+check('approved hourly leave counts as used hours, not days',
+  Number((await hb()).used_hours) === 4 && Number((await db.query(`SELECT get_leave_balance($1, '2026-12-01') b`, [IDS.emp])).rows[0].b.sick.used) === 0,
+  JSON.stringify(await hb()));
+check('next month starts with a fresh hours balance',
+  Number((await db.query(`SELECT get_leave_balance($1, '2027-01-05') b`, [IDS.emp])).rows[0].b.hourly.left_hours) === 8);
+
+// ---------------- 8) السياسة والتخصيص ----------------
+await db.exec(`UPDATE system_settings SET value = value || '{"default_annual": 30, "hourly_monthly_hours": 10}' WHERE key = 'leave_policy'`);
+const pb = async (who = 'emp') => (await as(db, who, `SELECT get_leave_balance($1, '2027-03-01') b`, [IDS.emp])).rows[0].b;
+check('policy change applies to everyone', Number((await pb()).annual.entitlement) === 30 && Number((await pb()).hourly.allowance_hours) === 10);
+await expectError('employee cannot set own entitlement',
+  as(db, 'emp', `SELECT set_employee_leave_entitlement($1, 99, 99, 99)`, [IDS.emp]), 'غير مصرح');
+await expectOk('admin sets a custom entitlement', as(db, 'admin', `SELECT set_employee_leave_entitlement($1, 40, NULL, 12)`, [IDS.emp]));
+check('custom entitlement overrides the policy',
+  Number((await pb()).annual.entitlement) === 40 && Number((await pb()).sick.entitlement) === 15 && Number((await pb()).hourly.allowance_hours) === 12);
+await expectError('employee cannot read a colleague balance',
+  as(db, 'emp', `SELECT get_leave_balance($1)`, [IDS.emp2]), 'غير مصرح');
+await expectOk('manager can read an employee balance', as(db, 'manager', `SELECT get_leave_balance($1)`, [IDS.emp]));
+check('a new year renews the annual balance', Number((await pb()).annual.used) === 0);
+
+await db.exec(`UPDATE system_settings SET value = jsonb_set(value, '{active_types}', value->'active_types' || '[{"id":"marriage","name":"إجازة زواج"}]') WHERE key = 'leave_policy'`);
+await expectOk('a leave type added in settings can be requested',
+  leave('2027-02-07T00:00:00+03', '2027-02-08T00:00:00+03', 'marriage'));
+await expectError('a type not in the policy is rejected',
+  leave('2027-02-14T00:00:00+03', '2027-02-15T00:00:00+03', 'vacation'), 'غير متاح');
 
 // ---------------- 5) الحاويات الخاصة ----------------
 await db.exec(`INSERT INTO storage.buckets (id, name, public) VALUES ('employee-documents', 'employee-documents', true)

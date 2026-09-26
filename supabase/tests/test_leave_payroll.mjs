@@ -1,7 +1,11 @@
 import { setup, as, IDS, expectOk, expectError, check, done } from './lib.mjs';
 
 const db = await setup();
-const bal = async (id) => (await db.query(`SELECT annual_used::float8 AS annual_used, sick_used::float8 AS sick_used FROM leave_balances WHERE employee_id=$1`, [id])).rows[0];
+// الرصيد المستخدم يُحسب من الطلبات المعتمدة لسنة 2026 (get_leave_balance)
+const bal = async (id) => {
+  const b = (await db.query(`SELECT get_leave_balance($1, '2026-10-15') b`, [id])).rows[0].b;
+  return { annual_used: Number(b.annual.used), sick_used: Number(b.sick.used), hours_used: Number(b.hourly.used_hours) };
+};
 
 // ---------------- leave balances ----------------
 check('every employee has a balance row', (await db.query(`SELECT count(*)::int n FROM leave_balances`)).rows[0].n === 4);
@@ -29,7 +33,7 @@ check('decision notification uses admin rejection reason',
 const hourly = (await as(db, 'emp', `INSERT INTO leave_requests (employee_id, start_date, end_date, leave_type, is_hourly, status)
   VALUES ($1, '2026-10-10T05:00:00Z', '2026-10-10T08:00:00Z', 'sick', true, 'pending') RETURNING id`, [IDS.emp])).rows[0].id;
 await as(db, 'admin', `UPDATE leave_requests SET status='approved' WHERE id=$1`, [hourly]);
-check('a 3-hour leave deducts 3/8 of a day', (await bal(IDS.emp)).sick_used === 0.38, JSON.stringify(await bal(IDS.emp)));
+check('an hourly leave uses the monthly hours, not the days', (await bal(IDS.emp)).hours_used === 3 && (await bal(IDS.emp)).sick_used === 0, JSON.stringify(await bal(IDS.emp)));
 
 await expectError('employee still cannot edit own balance',
   as(db, 'emp', `UPDATE leave_balances SET annual_used = 0 WHERE employee_id=$1 RETURNING 1`, [IDS.emp])
