@@ -5,6 +5,7 @@ import { Download, Eye, FileImage, FileText, FolderOpen, Pencil, Share2 } from '
 import type { Employee } from '@/lib/db-types';
 import { Avatar, Badge, Button, EmptyState, IconButton, Modal, type Tone } from '@/components/ui';
 import { formatIQD } from '@/lib/format';
+import { openStorageUrl, resolveStorageUrl } from '@/lib/signed-urls';
 
 const ROLE_META: Record<string, { label: string; tone: Tone }> = {
   admin: { label: 'مدير عام', tone: 'rose' },
@@ -35,7 +36,9 @@ export function EmployeeProfileModal({ profileEmployee: emp, onClose, onEdit, on
 
   const copyLinks = async () => {
     try {
-      await navigator.clipboard.writeText(docs.join('\n'));
+      // روابط موقّعة صالحة 7 أيام (الوثائق خاصة)
+      const links = await Promise.all(docs.map((u) => resolveStorageUrl(u, 7 * 24 * 3600)));
+      await navigator.clipboard.writeText(links.join('\n'));
       toast.success('تم نسخ روابط كافة الوثائق');
     } catch {
       toast.error('تعذر النسخ إلى الحافظة');
@@ -93,16 +96,14 @@ export function EmployeeProfileModal({ profileEmployee: emp, onClose, onEdit, on
                 </div>
                 <div className="flex gap-1">
                   <IconButton icon={Eye} label="معاينة" tone="teal" onClick={() => onPreview(url, title)} />
-                  <a
-                    href={url}
-                    target="_blank"
-                    rel="noreferrer"
-                    download
+                  <button
+                    type="button"
+                    onClick={() => openStorageUrl(url).catch(() => toast.error('تعذر فتح الوثيقة'))}
                     title="فتح وتحميل"
-                    className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-sky-300 hover:bg-sky-500/15"
+                    className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-sky-300 hover:bg-sky-500/15 cursor-pointer"
                   >
                     <Download className="w-4 h-4" />
-                  </a>
+                  </button>
                 </div>
               </div>
             );

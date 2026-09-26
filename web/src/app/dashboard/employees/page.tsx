@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Archive, Building, Check, Eye, EyeOff, FolderOpen, Lock, Pencil, RotateCcw, Smartphone, Trash2, Unlock, UserPlus, Users, X,
+  Archive, Building, Check, FolderOpen, Lock, Pencil, RotateCcw, Smartphone, Trash2, Unlock, UserPlus, Users, X,
 } from 'lucide-react';
 import type { Employee } from '@/lib/db-types';
 import { useConfirm } from '@/components/confirm';
@@ -35,7 +35,6 @@ export default function EmployeesPage() {
   const [tab, setTab] = useState<'active' | 'archived'>('active');
   const [search, setSearch] = useState('');
   const [branchFilter, setBranchFilter] = useState('all');
-  const [revealed, setRevealed] = useState<Record<string, boolean>>({});
 
   const [formTarget, setFormTarget] = useState<Employee | 'new' | null>(null);
   const [deleting, setDeleting] = useState<Employee | null>(null);
@@ -139,7 +138,6 @@ export default function EmployeesPage() {
               <tr>
                 <th>الموظف</th>
                 <th>الهاتف</th>
-                <th>كلمة المرور</th>
                 <th>الفرع</th>
                 <th>الصلاحية</th>
                 <th>الراتب الأساسي</th>
@@ -170,21 +168,6 @@ export default function EmployeesPage() {
                         </button>
                       </td>
                       <td className="font-mono" dir="ltr">{emp.phone || '—'}</td>
-                      <td>
-                        {emp.plain_password ? (
-                          <button
-                            type="button"
-                            onClick={() => setRevealed((r) => ({ ...r, [emp.id]: !r[emp.id] }))}
-                            className="inline-flex items-center gap-1.5 font-mono text-slate-300 hover:text-white cursor-pointer"
-                            title={revealed[emp.id] ? 'إخفاء' : 'إظهار'}
-                          >
-                            {revealed[emp.id] ? <EyeOff className="w-3.5 h-3.5 text-slate-500" /> : <Eye className="w-3.5 h-3.5 text-slate-500" />}
-                            <span dir="ltr">{revealed[emp.id] ? emp.plain_password : '••••••'}</span>
-                          </button>
-                        ) : (
-                          <span className="text-slate-600">—</span>
-                        )}
-                      </td>
                       <td>{emp.branches?.name || <span className="text-slate-600">—</span>}</td>
                       <td><Badge tone={role.tone}>{role.label}</Badge></td>
                       <td className="font-bold text-slate-200 whitespace-nowrap">{formatIQD(emp.monthly_salary_iqd)}</td>

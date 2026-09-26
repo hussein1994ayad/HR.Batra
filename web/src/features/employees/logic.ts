@@ -67,7 +67,7 @@ export function employeeToFormValues(emp: Employee): EmployeeFormValues {
     fullName: emp.full_name,
     email: emp.email ?? '',
     phone: emp.phone || '',
-    password: emp.plain_password || '',
+    password: '', // فارغة = بدون تغيير (كلمات السر لا تُحفظ مقروءة)
     role: emp.role,
     branchId: emp.branch_id || '',
     monthlySalary: emp.monthly_salary_iqd || 0,

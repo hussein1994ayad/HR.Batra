@@ -24,6 +24,7 @@ import { toDateKey } from '@/lib/attendance';
 import { errorMessage, formatDateTime } from '@/lib/format';
 import type { LeaveRequest, RequestStatus } from '@/lib/types';
 import { Avatar, Badge, Button, Card, EmptyState, PageHeader, SearchInput, SegmentedTabs, Toggle, cn } from '@/components/ui';
+import { openStorageUrl } from '@/lib/signed-urls';
 
 const LEAVE_TYPES: Record<string, string> = {
   annual: 'إجازة سنوية',
@@ -189,14 +190,13 @@ export default function LeavesPage() {
                   )}
 
                   {req.attachment_url && (
-                    <a
-                      href={req.attachment_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-300 hover:text-indigo-200 mb-3"
+                    <button
+                      type="button"
+                      onClick={() => openStorageUrl(req.attachment_url!).catch(() => toast.error('تعذر فتح الملف'))}
+                      className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-300 hover:text-indigo-200 mb-3 cursor-pointer"
                     >
                       <Paperclip className="w-3.5 h-3.5" /> عرض المستند المرفق
-                    </a>
+                    </button>
                   )}
 
                   <div className="mt-auto pt-4 border-t border-slate-800/70">

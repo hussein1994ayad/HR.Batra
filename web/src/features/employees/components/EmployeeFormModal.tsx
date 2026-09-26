@@ -8,8 +8,11 @@ import type { Employee } from '@/lib/db-types';
 import { AmountInput, Field, Input, Modal, ModalFooter, Select, cn } from '@/components/ui';
 import { emptyEmployeeForm, employeeToFormValues } from '../logic';
 import type { BranchOption, EmployeeFormValues } from '../types';
+import { useSignedUrl } from '@/lib/signed-urls';
 
-function Thumb({ src, onRemove, highlight }: { src: string; onRemove: () => void; highlight?: boolean }) {
+function Thumb({ src: rawSrc, onRemove, highlight }: { src: string; onRemove: () => void; highlight?: boolean }) {
+  const src = useSignedUrl(rawSrc);
+  if (!src) return <div className="w-16 h-16 rounded-xl border border-slate-700 bg-slate-900/60 animate-pulse" />;
   return (
     <div className="relative group">
       <Image
@@ -60,7 +63,7 @@ export function EmployeeFormModal({ employee, branches, saving, onClose, onSubmi
     e.preventDefault();
     if (!form.fullName.trim()) return void toast.error('يرجى إدخال اسم الموظف');
     if (!form.email.trim()) return void toast.error('يرجى إدخال البريد الإلكتروني');
-    if (!isEdit && form.password.length < 6) return void toast.error('يجب أن تكون كلمة المرور 6 أحرف على الأقل');
+    if ((!isEdit || form.password) && form.password.length < 6) return void toast.error('يجب أن تكون كلمة المرور 6 أحرف على الأقل');
     onSubmit(form, existingDocs, newDocs);
   };
 
@@ -84,14 +87,14 @@ export function EmployeeFormModal({ employee, branches, saving, onClose, onSubmi
           <Field label="رقم الهاتف">
             <Input type="tel" value={form.phone} onChange={(e) => set('phone', e.target.value)} placeholder="077XXXXXXXX" dir="ltr" className="text-left" />
           </Field>
-          <Field label={isEdit ? 'كلمة المرور' : 'كلمة المرور (6 أحرف فأكثر)'}>
+          <Field label={isEdit ? 'كلمة مرور جديدة (اتركها فارغة لعدم التغيير)' : 'كلمة المرور (6 أحرف فأكثر)'}>
             <div className="relative">
               <Input
                 type={showPassword ? 'text' : 'password'}
                 required={!isEdit}
                 value={form.password}
                 onChange={(e) => set('password', e.target.value)}
-                placeholder="••••••••"
+                placeholder={isEdit ? 'بدون تغيير' : '••••••••'}
                 dir="ltr"
                 className="text-left pl-10"
               />

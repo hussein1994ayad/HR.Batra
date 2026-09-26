@@ -177,7 +177,6 @@ export async function updateEmployee(
       monthly_salary_iqd: values.monthlySalary || 0,
       future_salary_iqd: values.futureSalary || null,
       future_salary_month: values.futureSalaryMonth || null,
-      plain_password: values.password,
       document_urls: [...keptDocuments, ...urls],
       join_date: values.joinDate,
     })

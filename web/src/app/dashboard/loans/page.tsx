@@ -1,4 +1,5 @@
 'use client';
+import { openStorageUrl } from '@/lib/signed-urls';
 
 import React, { useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
@@ -338,9 +339,9 @@ export default function LoansPage() {
                     <span className="text-sm font-extrabold text-sky-300">{formatIQD(amount / months)}</span>
                   </div>
                   {loan.pledge_url && (
-                    <a href={loan.pledge_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-300 hover:text-indigo-200 mb-3">
-                      <FileText className="w-3.5 h-3.5" /> عرض التعهد الموقّع
-                    </a>
+                    <button type="button" onClick={() => openStorageUrl(loan.pledge_url!).catch(() => toast.error('تعذر فتح التعهد'))} className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-300 hover:text-indigo-200 mb-3 cursor-pointer">
+                    <FileText className="w-3.5 h-3.5" /> عرض التعهد الموقّع
+                  </button>
                   )}
                   <div className="flex gap-2 mt-auto pt-4 border-t border-slate-800/70">
                     <Button variant="primary" icon={Settings2} block disabled={busy === loan.id} onClick={() => startApproval(loan)}>
