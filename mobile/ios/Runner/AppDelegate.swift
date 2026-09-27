@@ -1,16 +1,143 @@
 import Flutter
 import UIKit
+import UserNotifications
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
+
+  private let iosLocationChannel = "com.batra.hrpro/ios_location"
+  private let deviceChannel = "com.batra.hrpro/device"
+
   override func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
+
+    // طلب إذن الإشعارات يتم من Flutter بعد تسجيل الدخول (firebase_messaging)
+    // بنافذة واضحة للمستخدم. كان يُطلب هنا بصيغة provisional فتصل الإشعارات
+    // صامتة بدون صوت أو بانر، ومعه criticalAlert الذي يحتاج إذناً خاصاً من Apple.
+    UNUserNotificationCenter.current().delegate = self
+    application.registerForRemoteNotifications()
+
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
+  // مع UIScene تكون window فارغة داخل didFinishLaunching، لذلك تُسجَّل القنوات
+  // هنا عبر الـ engine الضمني (كانت القناة لا تُسجَّل إطلاقاً في المكان القديم).
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "HRProNativeChannels") {
+      setupIOSLocationChannel(messenger: registrar.messenger())
+      setupDeviceChannel(messenger: registrar.messenger())
+    }
+  }
+
+  private func setupDeviceChannel(messenger: FlutterBinaryMessenger) {
+    let channel = FlutterMethodChannel(name: deviceChannel, binaryMessenger: messenger)
+    channel.setMethodCallHandler { call, result in
+      switch call.method {
+      case "getStableDeviceId":
+        result(StableDeviceId.get())
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+  }
+
+  private func setupIOSLocationChannel(messenger: FlutterBinaryMessenger) {
+    let channel = FlutterMethodChannel(
+      name: iosLocationChannel,
+      binaryMessenger: messenger
+    )
+    channel.setMethodCallHandler { call, result in
+      switch call.method {
+      case "configure":
+        guard let args = call.arguments as? [String: Any],
+              let url = args["supabaseUrl"] as? String,
+              let anon = args["supabaseAnonKey"] as? String,
+              let employeeId = args["employeeId"] as? String
+        else {
+          result(FlutterError(code: "BAD_ARGS", message: "configure needs args", details: nil))
+          return
+        }
+        let token = (args["accessToken"] as? String) ?? ""
+        LocationMonitorIOS.shared.configure(
+          supabaseUrl: url,
+          supabaseAnonKey: anon,
+          employeeId: employeeId,
+          accessToken: token
+        )
+        result(true)
+
+      case "startMonitoring":
+        guard let args = call.arguments as? [String: Any],
+              let branches = args["branches"] as? [[String: Any]]
+        else {
+          result(FlutterError(code: "BAD_ARGS", message: "startMonitoring needs branches", details: nil))
+          return
+        }
+        LocationMonitorIOS.shared.startMonitoring(branches: branches)
+        result(true)
+
+      case "setCheckedIn":
+        guard let args = call.arguments as? [String: Any],
+              let value = args["value"] as? Bool
+        else {
+          result(FlutterError(code: "BAD_ARGS", message: "setCheckedIn needs value", details: nil))
+          return
+        }
+        LocationMonitorIOS.shared.setCheckedIn(value)
+        result(true)
+
+      case "stopMonitoring":
+        LocationMonitorIOS.shared.stopMonitoring()
+        result(true)
+
+      case "updateAccessToken":
+        guard let args = call.arguments as? [String: Any],
+              let token = args["accessToken"] as? String
+        else {
+          result(FlutterError(code: "BAD_ARGS", message: "updateAccessToken needs accessToken", details: nil))
+          return
+        }
+        LocationMonitorIOS.shared.updateAccessToken(token)
+        result(true)
+
+      case "drainPendingPoints":
+        result(LocationMonitorIOS.shared.drainPendingPoints())
+
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+  }
+
+  override func application(
+    _ application: UIApplication,
+    didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
+  ) {
+    super.application(application, didRegisterForRemoteNotificationsWithDeviceToken: deviceToken)
+  }
+
+  override func application(
+    _ application: UIApplication,
+    didFailToRegisterForRemoteNotificationsWithError error: Error
+  ) {
+    NSLog("APNs registration failed: \(error.localizedDescription)")
+    super.application(application, didFailToRegisterForRemoteNotificationsWithError: error)
+  }
+
+  override func userNotificationCenter(
+    _ center: UNUserNotificationCenter,
+    willPresent notification: UNNotification,
+    withCompletionHandler completionHandler:
+      @escaping (UNNotificationPresentationOptions) -> Void
+  ) {
+    if #available(iOS 14.0, *) {
+      completionHandler([.banner, .list, .badge, .sound])
+    } else {
+      completionHandler([.alert, .badge, .sound])
+    }
   }
 }

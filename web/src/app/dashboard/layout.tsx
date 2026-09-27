@@ -32,6 +32,7 @@ import {
 import type { User } from '@supabase/supabase-js';
 import { ConfirmProvider } from '@/components/confirm';
 import type { AppNotification } from '@/lib/types';
+import { useIsClient } from '@/lib/useIsClient';
 
 interface SidebarItem {
   name: string;
@@ -526,13 +527,15 @@ export default function DashboardLayout({
     </div>
   );
 
+  const isClient = useIsClient();
   const todayLabel = useMemo(() => {
+    if (!isClient) return '';
     try {
       return new Date().toLocaleDateString('ar-IQ-u-nu-latn', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
     } catch {
       return new Date().toDateString();
     }
-  }, []);
+  }, [isClient]);
 
   return (
     <div className="flex h-dvh bg-dark-bg overflow-hidden text-slate-100 font-sans" dir="rtl">

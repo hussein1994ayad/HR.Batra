@@ -1,14 +1,20 @@
 // =========================================================================
-// نظام HR Pro v6.0 - شاشة إدارة الأفرع (Geofences)
+// HR Pro — إدارة الأفرع (النطاق الجغرافي للبصمة)
 // =========================================================================
+// قائمة الأفرع مع خريطة مصغّرة، وإضافة/تعديل عبر نافذة فيها خريطة تفاعلية،
+// شريط لتحديد النطاق بالمتر، وزر "موقعي الحالي". الحذف بعد تأكيد.
+// =========================================================================
+
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
+
 import '../../core/services/supabase_service.dart';
-import '../../core/theme/app_theme.dart';
-import '../shared/widgets/glass_background.dart';
-import '../shared/widgets/glass_container.dart';
+import '../../core/utils/error_text.dart';
+import '../shared/ui/ui.dart';
 
 class BranchManagementScreen extends StatefulWidget {
   const BranchManagementScreen({super.key});
@@ -19,10 +25,11 @@ class BranchManagementScreen extends StatefulWidget {
 
 class _BranchManagementScreenState extends State<BranchManagementScreen> {
   bool _isLoading = true;
+  bool _hasError = false;
   List<Map<String, dynamic>> _branches = [];
-  
-  // Default map center (e.g., Baghdad)
-  final LatLng _defaultCenter = const LatLng(33.3152, 44.3661);
+
+  // مركز افتراضي للخريطة (بغداد)
+  static const LatLng _defaultCenter = LatLng(33.3152, 44.3661);
 
   @override
   void initState() {
@@ -33,330 +40,330 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
   Future<void> _loadBranches() async {
     setState(() => _isLoading = true);
     try {
-      final data = await SupabaseService.client
-          .from('branches')
-          .select('*')
-          .order('name');
-          
+      final data = await SupabaseService.client.from('branches').select().order('name');
+      if (!mounted) return;
       setState(() {
         _branches = List<Map<String, dynamic>>.from(data);
+        _hasError = false;
       });
     } catch (e) {
       debugPrint('Error loading branches: $e');
+      if (mounted) setState(() => _hasError = true);
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  void _showAddEditBranchModal([Map<String, dynamic>? branch]) {
-    final nameController = TextEditingController(text: branch?['name'] ?? '');
-    final radiusController = TextEditingController(text: (branch?['radius_meters'] ?? 50).toString());
-    
-    LatLng selectedLocation = branch != null && branch['latitude'] != null && branch['longitude'] != null
-        ? LatLng(branch['latitude'], branch['longitude'])
-        : _defaultCenter;
-        
-    bool isSaving = false;
-    final mapController = MapController();
+  static LatLng? _pointOf(Map<String, dynamic> b) {
+    final lat = b['latitude'];
+    final lng = b['longitude'];
+    if (lat is! num || lng is! num) return null;
+    return LatLng(lat.toDouble(), lng.toDouble());
+  }
 
-    showModalBottomSheet(
+  Future<void> _openEditor([Map<String, dynamic>? branch]) async {
+    final saved = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            return Container(
-              height: MediaQuery.of(context).size.height * 0.9,
-              decoration: BoxDecoration(
-                color: AppTheme.darkSurfaceHigh,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-                border: Border.all(color: AppTheme.neonCyan.withValues(alpha: 0.2)),
-              ),
-              child: isSaving 
-                  ? const Center(child: CircularProgressIndicator(color: AppTheme.neonCyan))
-                  : Column(
-                children: [
-                  Container(
-                    margin: const EdgeInsets.only(top: 12),
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.white24,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: AppTheme.neonCyan.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Icon(branch == null ? Icons.add_location_alt_rounded : Icons.edit_location_alt_rounded, color: AppTheme.neonCyan, size: 22),
-                        ),
-                        const SizedBox(width: 12),
-                        Text(
-                          branch == null ? 'إضافة فرع جديد' : 'تعديل بيانات الفرع',
-                          style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const Divider(color: Colors.white10, height: 1),
-                  Expanded(
-                    child: ListView(
-                      padding: const EdgeInsets.all(20),
-                      children: [
-                        _buildTextField(nameController, 'اسم الفرع', Icons.business_rounded),
-                        const SizedBox(height: 16),
-                        _buildTextField(radiusController, 'نطاق الفرع (بالمتر)', Icons.radar_rounded, isNumber: true),
-                        const SizedBox(height: 16),
-                        const Text('حدد موقع الفرع على الخريطة:', style: TextStyle(fontFamily: 'Cairo', color: Colors.white70, fontSize: 12)),
-                        const SizedBox(height: 8),
-                        Container(
-                          height: 250,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: AppTheme.neonCyan.withValues(alpha: 0.3)),
-                          ),
-                          clipBehavior: Clip.antiAlias,
-                          child: FlutterMap(
-                            mapController: mapController,
-                            options: MapOptions(
-                              initialCenter: selectedLocation,
-                              initialZoom: 15.0,
-                              onTap: (tapPosition, point) {
-                                setModalState(() {
-                                  selectedLocation = point;
-                                });
-                              },
-                            ),
-                            children: [
-                              TileLayer(
-                                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                                userAgentPackageName: 'com.hr.pro',
-                              ),
-                              CircleLayer(
-                                circles: [
-                                  CircleMarker(
-                                    point: selectedLocation,
-                                    color: AppTheme.neonCyan.withValues(alpha: 0.3),
-                                    borderStrokeWidth: 2,
-                                    borderColor: AppTheme.neonCyan,
-                                    useRadiusInMeter: true,
-                                    radius: double.tryParse(radiusController.text) ?? 50.0,
-                                  ),
-                                ],
-                              ),
-                              MarkerLayer(
-                                markers: [
-                                  Marker(
-                                    point: selectedLocation,
-                                    width: 40,
-                                    height: 40,
-                                    child: const Icon(Icons.location_on, color: AppTheme.dangerRed, size: 40),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        const Text('💡 اضغط على أي نقطة في الخريطة لتغيير الموقع', style: TextStyle(fontFamily: 'Cairo', color: AppTheme.warningOrange, fontSize: 10)),
-                      ],
-                    ),
-                  ),
-                  Padding(
-                    padding: EdgeInsets.fromLTRB(20, 0, 20, MediaQuery.of(context).viewInsets.bottom + 20),
-                    child: SizedBox(
-                      width: double.infinity,
-                      height: 50,
-                      child: ElevatedButton(
-                        onPressed: () async {
-                          if (nameController.text.isEmpty) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('الرجاء إدخال اسم الفرع', style: TextStyle(fontFamily: 'Cairo'))),
-                            );
-                            return;
-                          }
-
-                          setModalState(() => isSaving = true);
-                          try {
-                            final data = {
-                              'name': nameController.text.trim(),
-                              'latitude': selectedLocation.latitude,
-                              'longitude': selectedLocation.longitude,
-                              'radius_meters': double.tryParse(radiusController.text) ?? 50.0,
-                            };
-
-                            if (branch == null) {
-                              await SupabaseService.client.from('branches').insert(data);
-                            } else {
-                              await SupabaseService.client.from('branches').update(data).eq('id', branch['id']);
-                            }
-
-                            if (mounted) {
-                              Navigator.pop(context);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('تم حفظ الفرع بنجاح ✅', style: TextStyle(fontFamily: 'Cairo')), backgroundColor: AppTheme.successGreen),
-                              );
-                              _loadBranches();
-                            }
-                          } catch (e) {
-                            setModalState(() => isSaving = false);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('خطأ: $e', style: const TextStyle(fontFamily: 'Cairo')), backgroundColor: AppTheme.dangerRed),
-                            );
-                          }
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppTheme.neonCyan,
-                          foregroundColor: Colors.black,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                        ),
-                        child: Text(branch == null ? 'إضافة الفرع' : 'حفظ التعديلات', style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 15)),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (ctx) => _BranchEditor(branch: branch, initial: branch == null ? null : _pointOf(branch)),
     );
+    if (saved == true && mounted) {
+      AppSnack.success(context, branch == null ? 'أُضيف الفرع' : 'حُفظت التعديلات');
+      unawaited(_loadBranches());
+    }
   }
 
-  Widget _buildTextField(TextEditingController controller, String label, IconData icon, {bool isNumber = false}) {
-    return TextField(
-      controller: controller,
-      keyboardType: isNumber ? TextInputType.number : TextInputType.text,
-      style: const TextStyle(fontFamily: 'Cairo', color: Colors.white, fontSize: 14),
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: const TextStyle(fontFamily: 'Cairo', color: Colors.white54, fontSize: 12),
-        prefixIcon: Icon(icon, color: AppTheme.neonCyan, size: 20),
-        filled: true,
-        fillColor: Colors.white.withValues(alpha: 0.05),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: AppTheme.neonCyan)),
-      ),
+  Future<void> _deleteBranch(Map<String, dynamic> branch) async {
+    final confirm = await showAppConfirm(
+      context,
+      title: 'حذف ${branch['name'] ?? 'الفرع'}؟',
+      message: 'الموظفون المرتبطون بهذا الفرع راح يحتاجون فرعاً جديداً حتى يبصمون.',
+      confirmLabel: 'حذف',
+      destructive: true,
     );
-  }
-
-  Future<void> _deleteBranch(String id) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.darkSurfaceHigh,
-        title: const Text('حذف الفرع', style: TextStyle(fontFamily: 'Cairo', color: Colors.white)),
-        content: const Text('هل أنت متأكد من حذف هذا الفرع؟', style: TextStyle(fontFamily: 'Cairo', color: Colors.white70)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('إلغاء', style: TextStyle(fontFamily: 'Cairo', color: Colors.white54)),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.dangerRed),
-            child: const Text('حذف', style: TextStyle(fontFamily: 'Cairo', color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm != true) return;
+    if (!confirm) return;
 
     try {
       setState(() => _isLoading = true);
-      await SupabaseService.client.from('branches').delete().eq('id', id);
-      _loadBranches();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('تم حذف الفرع بنجاح', style: TextStyle(fontFamily: 'Cairo')), backgroundColor: AppTheme.successGreen),
-        );
-      }
+      await SupabaseService.client.from('branches').delete().eq('id', branch['id'] as String);
+      if (mounted) AppSnack.success(context, 'حُذف الفرع');
+      unawaited(_loadBranches());
     } catch (e) {
       debugPrint('Error deleting branch: $e');
-    } finally {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        AppSnack.error(context, 'تعذّر الحذف — قد يكون الفرع مرتبطاً بموظفين أو سجلات');
+        setState(() => _isLoading = false);
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return GlassBackground(
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-            onPressed: () => Navigator.pop(context),
+    final List<Widget> content;
+    if (_isLoading && _branches.isEmpty) {
+      content = const [SkeletonList(count: 3, itemHeight: 96)];
+    } else if (_hasError && _branches.isEmpty) {
+      content = [ErrorView(onRetry: _loadBranches)];
+    } else if (_branches.isEmpty) {
+      content = [
+        EmptyView(title: 'لا توجد أفرع', message: 'أضف فرعاً وحدد مكانه ونطاقه حتى يقدر الموظفون يبصمون.', icon: Icons.store_rounded, actionLabel: 'إضافة فرع', onAction: _openEditor),
+      ];
+    } else {
+      content = [
+        for (var i = 0; i < _branches.length; i++)
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppSpace.md),
+            child: FadeSlideIn(index: i, child: _branchCard(_branches[i])),
           ),
-          title: const Text('إدارة الأفرع 🏢', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white)),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.add_business_rounded, color: AppTheme.neonCyan),
-              onPressed: () => _showAddEditBranchModal(),
+      ];
+    }
+    return AppPage(
+      title: 'الأفرع',
+      subtitle: _branches.isEmpty ? null : '${_branches.length} فرع',
+      onRefresh: _loadBranches,
+      floatingActionButton: FloatingActionButton.extended(onPressed: _openEditor, icon: const Icon(Icons.add_business_rounded), label: const Text('فرع جديد')),
+      slivers: [SliverList.list(children: content)],
+    );
+  }
+
+  Widget _branchCard(Map<String, dynamic> branch) {
+    final point = _pointOf(branch);
+    final radius = (branch['radius_meters'] as num? ?? 50).toDouble();
+    return AppCard(
+      padding: EdgeInsets.zero,
+      onTap: () => _openEditor(branch),
+      child: Row(
+        children: [
+          if (point != null)
+            SizedBox(
+              width: 96,
+              height: 96,
+              child: IgnorePointer(
+                child: ClipRRect(
+                  borderRadius: const BorderRadiusDirectional.horizontal(start: Radius.circular(AppRadius.md)).resolve(Directionality.of(context)),
+                  child: _MiniMap(point: point, radius: radius),
+                ),
+              ),
+            )
+          else
+            const Padding(padding: EdgeInsets.all(AppSpace.lg), child: ToneIcon(Icons.store_rounded, tone: AppTone.accent)),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpace.md, vertical: AppSpace.md),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text((branch['name'] ?? 'بدون اسم').toString(), style: AppText.subtitle, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  const SizedBox(height: AppSpace.xs),
+                  StatusBadge('النطاق ${radius.round()} م', tone: AppTone.brand, icon: Icons.radar_rounded),
+                  if (point == null) ...[
+                    const SizedBox(height: AppSpace.xs),
+                    Text('لم يُحدد الموقع بعد', style: AppText.caption.copyWith(color: AppColors.warning)),
+                  ],
+                ],
+              ),
             ),
-          ],
-        ),
-        body: _isLoading
-            ? const Center(child: CircularProgressIndicator(color: AppTheme.neonCyan))
-            : _branches.isEmpty
-                ? const Center(child: Text('لا توجد أفرع مسجلة', style: TextStyle(color: Colors.white54, fontFamily: 'Cairo')))
-                : ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: _branches.length,
-                    itemBuilder: (context, index) {
-                      final branch = _branches[index];
-                      return GlassContainer(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        padding: const EdgeInsets.all(16),
-                        borderRadius: 16,
-                        opacity: 0.08,
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: AppTheme.neonCyan.withValues(alpha: 0.15),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: const Icon(Icons.business_rounded, color: AppTheme.neonCyan, size: 24),
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(branch['name'] ?? 'بدون اسم', style: const TextStyle(color: Colors.white, fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 14)),
-                                  const SizedBox(height: 4),
-                                  Text('النطاق: ${branch['radius_meters'] ?? 50} متر', style: const TextStyle(color: AppTheme.warningOrange, fontSize: 11, fontFamily: 'Cairo')),
-                                  if (branch['latitude'] != null)
-                                    Text('${branch['latitude']}, ${branch['longitude']}', style: const TextStyle(color: Colors.white38, fontSize: 9, fontFamily: 'monospace')),
-                                ],
-                              ),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.edit_rounded, color: AppTheme.neonCyan),
-                              onPressed: () => _showAddEditBranchModal(branch),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.delete_rounded, color: AppTheme.dangerRed),
-                              onPressed: () => _deleteBranch(branch['id']),
-                            ),
-                          ],
+          ),
+          PopupMenuButton<String>(
+            tooltip: 'خيارات',
+            onSelected: (v) => v == 'edit' ? _openEditor(branch) : _deleteBranch(branch),
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'edit', child: ListTile(leading: Icon(Icons.edit_rounded), title: Text('تعديل'))),
+              PopupMenuItem(value: 'delete', child: ListTile(leading: Icon(Icons.delete_outline_rounded, color: AppColors.danger), title: Text('حذف'))),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MiniMap extends StatelessWidget {
+  const _MiniMap({required this.point, required this.radius});
+  final LatLng point;
+  final double radius;
+
+  @override
+  Widget build(BuildContext context) {
+    return FlutterMap(
+      options: MapOptions(initialCenter: point, initialZoom: 15, backgroundColor: AppColors.surface2, interactionOptions: const InteractionOptions(flags: InteractiveFlag.none)),
+      children: [
+        appMapTiles(),
+        CircleLayer(circles: [
+          CircleMarker(point: point, radius: radius, useRadiusInMeter: true, color: AppColors.brand.withValues(alpha: 0.2), borderColor: AppColors.brand, borderStrokeWidth: 1.5),
+        ]),
+      ],
+    );
+  }
+}
+
+/// نافذة إضافة/تعديل فرع: الاسم، النطاق، والموقع على الخريطة.
+class _BranchEditor extends StatefulWidget {
+  const _BranchEditor({this.branch, this.initial});
+  final Map<String, dynamic>? branch;
+  final LatLng? initial;
+
+  @override
+  State<_BranchEditor> createState() => _BranchEditorState();
+}
+
+class _BranchEditorState extends State<_BranchEditor> {
+  final _formKey = GlobalKey<FormState>();
+  final _mapController = MapController();
+  late final _name = TextEditingController(text: (widget.branch?['name'] ?? '').toString());
+  late LatLng _location = widget.initial ?? _BranchManagementScreenState._defaultCenter;
+  late double _radius = ((widget.branch?['radius_meters'] as num?) ?? 100).toDouble().clamp(20, 1000);
+  bool _saving = false;
+  bool _locating = false;
+
+  @override
+  void dispose() {
+    _name.dispose();
+    super.dispose();
+  }
+
+  Future<void> _useMyLocation() async {
+    setState(() => _locating = true);
+    try {
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+        if (mounted) AppSnack.error(context, 'اسمح للتطبيق بالوصول للموقع أولاً');
+        return;
+      }
+      final pos = await Geolocator.getCurrentPosition().timeout(const Duration(seconds: 10));
+      setState(() => _location = LatLng(pos.latitude, pos.longitude));
+      _mapController.move(_location, 17);
+    } catch (e) {
+      if (mounted) AppSnack.error(context, 'تعذّر تحديد موقعك الحالي');
+    } finally {
+      if (mounted) setState(() => _locating = false);
+    }
+  }
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _saving = true);
+    try {
+      final data = {
+        'name': _name.text.trim(),
+        'latitude': _location.latitude,
+        'longitude': _location.longitude,
+        'radius_meters': _radius.roundToDouble(),
+      };
+      if (widget.branch == null) {
+        await SupabaseService.client.from('branches').insert(data);
+      } else {
+        await SupabaseService.client.from('branches').update(data).eq('id', widget.branch!['id'] as Object);
+      }
+      if (mounted) Navigator.pop(context, true);
+    } catch (e) {
+      if (mounted) {
+        AppSnack.error(context, 'تعذّر الحفظ: ${errorText(e)}');
+        setState(() => _saving = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final mapHeight = (MediaQuery.sizeOf(context).height * 0.34).clamp(200.0, 360.0);
+    return Padding(
+      padding: EdgeInsets.fromLTRB(AppSpace.xl, 0, AppSpace.xl, AppSpace.xl + MediaQuery.viewInsetsOf(context).bottom),
+      child: SingleChildScrollView(
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(widget.branch == null ? 'فرع جديد' : 'تعديل الفرع', style: AppText.title),
+              const SizedBox(height: AppSpace.lg),
+              AppTextField(
+                controller: _name,
+                label: 'اسم الفرع',
+                hint: 'مثلاً: فرع المنصور',
+                icon: Icons.store_rounded,
+                validator: (v) => v == null || v.trim().isEmpty ? 'اكتب اسم الفرع' : null,
+              ),
+              const SizedBox(height: AppSpace.lg),
+              Row(
+                children: [
+                  Expanded(child: Text('نطاق البصمة', style: AppText.bodySm.copyWith(fontWeight: FontWeight.w700))),
+                  Text('${_radius.round()} م', style: AppText.subtitle.copyWith(color: AppColors.brand)),
+                ],
+              ),
+              Slider.adaptive(
+                value: _radius,
+                min: 20,
+                max: 1000,
+                divisions: 98,
+                label: '${_radius.round()} م',
+                activeColor: AppColors.brand,
+                onChanged: (v) => setState(() => _radius = v),
+              ),
+              const SizedBox(height: AppSpace.sm),
+              ClipRRect(
+                borderRadius: AppRadius.card,
+                child: SizedBox(
+                  height: mapHeight,
+                  child: Stack(
+                    children: [
+                      FlutterMap(
+                        mapController: _mapController,
+                        options: MapOptions(
+                          initialCenter: _location,
+                          initialZoom: 16,
+                          backgroundColor: AppColors.surface2,
+                          onTap: (_, point) => setState(() => _location = point),
                         ),
-                      );
-                    },
+                        children: [
+                          appMapTiles(),
+                          CircleLayer(circles: [
+                            CircleMarker(
+                              point: _location,
+                              color: AppColors.brand.withValues(alpha: 0.25),
+                              borderStrokeWidth: 2,
+                              borderColor: AppColors.brand,
+                              useRadiusInMeter: true,
+                              radius: _radius,
+                            ),
+                          ]),
+                          MarkerLayer(markers: [
+                            Marker(point: _location, width: 40, height: 40, alignment: Alignment.topCenter, child: const Icon(Icons.location_on_rounded, color: AppColors.danger, size: 40)),
+                          ]),
+                        ],
+                      ),
+                      PositionedDirectional(
+                        top: AppSpace.sm,
+                        end: AppSpace.sm,
+                        child: AppButton.secondary(
+                          label: 'موقعي الحالي',
+                          icon: Icons.my_location_rounded,
+                          size: AppButtonSize.small,
+                          loading: _locating,
+                          onPressed: _useMyLocation,
+                        ),
+                      ),
+                    ],
                   ),
+                ),
+              ),
+              const SizedBox(height: AppSpace.sm),
+              const Text('اضغط على الخريطة لنقل موقع الفرع، أو استعمل موقعك إذا كنت داخل الفرع الآن.', style: AppText.caption),
+              const SizedBox(height: AppSpace.xl),
+              AppButton(
+                label: widget.branch == null ? 'إضافة الفرع' : 'حفظ التعديلات',
+                icon: Icons.check_rounded,
+                size: AppButtonSize.large,
+                expand: true,
+                loading: _saving,
+                onPressed: _save,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

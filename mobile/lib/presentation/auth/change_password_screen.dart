@@ -1,14 +1,21 @@
 // =========================================================================
-// نظام HR Pro v6.0 - شاشة تغيير كلمة المرور الإجبارية (Mandatory Password Change Screen)
+// HR Pro v6.0 - شاشة تغيير كلمة المرور الإلزامية
+// إعادة تصميم عصرية بنفس أسلوب login_screen الجديد.
+// كل منطق الأمان محفوظ كما هو.
 // =========================================================================
 
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+
+
 import '../../core/routes/app_router.dart';
 import '../../core/services/auth_service.dart';
-import '../../core/theme/app_theme.dart';
-import '../shared/widgets/glass_background.dart';
-import '../shared/widgets/glass_container.dart';
+import '../shared/ui/ui.dart';
+import 'widgets/auth_shell.dart';
 
 class ChangePasswordScreen extends StatefulWidget {
   const ChangePasswordScreen({super.key});
@@ -17,7 +24,8 @@ class ChangePasswordScreen extends StatefulWidget {
   State<ChangePasswordScreen> createState() => _ChangePasswordScreenState();
 }
 
-class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
+class _ChangePasswordScreenState extends State<ChangePasswordScreen>
+    {
   final _formKey = GlobalKey<FormState>();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
@@ -35,7 +43,9 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
   }
 
   Future<void> _handleChangePassword() async {
+    FocusScope.of(context).unfocus();
     if (!_formKey.currentState!.validate()) return;
+    unawaited(HapticFeedback.lightImpact());
 
     setState(() {
       _isLoading = true;
@@ -43,310 +53,148 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
     });
 
     try {
-      await AuthService.changePassword(_passwordController.text.trim());
-      
-      if (mounted) {
-        // إشعار المستخدم بالنجاح
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'تم تحديث كلمة المرور بنجاح! أهلاً بك في نظامك المالي والإداري الجديد.',
-              style: TextStyle(fontFamily: 'Cairo'),
-            ),
-            backgroundColor: AppTheme.successGreen,
-          ),
-        );
-        // التوجيه للرئيسية بعد النجاح
-        context.go(AppRoutes.employeeHome);
-      }
+      await AuthService.changePassword(_passwordController.text.trim())
+          .timeout(const Duration(seconds: 15));
+
+      if (!mounted) return;
+      AppSnack.success(context, 'تم تحديث كلمة المرور — أهلاً بك');
+      context.go(AppRoutes.employeeHome);
+    } on TimeoutException {
+      _setError('انتهى وقت الطلب — تأكد من جودة اتصالك بالإنترنت');
+    } on SocketException {
+      _setError('لا يوجد اتصال بالإنترنت — يرجى التحقق من الشبكة');
     } catch (e) {
-      setState(() {
-        _errorMessage = 'حدث خطأ أثناء تحديث كلمة المرور. يرجى المحاولة لاحقاً.';
-      });
+      _setError('حدث خطأ أثناء تحديث كلمة المرور. يرجى المحاولة لاحقاً.');
     } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  void _setError(String msg) {
+    if (!mounted) return;
+    HapticFeedback.mediumImpact();
+    setState(() => _errorMessage = msg);
+  }
+
+  // Password strength: returns 0..3 (weak/medium/strong)
+  int _strength(String p) {
+    if (p.length < 6) return 0;
+    var score = 0;
+    if (p.length >= 8) score++;
+    if (RegExp(r'\d').hasMatch(p)) score++;
+    if (RegExp(r'[A-Z]').hasMatch(p) && RegExp(r'[a-z]').hasMatch(p)) score++;
+    if (RegExp(r'[!@#$%^&*()_+\-=\[\]{};:,.<>?/\\|]').hasMatch(p)) score++;
+    return score.clamp(0, 3);
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return GlassBackground(
-      child: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // أيقونة قفل الأمان الأنيقة مع توهج
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: isDark ? AppTheme.darkSurfaceHigh : Colors.white,
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppTheme.warningOrange.withValues(alpha: 0.3),
-                      blurRadius: 24,
-                      spreadRadius: 4,
-                    )
-                  ],
-                ),
-                child: const Icon(
-                  Icons.security_rounded,
-                  size: 64,
-                  color: AppTheme.warningOrange,
-                ),
+    final strength = _strength(_passwordController.text);
+    return AuthShell(
+      icon: Icons.lock_reset_rounded,
+      title: 'غيّر كلمة المرور',
+      subtitle: 'لأمانك، اختر كلمة مرور جديدة بدل المؤقتة قبل البدء.',
+      child: Form(
+        key: _formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            AppTextField(
+              controller: _passwordController,
+              label: 'كلمة المرور الجديدة',
+              hint: '••••••••',
+              icon: Icons.lock_outline_rounded,
+              obscureText: !_isPasswordVisible,
+              textInputAction: TextInputAction.next,
+              autofillHints: const [AutofillHints.newPassword],
+              textDirection: TextDirection.ltr,
+              onChanged: (_) => setState(() {}),
+              suffix: PasswordVisibilityButton(
+                visible: _isPasswordVisible,
+                onPressed: () => setState(() => _isPasswordVisible = !_isPasswordVisible),
               ),
-              const SizedBox(height: 24),
-
-              const Text(
-                'تأمين الحساب الإلزامي 🔒',
-                style: TextStyle(
-                  fontFamily: 'Cairo',
-                  fontWeight: FontWeight.w900,
-                  fontSize: 24,
-                  color: AppTheme.warningOrange,
-                ),
+              validator: (v) {
+                if (v == null || v.isEmpty) return 'اكتب كلمة المرور الجديدة';
+                if (v.length < 6) return 'كلمة المرور 6 خانات على الأقل';
+                return null;
+              },
+            ),
+            const SizedBox(height: AppSpace.md),
+            _StrengthMeter(strength: strength, empty: _passwordController.text.isEmpty),
+            const SizedBox(height: AppSpace.lg),
+            AppTextField(
+              controller: _confirmPasswordController,
+              label: 'تأكيد كلمة المرور',
+              hint: '••••••••',
+              icon: Icons.check_circle_outline_rounded,
+              obscureText: !_isConfirmPasswordVisible,
+              textInputAction: TextInputAction.done,
+              textDirection: TextDirection.ltr,
+              onSubmitted: (_) => _handleChangePassword(),
+              suffix: PasswordVisibilityButton(
+                visible: _isConfirmPasswordVisible,
+                onPressed: () => setState(() => _isConfirmPasswordVisible = !_isConfirmPasswordVisible),
               ),
-              const SizedBox(height: 12),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                child: Text(
-                  'لقد قمت بتسجيل الدخول بكلمة مرور مؤقتة لأول مرة. كإجراء أمان إلزامي، يرجى تعيين كلمة مرور قوية وجديدة لحماية حسابك وجلساتك.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextSecondary,
-                    fontSize: 13,
-                    fontFamily: 'Cairo',
-                    fontWeight: FontWeight.bold,
-                    height: 1.6,
+              validator: (v) {
+                if (v == null || v.isEmpty) return 'أعد كتابة كلمة المرور';
+                if (v != _passwordController.text) return 'كلمتا المرور غير متطابقتين';
+                return null;
+              },
+            ),
+            AnimatedSize(
+              duration: AppMotion.of(context),
+              child: _errorMessage == null
+                  ? const SizedBox(width: double.infinity)
+                  : Padding(padding: const EdgeInsets.only(top: AppSpace.lg), child: FormErrorBanner(_errorMessage!)),
+            ),
+            const SizedBox(height: AppSpace.xl),
+            AppButton(
+              label: 'حفظ كلمة المرور',
+              icon: Icons.check_rounded,
+              size: AppButtonSize.large,
+              expand: true,
+              loading: _isLoading,
+              onPressed: _handleChangePassword,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// مؤشر قوة كلمة المرور: 4 أشرطة + وصف.
+class _StrengthMeter extends StatelessWidget {
+  const _StrengthMeter({required this.strength, required this.empty});
+  final int strength;
+  final bool empty;
+
+  @override
+  Widget build(BuildContext context) {
+    const labels = ['ضعيفة', 'متوسطة', 'جيدة', 'قوية'];
+    const tones = [AppTone.danger, AppTone.warning, AppTone.info, AppTone.success];
+    final tone = tones[strength];
+    return Semantics(
+      label: empty ? null : 'قوة كلمة المرور: ${labels[strength]}',
+      child: ExcludeSemantics(
+        child: Row(
+          children: [
+            for (var i = 0; i < 4; i++) ...[
+              Expanded(
+                child: AnimatedContainer(
+                  duration: AppMotion.of(context),
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: !empty && i <= strength ? tone.color : AppColors.surface3,
+                    borderRadius: AppRadius.pill,
                   ),
                 ),
               ),
-              const SizedBox(height: 32),
-
-              // نموذج ملء كلمات المرور داخل GlassContainer
-              GlassContainer(
-                padding: const EdgeInsets.all(28),
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      if (_errorMessage != null) ...[
-                        Container(
-                          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                          decoration: BoxDecoration(
-                            color: AppTheme.dangerRed.withAlpha(40),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: AppTheme.dangerRed.withAlpha(100)),
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.error_outline_rounded, color: AppTheme.dangerRed),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Text(
-                                  _errorMessage!,
-                                  style: const TextStyle(
-                                    color: AppTheme.dangerRed,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    fontFamily: 'Cairo',
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 18),
-                      ],
-
-                      // كلمة المرور الجديدة
-                      Text(
-                        'كلمة المرور الجديدة',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
-                          fontFamily: 'Cairo',
-                          color: isDark ? Colors.white70 : Colors.black87,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      TextFormField(
-                        controller: _passwordController,
-                        obscureText: !_isPasswordVisible,
-                        textAlign: TextAlign.left,
-                        style: TextStyle(color: isDark ? Colors.white : Colors.black, fontFamily: 'Cairo', fontSize: 14),
-                        decoration: InputDecoration(
-                          hintText: 'كلمة مرور جديدة قوية',
-                          prefixIcon: const Icon(Icons.lock_outline, color: AppTheme.neonCyan),
-                          suffixIcon: IconButton(
-                            icon: Icon(
-                              _isPasswordVisible 
-                                  ? Icons.visibility_off_outlined 
-                                  : Icons.visibility_outlined,
-                              color: AppTheme.neonCyan,
-                            ),
-                            onPressed: () {
-                              setState(() {
-                                _isPasswordVisible = !_isPasswordVisible;
-                              });
-                            },
-                          ),
-                          filled: true,
-                          fillColor: isDark ? Colors.white.withValues(alpha: 0.04) : Colors.black.withValues(alpha: 0.02),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(16),
-                            borderSide: BorderSide(color: isDark ? Colors.white.withValues(alpha: 0.1) : Colors.black.withValues(alpha: 0.08)),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(16),
-                            borderSide: const BorderSide(color: AppTheme.neonCyan, width: 1.5),
-                          ),
-                        ),
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'يرجى إدخال كلمة المرور الجديدة';
-                          }
-                          if (value.length < 8) {
-                            return 'يجب أن تكون كلمة المرور 8 خانات فأكثر';
-                          }
-                          // التحقق من احتواء كلمة المرور على رقم ورمز لتأمينها بامتياز
-                          if (!value.contains(RegExp(r'[0-9]')) || !value.contains(RegExp(r'[a-zA-Z]'))) {
-                            return 'يجب أن تحتوي كلمة المرور على أحرف وأرقام معاً';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 20),
-
-                      // تأكيد كلمة المرور الجديدة
-                      Text(
-                        'تأكيد كلمة المرور الجديدة',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
-                          fontFamily: 'Cairo',
-                          color: isDark ? Colors.white70 : Colors.black87,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      TextFormField(
-                        controller: _confirmPasswordController,
-                        obscureText: !_isConfirmPasswordVisible,
-                        textAlign: TextAlign.left,
-                        style: TextStyle(color: isDark ? Colors.white : Colors.black, fontFamily: 'Cairo', fontSize: 14),
-                        decoration: InputDecoration(
-                          hintText: 'أعد كتابة كلمة المرور تأكيداً لها',
-                          prefixIcon: const Icon(Icons.lock_reset_rounded, color: AppTheme.neonCyan),
-                          suffixIcon: IconButton(
-                            icon: Icon(
-                              _isConfirmPasswordVisible 
-                                  ? Icons.visibility_off_outlined 
-                                  : Icons.visibility_outlined,
-                              color: AppTheme.neonCyan,
-                            ),
-                            onPressed: () {
-                              setState(() {
-                                _isConfirmPasswordVisible = !_isConfirmPasswordVisible;
-                              });
-                            },
-                          ),
-                          filled: true,
-                          fillColor: isDark ? Colors.white.withValues(alpha: 0.04) : Colors.black.withValues(alpha: 0.02),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(16),
-                            borderSide: BorderSide(color: isDark ? Colors.white.withValues(alpha: 0.1) : Colors.black.withValues(alpha: 0.08)),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(16),
-                            borderSide: const BorderSide(color: AppTheme.neonCyan, width: 1.5),
-                          ),
-                        ),
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'يرجى تأكيد كلمة المرور';
-                          }
-                          if (value != _passwordController.text) {
-                            return 'كلمتا المرور غير متطابقتين';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 32),
-
-                      // زر تحديث كلمة المرور المضيء بنمط النيون
-                      Container(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(16),
-                          boxShadow: [
-                            if (!_isLoading)
-                              BoxShadow(
-                                color: AppTheme.warningOrange.withValues(alpha: 0.3),
-                                blurRadius: 12,
-                                offset: const Offset(0, 4),
-                              )
-                          ],
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(16),
-                          child: ElevatedButton(
-                            onPressed: _isLoading ? null : _handleChangePassword,
-                            style: ElevatedButton.styleFrom(
-                              padding: EdgeInsets.zero,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                              elevation: 0,
-                              shadowColor: Colors.transparent,
-                              backgroundColor: Colors.transparent,
-                            ),
-                            child: Ink(
-                              decoration: const BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [AppTheme.warningOrange, Colors.orangeAccent],
-                                  begin: Alignment.centerLeft,
-                                  end: Alignment.centerRight,
-                                ),
-                              ),
-                              child: Container(
-                                constraints: const BoxConstraints(minHeight: 52.0),
-                                alignment: Alignment.center,
-                                child: _isLoading
-                                    ? const SizedBox(
-                                        height: 20,
-                                        width: 20,
-                                        child: CircularProgressIndicator(
-                                          color: Colors.white,
-                                          strokeWidth: 2.5,
-                                        ),
-                                      )
-                                    : const Text(
-                                        'حفظ وتأمين الحساب',
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontFamily: 'Cairo',
-                                          fontSize: 15,
-                                          color: Colors.white,
-                                        ),
-                                      ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 30),
+              if (i < 3) const SizedBox(width: AppSpace.xs),
             ],
-          ),
+            const SizedBox(width: AppSpace.md),
+            Text(empty ? 'قوة كلمة المرور' : labels[strength], style: AppText.caption.copyWith(color: empty ? AppColors.textMuted : tone.color)),
+          ],
         ),
       ),
     );

@@ -1,15 +1,20 @@
 // =========================================================================
-// نظام HR Pro v6.0 - شاشة بصمة الدوام والخرائط الجغرافية (Attendance Map & Verification Screen)
+// HR Pro — بصمة الدوام: الخريطة، النطاق الجغرافي، وتسجيل الحضور/الانصراف
 // =========================================================================
 
 import 'dart:async';
+
 import 'package:flutter/material.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
+
+import '../../core/services/attendance_sync_service.dart';
+import '../../core/services/location_service.dart';
+import '../../core/services/schedule_service.dart';
 import '../../core/services/supabase_service.dart';
-import '../../core/theme/app_theme.dart';
-import '../shared/widgets/glass_container.dart';
+import '../shared/ui/ui.dart';
 
 class AttendanceScreen extends StatefulWidget {
   const AttendanceScreen({super.key});
@@ -18,7 +23,7 @@ class AttendanceScreen extends StatefulWidget {
   State<AttendanceScreen> createState() => _AttendanceScreenState();
 }
 
-class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerProviderStateMixin {
+class _AttendanceScreenState extends State<AttendanceScreen> {
   // إحداثيات افتراضية للفرع في حال لم يتم تحميل فرع الموظف بعد
   double _branchLat = 33.3152; // بغداد، العراق كافتراضي
   double _branchLng = 44.3661;
@@ -37,32 +42,101 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
   Map<String, dynamic>? _workSchedule;
 
   final MapController _mapController = MapController();
-  late AnimationController _pulseController;
-  late Animation<double> _pulseAnimation;
+  StreamSubscription<Position>? _positionStreamSubscription;
 
   @override
   void initState() {
     super.initState();
-    // إعداد حركة النبض لزر البصمة المضيء
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 2),
-    )..repeat(reverse: true);
-    
-    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.15).animate(
-      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
-    );
-
     _initLocationAndBranch();
   }
 
   @override
   void dispose() {
-    _pulseController.dispose();
+    _positionStreamSubscription?.cancel();
     super.dispose();
   }
 
-  // تهيئة وتحديد موقع الموظف والفرع المخصص له
+  // بدء الاستماع المباشر والمستمر للموقع الجغرافي لتحديث الإحداثيات فورياً دون تأخير
+  void _startPositionStream() {
+    _positionStreamSubscription?.cancel();
+    const locationSettings = LocationSettings(
+      distanceFilter: 1, // تحديث كل متر واحد للحصول على دقة فورية
+    );
+
+    _positionStreamSubscription = Geolocator.getPositionStream(locationSettings: locationSettings).listen(
+      (Position position) {
+        if (!mounted) return;
+        if (position.isMocked) {
+          setState(() {
+            _mockDetected = true;
+            _errorMessage = 'تم رصد محاولة استخدام تطبيق لتزييف الموقع (Mock GPS). تم إيقاف التبصيم.';
+          });
+          return;
+        }
+
+        setState(() {
+          _currentPosition = position;
+          _isLocating = false;
+          _distanceToBranch = Geolocator.distanceBetween(
+            position.latitude,
+            position.longitude,
+            _branchLat,
+            _branchLng,
+          );
+        });
+      },
+      onError: (dynamic e) {
+        debugPrint('GPS Stream Error: $e');
+      },
+    );
+  }
+
+  // إعادة تحديث الموقع الجغرافي يدوياً أو تلقائياً بسرعة فائقة
+  Future<void> _refreshGpsLocation({bool userInitiated = false}) async {
+    if (userInitiated) {
+      AppSnack.info(context, 'جاري تحديث موقعك...');
+    }
+
+    try {
+      final freshPos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          
+        ),
+      ).timeout(const Duration(seconds: 3));
+
+      if (mounted) {
+        setState(() {
+          _currentPosition = freshPos;
+          _isLocating = false;
+          _distanceToBranch = Geolocator.distanceBetween(
+            freshPos.latitude,
+            freshPos.longitude,
+            _branchLat,
+            _branchLng,
+          );
+        });
+
+        _mapController.move(LatLng(freshPos.latitude, freshPos.longitude), 16.0);
+      }
+    } catch (_) {
+      // الهبوط السريع إلى آخر موقع
+      final lastPos = await Geolocator.getLastKnownPosition();
+      if (lastPos != null && mounted) {
+        setState(() {
+          _currentPosition = lastPos;
+          _isLocating = false;
+          _distanceToBranch = Geolocator.distanceBetween(
+            lastPos.latitude,
+            lastPos.longitude,
+            _branchLat,
+            _branchLng,
+          );
+        });
+      }
+    }
+  }
+
+  // تهيئة وتحديد موقع الموظف والفرع المخصص له بسرعة فائقة (Dual-phase Fast Init)
   Future<void> _initLocationAndBranch() async {
     setState(() {
       _isLocating = true;
@@ -74,39 +148,19 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
       final user = SupabaseService.currentUser;
       if (user == null) return;
 
-      // 1. جلب بيانات فرع الموظف
-      final empData = await SupabaseService.client
-          .from('employees')
-          .select('branch_id, department_id, branches(name, latitude, longitude, radius_meters)')
-          .eq('id', user.id)
-          .maybeSingle();
-
-      if (empData != null && empData['branches'] != null) {
-        final branch = empData['branches'];
-        _branchId = empData['branch_id'];
-        _branchName = branch['name'] ?? 'فرع الشركة';
+      // 1. قراءة البيانات من الكاش المحلي أولاً للرسم الفوري للواجهة بدون انتظار الإنترنت
+      final cached = await AttendanceSyncService.getCachedData();
+      if (cached != null && cached['branch'] != null) {
+        final branch = Map<String, dynamic>.from(cached['branch'] as Map);
+        _branchId = branch['id'] as String?;
+        _branchName = (branch['name'] ?? 'فرع الشركة') as String;
         _branchLat = (branch['latitude'] as num).toDouble();
         _branchLng = (branch['longitude'] as num).toDouble();
         _branchRadius = (branch['radius_meters'] as num).toDouble();
-      } else {
-        _branchName = 'لا يوجد فرع معين حالياً';
+        _workSchedule = cached['schedule'] as Map<String, dynamic>?;
       }
 
-      // Fetch Work Schedule
-      final schedData = await SupabaseService.client
-          .from('work_schedules')
-          .select()
-          .or('employee_id.eq.${user.id},department_id.eq.${empData?['department_id']},branch_id.eq.${empData?['branch_id']}')
-          .limit(1)
-          .maybeSingle();
-          
-      if (schedData != null) {
-        setState(() {
-          _workSchedule = schedData;
-        });
-      }
-
-      // 2. فحص صلاحيات وتتبع الـ GPS
+      // 2. فحص صلاحيات الـ GPS
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
         throw Exception('خدمة تحديد الموقع الجغرافي (GPS) معطلة في هاتفك. يرجى تفعيلها.');
@@ -124,104 +178,154 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
         throw Exception('تم رفض صلاحية الموقع الجغرافي نهائياً، يرجى تفعيلها من إعدادات الهاتف.');
       }
 
-      // 3. جلب الموقع الحالي بدقة عالية مع مهلة انتظار وهبوط تلقائي آمن
-      Position? position;
-      try {
-        position = await Geolocator.getCurrentPosition(
-          locationSettings: const LocationSettings(
-            accuracy: LocationAccuracy.high,
-            distanceFilter: 2,
-          ),
-        ).timeout(const Duration(seconds: 8));
-      } catch (e) {
-        // هبوط تلقائي آمن إلى آخر موقع معروف للجهاز
-        position = await Geolocator.getLastKnownPosition();
-      }
-
-      if (position == null) {
-        throw Exception('تعذر تحديد موقعك الجغرافي الحالي بشكل دقيق. يرجى التأكد من تشغيل الـ GPS والوقوف في مكان مكشوف لتلقي إشارة الأقمار الصناعية، ثم المحاولة مرة أخرى.');
-      }
-
-      // 4. كشف تزييف المواقع الحاسم (Mock GPS Detection)
-      if (position.isMocked) {
-        _mockDetected = true;
-        // تسجيل محاولة التزييف في قاعدة البيانات للرقابة الفورية
-        await SupabaseService.client.from('mock_gps_attempts').insert({
-          'employee_id': user.id,
-          'latitude': position.latitude,
-          'longitude': position.longitude,
-          'app_used': 'تطبيق تزييف موقع مكتشف',
-        });
-        
-        await SupabaseService.client.from('notifications').insert({
-          'employee_id': user.id,
-          'title': 'محاولة تزييف موقع جغرافي 🚨',
-          'body': 'تم رصد محاولة استخدام تطبيق Mock GPS لتسجيل الدوام والحضور. تم منع الإجراء بنجاح.',
-          'type': 'attendance',
-        });
-        
-        throw Exception('عذراً! تم الكشف عن استخدام تطبيق لتزييف الموقع الجغرافي (Mock GPS). تم منع العملية وتسجيل الخرق الإداري.');
-      }
-
-      setState(() {
-        _currentPosition = position;
-        if (position != null) {
+      // 3. المرحلة الأولى الفورية (Fast-Path): قراءة آخر موقع معروف في أقل من 20ms لتجهيز الشاشة فوراً
+      Position? initialPosition = await Geolocator.getLastKnownPosition();
+      if (initialPosition != null && mounted) {
+        setState(() {
+          _currentPosition = initialPosition;
+          _isLocating = false;
           _distanceToBranch = Geolocator.distanceBetween(
-            position.latitude,
-            position.longitude,
+            initialPosition.latitude,
+            initialPosition.longitude,
             _branchLat,
             _branchLng,
           );
-        } else {
-          _distanceToBranch = null;
-        }
-      });
+        });
 
-      // 5. جلب حالة البصمة اليومية
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            try {
+              _mapController.move(LatLng(initialPosition.latitude, initialPosition.longitude), 16.0);
+            } catch (_) {}
+          }
+        });
+      }
+
+      // 4. بدء تتبع الإحداثيات المباشر (Active GPS Stream)
+      _startPositionStream();
+
+      // 5. محاولة جلب أحدث بيانات الفرع والجدول والبصمات من Supabase بشكل متوازي
       final todayStr = DateTime.now().toIso8601String().split('T')[0];
-      final attendanceData = await SupabaseService.client
-          .from('attendance')
-          .select()
-          .eq('employee_id', user.id)
-          .eq('work_date', todayStr)
-          .maybeSingle();
+      String? syncWarning;
+      try {
+        // رفع البصمات المحفوظة أوفلاين أولاً حتى تظهر حالة اليوم الصحيحة
+        final rejectedPunches = await AttendanceSyncService.syncOfflinePunches();
+        if (rejectedPunches.isNotEmpty) {
+          syncWarning = rejectedPunches.first.message ??
+              'تعذر اعتماد بصمة محفوظة بدون إنترنت. راجع الإدارة.';
+        }
 
-      setState(() {
-        _todayAttendance = attendanceData;
-        if (attendanceData != null) {
-          if (attendanceData['check_in_time'] != null && attendanceData['check_out_time'] == null) {
-            _selectedPunchType = 'check_out';
+        final List<Future<dynamic>> parallelQueries = [
+          SupabaseService.client
+              .from('employees')
+              .select('branch_id, department_id, branches(id, name, latitude, longitude, radius_meters)')
+              .eq('id', user.id)
+              .maybeSingle(),
+          SupabaseService.client
+              .from('attendance')
+              .select()
+              .eq('employee_id', user.id)
+              .eq('work_date', todayStr)
+              .maybeSingle(),
+        ];
+
+        final results = await Future.wait(parallelQueries);
+        final empData = results[0] as Map<String, dynamic>?;
+        final attendanceData = results[1];
+
+        if (empData != null && empData['branches'] != null) {
+          final branch = Map<String, dynamic>.from(empData['branches'] as Map);
+          _branchId = branch['id'] as String?;
+          _branchName = (branch['name'] ?? 'فرع الشركة') as String;
+          _branchLat = (branch['latitude'] as num).toDouble();
+          _branchLng = (branch['longitude'] as num).toDouble();
+          _branchRadius = (branch['radius_meters'] as num).toDouble();
+
+          final schedData = await ScheduleService.fetchEffectiveSchedule();
+
+          _workSchedule = schedData;
+
+          // تحديث الكاش المحلي
+          await AttendanceSyncService.cacheBranchAndSchedule(
+            branchData: branch,
+            scheduleData: schedData,
+          );
+        }
+
+        _todayAttendance = attendanceData as Map<String, dynamic>?;
+
+      } catch (networkError) {
+        debugPrint(' وضع الأوفلاين نشط: $networkError');
+      }
+
+      // 6. دمج البصمات المحلية المعلقة في طابور التزامن
+      final offlinePunches = await AttendanceSyncService.getOfflinePunchesQueue();
+      final me = SupabaseService.currentUser?.id;
+      final todayOfflinePunches = offlinePunches.where((p) {
+        if (p['user_id'] != me) return false;
+        final time = DateTime.tryParse(p['time'] as String? ?? '')?.toLocal();
+        return time != null && time.toIso8601String().startsWith(todayStr);
+      }).toList();
+
+      final Map<String, dynamic> combinedAttendance = _todayAttendance != null 
+          ? Map<String, dynamic>.from(_todayAttendance!) 
+          : {};
+
+      for (final punch in todayOfflinePunches) {
+        if (punch['type'] == 'check_in') {
+          combinedAttendance['check_in_time'] = punch['time'];
+          combinedAttendance['check_in_lat'] = punch['latitude'];
+          combinedAttendance['check_in_lng'] = punch['longitude'];
+        } else if (punch['type'] == 'check_out') {
+          combinedAttendance['check_out_time'] = punch['time'];
+          combinedAttendance['check_out_lat'] = punch['latitude'];
+          combinedAttendance['check_out_lng'] = punch['longitude'];
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          if (syncWarning != null) _errorMessage = syncWarning;
+          if (combinedAttendance.isNotEmpty) {
+            _todayAttendance = combinedAttendance;
+            if (combinedAttendance['check_in_time'] != null && combinedAttendance['check_out_time'] == null) {
+              _selectedPunchType = 'check_out';
+            } else {
+              _selectedPunchType = 'check_in';
+            }
           } else {
+            _todayAttendance = null;
             _selectedPunchType = 'check_in';
           }
-        } else {
-          _selectedPunchType = 'check_in';
-        }
-      });
 
-      // تحريك الكاميرا في الخريطة للتركيز على موقع الموظف والفرع بأمان
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          try {
-            _mapController.move(LatLng(_branchLat, _branchLng), 16.0);
-          } catch (e) {
-            debugPrint('Failed to move map: $e');
+          if (_currentPosition != null) {
+            _distanceToBranch = Geolocator.distanceBetween(
+              _currentPosition!.latitude,
+              _currentPosition!.longitude,
+              _branchLat,
+              _branchLng,
+            );
           }
-        }
-      });
+        });
+      }
 
     } catch (e) {
-      setState(() {
-        _errorMessage = e.toString().replaceAll('Exception:', '');
-      });
+      if (mounted) {
+        setState(() {
+          _errorMessage = e.toString().replaceAll('Exception:', '');
+        });
+      }
     } finally {
-      setState(() {
-        _isLocating = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLocating = false;
+        });
+      }
     }
   }
 
-  // إجراء عملية البصمة (حضور أو انصراف)
+  // إجراء عملية البصمة (حضور أو انصراف). السيرفر يحسب الوقت والمسافة والحالة؛
+  // الفحوصات المحلية هنا فقط لإظهار رسالة فورية قبل الإرسال.
   Future<void> _handleAttendanceSubmit() async {
     if (_currentPosition == null || _branchId == null || _mockDetected) return;
 
@@ -232,752 +336,383 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
 
     final user = SupabaseService.currentUser;
     if (user == null) return;
+    final punchType = _selectedPunchType;
+    final position = _currentPosition!;
 
     try {
-      // 1. حساب المسافة الجغرافية الفاصلة بين الموظف وحدود الفرع
-      double distanceInMeters = Geolocator.distanceBetween(
-        _currentPosition!.latitude,
-        _currentPosition!.longitude,
+      final double distanceInMeters = Geolocator.distanceBetween(
+        position.latitude,
+        position.longitude,
         _branchLat,
         _branchLng,
       );
-
       if (distanceInMeters > _branchRadius) {
         final double outOfRange = distanceInMeters - _branchRadius;
         throw Exception('أنت خارج نطاق الفرع الجغرافي المسموح به للتبصيم. المتبقي لتصل للفرع: ${outOfRange.toStringAsFixed(1)} متر.');
       }
+      if (punchType == 'check_in' && _todayAttendance?['check_in_time'] != null) {
+        throw Exception('لقد قمت بتسجيل بصمة الحضور مسبقاً لهذا اليوم!');
+      }
+      if (punchType == 'check_out' && _todayAttendance?['check_out_time'] != null) {
+        throw Exception('لقد قمت بتسجيل بصمة الانصراف مسبقاً لهذا اليوم!');
+      }
 
-      final todayStr = DateTime.now().toIso8601String().split('T')[0];
-      final nowUtcStr = DateTime.now().toUtc().toIso8601String();
+      final result = await AttendanceSyncService.punch(
+        type: punchType,
+        latitude: position.latitude,
+        longitude: position.longitude,
+        isMocked: position.isMocked,
+      );
+      if (!result.ok) {
+        throw Exception(result.message ?? 'تعذر تسجيل البصمة، حاول مرة أخرى.');
+      }
 
-      if (_selectedPunchType == 'check_in') {
-        // فحص ما إذا كان قد سجّل حضور بالفعل
-        if (_todayAttendance != null && _todayAttendance!['check_in_time'] != null) {
-          throw Exception('لقد قمت بتسجيل بصمة الحضور مسبقاً لهذا اليوم!');
-        }
-
-        final status = _determineAttendanceStatus();
-        
-        if (_todayAttendance != null) {
-          // يوجد سطر (مثلاً تبصم انصراف أولاً بالخطأ)، نقوم بتحديث الحضور فيه
-          await SupabaseService.client.from('attendance').update({
-            'check_in_time': nowUtcStr,
-            'check_in_lat': _currentPosition!.latitude,
-            'check_in_lng': _currentPosition!.longitude,
-            'status': status,
-          }).eq('employee_id', user.id).eq('work_date', todayStr);
-        } else {
-          // سطر جديد بالكامل
-          await SupabaseService.client.from('attendance').insert({
-            'employee_id': user.id,
-            'branch_id': _branchId,
-            'check_in_time': nowUtcStr,
-            'check_in_lat': _currentPosition!.latitude,
-            'check_in_lng': _currentPosition!.longitude,
-            'status': status,
-            'work_date': todayStr,
-          });
-        }
-
-        // تسجيل إشعار بنجاح الحضور
-        await SupabaseService.client.from('notifications').insert({
-          'employee_id': user.id,
-          'title': 'بصمة حضور ناجحة 🟢',
-          'body': 'تم تسجيل حضورك اليوم بنجاح في فرع ($_branchName). دواماً موفقاً!',
-          'type': 'attendance',
-        });
+      // تشغيل التتبع الجغرافي عند الحضور أو إيقافه عند الانصراف
+      if (punchType == 'check_in') {
+        unawaited(LocationService.startTracking(employeeId: user.id));
       } else {
-        // تسجيل انصراف
-        if (_todayAttendance != null && _todayAttendance!['check_out_time'] != null) {
-          throw Exception('لقد قمت بتسجيل بصمة الانصراف مسبقاً لهذا اليوم!');
-        }
+        unawaited(LocationService.stopTracking());
+      }
 
-        if (_todayAttendance == null) {
-          // لم يبصم حضور اليوم! ننشئ بصمة انصراف مع Missed Check-in ونوع دوام نصف يوم
-          await SupabaseService.client.from('attendance').insert({
-            'employee_id': user.id,
-            'branch_id': _branchId,
-            'check_out_time': nowUtcStr,
-            'check_out_lat': _currentPosition!.latitude,
-            'check_out_lng': _currentPosition!.longitude,
-            'status': 'half_day',
-            'work_date': todayStr,
-          });
-        } else {
-          final currentStatus = _todayAttendance!['status'] ?? 'present';
-          final newStatus = _determineCheckOutStatus(currentStatus);
-          // تحديث بصمة الانصراف
-          await SupabaseService.client.from('attendance').update({
-            'check_out_time': nowUtcStr,
-            'check_out_lat': _currentPosition!.latitude,
-            'check_out_lng': _currentPosition!.longitude,
-            'status': newStatus,
-          }).eq('employee_id', user.id).eq('work_date', todayStr);
-        }
+      if (mounted) {
+        _showSuccessDialog(punchType == 'check_in', !result.queued);
+      }
 
-        // تسجيل إشعار بنجاح الانصراف
-        await SupabaseService.client.from('notifications').insert({
-          'employee_id': user.id,
-          'title': 'بصمة انصراف ناجحة 🔴',
-          'body': 'تم تسجيل انصرافك بنجاح من فرع ($_branchName). يعطيك العافية!',
-          'type': 'attendance',
+      unawaited(_initLocationAndBranch());
+    } on PostgrestException catch (e) {
+      // رفض صريح من السيرفر (جهاز غير معتمد، حساب معطل...)
+      if (mounted) setState(() => _errorMessage = e.message);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = e.toString().replaceAll('Exception:', '');
         });
       }
-
-      // إظهار حوار النجاح الخلاب
-      if (mounted) {
-        _showSuccessDialog(_selectedPunchType == 'check_in');
-      }
-
-      // تحديث البيانات بعد البصمة
-      _initLocationAndBranch();
-
-    } catch (e) {
-      setState(() {
-        _errorMessage = e.toString().replaceAll('Exception:', '');
-      });
     } finally {
-      setState(() {
-        _isSubmitting = false;
-      });
-    }
-  }
-
-  // تحديد حالة الدخول (مثال: متأخر أو حاضر طبقاً لدوام الشركة)
-  String _determineAttendanceStatus() {
-    final now = DateTime.now();
-    if (_workSchedule != null && _workSchedule!['check_in_time'] != null) {
-      try {
-        final timeStr = _workSchedule!['check_in_time'] as String;
-        final parts = timeStr.split(':');
-        final int schedHour = int.parse(parts[0]);
-        final int schedMin = int.parse(parts[1]);
-        final int grace = _workSchedule!['grace_period_minutes'] ?? 15;
-        
-        final deadline = DateTime(now.year, now.month, now.day, schedHour, schedMin).add(Duration(minutes: grace));
-        if (now.isAfter(deadline)) {
-          return 'late';
-        }
-        return 'present';
-      } catch (e) {
-        debugPrint('خطأ في تحليل موعد الحضور: $e');
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
       }
     }
-    // افتراضاً: الدوام يبدأ الساعة 08:30 صباحاً
-    final checkInDeadline = DateTime(now.year, now.month, now.day, 8, 45); // 15 دقيقة فترة سماح
-    if (now.isAfter(checkInDeadline)) {
-      return 'late';
-    }
-    return 'present';
   }
 
-  // تحديد خروج مبكر (يُعتبر نصف يوم)
-  String _determineCheckOutStatus(String currentStatus) {
-    final now = DateTime.now();
-    if (_workSchedule != null && _workSchedule!['check_out_time'] != null) {
-      try {
-        final timeStr = _workSchedule!['check_out_time'] as String;
-        final parts = timeStr.split(':');
-        final int schedHour = int.parse(parts[0]);
-        final int schedMin = int.parse(parts[1]);
-        
-        final scheduledCheckout = DateTime(now.year, now.month, now.day, schedHour, schedMin);
-        
-        // خروج مبكر بأكثر من 15 دقيقة يعتبر نصف يوم
-        if (now.isBefore(scheduledCheckout.subtract(const Duration(minutes: 15)))) {
-          return 'half_day';
-        }
-        return currentStatus;
-      } catch (e) {
-        debugPrint('خطأ في تحليل موعد الانصراف: $e');
-      }
-    }
-    // افتراضاً: الانصراف الساعة 16:30 مساءً (4:30)
-    final checkOutTime = DateTime(now.year, now.month, now.day, 16, 30);
-    if (now.isBefore(checkOutTime.subtract(const Duration(minutes: 15)))) {
-      return 'half_day';
-    }
-    return currentStatus;
-  }
 
-  void _showSuccessDialog(bool isCheckIn) {
-    showDialog(
+  void _showSuccessDialog(bool isCheckIn, bool isSynced) {
+    if (isSynced) {
+      AppHaptics.success();
+    } else {
+      AppHaptics.submit();
+    }
+    final tone = isSynced ? AppTone.success : AppTone.warning;
+    showDialog<void>(
       context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) {
-        return AlertDialog(
-            backgroundColor: AppTheme.darkSurface,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(24),
-              side: BorderSide(color: AppTheme.successGreen.withValues(alpha: 0.3), width: 1.5),
+      builder: (ctx) => AlertDialog(
+        contentPadding: const EdgeInsets.fromLTRB(AppSpace.xxl, AppSpace.xxl, AppSpace.xxl, AppSpace.lg),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ToneIcon(isSynced ? Icons.check_rounded : Icons.cloud_off_rounded, tone: tone, size: 72),
+            const SizedBox(height: AppSpace.xl),
+            Text(isCheckIn ? 'تم تسجيل حضورك' : 'تم تسجيل انصرافك', style: AppText.title, textAlign: TextAlign.center),
+            const SizedBox(height: AppSpace.sm),
+            Text(
+              isSynced
+                  ? '${Fmt.time(DateTime.now())} — ${isCheckIn ? 'دوام موفق' : 'شكراً على يومك'}'
+                  : 'انقطع الإنترنت، فحفظنا البصمة بالجهاز وسنرسلها تلقائياً عند عودة الاتصال.',
+              style: AppText.bodySm,
+              textAlign: TextAlign.center,
             ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const SizedBox(height: 10),
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 500),
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: AppTheme.successGreen.withValues(alpha: 0.2),
-                    shape: BoxShape.circle,
-                    border: Border.all(color: AppTheme.successGreen, width: 2),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppTheme.successGreen.withValues(alpha: 0.3),
-                        blurRadius: 16,
-                      ),
-                    ],
-                  ),
-                  child: const Icon(
-                    Icons.check_circle_outline_rounded,
-                    color: AppTheme.successGreen,
-                    size: 64,
-                  ),
-                ),
-                const SizedBox(height: 24),
-                Text(
-                  isCheckIn ? 'تم تسجيل حضورك اليوم بنجاح!' : 'تم تسجيل انصرافك بنجاح!',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, fontFamily: 'Cairo', color: Colors.white),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 12),
-                const Text(
-                  'نتمنى لك يوماً رائعاً ودواماً موفقاً مع عائلة شركتكم الموقرة.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 12, color: Colors.white70, fontFamily: 'Cairo'),
-                ),
-                const SizedBox(height: 24),
-                ElevatedButton(
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.transparent,
-                    shadowColor: Colors.transparent,
-                    padding: EdgeInsets.zero,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  ),
-                  child: Ink(
-                    decoration: const BoxDecoration(
-                      gradient: AppTheme.cyberGradient,
-                      borderRadius: BorderRadius.all(Radius.circular(14)),
-                    ),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
-                      child: const Text('موافق', style: TextStyle(color: Colors.white, fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          );
-      },
+          ],
+        ),
+        actions: [AppButton(label: 'تم', expand: true, onPressed: () => Navigator.of(ctx).pop())],
+      ),
     );
   }
+
+  bool get _hasCheckIn => _todayAttendance?['check_in_time'] != null;
+  bool get _hasCheckOut => _todayAttendance?['check_out_time'] != null;
+  bool get _inRange => _distanceToBranch != null && _distanceToBranch! <= _branchRadius;
 
   @override
   Widget build(BuildContext context) {
-    final hasCheckIn = _todayAttendance != null && _todayAttendance!['check_in_time'] != null;
-    final hasCheckOut = _todayAttendance != null && _todayAttendance!['check_out_time'] != null;
+    final size = MediaQuery.sizeOf(context);
+    final landscapeWide = size.width >= AppBreakpoints.medium && size.width > size.height;
+    final map = ClipRRect(
+      borderRadius: landscapeWide ? AppRadius.card : BorderRadius.zero,
+      child: RepaintBoundary(child: _buildMap()),
+    );
+    final panel = _buildPanel();
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: AppColors.bg,
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        title: const Text(
-          'تسجيل الدوام الجغرافي',
-          style: TextStyle(
-            fontFamily: 'Cairo',
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
-        ),
+        title: const Text('بصمة الدوام'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.my_location_rounded, color: AppTheme.neonCyan),
-            onPressed: _initLocationAndBranch,
+            tooltip: 'تحديث الموقع',
+            icon: const Icon(Icons.my_location_rounded),
+            onPressed: () => _refreshGpsLocation(userInitiated: true),
           ),
+          const SizedBox(width: AppSpace.xs),
         ],
       ),
-      body: Stack(
-        children: [
-          // 1. خريطة الفرع والموظف التفاعلية (Leaflet / OSM Map)
-          FlutterMap(
-            mapController: _mapController,
-            options: MapOptions(
-              initialCenter: LatLng(_branchLat, _branchLng),
-              initialZoom: 15.0,
-            ),
-            children: [
-              TileLayer(
-                urlTemplate: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
-                subdomains: const ['a', 'b', 'c', 'd'],
-                userAgentPackageName: 'com.hrpro.app',
-              ),
-              // سياج الفرع الجغرافي (Geofence Circle)
-              CircleLayer(
-                circles: [
-                  CircleMarker(
-                    point: LatLng(_branchLat, _branchLng),
-                    color: AppTheme.neonCyan.withValues(alpha: 0.15),
-                    borderStrokeWidth: 2,
-                    borderColor: AppTheme.neonCyan,
-                    useRadiusInMeter: true,
-                    radius: _branchRadius,
-                  ),
-                ],
-              ),
-              // علامات الموقع (الموظف + الفرع)
-              MarkerLayer(
-                markers: [
-                  // علامة الفرع المعتمد
-                  Marker(
-                    point: LatLng(_branchLat, _branchLng),
-                    width: 60,
-                    height: 60,
-                    child: Tooltip(
-                      message: _branchName,
-                      child: Column(
-                        children: [
-                          const Icon(Icons.business_center, color: AppTheme.neonCyan, size: 36),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: 0.65),
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(color: AppTheme.neonCyan, width: 1),
-                            ),
-                            child: Text(
-                              _branchName.length > 10 ? '${_branchName.substring(0, 9)}..' : _branchName,
-                              style: const TextStyle(fontSize: 8, color: Colors.white, fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  // علامة الموظف الجغرافية
-                  if (_currentPosition != null)
-                    Marker(
-                      point: LatLng(_currentPosition!.latitude, _currentPosition!.longitude),
-                      width: 50,
-                      height: 50,
-                      child: const Icon(
-                        Icons.person_pin_circle_rounded,
-                        color: AppTheme.neonPink,
-                        size: 42,
-                      ),
-                    ),
-                ],
-              ),
-            ],
-          ),
-
-          // 2. لوحة التحكم السفلية المتميزة بتقنية الزجاج
-          Positioned(
-            bottom: 16,
-            left: 16,
-            right: 16,
-            child: GlassContainer(
-              padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
-              borderRadius: 28,
-              opacity: 0.15,
-              borderColor: AppTheme.neonCyan.withValues(alpha: 0.3),
-              boxShadow: [
-                BoxShadow(
-                  color: AppTheme.neonCyan.withValues(alpha: 0.08),
-                  blurRadius: 24,
-                  spreadRadius: 2,
-                )
-              ],
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
+      body: landscapeWide
+          ? Padding(
+              padding: const EdgeInsets.fromLTRB(AppSpace.lg, 0, AppSpace.lg, AppSpace.lg),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  if (_isLocating) ...[
-                    const CircularProgressIndicator(color: AppTheme.neonCyan),
-                    const SizedBox(height: 12),
-                    const Text(
-                      'جاري التحقق من الموقع الجغرافي والإحداثيات الفورية...',
-                      style: TextStyle(fontSize: 12, color: Colors.white70, fontFamily: 'Cairo'),
+                  Expanded(child: map),
+                  const SizedBox(width: AppSpace.lg),
+                  SizedBox(width: 400, child: SingleChildScrollView(child: panel)),
+                ],
+              ),
+            )
+          : RefreshIndicator.adaptive(
+              onRefresh: _initLocationAndBranch,
+              child: ListView(
+                padding: EdgeInsets.zero,
+                children: [
+                  SizedBox(height: (size.height * 0.34).clamp(200.0, 380.0), child: map),
+                  ContentWidth(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(AppSpace.page, AppSpace.lg, AppSpace.page, AppSpace.x3),
+                      child: panel,
                     ),
-                  ] else ...[
-                    // إظهار رسالة الخطأ أو التحذير إن وجد مع زر إعادة المحاولة
-                    if (_errorMessage != null) ...[
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: AppTheme.dangerRed.withAlpha(20),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: AppTheme.dangerRed.withAlpha(50)),
-                        ),
-                        child: Column(
-                          children: [
-                            Row(
-                              children: [
-                                const Icon(Icons.warning_amber_rounded, color: AppTheme.dangerRed, size: 28),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Text(
-                                    _errorMessage!,
-                                    style: const TextStyle(
-                                      color: AppTheme.dangerRed, 
-                                      fontSize: 11.5, 
-                                      fontWeight: FontWeight.bold,
-                                      fontFamily: 'Cairo',
-                                      height: 1.4,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton.icon(
-                                onPressed: _initLocationAndBranch,
-                                icon: const Icon(Icons.refresh_rounded, size: 18),
-                                label: const Text(
-                                  'إعادة محاولة جلب الموقع', 
-                                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, fontFamily: 'Cairo')
-                                ),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppTheme.dangerRed,
-                                  foregroundColor: Colors.white,
-                                  elevation: 0,
-                                  padding: const EdgeInsets.symmetric(vertical: 10),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                    ],
-
-                    if (_workSchedule != null) ...[
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        margin: const EdgeInsets.only(bottom: 16),
-                        decoration: BoxDecoration(
-                          color: AppTheme.neonPink.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: AppTheme.neonPink.withValues(alpha: 0.3)),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.access_time_filled_rounded, color: AppTheme.neonPink, size: 24),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text(
-                                    'أوقات الدوام المعتمدة للفرع',
-                                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13, fontFamily: 'Cairo'),
-                                  ),
-                                  Text(
-                                    'الدخول: ${_formatTimeString12Hr(_workSchedule!['check_in_time']?.toString())} | الخروج: ${_formatTimeString12Hr(_workSchedule!['check_out_time']?.toString())}\nسماحية التأخير: ${_workSchedule!['grace_period_minutes'] ?? 15} دقيقة',
-                                    style: const TextStyle(color: Colors.white70, fontSize: 11, fontFamily: 'Cairo'),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-
-                    // حالة دوام الموظف التفصيلية لليوم
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'الحالة: ${hasCheckOut ? "مكتمل 🟢" : (hasCheckIn ? "دوام نشط 🟡" : "لم تبصم بعد 🔴")}',
-                                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white, fontFamily: 'Cairo'),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                'الموقع المعتمد: $_branchName',
-                                style: const TextStyle(fontSize: 11, color: Colors.white70, fontFamily: 'Cairo'),
-                              ),
-                              if (_currentPosition != null) ...[
-                                const SizedBox(height: 4),
-                                Row(
-                                  children: [
-                                    Icon(
-                                      Icons.my_location_rounded,
-                                      size: 12,
-                                      color: _distanceToBranch != null && _distanceToBranch! <= _branchRadius
-                                          ? AppTheme.successGreen
-                                          : AppTheme.neonPink,
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Expanded(
-                                      child: Text(
-                                        _distanceToBranch != null
-                                            ? 'تبعد عن الفرع: ${_distanceToBranch!.toStringAsFixed(1)} م (دقة الموقع: ${_currentPosition!.accuracy.toStringAsFixed(1)} م)'
-                                            : 'دقة الموقع الحالية: ${_currentPosition!.accuracy.toStringAsFixed(1)} م',
-                                        style: TextStyle(
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.bold,
-                                          fontFamily: 'Cairo',
-                                          color: _distanceToBranch != null && _distanceToBranch! <= _branchRadius
-                                              ? AppTheme.successGreen
-                                              : AppTheme.neonPink,
-                                        ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                        if (hasCheckIn)
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                            decoration: BoxDecoration(
-                              color: AppTheme.successGreen.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: AppTheme.successGreen.withValues(alpha: 0.3)),
-                            ),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.check_circle, color: AppTheme.successGreen, size: 16),
-                                const SizedBox(width: 4),
-                                Text(
-                                  _formatTime(_todayAttendance?['check_in_time']),
-                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppTheme.successGreen, fontFamily: 'Cairo'),
-                                ),
-                              ],
-                            ),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
-
-                    if (!hasCheckOut)
-                      _buildPunchTypeSwitch(),
-
-                    // زر التبصيم الفخم بلمسات مضيئة في الوسط
-                    if (!hasCheckOut)
-                      GestureDetector(
-                        onTap: _isSubmitting || _mockDetected ? null : _handleAttendanceSubmit,
-                        child: ScaleTransition(
-                          scale: _pulseAnimation,
-                          child: Container(
-                            width: 88,
-                            height: 88,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              gradient: _selectedPunchType == 'check_out' 
-                                  ? const LinearGradient(colors: [AppTheme.neonPink, AppTheme.dangerRed])
-                                  : AppTheme.cyberGradient,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: (_selectedPunchType == 'check_out' ? AppTheme.neonPink : AppTheme.neonCyan).withValues(alpha: 0.4),
-                                  blurRadius: 20,
-                                  spreadRadius: 2,
-                                )
-                              ],
-                            ),
-                            child: Center(
-                              child: _isSubmitting
-                                  ? const CircularProgressIndicator(color: Colors.white)
-                                  : Icon(
-                                      _selectedPunchType == 'check_out' ? Icons.exit_to_app_rounded : Icons.fingerprint_rounded,
-                                      color: Colors.white,
-                                      size: 40,
-                                    ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    
-                    if (hasCheckOut)
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        decoration: BoxDecoration(
-                          color: AppTheme.successGreen.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: AppTheme.successGreen.withValues(alpha: 0.3)),
-                        ),
-                        child: const Center(
-                          child: Text(
-                            'لقد أتممت بصمة حضور وانصراف هذا اليوم. دوام موفق! 🎉',
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppTheme.successGreen, fontFamily: 'Cairo'),
-                          ),
-                        ),
-                      ),
-                    
-                    const SizedBox(height: 12),
-                    if (!hasCheckOut)
-                      Text(
-                        _selectedPunchType == 'check_out' ? 'اضغط لتسجيل بصمة الانصراف 🔴' : 'اضغط لتسجيل بصمة الحضور 🟢',
-                        style: const TextStyle(fontSize: 11, color: Colors.white70, fontWeight: FontWeight.w600, fontFamily: 'Cairo'),
-                      ),
-                  ],
+                  ),
                 ],
               ),
             ),
-          ),
-        ],
-      ),
     );
   }
 
-  Widget _buildPunchTypeSwitch() {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 20),
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-      ),
+  Widget _buildMap() {
+    return FlutterMap(
+      mapController: _mapController,
+      options: MapOptions(initialCenter: LatLng(_branchLat, _branchLng), initialZoom: 15.0, backgroundColor: AppColors.surface1),
+      children: [
+        appMapTiles(),
+        CircleLayer(
+          circles: [
+            CircleMarker(
+              point: LatLng(_branchLat, _branchLng),
+              color: AppColors.brand.withValues(alpha: 0.14),
+              borderStrokeWidth: 2,
+              borderColor: AppColors.brand,
+              useRadiusInMeter: true,
+              radius: _branchRadius,
+            ),
+          ],
+        ),
+        MarkerLayer(
+          markers: [
+            Marker(
+              point: LatLng(_branchLat, _branchLng),
+              width: 44,
+              height: 44,
+              child: Semantics(
+                label: 'موقع $_branchName',
+                child: Container(
+                  decoration: BoxDecoration(color: AppColors.brand, shape: BoxShape.circle, border: Border.all(color: AppColors.bg, width: 3)),
+                  child: const Icon(Icons.business_rounded, color: AppColors.onBrand, size: 20),
+                ),
+              ),
+            ),
+            if (_currentPosition != null)
+              Marker(
+                point: LatLng(_currentPosition!.latitude, _currentPosition!.longitude),
+                width: 28,
+                height: 28,
+                child: Semantics(
+                  label: 'موقعك الحالي',
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: AppColors.info,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: AppColors.textPrimary, width: 3),
+                      boxShadow: AppElevation.low,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPanel() {
+    if (_isLocating) {
+      return const Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Skeleton(height: 96, radius: AppRadius.md),
+          SizedBox(height: AppSpace.lg),
+          Skeleton(height: 56, radius: AppRadius.sm),
+          SizedBox(height: AppSpace.md),
+          Center(child: Text('نحدد موقعك...', style: AppText.caption)),
+        ],
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildLocationCard(),
+        if (_errorMessage != null) ...[
+          const SizedBox(height: AppSpace.md),
+          AppCard(
+            tone: AppTone.danger,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.error_outline_rounded, color: AppColors.danger),
+                    const SizedBox(width: AppSpace.md),
+                    Expanded(child: Text(_errorMessage!.trim(), style: AppText.bodySm.copyWith(color: AppColors.textPrimary))),
+                  ],
+                ),
+                const SizedBox(height: AppSpace.md),
+                Align(
+                  alignment: AlignmentDirectional.centerEnd,
+                  child: AppButton.secondary(label: 'إعادة المحاولة', icon: Icons.refresh_rounded, size: AppButtonSize.small, onPressed: _initLocationAndBranch),
+                ),
+              ],
+            ),
+          ),
+        ],
+        const SizedBox(height: AppSpace.lg),
+        if (_hasCheckOut)
+          const AppCard(
+            tone: AppTone.success,
+            child: Row(
+              children: [
+                ToneIcon(Icons.task_alt_rounded, tone: AppTone.success),
+                SizedBox(width: AppSpace.md),
+                Expanded(child: Text('سجّلت حضورك وانصرافك لهذا اليوم. يومك مكتمل.', style: AppText.subtitle)),
+              ],
+            ),
+          )
+        else ...[
+          SegmentedButton<String>(
+            segments: const [
+              ButtonSegment(value: 'check_in', label: Text('حضور'), icon: Icon(Icons.login_rounded)),
+              ButtonSegment(value: 'check_out', label: Text('انصراف'), icon: Icon(Icons.logout_rounded)),
+            ],
+            selected: {_selectedPunchType},
+            showSelectedIcon: false,
+            onSelectionChanged: (s) {
+              AppHaptics.select();
+              setState(() => _selectedPunchType = s.first);
+            },
+          ),
+          const SizedBox(height: AppSpace.md),
+          AppButton(
+            label: _selectedPunchType == 'check_out' ? 'بصمة الانصراف' : 'بصمة الحضور',
+            icon: Icons.fingerprint_rounded,
+            variant: _selectedPunchType == 'check_out' ? AppButtonVariant.warning : AppButtonVariant.primary,
+            size: AppButtonSize.large,
+            expand: true,
+            loading: _isSubmitting,
+            haptic: false,
+            onPressed: _mockDetected || _currentPosition == null ? null : _handleAttendanceSubmit,
+          ),
+          const SizedBox(height: AppSpace.sm),
+          Text(
+            _mockDetected
+                ? 'البصمة موقوفة لأن الجهاز يستعمل موقعاً مزيّفاً.'
+                : _currentPosition == null
+                    ? 'ننتظر تحديد موقعك حتى تقدر تبصم.'
+                    : _inRange
+                    ? 'أنت داخل نطاق الفرع، تقدر تبصم الآن.'
+                    : 'اقترب من الفرع حتى تدخل ضمن النطاق المسموح.',
+            style: AppText.caption.copyWith(color: _mockDetected ? AppColors.danger : null),
+            textAlign: TextAlign.center,
+          ),
+        ],
+        const SizedBox(height: AppSpace.lg),
+        _buildTodayCard(),
+        const SizedBox(height: AppSpace.lg),
+        const Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.privacy_tip_outlined, size: 16, color: AppColors.textMuted),
+            SizedBox(width: AppSpace.sm),
+            Expanded(
+              child: Text(
+                'نستعمل موقعك فقط لتأكيد وجودك في الفرع أثناء ساعات الدوام الرسمية.',
+                style: AppText.caption,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLocationCard() {
+    final tone = _mockDetected
+        ? AppTone.danger
+        : _currentPosition == null
+            ? AppTone.neutral
+            : _inRange
+                ? AppTone.success
+                : AppTone.warning;
+    final label = _mockDetected
+        ? 'موقع مزيّف'
+        : _currentPosition == null
+            ? 'بلا موقع'
+            : _inRange
+                ? 'داخل النطاق'
+                : 'خارج النطاق';
+    final distanceText = _distanceToBranch == null
+        ? 'بانتظار إشارة GPS'
+        : _inRange
+            ? 'تبعد ${_distanceToBranch!.round()} م عن الفرع'
+            : 'باقي ${(_distanceToBranch! - _branchRadius).round()} م للدخول بالنطاق';
+    return AppCard(
       child: Row(
         children: [
-          // حضور tab
+          ToneIcon(_inRange ? Icons.where_to_vote_rounded : Icons.location_searching_rounded, tone: tone, size: 48),
+          const SizedBox(width: AppSpace.md),
           Expanded(
-            child: GestureDetector(
-              onTap: () {
-                setState(() {
-                  _selectedPunchType = 'check_in';
-                });
-              },
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  color: _selectedPunchType == 'check_in'
-                      ? AppTheme.neonCyan.withValues(alpha: 0.2)
-                      : Colors.transparent,
-                  border: Border.all(
-                    color: _selectedPunchType == 'check_in'
-                        ? AppTheme.neonCyan.withValues(alpha: 0.5)
-                        : Colors.transparent,
-                    width: 1,
-                  ),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.login_rounded,
-                      size: 16,
-                      color: _selectedPunchType == 'check_in'
-                          ? AppTheme.neonCyan
-                          : Colors.white70,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      'تسجيل حضور',
-                      style: TextStyle(
-                        fontFamily: 'Cairo',
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: _selectedPunchType == 'check_in'
-                            ? Colors.white
-                            : Colors.white70,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(_branchName, style: AppText.subtitle, maxLines: 1, overflow: TextOverflow.ellipsis),
+                Text(distanceText, style: AppText.bodySm),
+                if (_currentPosition != null)
+                  Text('دقة GPS: ${_currentPosition!.accuracy.round()} م · النطاق ${_branchRadius.round()} م', style: AppText.caption),
+              ],
             ),
           ),
-          // انصراف tab
-          Expanded(
-            child: GestureDetector(
-              onTap: () {
-                setState(() {
-                  _selectedPunchType = 'check_out';
-                });
-              },
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  color: _selectedPunchType == 'check_out'
-                      ? AppTheme.neonPink.withValues(alpha: 0.2)
-                      : Colors.transparent,
-                  border: Border.all(
-                    color: _selectedPunchType == 'check_out'
-                        ? AppTheme.neonPink.withValues(alpha: 0.5)
-                        : Colors.transparent,
-                    width: 1,
-                  ),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.logout_rounded,
-                      size: 16,
-                      color: _selectedPunchType == 'check_out'
-                          ? AppTheme.neonPink
-                          : Colors.white70,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      'تسجيل انصراف',
-                      style: TextStyle(
-                        fontFamily: 'Cairo',
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: _selectedPunchType == 'check_out'
-                            ? Colors.white
-                            : Colors.white70,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
+          const SizedBox(width: AppSpace.sm),
+          StatusBadge(label, tone: tone, dot: true),
         ],
       ),
     );
   }
 
-  String _formatTime(String? timeStr) {
-    if (timeStr == null) return '--:--';
-    try {
-      final dateTime = DateTime.parse(timeStr).toLocal();
-      final hour = dateTime.hour > 12 ? dateTime.hour - 12 : (dateTime.hour == 0 ? 12 : dateTime.hour);
-      final amPm = dateTime.hour >= 12 ? 'PM' : 'AM';
-      final minute = dateTime.minute.toString().padLeft(2, '0');
-      return '$hour:$minute $amPm';
-    } catch (e) {
-      return '--:--';
-    }
-  }
-
-  String _formatTimeString12Hr(String? timeStr) {
-    if (timeStr == null || timeStr.isEmpty) return '--:--';
-    try {
-      final parts = timeStr.split(':');
-      int hour = int.parse(parts[0]);
-      final minute = parts[1];
-      final amPm = hour >= 12 ? 'PM' : 'AM';
-      if (hour > 12) hour -= 12;
-      if (hour == 0) hour = 12;
-      return '$hour:$minute $amPm';
-    } catch (e) {
-      return timeStr.length > 5 ? timeStr.substring(0, 5) : timeStr;
-    }
+  Widget _buildTodayCard() {
+    DateTime? parse(Object? v) => v == null ? null : DateTime.tryParse(v.toString())?.toLocal();
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('اليوم · ${Fmt.dateWithDay(DateTime.now())}', style: AppText.label),
+          const SizedBox(height: AppSpace.sm),
+          KeyValueRow('الحضور', _hasCheckIn ? Fmt.time(parse(_todayAttendance!['check_in_time'])) : '--:--', icon: Icons.login_rounded),
+          KeyValueRow('الانصراف', _hasCheckOut ? Fmt.time(parse(_todayAttendance!['check_out_time'])) : '--:--', icon: Icons.logout_rounded),
+          if (_workSchedule != null)
+            KeyValueRow(
+              'الدوام المعتمد',
+              '${Fmt.timeOfDay(_workSchedule!['check_in_time']?.toString())} - ${Fmt.timeOfDay(_workSchedule!['check_out_time']?.toString())}',
+              icon: Icons.schedule_rounded,
+            ),
+        ],
+      ),
+    );
   }
 }
-

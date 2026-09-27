@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+     قواعد استخراج البيانات (Android 12+)
+     - cloud-backup: يحكم Google Drive Backup
+     - device-transfer: يحكم النقل بين أجهزة أندرويد (Setup Wizard)
+     نمنع كل شي حساس (تفضيلات المصادقة، قواعد بيانات، ملفات مخبأة).
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="."/>
+        <exclude domain="database" path="."/>
+        <exclude domain="root" path="secure_storage/"/>
+        <exclude domain="file" path="."/>
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="."/>
+        <exclude domain="database" path="."/>
+        <exclude domain="root" path="secure_storage/"/>
+        <exclude domain="file" path="."/>
+    </device-transfer>
+</data-extraction-rules>

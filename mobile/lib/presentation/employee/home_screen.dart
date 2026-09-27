@@ -1,24 +1,31 @@
 // =========================================================================
-// نظام HR Pro v6.0 - الشاشة الرئيسية للموظف (Employee Home Screen)
+// HR Pro — الشاشة الرئيسية للموظف
 // =========================================================================
+// • تحية حسب الوقت + الإشعارات غير المقروءة
+// • بطاقة "اليوم": زر واحد يتغير حسب الحالة (حضور ← انصراف ← اكتمل الدوام)
+// • أوقات الدوام، اختصارات، والتعاميم
+// منطق التحميل والاشتراك الفوري والتتبع والتذكيرات لم يتغير.
+// =========================================================================
+import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
-import '../../core/routes/app_router.dart';
-import '../../core/services/supabase_service.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../core/theme/app_theme.dart';
 import 'package:flutter/services.dart';
-import 'package:audioplayers/audioplayers.dart';
+import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../../core/routes/app_router.dart';
 import '../../core/services/location_service.dart';
+import '../../core/services/notification_service.dart';
 import '../../core/services/ota_service.dart';
-import '../shared/widgets/app_widgets.dart';
-import '../shared/widgets/glass_container.dart';
+import '../../core/services/schedule_service.dart';
+import '../../core/services/supabase_service.dart';
+import '../shared/ui/ui.dart';
 
 class HomeScreen extends StatefulWidget {
-  final Function(int) onTabChange;
+  final void Function(int) onTabChange;
+  final ValueNotifier<int>? refreshNotifier;
 
-  const HomeScreen({super.key, required this.onTabChange});
+  const HomeScreen({super.key, required this.onTabChange, this.refreshNotifier});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -34,7 +41,7 @@ class _HomeScreenState extends State<HomeScreen> {
   String _userRole = 'employee';
   int _unreadNotificationsCount = 0;
   dynamic _realtimeSubscription;
-  final AudioPlayer _audioPlayer = AudioPlayer();
+  dynamic _attendanceSubscription;
   Map<String, dynamic>? _workSchedule;
 
   @override
@@ -42,16 +49,20 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _loadDashboardData();
     _subscribeToNotifications();
-    
-    // تشغيل تتبع الموقع التلقائي للموظف
-    LocationService.startTracking();
-    
-    // فحص التحديثات الهوائية (OTA) فور فتح التطبيق
+    _subscribeToAttendance();
+    // تحديث الدوام لما يرجع المستخدم للشاشة الرئيسية من تاب آخر
+    widget.refreshNotifier?.addListener(_onRefreshRequested);
+
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      final updateInfo = await OtaService.checkVersion();
-      if (mounted && (updateInfo['status'] == OtaStatus.mandatoryUpdate || 
-          updateInfo['status'] == OtaStatus.optionalUpdate)) {
-        OtaService.showUpdatePrompt(context, updateInfo);
+      try {
+        final updateInfo = await OtaService.checkVersion();
+        if (mounted &&
+            (updateInfo['status'] == OtaStatus.mandatoryUpdate ||
+                updateInfo['status'] == OtaStatus.optionalUpdate)) {
+          OtaService.showUpdatePrompt(context, updateInfo);
+        }
+      } catch (e) {
+        debugPrint('OTA check non-fatal error: $e');
       }
     });
   }
@@ -73,106 +84,139 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           callback: (payload) async {
             if (!mounted) return;
-            
-            // Increment unread count
-            setState(() {
-              _unreadNotificationsCount++;
-            });
+            setState(() => _unreadNotificationsCount++);
 
-            // Play alert sound!
             try {
-              SystemSound.play(SystemSoundType.alert);
+              unawaited(SystemSound.play(SystemSoundType.alert));
+              unawaited(HapticFeedback.mediumImpact());
             } catch (e) {
               debugPrint('خطأ في تشغيل صوت الإشعار: $e');
             }
 
-            // Show beautiful overlay banner notification and trigger system tray alert!
             final data = payload.newRecord;
-            // Show standard snackbar for foreground notifications
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Row(
-                    children: [
-                      const Icon(Icons.notifications_active_rounded, color: AppTheme.brandLight),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          '${data['title'] ?? 'تنبيه جديد'}\n${data['body'] ?? ''}',
-                        ),
-                      ),
-                    ],
-                  ),
-                  duration: const Duration(seconds: 4),
-                ),
-              );
+            // Show a REAL system notification with sound — works even if
+            // the user is on another tab. FCM push handles this when the
+            // app is in the background; this covers the in-app case.
+            await NotificationService.showLocalNotification(
+              title: (data['title'] ?? 'تنبيه جديد').toString(),
+              body: (data['body'] ?? '').toString(),
+            );
+          },
+        )
+        .subscribe((status, [error]) {
+          debugPrint('=== notifications channel: $status ===');
+          if (error != null) debugPrint('=== channel error: $error ===');
+        });
+  }
+
+  /// تنفَّذ لما يعود المستخدم للشاشة الرئيسية
+  void _onRefreshRequested() {
+    if (!mounted) return;
+    // نحدث بيانات الدوام فقط (خفيف وسريع)
+    _refreshAttendanceOnly();
+  }
+
+  Future<void> _refreshAttendanceOnly() async {
+    final user = SupabaseService.currentUser;
+    if (user == null) return;
+    try {
+      final todayStr = DateTime.now().toIso8601String().split('T')[0];
+      final rec = await SupabaseService.client
+          .from('attendance')
+          .select()
+          .eq('employee_id', user.id)
+          .eq('work_date', todayStr)
+          .maybeSingle();
+      if (mounted) {
+        setState(() {
+          _todayAttendance = rec;
+        });
+      }
+    } catch (e) {
+      debugPrint('تعذر تحديث سجل الدوام: \$e');
+    }
+  }
+
+  /// يستمع لأي تغيير في جدول attendance لليوم الحالي ويحدث الكارد فوراً
+  void _subscribeToAttendance() {
+    final user = SupabaseService.currentUser;
+    if (user == null) return;
+    final todayStr = DateTime.now().toIso8601String().split('T')[0];
+
+    _attendanceSubscription = SupabaseService.client
+        .channel('home:attendance:${user.id}')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'attendance',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'employee_id',
+            value: user.id,
+          ),
+          callback: (payload) {
+            if (!mounted) return;
+            final rec = payload.newRecord;
+            // نتحقق إن السجل ليوم اليوم فقط
+            if (rec['work_date'] == todayStr) {
+              setState(() {
+                _todayAttendance = Map<String, dynamic>.from(rec);
+              });
+              // تحديث التتبع بناءً على حالة الحضور الجديدة
+              if (rec['check_in_time'] != null && rec['check_out_time'] == null) {
+                LocationService.startTracking(employeeId: user.id);
+              } else if (rec['check_out_time'] != null) {
+                LocationService.stopTracking();
+              }
             }
           },
         )
         .subscribe((status, [error]) {
-          debugPrint('=== اشتراك الإشعارات الفورية للعميل: $status ===');
-          if (error != null) {
-            debugPrint('=== خطأ في اشتراك الإشعارات الفورية: $error ===');
-          }
+          debugPrint('=== attendance channel: \$status ===');
         });
   }
 
   @override
   void dispose() {
+    widget.refreshNotifier?.removeListener(_onRefreshRequested);
     if (_realtimeSubscription != null) {
-      SupabaseService.client.removeChannel(_realtimeSubscription);
+      SupabaseService.client.removeChannel(_realtimeSubscription as RealtimeChannel);
     }
-    _audioPlayer.dispose();
+    if (_attendanceSubscription != null) {
+      SupabaseService.client.removeChannel(_attendanceSubscription as RealtimeChannel);
+    }
     super.dispose();
   }
 
   Future<void> _loadDashboardData() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
     final user = SupabaseService.currentUser;
-    if (user == null) {
-      setState(() => _isLoading = false);
-      return;
-    }
+    if (user == null) return;
 
     try {
-      // 1. جلب بيانات الموظف والقسم
       final empData = await SupabaseService.client
           .from('v_employee_directory')
           .select()
           .eq('id', user.id)
           .maybeSingle();
-      if (!mounted) return;
 
       if (empData != null) {
         setState(() {
-          _employeeName = empData['full_name'] ?? _employeeName;
-          final String deptName = empData['department_name'] ?? 'القسم العام';
-          final String branchName = empData['branch_name'] ?? 'الفرع العام';
-          _departmentName = '$deptName - $branchName';
-          _avatarUrl = empData['avatar_url'] ?? '';
-          _userRole = empData['role'] ?? 'employee';
+          _employeeName = (empData['full_name'] ?? _employeeName) as String;
+          final String deptName = (empData['department_name'] ?? 'القسم العام') as String;
+          final String branchName = (empData['branch_name'] ?? 'الفرع العام') as String;
+          _departmentName = '$deptName • $branchName';
+          _avatarUrl = (empData['avatar_url'] ?? '') as String;
+          _userRole = (empData['role'] ?? 'employee') as String;
         });
       }
 
       final todayStr = DateTime.now().toIso8601String().split('T')[0];
 
-      // إعداد استعلام جدول العمل بناءً على توفر بيانات الموظف
-      final scheduleQuery = empData != null
-          ? SupabaseService.client
-              .from('work_schedules')
-              .select()
-              .or('employee_id.eq.${user.id},department_id.eq.${empData['department_id']},branch_id.eq.${empData['branch_id']}')
-              .limit(1)
-              .maybeSingle()
-          : SupabaseService.client
-              .from('work_schedules')
-              .select()
-              .eq('employee_id', user.id)
-              .limit(1)
-              .maybeSingle();
+      final scheduleQuery = ScheduleService.fetchEffectiveSchedule();
 
-      // جلب بقية البيانات بالتوازي لتسريع العملية بشكل كبير
-      final results = await Future.wait([
+      final results = await Future.wait<dynamic>([
         scheduleQuery,
         SupabaseService.client
             .from('announcements')
@@ -197,696 +241,432 @@ class _HomeScreenState extends State<HomeScreen> {
       final announcementsData = results[1] as List<dynamic>;
       final attendanceData = results[2];
       final unreadRes = results[3] as List<dynamic>;
-      if (!mounted) return;
 
       setState(() {
-        if (schedData != null) {
-          _workSchedule = schedData as Map<String, dynamic>;
-        }
+        _workSchedule = schedData != null ? schedData as Map<String, dynamic> : null;
         _announcements = List<Map<String, dynamic>>.from(announcementsData);
-        if (attendanceData != null) {
-          _todayAttendance = attendanceData as Map<String, dynamic>;
-        }
+        _todayAttendance = attendanceData != null ? attendanceData as Map<String, dynamic> : null;
         _unreadNotificationsCount = unreadRes.length;
       });
 
+
+      if (_todayAttendance != null &&
+          _todayAttendance!['check_in_time'] != null &&
+          _todayAttendance!['check_out_time'] == null) {
+        unawaited(LocationService.startTracking(employeeId: user.id));
+      } else if (_todayAttendance != null && _todayAttendance!['check_out_time'] != null) {
+        unawaited(LocationService.stopTracking());
+      } else {
+        unawaited(LocationService.stopTracking());
+      }
     } catch (e) {
       debugPrint('خطأ في تحميل بيانات لوحة الموظف: $e');
-    } finally {
       if (mounted) {
-        setState(() => _isLoading = false);
+        AppSnack.error(context, 'تعذّر تحديث البيانات، تأكد من اتصال الإنترنت.');
       }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+
+  // ==========================================================================
+  // Build
+  // ==========================================================================
+  bool get _isManager => _userRole == 'admin' || _userRole == 'manager';
+
+  Future<void> _openNotifications() async {
+    await context.push(AppRoutes.employeeNotifications);
+    unawaited(_loadDashboardData());
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: RefreshIndicator(
-        onRefresh: _loadDashboardData,
-        edgeOffset: 8,
-        child: CustomScrollView(
-          physics: const AlwaysScrollableScrollPhysics(
-            parent: BouncingScrollPhysics(),
-          ),
-          slivers: [
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-              sliver: SliverToBoxAdapter(child: _buildHeader()),
-            ),
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
-              sliver: SliverList.list(
-                children: [
-                  _buildAttendanceHeroCard(),
-                  if (_userRole == 'admin' || _userRole == 'manager') ...[
-                    const SizedBox(height: 14),
-                    _buildAdminDashboardCard(),
-                  ],
-                  const SizedBox(height: 26),
-                  const SectionHeader(
-                    title: 'الخدمات السريعة',
-                    icon: Icons.bolt_rounded,
-                  ),
-                  _buildQuickActionsGrid(context),
-                  const SizedBox(height: 26),
-                  SectionHeader(
-                    title: 'الإعلانات والتعاميم',
-                    icon: Icons.campaign_rounded,
-                    actionLabel: _announcements.isNotEmpty ? 'عرض الكل' : null,
-                    onAction: () => context.push(AppRoutes.employeeNotifications),
-                  ),
-                  _buildAnnouncementsSection(),
-                ],
-              ),
-            ),
-          ],
-        ),
+    final wide = MediaQuery.sizeOf(context).width >= AppBreakpoints.expanded;
+    final today = _TodayCard(
+      loading: _isLoading && _todayAttendance == null,
+      attendance: _todayAttendance,
+      schedule: _workSchedule,
+      onAction: () => widget.onTabChange(1),
+    );
+    final side = <Widget>[
+      if (_isManager) ...[
+        const SizedBox(height: AppSpace.lg),
+        _AdminEntry(onTap: () => context.push(AppRoutes.adminDashboard)),
+      ],
+      const SectionHeader('الخدمات'),
+      _QuickActions(
+        actions: [
+          _QuickAction(Icons.event_available_rounded, 'طلب إجازة', AppTone.accent, () => widget.onTabChange(2)),
+          _QuickAction(Icons.account_balance_wallet_rounded, 'طلب سلفة', AppTone.warning, () => widget.onTabChange(3)),
+          _QuickAction(Icons.receipt_long_rounded, 'كشف الراتب', AppTone.success, () => context.push(AppRoutes.employeePayslips)),
+          _QuickAction(Icons.history_rounded, 'سجل الدوام', AppTone.brand, () => widget.onTabChange(1)),
+          _QuickAction(Icons.groups_rounded, 'دليل الموظفين', AppTone.info, () => context.push(AppRoutes.employeeDirectory)),
+          _QuickAction(Icons.notifications_rounded, 'الإشعارات', AppTone.neutral, _openNotifications),
+        ],
       ),
+    ];
+    final announcements = <Widget>[
+      SectionHeader(
+        'التعاميم',
+        actionLabel: _announcements.isNotEmpty ? 'عرض الكل' : null,
+        onAction: _openNotifications,
+      ),
+      _Announcements(loading: _isLoading && _announcements.isEmpty, items: _announcements),
+    ];
+
+    return AppPage(
+      showBack: false,
+      onRefresh: _loadDashboardData,
+      maxWidth: wide ? 1080 : AppBreakpoints.maxContent,
+      padding: const EdgeInsets.fromLTRB(AppSpace.page, AppSpace.lg, AppSpace.page, AppSpace.x4),
+      slivers: [
+        SliverToBoxAdapter(
+          child: _Header(
+            name: _employeeName,
+            subtitle: _departmentName,
+            avatarUrl: _avatarUrl,
+            unread: _unreadNotificationsCount,
+            onNotifications: _openNotifications,
+          ),
+        ),
+        const SliverToBoxAdapter(child: SizedBox(height: AppSpace.xl)),
+        if (wide)
+          SliverToBoxAdapter(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: Column(children: [today, ...side])),
+                const SizedBox(width: AppSpace.xxl),
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: announcements)),
+              ],
+            ),
+          )
+        else
+          SliverList.list(children: [today, ...side, ...announcements]),
+      ],
     );
   }
+}
 
-  String _greeting() {
-    final hour = DateTime.now().hour;
-    if (hour < 12) return 'صباح الخير';
-    if (hour < 18) return 'مساء الخير';
-    return 'مساء النور';
-  }
+// =========================================================================
+// أجزاء الشاشة
+// =========================================================================
 
-  // الترويسة: صورة الموظف، التحية، والإشعارات
-  Widget _buildHeader() {
+class _Header extends StatelessWidget {
+  const _Header({required this.name, required this.subtitle, required this.avatarUrl, required this.unread, required this.onNotifications});
+
+  final String name;
+  final String subtitle;
+  final String avatarUrl;
+  final int unread;
+  final VoidCallback onNotifications;
+
+  @override
+  Widget build(BuildContext context) {
     return Row(
       children: [
-        Container(
-          padding: const EdgeInsets.all(2.5),
-          decoration: const BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: AppTheme.primaryGradient,
-          ),
-          child: CircleAvatar(
-            radius: 24,
-            backgroundColor: AppTheme.darkSurfaceHigh,
-            foregroundImage: _avatarUrl.isNotEmpty ? NetworkImage(_avatarUrl) : null,
-            child: Text(
-              _employeeName.trim().isNotEmpty ? _employeeName.trim()[0] : '؟',
-              style: const TextStyle(
-                fontFamily: AppTheme.fontFamily,
-                fontWeight: FontWeight.w800,
-                fontSize: 18,
-                color: AppTheme.brandLight,
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 12),
+        AppAvatar(name: name, url: avatarUrl, size: 52),
+        const SizedBox(width: AppSpace.md),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                '${_greeting()} 👋',
-                style: const TextStyle(
-                  fontFamily: AppTheme.fontFamily,
-                  fontSize: 13,
-                  color: AppTheme.darkTextSecondary,
-                ),
-              ),
-              _isLoading && _employeeName == 'موظف متميز'
-                  ? const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 4),
-                      child: SkeletonBox(width: 140, height: 18),
-                    )
-                  : Text(
-                      _employeeName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontFamily: AppTheme.fontFamily,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                        color: AppTheme.darkTextPrimary,
-                        height: 1.3,
-                      ),
-                    ),
-              Text(
-                _departmentName,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontFamily: AppTheme.fontFamily,
-                  fontSize: 12,
-                  color: AppTheme.darkTextMuted,
-                ),
-              ),
+              Text(Fmt.greeting(), style: AppText.bodySm),
+              Text(name, style: AppText.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+              Text(subtitle, style: AppText.caption, maxLines: 1, overflow: TextOverflow.ellipsis),
             ],
           ),
         ),
-        const SizedBox(width: 8),
-        IconButton.filledTonal(
-          tooltip: 'الإشعارات',
-          onPressed: () async {
-            await context.push(AppRoutes.employeeNotifications);
-            _loadDashboardData();
-          },
-          icon: Badge(
-            isLabelVisible: _unreadNotificationsCount > 0,
-            label: Text(
-              _unreadNotificationsCount > 99 ? '99+' : '$_unreadNotificationsCount',
-            ),
-            child: const Icon(Icons.notifications_none_rounded),
-          ),
+        AppIconButton(
+          icon: Icons.notifications_none_rounded,
+          tooltip: unread > 0 ? 'الإشعارات، $unread غير مقروءة' : 'الإشعارات',
+          badge: unread,
+          onPressed: onNotifications,
         ),
       ],
     );
   }
+}
 
-  // بطاقة الدوام الرئيسية: الحالة، الوقت، وأوقات الفرع
-  Widget _buildAttendanceHeroCard() {
-    final hasCheckIn = _todayAttendance != null && _todayAttendance!['check_in_time'] != null;
-    final hasCheckOut = _todayAttendance != null && _todayAttendance!['check_out_time'] != null;
+/// حالة يوم العمل الحالية.
+enum _DayState { notStarted, working, done }
 
-    final String status;
-    final IconData statusIcon;
-    if (hasCheckOut) {
-      status = 'اكتمل دوامك لليوم';
-      statusIcon = Icons.task_alt_rounded;
-    } else if (hasCheckIn) {
-      status = 'أنت في الدوام الآن';
-      statusIcon = Icons.timelapse_rounded;
-    } else {
-      status = 'لم تسجّل حضورك بعد';
-      statusIcon = Icons.schedule_rounded;
-    }
+class _TodayCard extends StatelessWidget {
+  const _TodayCard({required this.loading, required this.attendance, required this.schedule, required this.onAction});
 
-    return Container(
-      decoration: BoxDecoration(
-        gradient: AppTheme.primaryGradient,
-        borderRadius: BorderRadius.circular(AppTheme.radiusXl),
-        boxShadow: [
-          BoxShadow(
-            color: AppTheme.brand.withValues(alpha: 0.3),
-            blurRadius: 28,
-            offset: const Offset(0, 12),
-          ),
-        ],
-      ),
-      child: Stack(
-        children: [
-          // زخرفة خفيفة
-          PositionedDirectional(
-            top: -40,
-            end: -30,
-            child: Container(
-              width: 150,
-              height: 150,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.white.withValues(alpha: 0.08),
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.16),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.calendar_today_rounded, size: 13, color: Colors.white),
-                          const SizedBox(width: 6),
-                          Text(
-                            _getFormattedTodayDate(),
-                            style: const TextStyle(
-                              fontFamily: AppTheme.fontFamily,
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Icon(statusIcon, color: Colors.white, size: 26),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        status,
-                        style: const TextStyle(
-                          fontFamily: AppTheme.fontFamily,
-                          color: Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  hasCheckIn
-                      ? 'الحضور: ${_formatTime(_todayAttendance!['check_in_time'])}'
-                          '${hasCheckOut ? '   •   الانصراف: ${_formatTime(_todayAttendance!['check_out_time'])}' : ''}'
-                      : 'سجّل حضورك فور وصولك إلى الفرع.',
-                  style: TextStyle(
-                    fontFamily: AppTheme.fontFamily,
-                    color: Colors.white.withValues(alpha: 0.85),
-                    fontSize: 13,
-                  ),
-                ),
-                if (_workSchedule != null) ...[
-                  const SizedBox(height: 16),
-                  _buildScheduleStrip(),
-                ],
-                const SizedBox(height: 18),
-                SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: FilledButton.icon(
-                    onPressed: () => widget.onTabChange(1),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: AppTheme.brandDeep,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-                      ),
-                    ),
-                    icon: Icon(
-                      hasCheckOut
-                          ? Icons.history_rounded
-                          : (hasCheckIn ? Icons.logout_rounded : Icons.fingerprint_rounded),
-                    ),
-                    label: Text(
-                      hasCheckOut
-                          ? 'عرض سجل الدوام'
-                          : (hasCheckIn ? 'تسجيل الانصراف' : 'تسجيل الحضور'),
-                      style: const TextStyle(
-                        fontFamily: AppTheme.fontFamily,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 15,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
+  final bool loading;
+  final Map<String, dynamic>? attendance;
+  final Map<String, dynamic>? schedule;
+  final VoidCallback onAction;
+
+  static DateTime? _parse(Object? v) => v == null ? null : DateTime.tryParse(v.toString())?.toLocal();
+
+  /// عدد الدقائق المجدولة من "08:00:00" إلى "16:00:00".
+  double? get _scheduledMinutes {
+    final a = schedule?['check_in_time']?.toString().split(':');
+    final b = schedule?['check_out_time']?.toString().split(':');
+    if (a == null || b == null || a.length < 2 || b.length < 2) return null;
+    final start = (int.tryParse(a[0]) ?? 0) * 60 + (int.tryParse(a[1]) ?? 0);
+    final end = (int.tryParse(b[0]) ?? 0) * 60 + (int.tryParse(b[1]) ?? 0);
+    return end > start ? (end - start).toDouble() : null;
   }
 
-  // شريط أوقات الدوام المعتمدة للفرع
-  Widget _buildScheduleStrip() {
-    final checkIn = _formatTimeStr(_workSchedule!['check_in_time']?.toString());
-    final checkOut = _formatTimeStr(_workSchedule!['check_out_time']?.toString());
-    final grace = _workSchedule!['grace_period_minutes'] ?? 15;
-
-    Widget cell(String label, String value) => Expanded(
-          child: Column(
-            children: [
-              Text(
-                label,
-                style: TextStyle(
-                  fontFamily: AppTheme.fontFamily,
-                  fontSize: 11,
-                  color: Colors.white.withValues(alpha: 0.75),
-                ),
-              ),
-              const SizedBox(height: 2),
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(
-                  value,
-                  textDirection: TextDirection.ltr,
-                  style: const TextStyle(
-                    fontFamily: AppTheme.fontFamily,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-
-    Widget divider() => Container(
-          width: 1,
-          height: 28,
-          color: Colors.white.withValues(alpha: 0.2),
-        );
-
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-      ),
-      child: Row(
-        children: [
-          cell('بداية الدوام', checkIn),
-          divider(),
-          cell('نهاية الدوام', checkOut),
-          divider(),
-          cell('فترة السماح', '$grace د'),
-        ],
-      ),
-    );
-  }
-
-  // شبكة الخدمات السريعة (3 أعمدة على الهاتف و6 على الشاشات العريضة)
-  Widget _buildQuickActionsGrid(BuildContext context) {
-    final actions = [
-      (icon: Icons.event_note_rounded, title: 'طلب إجازة', color: AppTheme.sky, onTap: () => widget.onTabChange(2)),
-      (icon: Icons.account_balance_wallet_rounded, title: 'طلب سلفة', color: AppTheme.pink, onTap: () => widget.onTabChange(3)),
-      (icon: Icons.receipt_long_rounded, title: 'كشف الراتب', color: AppTheme.violetLight, onTap: () => context.push(AppRoutes.employeePayslips)),
-      (icon: Icons.fingerprint_rounded, title: 'بصمة الدوام', color: AppTheme.warningLight, onTap: () => widget.onTabChange(1)),
-      (icon: Icons.groups_rounded, title: 'دليل الموظفين', color: AppTheme.successLight, onTap: () => context.push(AppRoutes.employeeDirectory)),
-      (icon: Icons.tune_rounded, title: 'الإعدادات', color: AppTheme.brandLight, onTap: () => widget.onTabChange(4)),
-    ];
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final columns = constraints.maxWidth >= 560 ? 6 : 3;
-        final textScale = MediaQuery.textScalerOf(context).scale(1);
-        return GridView.builder(
-          shrinkWrap: true,
-          padding: EdgeInsets.zero,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: actions.length,
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: columns,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-            mainAxisExtent: 96 + 18 * textScale,
-          ),
-          itemBuilder: (context, index) {
-            final a = actions[index];
-            return _buildActionCard(
-              icon: a.icon,
-              title: a.title,
-              color: a.color,
-              onTap: a.onTap,
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildActionCard({
-    required IconData icon,
-    required String title,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    return GlassContainer(
-      padding: EdgeInsets.zero,
-      borderRadius: AppTheme.radiusLg,
-      child: Material(
-        type: MaterialType.transparency,
-        child: InkWell(
-          onTap: () {
-            HapticFeedback.selectionClick();
-            onTap();
-          },
-          borderRadius: BorderRadius.circular(AppTheme.radiusLg),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 12),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.14),
-                    borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-                  ),
-                  child: Icon(icon, color: color, size: 24),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w700,
-                    fontFamily: AppTheme.fontFamily,
-                    color: AppTheme.darkTextPrimary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  // قسم الإعلانات والتعاميم
-  Widget _buildAnnouncementsSection() {
-    if (_isLoading && _announcements.isEmpty) {
-      return Column(
-        children: List.generate(
-          2,
-          (_) => const Padding(
-            padding: EdgeInsets.only(bottom: 12),
-            child: SkeletonBox(height: 84, radius: AppTheme.radiusLg),
-          ),
+  @override
+  Widget build(BuildContext context) {
+    if (loading) {
+      return const AppCard(
+        padding: EdgeInsets.all(AppSpace.xl),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Skeleton(width: 120),
+            SizedBox(height: AppSpace.lg),
+            Skeleton(width: 180, height: 32),
+            SizedBox(height: AppSpace.xl),
+            Skeleton(height: 56, radius: AppRadius.sm),
+          ],
         ),
       );
     }
+    final checkIn = _parse(attendance?['check_in_time']);
+    final checkOut = _parse(attendance?['check_out_time']);
+    final state = checkOut != null
+        ? _DayState.done
+        : checkIn != null
+            ? _DayState.working
+            : _DayState.notStarted;
 
-    if (_announcements.isEmpty) {
-      return const GlassContainer(
-        width: double.infinity,
-        child: EmptyState(
-          icon: Icons.campaign_outlined,
-          title: 'لا توجد إعلانات جديدة',
-          message: 'ستظهر هنا تعاميم الإدارة فور نشرها.',
+    final now = DateTime.now();
+    final worked = checkIn == null ? Duration.zero : (checkOut ?? now).difference(checkIn);
+    final planned = _scheduledMinutes;
+
+    final (badge, tone, bigLabel, bigValue, actionLabel, actionIcon, variant) = switch (state) {
+      _DayState.notStarted => (
+          'لم تسجّل بعد',
+          AppTone.warning,
+          'يبدأ دوامك',
+          Fmt.timeOfDay(schedule?['check_in_time']?.toString()),
+          'تسجيل الحضور',
+          Icons.fingerprint_rounded,
+          AppButtonVariant.primary,
         ),
-      );
-    }
+      _DayState.working => (
+          'في الدوام',
+          AppTone.brand,
+          'مدة العمل حتى الآن',
+          _hm(worked),
+          'تسجيل الانصراف',
+          Icons.logout_rounded,
+          AppButtonVariant.warning,
+        ),
+      _DayState.done => (
+          'اكتمل الدوام',
+          AppTone.success,
+          'مجموع ساعات اليوم',
+          _hm(worked),
+          'عرض سجل اليوم',
+          Icons.history_rounded,
+          AppButtonVariant.secondary,
+        ),
+    };
 
-    return Column(
-      children: [
-        for (final announcement in _announcements)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: _buildAnnouncementCard(announcement),
-          ),
-      ],
-    );
-  }
-
-  Widget _buildAnnouncementCard(Map<String, dynamic> announcement) {
-    final isPinned = announcement['is_pinned'] == true;
-    final accent = isPinned ? AppTheme.warningLight : AppTheme.brandLight;
-
-    return GlassContainer(
-      padding: const EdgeInsets.all(16),
-      opacity: isPinned ? 0.12 : 0.05,
-      borderColor: isPinned ? AppTheme.warningOrange.withValues(alpha: 0.35) : null,
-      child: Row(
+    return AppCard(
+      padding: const EdgeInsets.all(AppSpace.xl),
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: accent.withValues(alpha: 0.14),
-              borderRadius: BorderRadius.circular(AppTheme.radiusSm),
-            ),
-            child: Icon(
-              isPinned ? Icons.push_pin_rounded : Icons.campaign_rounded,
-              color: accent,
-              size: 20,
-            ),
+          Row(
+            children: [
+              Expanded(child: Text(Fmt.dateWithDay(now), style: AppText.bodySm.copyWith(fontWeight: FontWeight.w700))),
+              StatusBadge(badge, tone: tone, dot: true),
+            ],
           ),
-          const SizedBox(width: 12),
+          const SizedBox(height: AppSpace.lg),
+          Text(bigLabel, style: AppText.caption),
+          Text(bigValue, style: AppText.display.copyWith(fontFeatures: const [FontFeature.tabularFigures()])),
+          if (state == _DayState.working && planned != null) ...[
+            const SizedBox(height: AppSpace.md),
+            AppProgressBar(value: worked.isNegative ? 0 : worked.inMinutes / planned),
+          ],
+          const SizedBox(height: AppSpace.lg),
+          Wrap(
+            spacing: AppSpace.lg,
+            runSpacing: AppSpace.xs,
+            children: [
+              _TimeChip(icon: Icons.login_rounded, label: 'الحضور', value: checkIn == null ? '--:--' : Fmt.time(checkIn)),
+              _TimeChip(icon: Icons.logout_rounded, label: 'الانصراف', value: checkOut == null ? '--:--' : Fmt.time(checkOut)),
+              if (schedule != null)
+                _TimeChip(
+                  icon: Icons.schedule_rounded,
+                  label: 'الدوام',
+                  value: '${Fmt.timeOfDay(schedule!['check_in_time']?.toString())} - ${Fmt.timeOfDay(schedule!['check_out_time']?.toString())}',
+                ),
+            ],
+          ),
+          const SizedBox(height: AppSpace.xl),
+          AppButton(label: actionLabel, icon: actionIcon, variant: variant, size: AppButtonSize.large, expand: true, onPressed: onAction),
+          if (state == _DayState.notStarted && schedule?['grace_period_minutes'] != null)
+            Padding(
+              padding: const EdgeInsets.only(top: AppSpace.sm),
+              child: Center(child: Text('سماحية التأخير ${schedule!['grace_period_minutes']} دقيقة', style: AppText.caption)),
+            ),
+        ],
+      ),
+    );
+  }
+
+  static String _hm(Duration d) {
+    if (d.isNegative) return '0 د';
+    final h = d.inHours;
+    final m = d.inMinutes % 60;
+    if (h == 0) return '$m د';
+    return m == 0 ? '$h س' : '$h س $m د';
+  }
+}
+
+class _TimeChip extends StatelessWidget {
+  const _TimeChip({required this.icon, required this.label, required this.value});
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 16, color: AppColors.textMuted),
+        const SizedBox(width: AppSpace.xs),
+        Text('$label ', style: AppText.caption),
+        Text(value, style: AppText.bodySm.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
+      ],
+    );
+  }
+}
+
+class _AdminEntry extends StatelessWidget {
+  const _AdminEntry({required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      tone: AppTone.accent,
+      onTap: onTap,
+      child: const Row(
+        children: [
+          ToneIcon(Icons.admin_panel_settings_rounded, tone: AppTone.accent, size: 44),
+          SizedBox(width: AppSpace.md),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        announcement['title'] ?? 'إعلان إداري',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w800,
-                          fontSize: 14,
-                          fontFamily: AppTheme.fontFamily,
-                          color: AppTheme.darkTextPrimary,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      _formatAnnounceDate(announcement['created_at']),
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: AppTheme.darkTextMuted,
-                        fontFamily: AppTheme.fontFamily,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  announcement['content'] ?? '',
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: AppTheme.darkTextSecondary,
-                    fontFamily: AppTheme.fontFamily,
-                    height: 1.6,
-                  ),
-                ),
+                Text('لوحة الإدارة', style: AppText.subtitle),
+                Text('الطلبات، الحضور، السلف، والتتبع', style: AppText.caption),
               ],
             ),
           ),
+          Icon(Icons.chevron_right_rounded, color: AppColors.accent),
         ],
       ),
     );
   }
+}
 
-  // دوال وتنسيقات برمجية مساعدة
-  String _getFormattedTodayDate() {
-    final now = DateTime.now();
-    final months = [
-      'كانون الثاني', 'شباط', 'آذار', 'نيسان', 'أيار', 'حزيران',
-      'تموز', 'آب', 'أيلول', 'تشرين الأول', 'تشرين الثاني', 'كانون الأول'
-    ];
-    return '${now.day} ${months[now.month - 1]}، ${now.year}';
-  }
+class _QuickAction {
+  const _QuickAction(this.icon, this.title, this.tone, this.onTap);
+  final IconData icon;
+  final String title;
+  final AppTone tone;
+  final VoidCallback onTap;
+}
 
-  String _formatTime(String? timeStr) {
-    if (timeStr == null) return '--:--';
-    try {
-      final dateTime = DateTime.parse(timeStr).toLocal();
-      final hour = dateTime.hour > 12 ? dateTime.hour - 12 : (dateTime.hour == 0 ? 12 : dateTime.hour);
-      final amPm = dateTime.hour >= 12 ? 'PM' : 'AM';
-      final minute = dateTime.minute.toString().padLeft(2, '0');
-      return '$hour:$minute $amPm';
-    } catch (e) {
-      return '--:--';
-    }
-  }
+class _QuickActions extends StatelessWidget {
+  const _QuickActions({required this.actions});
+  final List<_QuickAction> actions;
 
-  String _formatAnnounceDate(String? dateStr) {
-    if (dateStr == null) return '';
-    try {
-      final date = DateTime.parse(dateStr).toLocal();
-      return '${date.year}/${date.month}/${date.day}';
-    } catch (e) {
-      return '';
-    }
-  }
-
-  Widget _buildAdminDashboardCard() {
-    return GlassContainer(
-      padding: EdgeInsets.zero,
-      opacity: 0.12,
-      borderColor: AppTheme.violetLight.withValues(alpha: 0.3),
-      child: Material(
-        type: MaterialType.transparency,
-        child: InkWell(
-          onTap: () => context.push(AppRoutes.adminDashboard),
-          borderRadius: BorderRadius.circular(AppTheme.radiusLg),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    gradient: AppTheme.accentGradient,
-                    borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-                  ),
-                  child: const Icon(
-                    Icons.admin_panel_settings_rounded,
-                    color: Colors.white,
-                    size: 26,
-                  ),
-                ),
-                const SizedBox(width: 14),
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'بوابة الإدارة',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w800,
-                          fontFamily: AppTheme.fontFamily,
-                          color: AppTheme.darkTextPrimary,
-                        ),
-                      ),
-                      SizedBox(height: 2),
-                      Text(
-                        'الإجازات، السلف، الأجهزة، ومراقبة الحضور والـ GPS',
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: AppTheme.darkTextSecondary,
-                          fontFamily: AppTheme.fontFamily,
-                          height: 1.5,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const Icon(
-                  Icons.chevron_left_rounded,
-                  color: AppTheme.darkTextSecondary,
-                ),
-              ],
+  @override
+  Widget build(BuildContext context) {
+    return ResponsiveGrid(
+      minItemWidth: 96,
+      maxColumns: 6,
+      children: [
+        for (final a in actions)
+          AppCard(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpace.sm, vertical: AppSpace.md),
+            onTap: () {
+              AppHaptics.select();
+              a.onTap();
+            },
+            semanticLabel: a.title,
+            child: ExcludeSemantics(
+              child: Column(
+                children: [
+                  ToneIcon(a.icon, tone: a.tone, size: 44),
+                  const SizedBox(height: AppSpace.sm),
+                  Text(a.title, textAlign: TextAlign.center, maxLines: 2, style: AppText.bodySm.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
+                ],
+              ),
             ),
           ),
-        ),
-      ),
+      ],
     );
   }
+}
 
-  String _formatTimeStr(String? timeStr) {
-    if (timeStr == null || timeStr.isEmpty) return '--:--';
-    try {
-      final parts = timeStr.split(':');
-      if (parts.length < 2) return timeStr;
-      int hour = int.parse(parts[0]);
-      final int minute = int.parse(parts[1]);
-      final String period = hour >= 12 ? 'PM' : 'AM';
-      hour = hour % 12;
-      if (hour == 0) hour = 12;
-      final String minuteStr = minute.toString().padLeft(2, '0');
-      return '$hour:$minuteStr $period';
-    } catch (e) {
-      return timeStr;
+class _Announcements extends StatelessWidget {
+  const _Announcements({required this.loading, required this.items});
+  final bool loading;
+  final List<Map<String, dynamic>> items;
+
+  @override
+  Widget build(BuildContext context) {
+    if (loading) return const SkeletonList(count: 2, itemHeight: 88);
+    if (items.isEmpty) {
+      return const AppCard(
+        child: EmptyView(title: 'لا توجد تعاميم جديدة', message: 'ستظهر هنا إعلانات الإدارة.', icon: Icons.campaign_rounded, compact: true),
+      );
     }
+    return Column(
+      children: [
+        for (var i = 0; i < items.length; i++)
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppSpace.md),
+            child: FadeSlideIn(index: i, child: _AnnouncementCard(items[i])),
+          ),
+      ],
+    );
+  }
+}
+
+class _AnnouncementCard extends StatelessWidget {
+  const _AnnouncementCard(this.a);
+  final Map<String, dynamic> a;
+
+  @override
+  Widget build(BuildContext context) {
+    final pinned = a['is_pinned'] == true;
+    final body = (a['content'] ?? a['body'] ?? '').toString();
+    return AppCard(
+      tone: pinned ? AppTone.warning : null,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              if (pinned) ...[const Icon(Icons.push_pin_rounded, size: 16, color: AppColors.warning), const SizedBox(width: AppSpace.xs)],
+              Expanded(child: Text((a['title'] ?? 'إعلان إداري').toString(), style: AppText.subtitle, maxLines: 2, overflow: TextOverflow.ellipsis)),
+              const SizedBox(width: AppSpace.sm),
+              Text(Fmt.relative(DateTime.tryParse(a['created_at']?.toString() ?? '')), style: AppText.caption),
+            ],
+          ),
+          if (body.isNotEmpty) ...[
+            const SizedBox(height: AppSpace.xs),
+            Text(body, style: AppText.bodySm, maxLines: 4, overflow: TextOverflow.ellipsis),
+          ],
+        ],
+      ),
+    );
   }
 }

@@ -84,11 +84,17 @@ CREATE POLICY "Employees can update their own details (limited)"
 ON employees FOR UPDATE TO authenticated
 USING (id = auth.uid())
 WITH CHECK (id = auth.uid() AND (
-  -- منع الموظف العادي من تغيير حقل الصلاحية (role) أو القسم أو الفرع أو النشاط
+  -- منع الموظف العادي من تغيير الحقول الحساسة
   (role = (SELECT role FROM employees WHERE id = auth.uid())) AND
-  (department_id = (SELECT department_id FROM employees WHERE id = auth.uid())) AND
-  (branch_id = (SELECT branch_id FROM employees WHERE id = auth.uid())) AND
-  (is_active = (SELECT is_active FROM employees WHERE id = auth.uid()))
+  (department_id IS NOT DISTINCT FROM (SELECT department_id FROM employees WHERE id = auth.uid())) AND
+  (branch_id IS NOT DISTINCT FROM (SELECT branch_id FROM employees WHERE id = auth.uid())) AND
+  (is_active = (SELECT is_active FROM employees WHERE id = auth.uid())) AND
+  (monthly_salary_iqd IS NOT DISTINCT FROM (SELECT monthly_salary_iqd FROM employees WHERE id = auth.uid())) AND
+  (future_salary_iqd IS NOT DISTINCT FROM (SELECT future_salary_iqd FROM employees WHERE id = auth.uid())) AND
+  (future_salary_month IS NOT DISTINCT FROM (SELECT future_salary_month FROM employees WHERE id = auth.uid())) AND
+  (employee_code IS NOT DISTINCT FROM (SELECT employee_code FROM employees WHERE id = auth.uid())) AND
+  (join_date IS NOT DISTINCT FROM (SELECT join_date FROM employees WHERE id = auth.uid())) AND
+  (device_id_lock IS NOT DISTINCT FROM (SELECT device_id_lock FROM employees WHERE id = auth.uid()))
 ));
 
 -- سياسات إعدادات الشركة (company_settings)

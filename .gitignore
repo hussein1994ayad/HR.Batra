@@ -2,3 +2,24 @@ scratch/
 *.apk
 *.aab
 *.ipa
+
+# ملفات محلية مؤقتة (سكربتات ترقيع قديمة وخطط اختبار TestSprite)
+_to_delete/
+test_*.json
+.agents/
+
+# أسرار التوقيع — لا تُرفع أبداً
+mobile/android/key.properties
+*.jks
+*.keystore
+
+# لقطات الشاشة المؤقتة أثناء العمل
+mobile/design/screenshots/wip/
+# ملفات Supabase CLI المحلية
+supabase/.temp/
+
+# نسخة base64 من مفتاح التوقيع (لـ GitHub Secrets) — لا تُرفع
+*.jks.base64
+
+# Firebase iOS config (من Firebase Console — يُمرَّر في CI كـ Secret)
+mobile/ios/Runner/GoogleService-Info.plist

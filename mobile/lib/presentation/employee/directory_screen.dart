@@ -1,13 +1,16 @@
 // =========================================================================
-// نظام HR Pro v6.0 - دليل الموظفين الآمن والمصرح به (Employee Directory Screen)
+// HR Pro — دليل الموظفين: بحث فوري بالعربي، فلتر الفرع، وبطاقة تواصل ووثائق
 // =========================================================================
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+import '../../core/services/auth_service.dart';
+import '../../core/services/share_helper.dart';
+import '../../core/services/storage_links.dart';
 import '../../core/services/supabase_service.dart';
-import '../../core/theme/app_theme.dart';
-import '../shared/widgets/glass_container.dart';
-import '../shared/widgets/glass_background.dart';
+import '../shared/ui/ui.dart';
 
 class EmployeeDirectoryScreen extends StatefulWidget {
   const EmployeeDirectoryScreen({super.key});
@@ -20,7 +23,12 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
   List<Map<String, dynamic>> _allEmployees = [];
   List<Map<String, dynamic>> _filteredEmployees = [];
   bool _isLoading = true;
+  bool _hasError = false;
   final _searchController = TextEditingController();
+
+  // فلاتر سريعة
+  String _selectedBranch = 'all';
+  List<String> _branchOptions = ['all'];
 
   @override
   void initState() {
@@ -34,222 +42,334 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
     super.dispose();
   }
 
-  // جلب البيانات من الـ view المخصص والمحمي والمحسّن بقاعدة البيانات
+  /// دالة تسوية الحروف العربية للبحث الفوري الدقيق
+  String _normalizeArabic(String text) {
+    return text
+        .replaceAll(RegExp(r'[أإآٱ]'), 'ا')
+        .replaceAll('ة', 'ه')
+        .replaceAll('ى', 'ي')
+        .replaceAll('ئ', 'ي')
+        .replaceAll('ؤ', 'و')
+        .replaceAll(RegExp(r'[\u064B-\u065F]'), '') // إزالة الحركات
+        .trim()
+        .toLowerCase();
+  }
+
+  /// قائمة الزملاء من دالة get_employee_directory (أعمدة غير حساسة فقط).
+  /// الـ View مقيّد بـ RLS ويعيد صف الموظف نفسه فقط.
   Future<void> _loadDirectory() async {
     setState(() => _isLoading = true);
 
     try {
-      final data = await SupabaseService.client
-          .from('v_employee_directory')
-          .select()
-          .order('full_name');
+      final dynamic data = await SupabaseService.client.rpc<dynamic>('get_employee_directory');
+
+      if (!mounted) return;
+      final list = (data as List<dynamic>).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      final branches = {'all', ...list.map((e) => (e['branch_name'] ?? '').toString()).where((b) => b.isNotEmpty)};
 
       setState(() {
-        _allEmployees = List<Map<String, dynamic>>.from(data);
-        _filteredEmployees = _allEmployees;
+        _allEmployees = list;
+        _hasError = false;
+        _branchOptions = branches.toList();
+        _applyFilters();
       });
     } catch (e) {
       debugPrint('خطأ في تحميل دليل الموظفين: $e');
+      if (mounted) setState(() => _hasError = true);
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  // تصفية نتائج البحث الفوري
-  void _filterSearch(String query) {
-    if (query.trim().isEmpty) {
-      setState(() {
-        _filteredEmployees = _allEmployees;
-      });
-      return;
-    }
+  /// تطبيق البحث والتصفية الفورية بمجرد كتابة أي حرف
+  void _applyFilters() {
+    final query = _searchController.text.trim();
+    final normalizedQuery = _normalizeArabic(query);
 
-    final lowerQuery = query.toLowerCase();
     setState(() {
       _filteredEmployees = _allEmployees.where((emp) {
-        final name = (emp['full_name'] ?? '').toLowerCase();
-        final dept = (emp['department_name'] ?? '').toLowerCase();
-        final code = (emp['employee_code'] ?? '').toLowerCase();
-        return name.contains(lowerQuery) || dept.contains(lowerQuery) || code.contains(lowerQuery);
+        // تصفية الفرع
+        if (_selectedBranch != 'all' && (emp['branch_name'] ?? '') != _selectedBranch) {
+          return false;
+        }
+
+        // إذا كان البحث فارغاً، يظهر جميع الموظفين في الفرع
+        if (normalizedQuery.isEmpty) return true;
+
+        final name = _normalizeArabic((emp['full_name'] ?? '') as String);
+        final dept = _normalizeArabic((emp['department_name'] ?? '') as String);
+        final branch = _normalizeArabic((emp['branch_name'] ?? '') as String);
+        final code = (emp['employee_code'] ?? '').toString().toLowerCase();
+        final phone = (emp['phone'] ?? '').toString();
+        final email = (emp['email'] ?? '').toString().toLowerCase();
+
+        return name.contains(normalizedQuery) ||
+            dept.contains(normalizedQuery) ||
+            branch.contains(normalizedQuery) ||
+            code.contains(normalizedQuery) ||
+            phone.contains(query) ||
+            email.contains(query.toLowerCase());
       }).toList();
     });
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return GlassBackground(
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          centerTitle: true,
-          iconTheme: const IconThemeData(color: Colors.white),
-          title: const Text(
-            'دليل الموظفين المعتمد',
-            style: TextStyle(
-              fontFamily: 'Cairo',
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
+  // بطاقة الموظف: تواصل سريع، معلومات العمل، والوثائق
+  void _showEmployeeProfileModal(Map<String, dynamic> emp) {
+    final name = (emp['full_name'] ?? 'موظف').toString();
+    final phone = (emp['phone'] ?? '').toString();
+    final hasPhone = phone.trim().isNotEmpty;
+    final role = switch (emp['role']) {
+      'admin' => 'مدير نظام',
+      'manager' => 'مدير فرع',
+      _ => 'موظف',
+    };
+    // وثائق الزملاء (هويات، عقود) للأدمن فقط — الموظف يرى الاسم والقسم والتواصل
+    final canSeeDocs = AuthService.currentUserRole == 'admin';
+    final docUrls = canSeeDocs ? [for (final u in (emp['document_urls'] as List<dynamic>? ?? const [])) u.toString()] : const <String>[];
+
+    showAppSheet<void>(
+      context,
+      builder: (ctx) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              AppAvatar(name: name, url: emp['avatar_url']?.toString(), size: 60),
+              const SizedBox(width: AppSpace.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(name, style: AppText.title),
+                    const SizedBox(height: AppSpace.xs),
+                    Wrap(
+                      spacing: AppSpace.xs,
+                      runSpacing: AppSpace.xs,
+                      children: [
+                        StatusBadge((emp['employee_code'] ?? '—').toString(), tone: AppTone.brand),
+                        StatusBadge(role),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpace.lg),
+          Row(
+            children: [
+              Expanded(
+                child: AppButton.secondary(
+                  label: 'اتصال',
+                  icon: Icons.phone_rounded,
+                  onPressed: hasPhone
+                      ? () async {
+                          final uri = Uri.parse('tel:$phone');
+                          if (await canLaunchUrl(uri)) await launchUrl(uri);
+                        }
+                      : null,
+                ),
+              ),
+              const SizedBox(width: AppSpace.sm),
+              Expanded(
+                child: AppButton.secondary(
+                  label: 'واتساب',
+                  icon: Icons.chat_rounded,
+                  onPressed: hasPhone
+                      ? () async {
+                          final cleanPhone = phone.replaceAll(RegExp(r'\D'), '');
+                          final uri = Uri.parse('https://wa.me/$cleanPhone');
+                          if (await canLaunchUrl(uri)) await launchUrl(uri, mode: LaunchMode.externalApplication);
+                        }
+                      : null,
+                ),
+              ),
+              const SizedBox(width: AppSpace.sm),
+              AppIconButton(
+                icon: Icons.copy_rounded,
+                tooltip: 'نسخ الرقم',
+                onPressed: hasPhone
+                    ? () {
+                        Clipboard.setData(ClipboardData(text: phone));
+                        AppSnack.info(context, 'نُسخ رقم الهاتف');
+                      }
+                    : null,
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpace.lg),
+          AppCard(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg, vertical: AppSpace.sm),
+            child: Column(
+              children: [
+                KeyValueRow('الفرع', (emp['branch_name'] ?? '—').toString(), icon: Icons.store_rounded),
+                KeyValueRow('القسم', (emp['department_name'] ?? '—').toString(), icon: Icons.apartment_rounded),
+                KeyValueRow('الهاتف', hasPhone ? phone : 'غير مسجل', icon: Icons.phone_iphone_rounded),
+                KeyValueRow('البريد', (emp['email'] ?? 'غير مسجل').toString(), icon: Icons.alternate_email_rounded),
+              ],
+            ),
+          ),
+          if (canSeeDocs) ...[
+            SectionHeader(
+              'الوثائق (${docUrls.length})',
+              actionLabel: docUrls.length > 1 ? 'مشاركة الكل' : null,
+              onAction: () => ShareHelper.shareLinks(docUrls, subject: 'وثائق الموظف: $name', context: context),
+            ),
+            if (docUrls.isEmpty)
+              const Text('لا توجد وثائق مرفوعة لهذا الموظف.', style: AppText.caption)
+            else
+              for (var i = 0; i < docUrls.length; i++)
+                AppListTile(
+                  dense: true,
+                  leading: ToneIcon(
+                    docUrls[i].toLowerCase().contains('.pdf') ? Icons.picture_as_pdf_rounded : Icons.image_rounded,
+                    tone: docUrls[i].toLowerCase().contains('.pdf') ? AppTone.accent : AppTone.brand,
+                    size: 36,
+                  ),
+                  title: 'وثيقة ${i + 1}',
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        tooltip: 'معاينة',
+                        icon: const Icon(Icons.visibility_rounded),
+                        onPressed: () => _previewImageDialog(docUrls[i], 'وثيقة ${i + 1}'),
+                      ),
+                      IconButton(tooltip: 'مشاركة', icon: const Icon(Icons.ios_share_rounded), onPressed: () => ShareHelper.shareLink(docUrls[i], context)),
+                    ],
+                  ),
+                ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  void _previewImageDialog(String url, String title) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        contentPadding: const EdgeInsets.all(AppSpace.lg),
+        content: ClipRRect(
+          borderRadius: AppRadius.control,
+          child: Container(
+            constraints: const BoxConstraints(maxHeight: 360),
+            color: AppColors.surface1,
+            child: SignedNetworkImage(
+              url,
+              fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) => const EmptyView(title: 'مستند PDF', icon: Icons.picture_as_pdf_rounded, tone: AppTone.accent, compact: true),
             ),
           ),
         ),
-        body: Column(
-          children: [
-            // شريط البحث المتميز بقلم HSL المضيء
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: TextField(
-                controller: _searchController,
-                onChanged: _filterSearch,
-                style: const TextStyle(color: Colors.white, fontSize: 13, fontFamily: 'Cairo'),
-                decoration: InputDecoration(
-                  hintText: 'ابحث بالاسم، القسم، أو كود الموظف...',
-                  hintStyle: const TextStyle(color: Colors.white54, fontSize: 13, fontFamily: 'Cairo'),
-                  prefixIcon: const Icon(Icons.search, color: AppTheme.neonCyan),
-                  suffixIcon: _searchController.text.isNotEmpty
-                      ? IconButton(
-                          icon: const Icon(Icons.clear, color: Colors.white70),
-                          onPressed: () {
-                            _searchController.clear();
-                            _filterSearch('');
-                          },
-                        )
-                      : null,
-                  filled: true,
-                  fillColor: Colors.white.withValues(alpha: 0.04),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: const BorderSide(color: AppTheme.neonCyan),
-                  ),
+        actions: [
+          AppButton.ghost(label: 'إغلاق', onPressed: () => Navigator.pop(ctx)),
+          AppButton(
+            label: 'مشاركة',
+            icon: Icons.ios_share_rounded,
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await ShareHelper.shareLink(url, context);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    Widget list;
+    if (_isLoading && _allEmployees.isEmpty) {
+      list = const Padding(padding: EdgeInsets.all(AppSpace.page), child: SkeletonList(count: 6));
+    } else if (_hasError && _allEmployees.isEmpty) {
+      list = ErrorView(onRetry: _loadDirectory);
+    } else if (_filteredEmployees.isEmpty) {
+      list = EmptyView(
+        title: _allEmployees.isEmpty ? 'الدليل فارغ' : 'ما لقينا نتيجة',
+        message: _allEmployees.isEmpty ? null : 'جرّب اسماً أو قسماً أو رقماً ثانياً.',
+        icon: Icons.person_search_rounded,
+      );
+    } else {
+      list = ListView.builder(
+        padding: const EdgeInsets.fromLTRB(AppSpace.page, AppSpace.sm, AppSpace.page, AppSpace.x4),
+        itemCount: _filteredEmployees.length,
+        itemBuilder: (context, index) {
+          final emp = _filteredEmployees[index];
+          final docs = AuthService.currentUserRole == 'admin' ? (emp['document_urls'] as List<dynamic>? ?? const []).length : 0;
+          return Padding(
+            padding: const EdgeInsets.only(bottom: AppSpace.sm),
+            child: ContentWidth(
+              child: AppCard(
+                padding: EdgeInsets.zero,
+                onTap: () => _showEmployeeProfileModal(emp),
+                child: AppListTile(
+                  leading: AppAvatar(name: (emp['full_name'] ?? '').toString(), url: emp['avatar_url']?.toString()),
+                  title: (emp['full_name'] ?? 'موظف').toString(),
+                  subtitle: '${emp['department_name'] ?? 'القسم العام'} · ${emp['branch_name'] ?? 'الفرع العام'}',
+                  trailing: docs > 0 ? StatusBadge('$docs وثائق', tone: AppTone.success, icon: Icons.folder_rounded) : null,
+                  onTap: () => _showEmployeeProfileModal(emp),
                 ),
               ),
             ),
+          );
+        },
+      );
+    }
 
-            // قائمة دليل الموظفين
-            Expanded(
-              child: _isLoading
-                  ? const Center(child: CircularProgressIndicator(color: AppTheme.neonCyan))
-                  : _filteredEmployees.isEmpty
-                      ? const Center(
-                          child: Text(
-                            'لم يتم العثور على أي موظف مطابق للبحث 🔍',
-                            style: TextStyle(fontSize: 12, color: Colors.white70, fontFamily: 'Cairo'),
-                          ),
-                        )
-                      : RefreshIndicator(
-                          onRefresh: _loadDirectory,
-                          color: AppTheme.neonCyan,
-                          child: ListView.separated(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                            itemCount: _filteredEmployees.length,
-                            separatorBuilder: (_, __) => const SizedBox(height: 12),
-                            itemBuilder: (context, index) {
-                              final emp = _filteredEmployees[index];
-                              final avatarUrl = emp['avatar_url'] ?? '';
-                              final name = emp['full_name'] ?? 'موظف';
-                              final dept = emp['department_name'] ?? 'القسم العام';
-                              final branch = emp['branch_name'] ?? 'الفرع العام';
-                              final phone = emp['phone'] ?? 'غير متوفر';
-                              final code = emp['employee_code'] ?? 'EMP-000';
-
-                              return GlassContainer(
-                                padding: const EdgeInsets.all(14),
-                                borderRadius: 20,
-                                opacity: 0.1,
-                                borderColor: AppTheme.neonCyan.withValues(alpha: 0.2),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: AppTheme.neonCyan.withValues(alpha: 0.04),
-                                    blurRadius: 16,
-                                  )
-                                ],
-                                child: Row(
-                                  children: [
-                                    // الصورة الشخصية
-                                    Container(
-                                      decoration: BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        border: Border.all(color: AppTheme.neonCyan, width: 1.5),
-                                      ),
-                                      child: CircleAvatar(
-                                        radius: 26,
-                                        backgroundColor: Colors.white.withValues(alpha: 0.04),
-                                        backgroundImage: avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null,
-                                        child: avatarUrl.isEmpty
-                                            ? const Icon(Icons.person, color: AppTheme.neonCyan)
-                                            : null,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 14),
-
-                                    // تفاصيل الموظف
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Row(
-                                            children: [
-                                              Text(
-                                                name,
-                                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white, fontFamily: 'Cairo'),
-                                              ),
-                                              const SizedBox(width: 8),
-                                              Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                                decoration: BoxDecoration(
-                                                  color: AppTheme.neonCyan.withValues(alpha: 0.15),
-                                                  borderRadius: BorderRadius.circular(6),
-                                                  border: Border.all(color: AppTheme.neonCyan.withValues(alpha: 0.3), width: 1),
-                                                ),
-                                                child: Text(
-                                                  code,
-                                                  style: const TextStyle(fontSize: 8, color: AppTheme.neonCyan, fontWeight: FontWeight.bold, fontFamily: 'Cairo'),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          const SizedBox(height: 4),
-                                          Text(
-                                            '$dept - $branch',
-                                            style: const TextStyle(fontSize: 11, color: Colors.white70, fontFamily: 'Cairo'),
-                                          ),
-                                          const SizedBox(height: 2),
-                                          Text(
-                                            'الهاتف: $phone',
-                                            style: const TextStyle(fontSize: 10, color: Colors.white54, fontFamily: 'Cairo'),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    
-                                    // زر نسخ الهاتف أو المساعدة
-                                    IconButton(
-                                      icon: const Icon(Icons.copy_rounded, color: AppTheme.neonCyan, size: 20),
-                                      onPressed: () {
-                                        // نسخ رقم الهاتف للحافظة
-                                        Clipboard.setData(ClipboardData(text: phone));
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(
-                                            content: Text('تم نسخ رقم الهاتف للحافظة بنجاح! 📋', style: TextStyle(fontFamily: 'Cairo')),
-                                            backgroundColor: AppTheme.successGreen,
-                                          ),
-                                        );
-                                      },
-                                    ),
-                                  ],
-                                ),
-                              );
-                            },
-                          ),
-                        ),
+    return Scaffold(
+      backgroundColor: AppColors.bg,
+      appBar: AppBar(
+        title: Text('دليل الموظفين${_allEmployees.isEmpty ? '' : ' (${_allEmployees.length})'}'),
+        bottom: PreferredSize(
+          preferredSize: Size.fromHeight(_branchOptions.length > 2 ? 124 : 72),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(AppSpace.page, 0, AppSpace.page, AppSpace.sm),
+            child: Column(
+              children: [
+                ContentWidth(
+                  child: TextField(
+                    controller: _searchController,
+                    onChanged: (_) => _applyFilters(),
+                    textInputAction: TextInputAction.search,
+                    style: AppText.body,
+                    decoration: InputDecoration(
+                      hintText: 'ابحث بالاسم، القسم، الكود أو الهاتف',
+                      prefixIcon: const Icon(Icons.search_rounded),
+                      suffixIcon: _searchController.text.isEmpty
+                          ? null
+                          : IconButton(
+                              tooltip: 'مسح البحث',
+                              icon: const Icon(Icons.close_rounded),
+                              onPressed: () {
+                                _searchController.clear();
+                                _applyFilters();
+                              },
+                            ),
+                    ),
+                  ),
+                ),
+                if (_branchOptions.length > 2) ...[
+                  const SizedBox(height: AppSpace.sm),
+                  AppChoiceChips<String>(
+                    scrollable: true,
+                    value: _selectedBranch,
+                    options: [for (final b in _branchOptions) (b, b == 'all' ? 'كل الفروع' : b, null)],
+                    onChanged: (b) {
+                      setState(() => _selectedBranch = b);
+                      _applyFilters();
+                    },
+                  ),
+                ],
+              ],
             ),
-          ],
+          ),
         ),
+      ),
+      body: RefreshIndicator.adaptive(
+        onRefresh: _loadDirectory,
+        child: list is ListView ? list : ListView(children: [list]),
       ),
     );
   }

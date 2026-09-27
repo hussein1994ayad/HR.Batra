@@ -58,7 +58,7 @@ export function defaultFixtures(): Record<string, Row[]> {
       { id: 'bd2', employee_id: 'e1', type: 'deduction', amount: 20000, reason: 'خصم إداري', issue_date: today },
     ],
     salary_slips: [],
-    employee_devices: [{ id: 'dv1', employee_id: 'e2', device_id: 'dev-2', device_model: 'Galaxy S24', os_version: 'Android 15', is_approved: false, employees: { full_name: 'مصطفى حسن' } }],
+    employee_devices: [{ id: 'dv1', employee_id: 'e2', device_id: 'dev-2', model: 'Galaxy S24', os_version: 'Android 15', is_approved: false, employees: { full_name: 'مصطفى حسن' } }],
     mock_gps_attempts: [{ id: 'm1', employee_id: 'e2', latitude: 33.31, longitude: 44.36, app_used: 'Fake GPS', timestamp: now, employees: { full_name: 'مصطفى حسن' } }],
     geofence_violations: [],
     geofence_zones: [],

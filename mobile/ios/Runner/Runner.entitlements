@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyLists-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Push Notifications (APNs) — يتحول تلقائياً إلى production عند التوقيع للتوزيع -->
+	<key>aps-environment</key>
+	<string>development</string>
+	<!-- تذكيرات البصمة بمستوى Time Sensitive (InterruptionLevel.timeSensitive) -->
+	<key>com.apple.developer.usernotifications.time-sensitive</key>
+	<true/>
+</dict>
+</plist>

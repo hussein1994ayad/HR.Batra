@@ -3,11 +3,13 @@
 // =========================================================================
 
 import 'dart:io';
+
 import 'package:flutter/foundation.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:path/path.dart' as p;
-import 'supabase_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 import 'image_compression_service.dart';
+import 'supabase_service.dart';
 
 class FileUploadService {
   // 1. رفع ملف مع الضغط التلقائي للصور وتطهير الـ EXIF، وإمكانية حذف الملف القديم المستبدل
@@ -25,8 +27,7 @@ class FileUploadService {
         .from(bucketName)
         .upload(
           remotePath, 
-          processedFile, 
-          fileOptions: const FileOptions(upsert: true)
+          processedFile
         );
 
     // استخراج الرابط العام للملف
@@ -42,11 +43,11 @@ class FileUploadService {
             .remove([oldRemotePath]);
         
         if (kDebugMode) {
-          print("تم مسح الملف المستبدل القديم بنجاح من التخزين: $oldRemotePath");
+          debugPrint('تم مسح الملف المستبدل القديم بنجاح من التخزين: $oldRemotePath');
         }
       } catch (e) {
         if (kDebugMode) {
-          print("فشل مسح الملف المستبدل القديم تلقائياً: $e");
+          debugPrint('فشل مسح الملف المستبدل القديم تلقائياً: $e');
         }
       }
     }
@@ -71,7 +72,7 @@ class FileUploadService {
       await supabase.storage.from(bucketName).remove([filePath]);
       
       if (kDebugMode) {
-        print("تم حذف الملف نهائياً وفورياً من التخزين: $filePath");
+        debugPrint('تم حذف الملف نهائياً وفورياً من التخزين: $filePath');
       }
     } else {
       // نقل الملف لسلة المحذوفات (Deleted Files) لمدة 30 يوماً
@@ -93,7 +94,7 @@ class FileUploadService {
       });
 
       if (kDebugMode) {
-        print("تم نقل الملف لسلة المحذوفات مؤقتاً لمدة 30 يوماً: $filePath");
+        debugPrint('تم نقل الملف لسلة المحذوفات مؤقتاً لمدة 30 يوماً: $filePath');
       }
     }
   }
@@ -103,10 +104,9 @@ class FileUploadService {
     try {
       final List<FileObject> list = await SupabaseService.client.storage.from(bucket).list(
         path: p.dirname(filePath),
-        searchOptions: const SearchOptions(limit: 100),
       );
       final filename = p.basename(filePath);
-      for (var f in list) {
+      for (final f in list) {
         if (f.name == filename) {
           return f.metadata?['size'] as int?;
         }
