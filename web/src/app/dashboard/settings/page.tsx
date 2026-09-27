@@ -589,7 +589,29 @@ function SchedulesSection({ data, onChanged }: { data: SettingsData; onChanged: 
 
 /* ------------------------------ Announcements ------------------------------ */
 
+/** حالة التعميم حسب مدته: ساري / مجدول / منتهٍ (المنتهي لا يظهر في التطبيق). */
+function AnnouncementStatus({ a, now }: { a: Announcement; now: number }) {
+  const starts = a.starts_at ? Date.parse(a.starts_at) : Date.parse(a.created_at);
+  const ends = a.ends_at ? Date.parse(a.ends_at) : null;
+  const audience = a.target_employee_ids?.length ? `${a.target_employee_ids.length} موظف` : a.target_branch_id ? 'فرع' : 'الجميع';
+  const state =
+    ends !== null && ends <= now
+      ? { tone: 'slate' as const, label: 'منتهٍ' }
+      : starts > now
+        ? { tone: 'amber' as const, label: 'مجدول' }
+        : { tone: 'emerald' as const, label: 'ساري' };
+  return (
+    <>
+      <Badge tone={state.tone} dot>
+        {state.label}
+      </Badge>
+      <Badge tone="sky">{audience}</Badge>
+    </>
+  );
+}
+
 function AnnouncementsSection({ announcements, onRemoved }: { announcements: Announcement[]; onRemoved: (ids: string[]) => void }) {
+  const [now] = useState(() => Date.now());
   const confirm = useConfirm();
   const [busy, setBusy] = useState<string | null>(null);
 
@@ -649,8 +671,10 @@ function AnnouncementsSection({ announcements, onRemoved }: { announcements: Ann
                 <div className="flex flex-wrap items-center gap-2 mb-1">
                   <h4 className="text-[13px] font-bold text-white">{a.title}</h4>
                   {a.is_pinned && <Badge tone="violet"><Pin className="w-3 h-3" /> مثبت</Badge>}
+                  <AnnouncementStatus a={a} now={now} />
                   <span className="text-[10px] text-slate-500 flex items-center gap-1" dir="ltr">
-                    <Clock className="w-3 h-3" /> {formatDateTime(a.created_at)}
+                    <Clock className="w-3 h-3" /> {formatDateTime(a.starts_at ?? a.created_at)}
+                    {a.ends_at ? <> → {formatDateTime(a.ends_at)}</> : null}
                   </span>
                 </div>
                 <p className="text-xs text-slate-400 leading-relaxed whitespace-pre-line">{a.content}</p>

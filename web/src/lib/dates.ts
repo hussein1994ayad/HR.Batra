@@ -95,3 +95,10 @@ export function getLocalDateStr(date: Date = new Date()): string {
 export function toDateStr(d: Date): string {
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 }
+
+/** يضيف أياماً لتاريخ YYYY-MM-DD ويرجع YYYY-MM-DD (حساب تقويمي بدون منطقة زمنية). */
+export function addDaysStr(dateStr: string, days: number): string {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const t = new Date(Date.UTC(y, m - 1, d + days));
+  return t.toISOString().slice(0, 10);
+}

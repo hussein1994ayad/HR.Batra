@@ -7,6 +7,7 @@ import 'package:hr_pro/presentation/employee/admin_dashboard/admin_dashboard_scr
 import 'package:hr_pro/presentation/employee/admin_live_tracking_screen.dart';
 import 'package:hr_pro/presentation/employee/admin_loans/admin_loans_screen.dart';
 import 'package:hr_pro/presentation/employee/announcement_screen.dart';
+import 'package:hr_pro/presentation/employee/announcements/announcements_board_screen.dart';
 import 'package:hr_pro/presentation/employee/attendance_report_screen.dart';
 import 'package:hr_pro/presentation/employee/branch_management_screen.dart';
 import 'package:hr_pro/presentation/employee/branch_schedule_screen.dart';
@@ -37,6 +38,7 @@ final List<ScreenCase> kScreens = [
   ScreenCase('09_notifications', () => const NotificationsScreen(), role: 'employee'),
   ScreenCase('10_payslips', () => const PayslipsScreen(), role: 'employee'),
   ScreenCase('11_directory', () => const EmployeeDirectoryScreen(), role: 'employee'),
+  ScreenCase('11b_announcements_board', () => const AnnouncementsBoardScreen(), role: 'employee'),
   ScreenCase('12_admin_dashboard', () => const AdminDashboardScreen()),
   ScreenCase('13_admin_loans', () => const AdminLoansManagementScreen()),
   ScreenCase('14_admin_tracking', () => const AdminLiveTrackingScreen()),

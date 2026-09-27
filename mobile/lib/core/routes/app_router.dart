@@ -12,6 +12,7 @@ import '../../presentation/employee/admin_dashboard/admin_dashboard_screen.dart'
 import '../../presentation/employee/admin_live_tracking_screen.dart';
 import '../../presentation/employee/admin_loans/admin_loans_screen.dart';
 import '../../presentation/employee/announcement_screen.dart';
+import '../../presentation/employee/announcements/announcements_board_screen.dart';
 import '../../presentation/employee/attendance_report_screen.dart';
 import '../../presentation/employee/branch_management_screen.dart';
 import '../../presentation/employee/branch_schedule_screen.dart';
@@ -38,6 +39,7 @@ class AppRoutes {
   static const String employeeLoan = '/employee/loan';
   static const String employeeDirectory = '/employee/directory';
   static const String employeeNotifications = '/employee/notifications';
+  static const String employeeAnnouncements = '/employee/announcements';
   static const String employeePayslips = '/employee/payslips';
   static const String adminDashboard = '/admin/dashboard';
   static const String adminLoans = '/admin/loans';
@@ -148,6 +150,13 @@ final GoRouter appRouter = GoRouter(
       },
     ),
     
+    GoRoute(
+      path: AppRoutes.employeeAnnouncements,
+      builder: (BuildContext context, GoRouterState state) {
+        return const AnnouncementsBoardScreen();
+      },
+    ),
+
     GoRoute(
       path: AppRoutes.employeeNotifications,
       builder: (BuildContext context, GoRouterState state) {

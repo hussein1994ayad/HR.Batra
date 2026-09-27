@@ -30,6 +30,7 @@ import { confetti } from '@/lib/lazy';
 import { readCache, useQuery, writeCache } from '@/lib/useQuery';
 import { findSchedule, isDateInRange, weekdayOf, workDaysFor } from '@/lib/attendance';
 import { errorMessage, formatBytes, localDateStr, timeAgo } from '@/lib/format';
+import { addDaysStr, getLocalDateStr } from '@/lib/dates';
 import type {
   Attendance,
   Branch,
@@ -47,6 +48,7 @@ import {
   CardHeader,
   EmptyState,
   Field,
+  Input,
   Modal,
   ModalFooter,
   SearchInput,
@@ -513,7 +515,12 @@ function AnnouncementModal({
   employees: DirectoryEmployee[];
   onClose: () => void;
 }) {
+  const [title, setTitle] = useState('');
   const [text, setText] = useState('');
+  const today = getLocalDateStr();
+  // مدة ظهور التعميم في التطبيق: من تاريخ إلى تاريخ (فارغ = بدون نهاية)
+  const [startDate, setStartDate] = useState(today);
+  const [endDate, setEndDate] = useState(() => addDaysStr(today, 6));
   const [targetType, setTargetType] = useState<'all' | 'branch' | 'employee'>('all');
   const [branchId, setBranchId] = useState('');
   const [employeeIds, setEmployeeIds] = useState<string[]>([]);
@@ -524,46 +531,26 @@ function AnnouncementModal({
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!text.trim()) return;
+    if (!text.trim() || !title.trim()) return;
+    if (targetType === 'branch' && !branchId) return void toast.error('يرجى اختيار الفرع المستهدف أولاً');
+    if (targetType === 'employee' && employeeIds.length === 0) return void toast.error('يرجى اختيار موظف واحد على الأقل');
+    if (endDate && endDate < startDate) return void toast.error('تاريخ الانتهاء يجب أن يكون بعد تاريخ البداية');
     setSending(true);
     try {
-      let targets: string[] = [];
-      if (targetType === 'all') {
-        const { data: emps } = await supabase.from('employees').select('id').eq('is_active', true);
-        targets = (emps ?? []).map((emp) => emp.id);
-      } else if (targetType === 'branch') {
-        if (!branchId) {
-          toast.error('يرجى اختيار الفرع المستهدف أولاً');
-          return;
-        }
-        const { data: emps } = await supabase.from('employees').select('id').eq('branch_id', branchId).eq('is_active', true);
-        targets = (emps ?? []).map((emp) => emp.id);
-      } else {
-        if (employeeIds.length === 0) {
-          toast.error('يرجى اختيار موظف واحد على الأقل');
-          return;
-        }
-        targets = employeeIds;
-      }
-
-      if (targets.length === 0) {
-        toast('لم يتم العثور على موظفين مستهدفين لإرسال هذا التعميم');
-        return;
-      }
-
-      const title = 'تعميم إداري هام 📢';
-      const { error: notifErr } = await supabase.from('notifications').insert(
-        targets.map((employee_id) => ({ employee_id, title, body: text, type: 'memo', is_read: false })),
-      );
-      if (notifErr) throw notifErr;
-
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      await supabase.from('announcements').insert({ title, content: text, is_pinned: false, created_by: session?.user?.id || null });
+      // يحفظ التعميم بمدته وجمهوره ويُشعر المستهدفين في خطوة واحدة؛ يختفي من التطبيق بعد مدته
+      const { data: sent, error } = await supabase.rpc('publish_announcement', {
+        p_title: title.trim(),
+        p_content: text.trim(),
+        p_starts_at: startDate === today ? null : new Date(`${startDate}T00:00:00`).toISOString(),
+        p_ends_at: endDate ? new Date(`${endDate}T23:59:59`).toISOString() : null,
+        p_target: targetType === 'employee' ? 'employees' : targetType,
+        p_branch_id: targetType === 'branch' ? branchId : null,
+        p_employee_ids: targetType === 'employee' ? employeeIds : null,
+      });
+      if (error) throw error;
 
       confetti({ particleCount: 80, spread: 60, origin: { y: 0.8 } });
-      toast.success(`تم إرسال التعميم إلى ${targets.length} موظف`);
+      toast.success(`تم نشر التعميم ووصل إشعاره إلى ${sent ?? 0} موظف`);
       onClose();
     } catch (err) {
       toast.error(`فشل إرسال التعميم: ${errorMessage(err)}`);
@@ -631,11 +618,60 @@ function AnnouncementModal({
           </Field>
         )}
 
+        <Field label="عنوان التعميم">
+          <Input value={title} onChange={(e) => setTitle(e.target.value)} required maxLength={80} placeholder="مثال: عطلة رسمية يوم الخميس" />
+        </Field>
+
         <Field label="نص التعميم">
           <Textarea value={text} onChange={(e) => setText(e.target.value)} required rows={4} placeholder="اكتب نص التعميم هنا..." />
         </Field>
 
-        <ModalFooter onCancel={onClose} loading={sending} submitLabel="إرسال التعميم" loadingLabel="جاري الإرسال..." submitIcon={Send} />
+        <Field label="مدة الظهور في التطبيق" hint="يظهر في قسم التعاميم خلال هذه المدة ثم يختفي تلقائياً. اترك تاريخ الانتهاء فارغاً ليبقى بدون نهاية.">
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block">
+              <span className="block text-[11px] text-slate-500 mb-1">من</span>
+              <Input type="date" value={startDate} min={today} onChange={(e) => setStartDate(e.target.value)} required dir="ltr" className="text-left" />
+            </label>
+            <label className="block">
+              <span className="block text-[11px] text-slate-500 mb-1">إلى</span>
+              <Input type="date" value={endDate} min={startDate} onChange={(e) => setEndDate(e.target.value)} dir="ltr" className="text-left" />
+            </label>
+          </div>
+          <div className="flex flex-wrap gap-1.5 mt-2">
+            {[
+              { label: 'يوم', days: 0 },
+              { label: '3 أيام', days: 2 },
+              { label: 'أسبوع', days: 6 },
+              { label: 'شهر', days: 29 },
+            ].map((d) => (
+              <button
+                key={d.label}
+                type="button"
+                onClick={() => setEndDate(addDaysStr(startDate, d.days))}
+                className={cn(
+                  'h-7 px-3 rounded-lg text-[11px] font-bold border cursor-pointer transition-colors',
+                  endDate === addDaysStr(startDate, d.days)
+                    ? 'bg-indigo-500/15 border-indigo-500/40 text-indigo-200'
+                    : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200',
+                )}
+              >
+                {d.label}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => setEndDate('')}
+              className={cn(
+                'h-7 px-3 rounded-lg text-[11px] font-bold border cursor-pointer transition-colors',
+                endDate === '' ? 'bg-indigo-500/15 border-indigo-500/40 text-indigo-200' : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200',
+              )}
+            >
+              بدون نهاية
+            </button>
+          </div>
+        </Field>
+
+        <ModalFooter onCancel={onClose} loading={sending} submitLabel="نشر التعميم" loadingLabel="جاري النشر..." submitIcon={Send} />
       </form>
     </Modal>
   );

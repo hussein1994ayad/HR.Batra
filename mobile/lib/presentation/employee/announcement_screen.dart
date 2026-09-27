@@ -1,8 +1,9 @@
 // =========================================================================
 // HR Pro — إرسال تعميم للموظفين
 // =========================================================================
-// عنوان ونص، ثم الاستهداف (الجميع / فرع / أشخاص)، معاينة حيّة كما سيراها
-// الموظف، وتأكيد بعدد المستلمين قبل الإرسال. يُرسل كإشعارات (notifications).
+// عنوان ونص، الاستهداف (الجميع / فرع / أشخاص)، ومدة الظهور (من تاريخ إلى تاريخ)،
+// مع معاينة حيّة. publish_announcement يحفظ التعميم ويُشعر المستهدفين معاً؛
+// التعميم يظهر في "التعاميم" خلال مدته فقط ثم يختفي تلقائياً.
 // =========================================================================
 
 import 'package:flutter/material.dart';
@@ -30,6 +31,47 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
   List<Map<String, dynamic>> _branches = [];
   List<Map<String, dynamic>> _employees = [];
   final List<String> _selectedEmployeeIds = [];
+
+  // مدة الظهور: 'day' | '3' | '7' | '30' | 'none' | 'custom'
+  String _duration = '7';
+  DateTime _startDay = DateUtils.dateOnly(DateTime.now());
+  DateTime? _customEndDay;
+
+  bool get _startsToday => DateUtils.isSameDay(_startDay, DateTime.now());
+
+  /// آخر يوم يظهر فيه التعميم (نهاية اليوم)، أو null بدون نهاية.
+  DateTime? get _endDay => switch (_duration) {
+        'none' => null,
+        'custom' => _customEndDay,
+        'day' => _startDay,
+        _ => _startDay.add(Duration(days: int.parse(_duration) - 1)),
+      };
+
+  String get _periodLabel {
+    final from = _startsToday ? 'من الآن' : 'من ${Fmt.dateWithDay(_startDay)}';
+    final end = _endDay;
+    return end == null ? '$from وبدون نهاية' : '$from حتى نهاية ${Fmt.dateWithDay(end)}';
+  }
+
+  Future<void> _pickStart() async {
+    final now = DateUtils.dateOnly(DateTime.now());
+    final d = await showDatePicker(context: context, initialDate: _startDay, firstDate: now, lastDate: now.add(const Duration(days: 365)));
+    if (d == null) return;
+    setState(() {
+      _startDay = d;
+      if (_customEndDay != null && _customEndDay!.isBefore(d)) _customEndDay = d;
+    });
+  }
+
+  Future<void> _pickEnd() async {
+    final d = await showDatePicker(
+      context: context,
+      initialDate: _customEndDay ?? _startDay.add(const Duration(days: 6)),
+      firstDate: _startDay,
+      lastDate: _startDay.add(const Duration(days: 730)),
+    );
+    if (d != null) setState(() => _customEndDay = d);
+  }
 
   @override
   void initState() {
@@ -82,45 +124,33 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
       AppSnack.error(context, 'اختر موظفاً واحداً على الأقل');
       return;
     }
+    if (_duration == 'custom' && _customEndDay == null) {
+      AppSnack.error(context, 'اختر تاريخ انتهاء التعميم');
+      return;
+    }
 
-    final ok = await showAppConfirm(context, title: 'إرسال التعميم؟', message: 'راح يوصل إشعار إلى $_targetLabel.', confirmLabel: 'إرسال');
+    final ok = await showAppConfirm(context, title: 'إرسال التعميم؟', message: 'راح يوصل إشعار إلى $_targetLabel، ويظهر في التعاميم $_periodLabel.', confirmLabel: 'إرسال');
     if (!ok || !mounted) return;
 
     setState(() => _isLoading = true);
 
     try {
-      List<String> targetEmployeeIds = [];
-
-      if (_selectedTarget == 'all') {
-        targetEmployeeIds = _employees.map((e) => e['id'] as String).toList();
-      } else if (_selectedTarget == 'branch') {
-        final branchEmps = await SupabaseService.client.from('employees').select('id').eq('branch_id', _selectedBranchId!).eq('is_active', true);
-        targetEmployeeIds = branchEmps.map((e) => e['id'] as String).toList();
-      } else {
-        targetEmployeeIds = List.of(_selectedEmployeeIds);
-      }
-
-      if (targetEmployeeIds.isEmpty) {
-        if (mounted) AppSnack.show(context, 'لا يوجد موظفون في هذا النطاق', tone: AppTone.warning);
-        return;
-      }
-
-      final notifications = targetEmployeeIds
-          .map((id) => {
-                'employee_id': id,
-                'title': '📢 ${_titleController.text.trim()}',
-                'body': _bodyController.text.trim(),
-                'type': 'system',
-                'is_read': false,
-              })
-          .toList();
-
-      await SupabaseService.client.from('notifications').insert(notifications);
+      final end = _endDay;
+      final sent = await SupabaseService.client.rpc<dynamic>('publish_announcement', params: {
+        'p_title': _titleController.text.trim(),
+        'p_content': _bodyController.text.trim(),
+        'p_starts_at': _startsToday ? null : _startDay.toUtc().toIso8601String(),
+        // نهاية اليوم الأخير بتوقيت الهاتف
+        'p_ends_at': end == null ? null : DateTime(end.year, end.month, end.day, 23, 59, 59).toUtc().toIso8601String(),
+        'p_target': _selectedTarget,
+        'p_branch_id': _selectedTarget == 'branch' ? _selectedBranchId : null,
+        'p_employee_ids': _selectedTarget == 'employees' ? _selectedEmployeeIds : null,
+      });
 
       if (mounted) {
         _titleController.clear();
         _bodyController.clear();
-        AppSnack.success(context, 'وصل التعميم إلى ${targetEmployeeIds.length} موظف');
+        AppSnack.success(context, 'نُشر التعميم ووصل إشعاره إلى ${sent ?? 0} موظف');
       }
     } catch (e) {
       debugPrint('Error sending announcement: $e');
@@ -218,6 +248,43 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
                 onTap: _loadingData ? null : _pickEmployees,
               ),
             ],
+            const SizedBox(height: AppSpace.lg),
+            AppChoiceChips<String>(
+              label: 'مدة الظهور',
+              value: _duration,
+              options: const [
+                ('day', 'يوم', null),
+                ('3', '3 أيام', null),
+                ('7', 'أسبوع', null),
+                ('30', 'شهر', null),
+                ('none', 'بدون نهاية', null),
+                ('custom', 'تاريخ محدد', Icons.event_rounded),
+              ],
+              onChanged: (v) => setState(() => _duration = v),
+            ),
+            const SizedBox(height: AppSpace.md),
+            Row(
+              children: [
+                Expanded(
+                  child: AppPickerField(
+                    label: 'يبدأ',
+                    value: _startsToday ? 'اليوم' : Fmt.dateWithDay(_startDay),
+                    onTap: _pickStart,
+                  ),
+                ),
+                if (_duration == 'custom') ...[
+                  const SizedBox(width: AppSpace.md),
+                  Expanded(
+                    child: AppPickerField(
+                      label: 'ينتهي',
+                      value: _customEndDay == null ? null : Fmt.dateWithDay(_customEndDay),
+                      placeholder: 'اختر التاريخ',
+                      onTap: _pickEnd,
+                    ),
+                  ),
+                ],
+              ],
+            ),
             const SectionHeader('معاينة'),
             AppCard(
               child: Row(
@@ -240,8 +307,16 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
             ),
             const SizedBox(height: AppSpace.sm),
             Text('يصل إلى: $_targetLabel', style: AppText.caption),
+            const SizedBox(height: AppSpace.xs),
+            Row(
+              children: [
+                const Icon(Icons.schedule_rounded, size: 14, color: AppColors.textMuted),
+                const SizedBox(width: AppSpace.xs),
+                Expanded(child: Text('يظهر في التعاميم $_periodLabel ثم يختفي تلقائياً', style: AppText.caption)),
+              ],
+            ),
             const SizedBox(height: AppSpace.xxl),
-            AppButton(label: 'إرسال التعميم', icon: Icons.send_rounded, size: AppButtonSize.large, expand: true, loading: _isLoading, onPressed: _sendAnnouncement),
+            AppButton(label: 'نشر التعميم', icon: Icons.send_rounded, size: AppButtonSize.large, expand: true, loading: _isLoading, onPressed: _sendAnnouncement),
           ],
         ),
       ),

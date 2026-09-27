@@ -20,6 +20,7 @@ import '../../core/services/ota_service.dart';
 import '../../core/services/schedule_service.dart';
 import '../../core/services/supabase_service.dart';
 import '../shared/ui/ui.dart';
+import 'announcements/announcement_widgets.dart';
 
 class HomeScreen extends StatefulWidget {
   final void Function(int) onTabChange;
@@ -37,6 +38,7 @@ class _HomeScreenState extends State<HomeScreen> {
   String _avatarUrl = '';
   bool _isLoading = true;
   List<Map<String, dynamic>> _announcements = [];
+  List<Map<String, dynamic>> _onLeave = [];
   Map<String, dynamic>? _todayAttendance;
   String _userRole = 'employee';
   int _unreadNotificationsCount = 0;
@@ -218,12 +220,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
       final results = await Future.wait<dynamic>([
         scheduleQuery,
-        SupabaseService.client
-            .from('announcements')
-            .select()
-            .order('is_pinned', ascending: false)
-            .order('created_at', ascending: false)
-            .limit(3),
+        // التعاميم السارية الآن لهذا الموظف فقط (مدة + جمهور مستهدف)
+        SupabaseService.client.rpc<dynamic>('get_active_announcements', params: {'p_limit': 3}),
         SupabaseService.client
             .from('attendance')
             .select()
@@ -241,6 +239,8 @@ class _HomeScreenState extends State<HomeScreen> {
       final announcementsData = results[1] as List<dynamic>;
       final attendanceData = results[2];
       final unreadRes = results[3] as List<dynamic>;
+
+      unawaited(_loadOnLeave());
 
       setState(() {
         _workSchedule = schedData != null ? schedData as Map<String, dynamic> : null;
@@ -274,6 +274,21 @@ class _HomeScreenState extends State<HomeScreen> {
   // Build
   // ==========================================================================
   bool get _isManager => _userRole == 'admin' || _userRole == 'manager';
+
+  // المجازون الآن (منفصل: فشله لا يوقف باقي الرئيسية)
+  Future<void> _loadOnLeave() async {
+    try {
+      final data = await SupabaseService.client.rpc<dynamic>('get_on_leave_now');
+      if (mounted && data is List) setState(() => _onLeave = List<Map<String, dynamic>>.from(data));
+    } catch (e) {
+      debugPrint('Error loading on-leave list: $e');
+    }
+  }
+
+  Future<void> _openAnnouncements() async {
+    await context.push(AppRoutes.employeeAnnouncements);
+    unawaited(_loadDashboardData());
+  }
 
   Future<void> _openNotifications() async {
     await context.push(AppRoutes.employeeNotifications);
@@ -309,10 +324,19 @@ class _HomeScreenState extends State<HomeScreen> {
     final announcements = <Widget>[
       SectionHeader(
         'التعاميم',
-        actionLabel: _announcements.isNotEmpty ? 'عرض الكل' : null,
-        onAction: _openNotifications,
+        actionLabel: 'عرض الكل',
+        onAction: _openAnnouncements,
       ),
       _Announcements(loading: _isLoading && _announcements.isEmpty, items: _announcements),
+      if (_onLeave.isNotEmpty) ...[
+        SectionHeader(
+          'المجازون اليوم',
+          trailing: StatusBadge('${_onLeave.length}', tone: AppTone.accent),
+          actionLabel: 'عرض الكل',
+          onAction: _openAnnouncements,
+        ),
+        OnLeaveStrip(people: _onLeave),
+      ],
     ];
 
     return AppPage(
@@ -633,40 +657,10 @@ class _Announcements extends StatelessWidget {
         for (var i = 0; i < items.length; i++)
           Padding(
             padding: const EdgeInsets.only(bottom: AppSpace.md),
-            child: FadeSlideIn(index: i, child: _AnnouncementCard(items[i])),
+            child: FadeSlideIn(index: i, child: AnnouncementCard(items[i])),
           ),
       ],
     );
   }
 }
 
-class _AnnouncementCard extends StatelessWidget {
-  const _AnnouncementCard(this.a);
-  final Map<String, dynamic> a;
-
-  @override
-  Widget build(BuildContext context) {
-    final pinned = a['is_pinned'] == true;
-    final body = (a['content'] ?? a['body'] ?? '').toString();
-    return AppCard(
-      tone: pinned ? AppTone.warning : null,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              if (pinned) ...[const Icon(Icons.push_pin_rounded, size: 16, color: AppColors.warning), const SizedBox(width: AppSpace.xs)],
-              Expanded(child: Text((a['title'] ?? 'إعلان إداري').toString(), style: AppText.subtitle, maxLines: 2, overflow: TextOverflow.ellipsis)),
-              const SizedBox(width: AppSpace.sm),
-              Text(Fmt.relative(DateTime.tryParse(a['created_at']?.toString() ?? '')), style: AppText.caption),
-            ],
-          ),
-          if (body.isNotEmpty) ...[
-            const SizedBox(height: AppSpace.xs),
-            Text(body, style: AppText.bodySm, maxLines: 4, overflow: TextOverflow.ellipsis),
-          ],
-        ],
-      ),
-    );
-  }
-}

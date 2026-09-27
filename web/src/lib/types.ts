@@ -188,6 +188,10 @@ export interface Announcement {
   content: string;
   is_pinned: boolean;
   created_at: string;
+  starts_at?: string | null;
+  ends_at?: string | null;
+  target_branch_id?: string | null;
+  target_employee_ids?: string[] | null;
 }
 
 export interface MockGpsAttempt {
