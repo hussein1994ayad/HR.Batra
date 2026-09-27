@@ -43,6 +43,10 @@ void main() async {
     final license = await rootBundle.loadString('assets/google_fonts/OFL.txt');
     yield LicenseEntryWithLineBreaks(['google_fonts', 'Cairo'], license);
   });
+  LicenseRegistry.addLicense(() async* {
+    final license = await rootBundle.loadString('assets/fonts/pdf/OFL.txt');
+    yield LicenseEntryWithLineBreaks(['IBM Plex Sans Arabic'], license);
+  });
 
   FlutterError.onError = (FlutterErrorDetails details) {
     FlutterError.presentError(details);

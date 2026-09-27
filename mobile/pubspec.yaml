@@ -90,6 +90,9 @@ flutter:
     - assets/sounds/
     # خط Cairo مضمّن (OFL) — google_fonts يقرأه من هنا بدل تحميله من Google
     - assets/google_fonts/
+    # خط IBM Plex Sans Arabic (OFL) لملفات PDF: فيه كل أشكال الحروف العربية التي
+    # تحتاجها مكتبة PDF (خط Cairo ينقصه الألف المنفصل فكان يختفي من الكشف)
+    - assets/fonts/pdf/
 
   # يجعل fontFamily: 'Cairo' المستعمل في الشاشات يعمل (لم يكن مسجلاً سابقاً)
   fonts:

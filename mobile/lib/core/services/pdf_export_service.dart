@@ -60,6 +60,25 @@ class PdfExportService {
     return path;
   }
 
+  /// مبلغ بفواصل الآلاف + العملة، بدون إشارة (الإشارة في عمود النوع حتى لا
+  /// تنقلب مع اتجاه النص العربي).
+  @visibleForTesting
+  static String money(num amount) => '${NumberFormat('#,##0', 'en').format(amount.abs().round())} ${AppConstants.currency}';
+
+  static const _arabicMonths = [
+    'كانون الثاني', 'شباط', 'آذار', 'نيسان', 'أيار', 'حزيران',
+    'تموز', 'آب', 'أيلول', 'تشرين الأول', 'تشرين الثاني', 'كانون الأول',
+  ];
+
+  /// "2026-09" ← "أيلول 2026" (بدون شرطات تنعكس مع النص العربي)
+  @visibleForTesting
+  static String monthLabel(String workMonth) {
+    final parts = workMonth.split('-');
+    final m = parts.length == 2 ? int.tryParse(parts[1]) : null;
+    if (m == null || m < 1 || m > 12) return workMonth;
+    return '${_arabicMonths[m - 1]} ${parts[0]}';
+  }
+
   /// بناء محتوى كشف الراتب PDF (بدون حفظ) — مفصول لإمكانية اختباره.
   static Future<List<int>> buildPayslipPdfBytes({
     required String employeeName,
@@ -73,351 +92,192 @@ class PdfExportService {
     List<Map<String, dynamic>>? bonusesList,
     List<Map<String, dynamic>>? deductionsList,
   }) async {
-    // 1. خط Cairo المضمّن (رخصة OFL حرة) يدعم العربية بالكامل
-    final fontData = await rootBundle.load('assets/google_fonts/Cairo-Regular.ttf');
-    final boldFontData = await rootBundle.load('assets/google_fonts/Cairo-Bold.ttf');
-    final fontBytes = fontData.buffer.asUint8List();
-    final boldFontBytes = boldFontData.buffer.asUint8List();
+    // خط IBM Plex Sans Arabic: فيه كل أشكال الحروف العربية التي تحتاجها مكتبة PDF
+    // (Cairo ينقصه الألف المنفصل وأشكال أخرى، فكانت الحروف تختفي من الكشف).
+    final regular = (await rootBundle.load('assets/fonts/pdf/IBMPlexSansArabic-Regular.ttf')).buffer.asUint8List();
+    final bold = (await rootBundle.load('assets/fonts/pdf/IBMPlexSansArabic-Bold.ttf')).buffer.asUint8List();
 
-    // 2. إنشاء مستند PDF جديد
     final PdfDocument document = PdfDocument();
     document.pageSettings.size = PdfPageSize.a4;
-    document.pageSettings.margins.all = 25;
-
+    document.pageSettings.margins.all = 32;
     final PdfPage page = document.pages.add();
-    final Size pageSize = page.getClientSize();
-    double currentY = 0;
+    final Size size = page.getClientSize();
+    final PdfGraphics g = page.graphics;
 
-    // 3. خطوط وتنسيقات تدعم اللغة العربية 100%
-    final PdfFont titleFont = PdfTrueTypeFont(boldFontBytes, 16);
-    final PdfFont subtitleFont = PdfTrueTypeFont(boldFontBytes, 11);
-    final PdfFont bodyFont = PdfTrueTypeFont(fontBytes, 9);
-    final PdfFont boldBodyFont = PdfTrueTypeFont(boldFontBytes, 9);
-    final PdfFont smallFont = PdfTrueTypeFont(fontBytes, 8);
+    final titleFont = PdfTrueTypeFont(bold, 20);
+    final headFont = PdfTrueTypeFont(bold, 12);
+    final labelFont = PdfTrueTypeFont(bold, 10);
+    final bodyFont = PdfTrueTypeFont(regular, 10);
+    final smallFont = PdfTrueTypeFont(regular, 8.5);
+    final netFont = PdfTrueTypeFont(bold, 15);
 
-    final PdfStringFormat rtlCenterFormat = PdfStringFormat(
-      alignment: PdfTextAlignment.center,
-      textDirection: PdfTextDirection.rightToLeft,
-    );
-    final PdfStringFormat rtlRightFormat = PdfStringFormat(
+    final right = PdfStringFormat(
       alignment: PdfTextAlignment.right,
+      lineAlignment: PdfVerticalAlignment.middle,
+      textDirection: PdfTextDirection.rightToLeft,
+    );
+    final center = PdfStringFormat(
+      alignment: PdfTextAlignment.center,
+      lineAlignment: PdfVerticalAlignment.middle,
       textDirection: PdfTextDirection.rightToLeft,
     );
 
-    // ألوان الهوية البصرية
-    final PdfColor brandDark = PdfColor(15, 23, 42);       // #0F172A
-    final PdfColor brandTeal = PdfColor(13, 148, 136);     // #0D9488
-    final PdfColor brandCyan = PdfColor(6, 182, 212);      // #06B6D4
-    final PdfColor textSlate = PdfColor(51, 65, 85);       // #334155
-    final PdfColor successGreen = PdfColor(16, 185, 129);  // #10B981
-    final PdfColor dangerRed = PdfColor(239, 68, 68);      // #EF4444
-    final PdfColor lightBg = PdfColor(248, 250, 252);      // #F8FAFC
+    final navy = PdfColor(15, 23, 42);
+    final teal = PdfColor(13, 148, 136);
+    final tealSoft = PdfColor(204, 251, 241);
+    final slate = PdfColor(71, 85, 105);
+    final line = PdfColor(226, 232, 240);
+    final soft = PdfColor(248, 250, 252);
+    final green = PdfColor(5, 150, 105);
+    final red = PdfColor(220, 38, 38);
+    final white = PdfColor(255, 255, 255);
 
-    // -------------------------------------------------------------
-    // الترويسة الرئيسية للشركة
-    // -------------------------------------------------------------
-    page.graphics.drawRectangle(
-      brush: PdfSolidBrush(brandDark),
-      bounds: Rect.fromLTWH(0, currentY, pageSize.width, 60),
-    );
-
-    page.graphics.drawString(
-      'HR PRO BATRA - كشف الراتب الشهري الرسمي',
-      titleFont,
-      brush: PdfSolidBrush(PdfColor(255, 255, 255)),
-      bounds: Rect.fromLTWH(0, currentY + 12, pageSize.width, 24),
-      format: rtlCenterFormat,
-    );
-
-    final String exportDateStr = DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now());
-    page.graphics.drawString(
-      'تاريخ الاستخراج: $exportDateStr | النظام المالي المعتمد v6.0',
-      smallFont,
-      brush: PdfSolidBrush(brandCyan),
-      bounds: Rect.fromLTWH(0, currentY + 38, pageSize.width, 16),
-      format: rtlCenterFormat,
-    );
-
-    currentY += 75;
-
-    // -------------------------------------------------------------
-    // بطاقة بيانات الموظف والدورة المالية
-    // -------------------------------------------------------------
-    final PdfGrid infoGrid = PdfGrid();
-    infoGrid.columns.add(count: 4);
-    infoGrid.columns[0].width = pageSize.width * 0.25;
-    infoGrid.columns[1].width = pageSize.width * 0.25;
-    infoGrid.columns[2].width = pageSize.width * 0.25;
-    infoGrid.columns[3].width = pageSize.width * 0.25;
-
-    infoGrid.style.cellPadding = PdfPaddings(left: 6, top: 6, right: 6, bottom: 6);
-
-    PdfGridRow row1 = infoGrid.rows.add();
-    row1.cells[0].value = 'اسم الموظف:';
-    row1.cells[1].value = employeeName;
-    row1.cells[2].value = 'الشهر المالي:';
-    row1.cells[3].value = workMonth;
-
-    PdfGridRow row2 = infoGrid.rows.add();
-    row2.cells[0].value = 'الفرع / الموقع:';
-    row2.cells[1].value = branchName.isEmpty ? 'المقر الرئيسي' : branchName;
-    row2.cells[2].value = 'العملة المعتمدة:';
-    row2.cells[3].value = 'دينار عراقي (IQD)';
-
-    for (int i = 0; i < infoGrid.rows.count; i++) {
-      final r = infoGrid.rows[i];
-      r.cells[0].style.font = boldBodyFont;
-      r.cells[0].style.backgroundBrush = PdfSolidBrush(lightBg);
-      r.cells[0].style.stringFormat = rtlRightFormat;
-
-      r.cells[1].style.font = boldBodyFont;
-      r.cells[1].style.textBrush = PdfSolidBrush(brandTeal);
-      r.cells[1].style.stringFormat = rtlRightFormat;
-
-      r.cells[2].style.font = boldBodyFont;
-      r.cells[2].style.backgroundBrush = PdfSolidBrush(lightBg);
-      r.cells[2].style.stringFormat = rtlRightFormat;
-
-      r.cells[3].style.font = boldBodyFont;
-      r.cells[3].style.textBrush = PdfSolidBrush(textSlate);
-      r.cells[3].style.stringFormat = rtlRightFormat;
+    // ارتفاع سطر كافٍ للخط (مكتبة PDF تحذف السطر كله إذا كان المستطيل أقصر منه)
+    double lineH(PdfFont f) => f.height * 1.35;
+    void text(String s, PdfFont f, PdfColor c, double y, {double x = 0, double? w, PdfStringFormat? fmt}) {
+      g.drawString(s, f, brush: PdfSolidBrush(c), bounds: Rect.fromLTWH(x, y, w ?? size.width, lineH(f)), format: fmt ?? right);
     }
 
-    final PdfLayoutResult infoResult = infoGrid.draw(
-      page: page,
-      bounds: Rect.fromLTWH(0, currentY, pageSize.width, 0),
-    )!;
+    double y = 0;
 
-    currentY = infoResult.bounds.bottom + 18;
+    // ---------------- الترويسة ----------------
+    const headerH = 78.0;
+    g.drawRectangle(brush: PdfSolidBrush(navy), bounds: Rect.fromLTWH(0, y, size.width, headerH));
+    g.drawRectangle(brush: PdfSolidBrush(teal), bounds: Rect.fromLTWH(0, y + headerH - 4, size.width, 4));
+    const pad = 18.0;
+    text('كشف راتب شهري', titleFont, white, y + 12, x: pad, w: size.width - 2 * pad);
+    text('HR Pro · ${monthLabel(workMonth)}', bodyFont, PdfColor(153, 246, 228), y + 12 + lineH(titleFont), x: pad, w: size.width - 2 * pad);
+    final ltrLeft = PdfStringFormat(lineAlignment: PdfVerticalAlignment.middle);
+    final leftArabic = PdfStringFormat(textDirection: PdfTextDirection.rightToLeft);
+    text('تاريخ الإصدار', smallFont, PdfColor(148, 163, 184), y + 14, x: pad, w: size.width / 2, fmt: leftArabic);
+    text(DateFormat('yyyy-MM-dd  HH:mm').format(DateTime.now()), smallFont, PdfColor(203, 213, 225), y + 14 + lineH(smallFont),
+        x: pad, w: size.width / 2, fmt: ltrLeft);
+    y += headerH + 18;
 
-    // -------------------------------------------------------------
-    // ملخص الموقف المالي وكشف المستحقات والخصومات
-    // -------------------------------------------------------------
-    page.graphics.drawString(
-      '1. تفاصيل وملخص الموقف المالي للشهر:',
-      subtitleFont,
-      brush: PdfSolidBrush(brandDark),
-      bounds: Rect.fromLTWH(0, currentY, pageSize.width, 20),
-      format: rtlRightFormat,
-    );
-
-    currentY += 24;
-
-    final PdfGrid summaryGrid = PdfGrid();
-    summaryGrid.columns.add(count: 3);
-    summaryGrid.columns[0].width = pageSize.width * 0.40;
-    summaryGrid.columns[1].width = pageSize.width * 0.35;
-    summaryGrid.columns[2].width = pageSize.width * 0.25;
-
-    summaryGrid.headers.add(1);
-    final PdfGridRow headerRow = summaryGrid.headers[0];
-    headerRow.cells[0].value = 'البند المالي';
-    headerRow.cells[1].value = 'المبلغ بالدينار العراقي';
-    headerRow.cells[2].value = 'النوع / الأثر';
-
-    headerRow.style.backgroundBrush = PdfSolidBrush(brandTeal);
-    for (int c = 0; c < 3; c++) {
-      headerRow.cells[c].style.font = boldBodyFont;
-      headerRow.cells[c].style.textBrush = PdfSolidBrush(PdfColor(255, 255, 255));
-      headerRow.cells[c].style.stringFormat = rtlCenterFormat;
-    }
-
-    // إضافة صفوف الملخص
-    _addSummaryGridRow(summaryGrid, 'الراتب الأساسي الاسمي', AppConstants.formatMoney(basicSalary), 'استحقاق ثابت (+)', boldBodyFont, rtlRightFormat, rtlCenterFormat);
-    if (allowances > 0) {
-      _addSummaryGridRow(summaryGrid, 'إجمالي المكافآت والبدلات', '+ ${AppConstants.formatMoney(allowances)}', 'إضافة تشجيعية (+)', boldBodyFont, rtlRightFormat, rtlCenterFormat, textColor: successGreen);
-    }
-    if (deductions > 0) {
-      _addSummaryGridRow(summaryGrid, 'إجمالي خصومات الغياب والدوام والجزاءات', '- ${AppConstants.formatMoney(deductions)}', 'استقطاع (-)', boldBodyFont, rtlRightFormat, rtlCenterFormat, textColor: dangerRed);
-    }
-    if (loansDeduction > 0) {
-      _addSummaryGridRow(summaryGrid, 'استقطاع قسط السلفة المالية', '- ${AppConstants.formatMoney(loansDeduction)}', 'سداد سلفة (-)', boldBodyFont, rtlRightFormat, rtlCenterFormat, textColor: dangerRed);
-    }
-
-    // صف الصافي الإجمالي
-    final PdfGridRow netRow = summaryGrid.rows.add();
-    netRow.cells[0].value = 'صافي الراتب المستحق للصرف:';
-    netRow.cells[1].value = AppConstants.formatMoney(netSalary);
-    netRow.cells[2].value = 'المبلغ النهائي الصافي 💸';
-
-    netRow.style.backgroundBrush = PdfSolidBrush(lightBg);
-    netRow.cells[0].style.font = boldBodyFont;
-    netRow.cells[0].style.stringFormat = rtlRightFormat;
-    netRow.cells[0].style.textBrush = PdfSolidBrush(brandDark);
-
-    netRow.cells[1].style.font = subtitleFont;
-    netRow.cells[1].style.stringFormat = rtlCenterFormat;
-    netRow.cells[1].style.textBrush = PdfSolidBrush(brandTeal);
-
-    netRow.cells[2].style.font = boldBodyFont;
-    netRow.cells[2].style.stringFormat = rtlCenterFormat;
-    netRow.cells[2].style.textBrush = PdfSolidBrush(successGreen);
-
-    final PdfLayoutResult summaryResult = summaryGrid.draw(
-      page: page,
-      bounds: Rect.fromLTWH(0, currentY, pageSize.width, 0),
-    )!;
-
-    currentY = summaryResult.bounds.bottom + 18;
-
-    // -------------------------------------------------------------
-    // جدول بنود المكافآت والخصومات المسجلة وملاحظاتها
-    // -------------------------------------------------------------
-    final bool hasBonuses = bonusesList != null && bonusesList.isNotEmpty;
-    final bool hasDeductions = deductionsList != null && deductionsList.isNotEmpty;
-
-    if (hasBonuses || hasDeductions) {
-      page.graphics.drawString(
-        '2. تفاصيل وبنود المكافآت والخصومات الإضافية المسجلة:',
-        subtitleFont,
-        brush: PdfSolidBrush(brandDark),
-        bounds: Rect.fromLTWH(0, currentY, pageSize.width, 20),
-        format: rtlRightFormat,
-      );
-
-      currentY += 22;
-
-      final PdfGrid detailsGrid = PdfGrid();
-      detailsGrid.columns.add(count: 4);
-      detailsGrid.columns[0].width = pageSize.width * 0.15;
-      detailsGrid.columns[1].width = pageSize.width * 0.20;
-      detailsGrid.columns[2].width = pageSize.width * 0.45;
-      detailsGrid.columns[3].width = pageSize.width * 0.20;
-
-      detailsGrid.headers.add(1);
-      final PdfGridRow dHeader = detailsGrid.headers[0];
-      dHeader.cells[0].value = 'النوع';
-      dHeader.cells[1].value = 'المبلغ';
-      dHeader.cells[2].value = 'السبب / الملاحظات';
-      dHeader.cells[3].value = 'تاريخ الإضافة';
-
-      dHeader.style.backgroundBrush = PdfSolidBrush(brandDark);
-      for (int c = 0; c < 4; c++) {
-        dHeader.cells[c].style.font = boldBodyFont;
-        dHeader.cells[c].style.textBrush = PdfSolidBrush(PdfColor(255, 255, 255));
-        dHeader.cells[c].style.stringFormat = rtlCenterFormat;
+    // ---------------- بيانات الموظف ----------------
+    // الجداول تُرسم من اليسار؛ نعكس الأعمدة حتى يكون العمود 0 أقصى اليمين (قراءة عربية)
+    PdfGrid grid(List<double> widths) {
+      final gr = PdfGrid();
+      gr.columns.add(count: widths.length);
+      for (var i = 0; i < widths.length; i++) {
+        gr.columns[widths.length - 1 - i].width = size.width * widths[i];
       }
-
-      if (hasBonuses) {
-        for (final b in bonusesList) {
-          final amt = (b['amount'] as num?)?.toDouble() ?? 0.0;
-          final reason = b['reason']?.toString() ?? 'مكافأة تشجيعية';
-          final date = b['issue_date']?.toString() ?? '-';
-          _addDetailGridRow(detailsGrid, 'مكافأة (+)', '+ ${AppConstants.formatMoney(amt)}', reason, date, bodyFont, rtlCenterFormat, rtlRightFormat, textColor: successGreen);
-        }
-      }
-
-      if (hasDeductions) {
-        for (final d in deductionsList) {
-          final amt = (d['amount'] as num?)?.toDouble() ?? 0.0;
-          final reason = d['reason']?.toString() ?? 'خصم إداري';
-          final date = d['issue_date']?.toString() ?? '-';
-          _addDetailGridRow(detailsGrid, 'خصم (-)', '- ${AppConstants.formatMoney(amt)}', reason, date, bodyFont, rtlCenterFormat, rtlRightFormat, textColor: dangerRed);
-        }
-      }
-
-      final PdfLayoutResult detailsResult = detailsGrid.draw(
-        page: page,
-        bounds: Rect.fromLTWH(0, currentY, pageSize.width, 0),
-      )!;
-
-      currentY = detailsResult.bounds.bottom + 20;
+      gr.style.cellPadding = PdfPaddings(left: 8, right: 8, top: 7, bottom: 7);
+      return gr;
     }
 
-    // -------------------------------------------------------------
-    // صندوق التوقيعات الرسمية
-    // -------------------------------------------------------------
-    if (currentY + 70 > pageSize.height) {
-      currentY = pageSize.height - 70;
+    PdfGridCell rc(PdfGridRow r, int i) => r.cells[r.cells.count - 1 - i];
+
+    PdfGridCellStyle cell(PdfFont f, {PdfColor? color, PdfColor? bg, PdfStringFormat? fmt}) => PdfGridCellStyle(
+          font: f,
+          textBrush: PdfSolidBrush(color ?? navy),
+          backgroundBrush: bg == null ? null : PdfSolidBrush(bg),
+          format: fmt ?? right,
+          borders: PdfBorders(left: PdfPen(line), right: PdfPen(line), top: PdfPen(line), bottom: PdfPen(line)),
+        );
+
+    final info = grid([0.18, 0.32, 0.18, 0.32]);
+    void infoRow(String l1, String v1, String l2, String v2) {
+      final r = info.rows.add();
+      rc(r, 0).value = l1;
+      rc(r, 1).value = v1;
+      rc(r, 2).value = l2;
+      rc(r, 3).value = v2;
+      rc(r, 0).style = cell(labelFont, color: slate, bg: soft);
+      rc(r, 1).style = cell(bodyFont);
+      rc(r, 2).style = cell(labelFont, color: slate, bg: soft);
+      rc(r, 3).style = cell(bodyFont);
     }
 
-    final PdfGrid signGrid = PdfGrid();
-    signGrid.columns.add(count: 3);
-    for (int i = 0; i < 3; i++) {
-      signGrid.columns[i].width = pageSize.width / 3;
+    infoRow('اسم الموظف', employeeName, 'الشهر', monthLabel(workMonth));
+    infoRow('الفرع', branchName.isEmpty ? 'المقر الرئيسي' : branchName, 'العملة', 'دينار عراقي');
+    y = info.draw(page: page, bounds: Rect.fromLTWH(0, y, size.width, 0))!.bounds.bottom + 20;
+
+    // ---------------- ملخص الراتب ----------------
+    text('ملخص الراتب', headFont, navy, y);
+    y += lineH(headFont) + 4;
+
+    final summary = grid([0.50, 0.28, 0.22]);
+    summary.headers.add(1);
+    final h = summary.headers[0];
+    for (final (i, t) in ['البند', 'المبلغ', 'النوع'].indexed) {
+      rc(h, i).value = t;
+      rc(h, i).style = cell(labelFont, color: white, bg: teal, fmt: i == 0 ? right : center);
+    }
+    void summaryRow(String label, num amount, String kind, PdfColor color) {
+      final r = summary.rows.add();
+      rc(r, 0).value = label;
+      rc(r, 1).value = money(amount);
+      rc(r, 2).value = kind;
+      rc(r, 0).style = cell(bodyFont);
+      rc(r, 1).style = cell(labelFont, color: color, fmt: center);
+      rc(r, 2).style = cell(bodyFont, color: color, fmt: center);
     }
 
-    final PdfGridRow signRow = signGrid.rows.add();
-    signRow.cells[0].value = 'توقيع الموظف المستلم:\n\n___________________';
-    signRow.cells[1].value = 'توقيع المحاسب المالي:\n\n___________________';
-    signRow.cells[2].value = 'اعتماد الموارد البشرية:\n\n___________________';
+    summaryRow('الراتب الأساسي', basicSalary, 'مستحق +', navy);
+    if (allowances > 0) summaryRow('المكافآت والبدلات', allowances, 'إضافة +', green);
+    if (deductions > 0) summaryRow('خصومات الغياب والتأخير والجزاءات', deductions, 'خصم −', red);
+    if (loansDeduction > 0) summaryRow('قسط السلفة', loansDeduction, 'خصم −', red);
+    y = summary.draw(page: page, bounds: Rect.fromLTWH(0, y, size.width, 0))!.bounds.bottom + 12;
 
-    for (int i = 0; i < 3; i++) {
-      signRow.cells[i].style.font = boldBodyFont;
-      signRow.cells[i].style.stringFormat = rtlCenterFormat;
-      signRow.cells[i].style.textBrush = PdfSolidBrush(textSlate);
-    }
-
-    signGrid.draw(
-      page: page,
-      bounds: Rect.fromLTWH(0, currentY, pageSize.width, 0),
+    // ---------------- الصافي ----------------
+    final netH = lineH(netFont) + 18;
+    final negative = netSalary < 0;
+    g.drawRectangle(
+      brush: PdfSolidBrush(negative ? PdfColor(254, 226, 226) : tealSoft),
+      pen: PdfPen(negative ? red : teal),
+      bounds: Rect.fromLTWH(0, y, size.width, netH),
     );
+    text(negative ? 'الصافي (مبلغ مستحق على الموظف)' : 'صافي الراتب المستحق', headFont, navy, y + (netH - lineH(headFont)) / 2,
+        x: size.width * 0.45, w: size.width * 0.55 - 12);
+    text(money(netSalary), netFont, negative ? red : teal, y + 9, x: 12, w: size.width * 0.45,
+        fmt: PdfStringFormat(textDirection: PdfTextDirection.rightToLeft));
+    y += netH + 22;
 
-    final List<int> bytes = document.saveSync();
+    // ---------------- تفاصيل المكافآت والخصومات ----------------
+    final items = [
+      for (final b in bonusesList ?? const <Map<String, dynamic>>[]) (true, b),
+      for (final d in deductionsList ?? const <Map<String, dynamic>>[]) (false, d),
+    ];
+    if (items.isNotEmpty) {
+      text('تفاصيل المكافآت والخصومات', headFont, navy, y);
+      y += lineH(headFont) + 4;
+      final details = grid([0.16, 0.20, 0.46, 0.18]);
+      details.headers.add(1);
+      for (final (i, t) in ['النوع', 'المبلغ', 'السبب', 'التاريخ'].indexed) {
+        rc(details.headers[0], i).value = t;
+        rc(details.headers[0], i).style = cell(labelFont, color: white, bg: navy, fmt: i == 2 ? right : center);
+      }
+      for (final (isBonus, m) in items) {
+        final r = details.rows.add();
+        final color = isBonus ? green : red;
+        rc(r, 0).value = isBonus ? 'مكافأة' : 'خصم';
+        rc(r, 1).value = money((m['amount'] as num?) ?? 0);
+        rc(r, 2).value = (m['reason']?.toString().trim().isNotEmpty ?? false) ? m['reason'].toString() : (isBonus ? 'مكافأة' : 'خصم إداري');
+        rc(r, 3).value = m['issue_date']?.toString() ?? '—';
+        rc(r, 0).style = cell(bodyFont, color: color, fmt: center);
+        rc(r, 1).style = cell(labelFont, color: color, fmt: center);
+        rc(r, 2).style = cell(bodyFont);
+        rc(r, 3).style = cell(bodyFont, color: slate, fmt: center);
+      }
+      y = details.draw(page: page, bounds: Rect.fromLTWH(0, y, size.width, 0))!.bounds.bottom + 26;
+    }
+
+    // ---------------- التواقيع ----------------
+    const signH = 64.0;
+    if (y + signH + 30 > size.height) y = size.height - signH - 30;
+    final colW = size.width / 3;
+    for (final (i, t) in ['توقيع الموظف', 'المحاسب', 'الموارد البشرية'].indexed) {
+      final x = size.width - colW * (i + 1);
+      text(t, labelFont, slate, y, x: x, w: colW, fmt: center);
+      g.drawLine(PdfPen(PdfColor(148, 163, 184), dashStyle: PdfDashStyle.dash), Offset(x + 20, y + signH - 8), Offset(x + colW - 20, y + signH - 8));
+    }
+    text('صدر إلكترونياً من نظام HR Pro — لا يحتاج ختماً إلا عند الطلب.', smallFont, PdfColor(148, 163, 184), size.height - lineH(smallFont),
+        fmt: center);
+
+    final List<int> bytes = await document.save();
     document.dispose();
     return bytes;
-  }
-
-  static void _addSummaryGridRow(
-    PdfGrid grid,
-    String label,
-    String amount,
-    String type,
-    PdfFont font,
-    PdfStringFormat rightFmt,
-    PdfStringFormat centerFmt, {
-    PdfColor? textColor,
-  }) {
-    final PdfGridRow row = grid.rows.add();
-    row.cells[0].value = label;
-    row.cells[1].value = amount;
-    row.cells[2].value = type;
-
-    row.cells[0].style.font = font;
-    row.cells[0].style.stringFormat = rightFmt;
-
-    row.cells[1].style.font = font;
-    row.cells[1].style.stringFormat = centerFmt;
-    if (textColor != null) {
-      row.cells[1].style.textBrush = PdfSolidBrush(textColor);
-    }
-
-    row.cells[2].style.font = font;
-    row.cells[2].style.stringFormat = centerFmt;
-  }
-
-  static void _addDetailGridRow(
-    PdfGrid grid,
-    String type,
-    String amount,
-    String reason,
-    String date,
-    PdfFont font,
-    PdfStringFormat centerFmt,
-    PdfStringFormat rightFmt, {
-    PdfColor? textColor,
-  }) {
-    final PdfGridRow row = grid.rows.add();
-    row.cells[0].value = type;
-    row.cells[1].value = amount;
-    row.cells[2].value = reason;
-    row.cells[3].value = date;
-
-    row.cells[0].style.font = font;
-    row.cells[0].style.stringFormat = centerFmt;
-    if (textColor != null) {
-      row.cells[0].style.textBrush = PdfSolidBrush(textColor);
-      row.cells[1].style.textBrush = PdfSolidBrush(textColor);
-    }
-
-    row.cells[1].style.font = font;
-    row.cells[1].style.stringFormat = centerFmt;
-
-    row.cells[2].style.font = font;
-    row.cells[2].style.stringFormat = rightFmt;
-
-    row.cells[3].style.font = font;
-    row.cells[3].style.stringFormat = centerFmt;
   }
 
   /// فتح ملف الـ PDF عبر عارض المستندات المفضل في الهاتف

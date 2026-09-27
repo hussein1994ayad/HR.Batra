@@ -57,6 +57,10 @@ const approve = (who, instIds, adj = adjustments) => as(db, who,
 
 await expectError('employee cannot approve salaries', approve('emp', [inst[0]]), 'غير مصرح');
 
+await expectError('a negative net salary cannot be approved', as(db, 'admin',
+  `SELECT approve_salary_slip($1, '2026-09', 600000, 0, 0, 666667, -66667, '{}'::uuid[], '[]'::jsonb) AS id`, [IDS.emp]),
+  'صافي الراتب بالسالب');
+
 // atomicity: a bad adjustment makes the whole approval fail with nothing written
 await expectError('invalid adjustment rolls back everything',
   approve('admin', [inst[0]], JSON.stringify([{ type: 'gift', amount: 5, reason: 'bad type' }])), 'bonuses_deductions_type_check');

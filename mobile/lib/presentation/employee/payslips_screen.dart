@@ -129,7 +129,14 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
   }
 
   // تحميل تفاصيل المكافآت والخصومات المسجلة للموظف خلال الدورة المالية
-  Future<void> _loadSlipDetails(String slipId, String workMonth) async {
+  //
+  // فقط البنود التي دخلت في هذا الكشف: المرتبطة به (salary_slip_id)، أو اليدوية
+  // المسجلة قبل اعتماده. البنود المضافة بعد الاعتماد تخص كشفاً قادماً، وكانت تظهر
+  // في الكشف بدون أن تُحسب في صافيه.
+  Future<void> _loadSlipDetails(Map<String, dynamic> slip) async {
+    final slipId = (slip['id'] ?? '').toString();
+    final workMonth = (slip['work_month'] ?? '0000-00').toString();
+    final slipCreated = DateTime.tryParse((slip['created_at'] ?? '').toString());
     if (_slipsDetails.containsKey(slipId)) return; // محملة مسبقاً
 
     final user = SupabaseService.currentUser;
@@ -148,8 +155,14 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
           .order('issue_date', ascending: true);
 
       if (!mounted) return;
+      final rows = List<Map<String, dynamic>>.from(detailsData).where((d) {
+        final linked = d['salary_slip_id']?.toString();
+        if (linked != null) return linked == slipId;
+        final created = DateTime.tryParse((d['created_at'] ?? '').toString());
+        return slipCreated == null || created == null || !created.isAfter(slipCreated);
+      }).toList();
       setState(() {
-        _slipsDetails[slipId] = List<Map<String, dynamic>>.from(detailsData);
+        _slipsDetails[slipId] = rows;
       });
     } catch (e) {
       debugPrint('خطأ في تحميل تفاصيل المكافآت والخصومات: $e');
@@ -165,7 +178,7 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
 
     try {
       if (!_slipsDetails.containsKey(slipId)) {
-        await _loadSlipDetails(slipId, workMonth);
+        await _loadSlipDetails(slip);
       }
 
       final List<Map<String, dynamic>> details = _slipsDetails[slipId] ?? [];
@@ -240,7 +253,7 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
   Future<void> _openSlip(Map<String, dynamic> slip) async {
     final slipId = (slip['id'] ?? '').toString();
     final workMonth = (slip['work_month'] ?? '0000-00').toString();
-    unawaited(_loadSlipDetails(slipId, workMonth));
+    unawaited(_loadSlipDetails(slip));
     final (m, y) = _monthOf(workMonth);
     await showAppSheet<void>(
       context,
