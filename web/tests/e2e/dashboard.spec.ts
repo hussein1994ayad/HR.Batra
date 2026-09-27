@@ -71,12 +71,16 @@ test.describe('overview', () => {
     await page.getByRole('button', { name: 'بث تعميم' }).first().click();
     await page.getByRole('tab', { name: /موظفون محددون/ }).click();
     await page.getByLabel('زينب علي').check();
+    await page.getByPlaceholder('مثال: عطلة رسمية يوم الخميس').fill('اجتماع');
     await page.getByPlaceholder('اكتب نص التعميم هنا...').fill('اجتماع الساعة 10');
-    await page.getByRole('button', { name: 'إرسال التعميم' }).click();
-    await expect.poll(() => api.writes('notifications', 'POST').length).toBe(1);
-    const body = api.writes('notifications', 'POST')[0].body as Array<{ employee_id: string; body: string }>;
-    expect(body).toHaveLength(1);
-    expect(body[0]).toMatchObject({ employee_id: 'e1', body: 'اجتماع الساعة 10' });
+    await page.getByRole('button', { name: 'بدون نهاية' }).click();
+    await page.getByRole('button', { name: 'أسبوع' }).click();
+    await page.getByRole('button', { name: 'نشر التعميم' }).click();
+    // يُنشر عبر publish_announcement: التعميم + الإشعار + مدة الظهور في خطوة واحدة
+    await expect.poll(() => api.writes('rpc:publish_announcement', 'POST').length).toBe(1);
+    const body = api.writes('rpc:publish_announcement', 'POST')[0].body as Record<string, unknown>;
+    expect(body).toMatchObject({ p_title: 'اجتماع', p_content: 'اجتماع الساعة 10', p_target: 'employees', p_employee_ids: ['e1'] });
+    expect(typeof body.p_ends_at).toBe('string');
   });
 });
 

@@ -209,6 +209,10 @@ export interface Announcement {
   target_department_id?: string | null;
   created_by?: string | null;
   created_at: string;
+  starts_at?: string | null;
+  ends_at?: string | null;
+  target_branch_id?: string | null;
+  target_employee_ids?: string[] | null;
 }
 
 export interface GeofenceZone {
