@@ -176,6 +176,15 @@ Map<String, List<Map<String, dynamic>>> buildFixtures({String role = 'admin'}) {
     'announcements': [
       {'id': 'a1', 'title': 'عطلة رسمية', 'body': 'الخميس القادم عطلة رسمية لجميع الفروع', 'created_at': _iso(3, 9, 0)},
     ],
+    'rpc:get_active_announcements': [
+      {'id': 'a1', 'title': 'عطلة رسمية', 'content': 'الخميس القادم عطلة رسمية لجميع الفروع', 'is_pinned': true, 'starts_at': _iso(1, 9, 0), 'ends_at': _iso(-3, 23, 0), 'created_at': _iso(1, 9, 0)},
+      {'id': 'a2', 'title': 'اجتماع الفرع', 'content': 'اجتماع شهري يوم الأحد الساعة العاشرة صباحاً في قاعة الاجتماعات الرئيسية لمناقشة خطة الربع القادم', 'is_pinned': false, 'starts_at': _iso(0, 8, 0), 'ends_at': null, 'created_at': _iso(0, 8, 0)},
+    ],
+    'rpc:get_on_leave_now': [
+      {'employee_id': 'x1', 'full_name': 'زينب علي الموسوي', 'avatar_url': null, 'branch_name': 'فرع المنصور', 'is_hourly': false, 'from_date': _daysAgo(1), 'to_date': _daysAgo(-2), 'start_hour': null, 'end_hour': null},
+      {'employee_id': 'x2', 'full_name': 'علي كريم', 'avatar_url': null, 'branch_name': 'مكتب بغداد الرئيسي', 'is_hourly': true, 'from_date': _daysAgo(0), 'to_date': _daysAgo(0), 'start_hour': '10:00:00', 'end_hour': '12:00:00'},
+      {'employee_id': 'x3', 'full_name': 'مصطفى حسن', 'avatar_url': null, 'branch_name': 'فرع الكرادة', 'is_hourly': false, 'from_date': _daysAgo(3), 'to_date': _daysAgo(0), 'start_hour': null, 'end_hour': null},
+    ],
     'system_settings': [
       {'key': 'tracking_enabled', 'value': 'true'},
     ],
