@@ -95,12 +95,22 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ status: "skipped", reason: "no notification id" });
     }
 
-    const notifRes = await fetch(
-      `${supabaseUrl}/rest/v1/notifications?id=eq.${notificationId}&select=id,employee_id,title,body,type,created_at`,
-      { headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}` } },
-    );
-    const notifRows = notifRes.ok ? await notifRes.json() : [];
-    const record = notifRows[0];
+    // The DB trigger can call us a moment before its transaction commits (e.g. the
+    // per-minute reminder job), so a missing row is retried briefly instead of dropped.
+    const readNotification = async () => {
+      const res = await fetch(
+        `${supabaseUrl}/rest/v1/notifications?id=eq.${notificationId}&select=id,employee_id,title,body,type,created_at`,
+        { headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}` } },
+      );
+      const rows = res.ok ? await res.json() : [];
+      return rows[0];
+    };
+    let record = await readNotification();
+    for (const waitMs of [700, 1500, 3000]) {
+      if (record) break;
+      await new Promise((r) => setTimeout(r, waitMs));
+      record = await readNotification();
+    }
     if (!record || !record.employee_id) {
       return jsonResponse({ status: "skipped", reason: "notification not found" });
     }
@@ -209,7 +219,7 @@ Deno.serve(async (req: Request) => {
             android: {
               priority: "HIGH", // Case-sensitive uppercase HIGH is required!
               notification: {
-                channel_id: "hr_pro_channel_v7", // must match NotificationService.channelId in the app
+                channel_id: "hr_pro_channel_v8", // must match NotificationService.channelId in the app
                 sound: "special_chime", // Android custom sound
                 default_vibrate_timings: true,
                 default_light_settings: true,
