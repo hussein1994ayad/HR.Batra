@@ -19,6 +19,8 @@ ALTER TABLE public.announcements
   ADD COLUMN IF NOT EXISTS target_employee_ids uuid[];
 
 UPDATE public.announcements SET starts_at = created_at WHERE starts_at > created_at;
+-- التعاميم القديمة كانت بلا نهاية: تظهر أسبوعاً من نشرها ثم تختفي
+UPDATE public.announcements SET ends_at = starts_at + interval '7 days' WHERE ends_at IS NULL;
 
 DO $$
 BEGIN
