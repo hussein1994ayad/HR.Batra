@@ -142,8 +142,6 @@ void main() {
       expect(lateMinutes(DateTime(2026, 9, 24, 7, 55), s), 0);
       expect(lateMinutes(DateTime(2026, 9, 24, 9, 10), null), 10); // 09:00 بدون جدول
       expect(earlyLeaveMinutes(DateTime(2026, 9, 24, 15), s), 60);
-      expect(suggestedPenalty('late', 25), 1250);
-      expect(suggestedPenalty('absent', 0), kAbsencePenalty);
     });
 
     test('day summary skips days off and approved leave', () {

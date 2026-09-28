@@ -21,24 +21,26 @@ class AdminActionsRepository {
     return id;
   }
 
-  /// قرار خصم أو إعفاء لغياب/تأخير/نصف يوم (نفس saveDecision في الويب).
-  /// الغياب الافتراضي يُنشأ له سجل حضور بحالة غياب.
-  Future<void> applyDecision(PendingDecision item, {required bool deduct, required String reason, double amount = 0}) async {
+  /// قرار خصم أو إعفاء لغياب/تأخير/خروج مبكر/بصمة ناقصة.
+  ///
+  /// المبلغ لا يُكتب من التطبيق: محرّك الرواتب يحسبه (أجر اليوم = الراتب ÷ 30، والدقائق
+  /// بأجر دقيقة دوام الموظف). كان يُضاف قيد خصم منفصل فوق خصم الحضور فيُخصم الموظف مرتين.
+  /// إن وُجدت حركة للمحرّك يُرسل القرار لها مباشرة (والسيرفر يحدّث الحضور ويُشعر الموظف)؛
+  /// وإلا (مثل غياب اليوم قبل حسابه) يُسجَّل في الحضور والمحرّك يلتقطه.
+  Future<void> applyDecision(PendingDecision item, {required bool deduct, required String reason}) async {
     final status = deduct ? 'applied' : 'ignored';
 
     if (item.isVirtual && item.branchId == null) {
       throw StateError('الموظف غير مرتبط بفرع، يرجى ربطه بفرع أولاً.');
     }
 
-    if (deduct && amount > 0) {
-      await _db.from('bonuses_deductions').insert({
-        'employee_id': item.employeeId,
-        'type': 'deduction',
-        'amount': amount,
-        'reason': reason,
-        // تاريخ يوم المخالفة حتى يُحتسب في دورة الراتب الصحيحة
-        'issue_date': item.workDate,
+    if (item.eventId != null) {
+      await _db.rpc<Object?>('decide_payroll_event', params: {
+        'p_event_id': item.eventId,
+        'p_approve': deduct,
+        'p_reason': reason,
       });
+      return;
     }
 
     final values = {

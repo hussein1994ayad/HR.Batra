@@ -142,6 +142,22 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
     final user = SupabaseService.currentUser;
     if (user == null) return;
 
+    // كشوف محرّك الرواتب: التفاصيل محفوظة مع الكشف نفسه سطراً سطراً
+    if (slip['computed_by_engine'] == true) {
+      try {
+        final lines = await SupabaseService.client
+            .from('salary_slip_lines')
+            .select()
+            .eq('salary_slip_id', slipId)
+            .order('event_date', ascending: true);
+        if (!mounted) return;
+        setState(() => _slipsDetails[slipId] = slipLinesToDetails(List<Map<String, dynamic>>.from(lines)));
+      } catch (e) {
+        debugPrint('خطأ في تحميل تفاصيل الكشف: $e');
+      }
+      return;
+    }
+
     final cycle = _getCycleDates(workMonth);
     if (cycle['start']!.isEmpty || cycle['end']!.isEmpty) return;
 
@@ -344,6 +360,46 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
       ),
     );
   }
+}
+
+const _lineLabels = {
+  'absence': 'غياب',
+  'late': 'تأخير',
+  'early_leave': 'خروج مبكر',
+  'unpaid_leave': 'إجازة بدون راتب',
+  'overtime': 'ساعات إضافية',
+  'manual_deduction': 'خصم',
+  'bonus': 'مكافأة',
+  'allowance': 'مخصصات',
+  'adjustment': 'تسوية',
+};
+
+/// أسطر كشف المحرّك (salary_slip_lines) بنفس شكل تفاصيل الكشف القديمة
+/// (reason / amount / issue_date / type) — أقساط السلف لها سطرها الخاص في الكشف،
+/// والإجازات المدفوعة بلا مبلغ لا تظهر.
+List<Map<String, dynamic>> slipLinesToDetails(List<Map<String, dynamic>> lines) => [
+      for (final l in lines)
+        if (l['line_type'] != 'loan' && ((l['amount'] as num?) ?? 0) > 0)
+          {
+            'reason': _lineReason(l),
+            'amount': l['amount'],
+            'issue_date': l['event_date'],
+            'type': ((l['direction'] as num?) ?? -1) > 0 ? 'bonus' : 'deduction',
+          },
+    ];
+
+String _lineReason(Map<String, dynamic> l) {
+  final type = (l['line_type'] ?? '').toString();
+  final label = _lineLabels[type] ?? 'بند';
+  final minutes = ((l['minutes'] as num?) ?? 0).round();
+  final notes = (l['notes'] ?? '').toString().trim();
+  final base = type == 'bonus' || type == 'manual_deduction' || type == 'adjustment'
+      ? (notes.isNotEmpty ? notes : label)
+      : minutes > 0
+          ? '$label $minutes دقيقة'
+          : label;
+  final carried = (l['carried_from'] ?? '').toString();
+  return carried.isEmpty ? base : '$base (مرحّل من $carried)';
 }
 
 class _SlipDetails extends StatelessWidget {

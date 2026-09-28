@@ -260,9 +260,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                       decisions: s.decisions,
                       scheduleFor: _scheduleFor,
                       busyKey: _busyKey,
-                      onDecide: (item, {required deduct, required reason, required amount}) => _run(
+                      onDecide: (item, {required deduct, required reason}) => _run(
                         item.key,
-                        () => _actions.applyDecision(item, deduct: deduct, reason: reason, amount: amount),
+                        () => _actions.applyDecision(item, deduct: deduct, reason: reason),
                         deduct ? 'تم تطبيق الخصم' : 'تم الإعفاء من الخصم',
                         deduct ? AppColors.warning : AppColors.success,
                       ),
