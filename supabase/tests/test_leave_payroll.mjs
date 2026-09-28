@@ -39,7 +39,7 @@ await expectError('employee still cannot edit own balance',
   as(db, 'emp', `UPDATE leave_balances SET annual_used = 0 WHERE employee_id=$1 RETURNING 1`, [IDS.emp])
     .then((x) => { if (!x.rows.length) throw new Error('blocked by RLS'); }), 'blocked by RLS');
 
-// ---------------- payroll ----------------
+// ---------------- payroll (legacy path: months before the engine, e.g. 2026-08) ----------------
 const loan = (await db.query(`INSERT INTO loans (employee_id, amount, installment_amount, installment_count, remaining_amount, pledge_url, status)
   VALUES ($1, 300000, 100000, 3, 300000, 'x', 'approved') RETURNING id`, [IDS.emp])).rows[0].id;
 await db.exec(`INSERT INTO loan_installments (loan_id, due_date, amount) VALUES
@@ -52,13 +52,15 @@ const adjustments = JSON.stringify([
   { type: 'bonus', amount: 0, reason: 'zero is ignored' },
 ]);
 const approve = (who, instIds, adj = adjustments) => as(db, who,
-  `SELECT approve_salary_slip($1, '2026-09', 1000000, 50000, 25000, 100000, 925000, $2::uuid[], $3::jsonb) AS id`,
+  `SELECT approve_salary_slip($1, '2026-08', 1000000, 50000, 25000, 100000, 925000, $2::uuid[], $3::jsonb) AS id`,
   [IDS.emp, `{${instIds.join(',')}}`, adj]);
 
+await expectError('legacy browser-computed approval is refused for engine months', as(db, 'admin',
+  `SELECT approve_salary_slip($1, '2026-09', 1000000, 0, 0, 0, 1000000, '{}'::uuid[], '[]'::jsonb)`, [IDS.emp]), 'تم تحديث نظام الرواتب');
 await expectError('employee cannot approve salaries', approve('emp', [inst[0]]), 'غير مصرح');
 
 await expectError('a negative net salary cannot be approved', as(db, 'admin',
-  `SELECT approve_salary_slip($1, '2026-09', 600000, 0, 0, 666667, -66667, '{}'::uuid[], '[]'::jsonb) AS id`, [IDS.emp]),
+  `SELECT approve_salary_slip($1, '2026-08', 600000, 0, 0, 666667, -66667, '{}'::uuid[], '[]'::jsonb) AS id`, [IDS.emp]),
   'صافي الراتب بالسالب');
 
 // atomicity: a bad adjustment makes the whole approval fail with nothing written
@@ -88,7 +90,7 @@ check('slip installment back to unpaid', (await db.query(`SELECT is_paid FROM lo
 check('manually paid installment untouched', (await db.query(`SELECT is_paid FROM loan_installments WHERE id=$1`, [inst[1]])).rows[0].is_paid === true);
 
 // archived month is locked
-await db.exec(`INSERT INTO archived_months (work_month) VALUES ('2026-09')`);
+await db.exec(`INSERT INTO archived_months (work_month) VALUES ('2026-08')`);
 await expectError('cannot approve into archived month', approve('admin', [inst[0]]), 'مؤرشف');
 
 done();
