@@ -1097,6 +1097,9 @@ BEGIN
   IF e.event_type IN ('absence', 'late') THEN
     IF e.source = 'no_record' THEN
       SELECT branch_id INTO v_branch FROM employees WHERE id = e.employee_id;
+      IF v_branch IS NULL THEN
+        RAISE EXCEPTION 'الموظف غير مرتبط بفرع، يرجى ربطه بفرع أولاً.' USING ERRCODE = '22023';
+      END IF;
       INSERT INTO attendance (employee_id, branch_id, work_date, status, deduction_status, deduction_reason)
       VALUES (e.employee_id, v_branch, e.event_date, 'absent', CASE WHEN p_approve THEN 'applied' ELSE 'ignored' END, p_reason)
       RETURNING id INTO v_att_id;
