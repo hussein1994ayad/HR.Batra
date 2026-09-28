@@ -98,5 +98,6 @@ jobs:
         run: |
           for domain in $SURGE_DOMAINS; do
             echo "Publishing to https://$domain"
-            npx --yes surge@0.44 ./out "$domain" --token "$SURGE_TOKEN"
+            # بادئة https:// تجعل Surge يحوّل أي فتح بـ http إلى https (بدون تحذير "Not secure")
+            npx --yes surge@0.44 ./out "https://$domain" --token "$SURGE_TOKEN"
           done

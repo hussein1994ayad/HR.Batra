@@ -452,7 +452,7 @@ BEGIN
     event_type text, source text, source_id uuid, minutes numeric, days numeric,
     amount numeric, direction smallint, status_hint text, notes text
   ) ON COMMIT DROP;
-  DELETE FROM _pd;
+  DELETE FROM _pd WHERE true; -- pg_safeupdate على Supabase يرفض DELETE بدون WHERE
 
   -- الموظف لم يباشر بعد أو انتهت خدمته: لا حركات لهذا اليوم
   IF (v_emp.join_date IS NOT NULL AND p_date < v_emp.join_date)

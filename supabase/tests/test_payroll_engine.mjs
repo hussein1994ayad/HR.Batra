@@ -1,5 +1,6 @@
 // محرّك الرواتب: المسيرات (1 → 26)، الترحيل، أجر اليوم ÷ 30، أجر الدقيقة حسب الدوام،
 // القرارات، الإضافي، الاعتماد، الإغلاق، والتعديل بعد الإغلاق.
+import fs from 'node:fs';
 import { setup, as, IDS, expectOk, expectError, check, done } from './lib.mjs';
 
 const db = await setup();
@@ -262,5 +263,12 @@ check('employee sees only own payroll events', own.rows[0].n === 0);
 await expectError('employee cannot write payroll events',
   as(db, 'emp', `INSERT INTO payroll_events (employee_id, event_date, event_type, direction, payroll_month, source) VALUES ($1, '2026-10-01', 'bonus', 1, '2026-10', 'manual')`, [IDS.emp]),
   'row-level security');
+
+// Supabase يفعّل pg_safeupdate لطلبات الـ API (PGlite لا يفعّله): DELETE/UPDATE بدون WHERE يفشل هناك
+const migDir = new URL('../migrations/', import.meta.url);
+const unsafe = fs.readdirSync(migDir).filter((f) => f.endsWith('.sql')).flatMap((f) =>
+  fs.readFileSync(new URL(f, migDir), 'utf8').split('\n').map((l, i) => [f, i + 1, l])
+    .filter(([, , l]) => /^\s*DELETE\s+FROM\s+[\w.]+\s*;/i.test(l)).map(([file, n]) => `${file}:${n}`));
+check('no DELETE without WHERE in migrations (rejected by pg_safeupdate on Supabase)', unsafe.length === 0, unsafe.join(', '));
 
 done();
