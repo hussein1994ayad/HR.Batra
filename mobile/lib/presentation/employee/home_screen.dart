@@ -241,6 +241,8 @@ class _HomeScreenState extends State<HomeScreen> {
       final unreadRes = results[3] as List<dynamic>;
 
       unawaited(_loadOnLeave());
+      // تذكيرات البصمة المحلية (للآيفون) حسب الجدول والإجازات وبصمة اليوم
+      unawaited(NotificationService.refreshLocalAttendanceReminders());
 
       setState(() {
         _workSchedule = schedData != null ? schedData as Map<String, dynamic> : null;
