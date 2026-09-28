@@ -3,7 +3,6 @@
 // =========================================================================
 
 import 'dart:async';
-
 import 'dart:io' show Platform;
 
 import 'package:firebase_core/firebase_core.dart';
@@ -13,8 +12,11 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
+import 'package:timezone/timezone.dart' as tzz;
 
 import '../../core/design/design.dart';
+import '../logic/reminder_plan.dart';
+import 'schedule_service.dart';
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -68,10 +70,8 @@ class NotificationService {
               AndroidFlutterLocalNotificationsPlugin>();
 
       if (androidPlugin != null) {
-        // طلب إذن المنبهات والتنبيهات الدقيقة في Android 12+
-        try {
-          await androidPlugin.requestExactAlarmsPermission();
-        } catch (_) {}
+        // لا نطلب إذن "المنبهات والتذكيرات" (المنبه الدقيق): تذكيرات الأندرويد تصل من السيرفر،
+        // والتطبيق لا يعلن هذا الإذن فكان يفتح صفحة الإعدادات عند كل تشغيل بزر معطّل.
 
         // حذف القنوات القديمة
         try {
@@ -176,7 +176,7 @@ class NotificationService {
             _firebaseMessaging.onTokenRefresh.listen(_saveTokenToSupabase);
           }
           if (user != null) {
-            unawaited(cancelAllAttendanceReminders());
+            unawaited(refreshLocalAttendanceReminders());
           }
         } catch (e) {
           debugPrint('Non-fatal background notification init error: $e');
@@ -192,7 +192,7 @@ class NotificationService {
   /// طلب الصلاحيات وحفظ التوكن. يُستدعى بعد تسجيل الدخول.
   static Future<bool> requestPermissionAndSaveToken() async {
     if (!_firebaseReady) {
-      await cancelAllAttendanceReminders();
+      await refreshLocalAttendanceReminders();
       return false;
     }
     try {
@@ -208,7 +208,7 @@ class NotificationService {
       _firebaseMessaging.onTokenRefresh.listen(_saveTokenToSupabase);
 
       // إعادة جدولة التذكيرات بعد منح الصلاحيات
-      await cancelAllAttendanceReminders();
+      await refreshLocalAttendanceReminders();
 
       return true;
     } catch (e) {
@@ -275,6 +275,82 @@ class NotificationService {
         await _localNotifications.cancel(1000 + day);
         await _localNotifications.cancel(2000 + day);
       } catch (_) {}
+    }
+    for (int day = 0; day < kLocalReminderDays; day++) {
+      try {
+        await _localNotifications.cancel(kLocalCheckInReminderBase + day);
+        await _localNotifications.cancel(kLocalCheckOutReminderBase + day);
+      } catch (_) {}
+    }
+  }
+
+  /// تذكيرات البصمة المحلية للآيفون (قبل بداية الدوام ونهايته بـ 15 دقيقة، 14 يوماً قادمة).
+  /// على الآيفون لا تصل إشعارات السيرفر بدون حساب Apple Developer، والإشعار المحلي يعمل
+  /// بدونه. على الأندرويد السيرفر يرسلها (فلا تكرار). يُستدعى عند فتح الرئيسية وبعد البصمة.
+  static Future<void> refreshLocalAttendanceReminders() async {
+    if (!Platform.isIOS) {
+      await cancelAllAttendanceReminders(); // تذكيرات النسخ القديمة المحلية
+      return;
+    }
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return;
+    try {
+      final schedule = await ScheduleService.fetchEffectiveSchedule();
+      await cancelAllAttendanceReminders();
+      if (schedule == null) return;
+
+      final location = tzz.getLocation('Asia/Baghdad');
+      final now = tzz.TZDateTime.now(location);
+      final today = DateTime(now.year, now.month, now.day);
+      final todayStr = '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+      final db = Supabase.instance.client;
+      final results = await Future.wait<dynamic>([
+        db.from('attendance').select('check_in_time, check_out_time').eq('employee_id', user.id).eq('work_date', todayStr).maybeSingle(),
+        db.from('leave_requests').select('start_date, end_date').eq('employee_id', user.id).eq('status', 'approved')
+            .eq('is_hourly', false).gte('end_date', today.toUtc().toIso8601String()),
+      ]);
+      final att = results[0] as Map<String, dynamic>?;
+      final leaveDays = <DateTime>{};
+      for (final l in (results[1] as List<dynamic>).cast<Map<String, dynamic>>()) {
+        final from = DateTime.tryParse(l['start_date'].toString())?.toLocal();
+        final to = DateTime.tryParse(l['end_date'].toString())?.toLocal();
+        if (from == null || to == null) continue;
+        for (var d = DateTime(from.year, from.month, from.day); !d.isAfter(to); d = DateTime(d.year, d.month, d.day + 1)) {
+          leaveDays.add(d);
+        }
+      }
+
+      final plan = planAttendanceReminders(
+        now: DateTime(now.year, now.month, now.day, now.hour, now.minute, now.second),
+        checkInTime: schedule['check_in_time']?.toString(),
+        checkOutTime: schedule['check_out_time']?.toString(),
+        workDays: [for (final d in (schedule['work_days'] as List<dynamic>? ?? const [0, 1, 2, 3, 4, 6])) (d as num).toInt()],
+        leaveDays: leaveDays,
+        checkedInToday: att?['check_in_time'] != null,
+        checkedOutToday: att?['check_out_time'] != null,
+      );
+      for (final r in plan) {
+        await _localNotifications.zonedSchedule(
+          r.id,
+          r.title,
+          r.body,
+          tzz.TZDateTime(location, r.at.year, r.at.month, r.at.day, r.at.hour, r.at.minute),
+          const NotificationDetails(
+            android: AndroidNotificationDetails(reminderChannelId, reminderChannelName, importance: Importance.max, priority: Priority.max),
+            iOS: DarwinNotificationDetails(
+              presentAlert: true,
+              presentSound: true,
+              sound: 'special_chime.wav',
+              interruptionLevel: InterruptionLevel.timeSensitive,
+            ),
+          ),
+          androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+          uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+        );
+      }
+      debugPrint('Local attendance reminders scheduled: ${plan.length}');
+    } catch (e) {
+      debugPrint('Local attendance reminders failed: $e');
     }
   }
 

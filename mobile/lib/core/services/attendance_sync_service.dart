@@ -8,6 +8,7 @@
 // (رفض منطقي أو خطأ صلاحية) يُعرض للموظف ولا يُعاد إرساله.
 // =========================================================================
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -16,6 +17,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'device_service.dart';
+import 'notification_service.dart';
 import 'supabase_service.dart';
 
 /// نتيجة محاولة البصمة.
@@ -118,7 +120,11 @@ class AttendanceSyncService {
     ).timeout(const Duration(seconds: 15));
 
     final data = Map<String, dynamic>.from(response as Map);
-    if (data['ok'] == true) return PunchResult.saved(data);
+    if (data['ok'] == true) {
+      // بعد البصمة: لا تذكير بما سُجّل اليوم
+      unawaited(NotificationService.refreshLocalAttendanceReminders());
+      return PunchResult.saved(data);
+    }
     return PunchResult.rejected(data['code'] as String?, data['message'] as String?);
   }
 
