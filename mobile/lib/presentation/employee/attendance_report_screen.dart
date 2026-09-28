@@ -1,8 +1,9 @@
 // =========================================================================
 // HR Pro — تقارير الحضور
 // =========================================================================
-// فلاتر (الفترة، الفرع، الموظف، الحالة)، مؤشرات سريعة، وسجل لكل موظف مع
-// فتح موقع البصمة على الخريطة وتعديل الأوقات. الموظف بلا سجل = غائب.
+// فلاتر (الفترة، الفرع، الموظف، الحالة)، مؤشرات سريعة، وسجل يوم بيوم لكل موظف:
+// حاضر / متأخر / خروج مبكر / غائب / مجاز (مع نوع الإجازة). فتح موقع البصمة على
+// الخريطة، تعديل الأوقات، وتصدير الفترة إلى Excel مرتباً يوماً بيوم.
 // =========================================================================
 
 import 'dart:async';
@@ -10,6 +11,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/logic/attendance_report.dart';
+import '../../core/models/models.dart';
+import '../../core/services/excel_export_service.dart';
 import '../../core/services/supabase_service.dart';
 import '../shared/ui/ui.dart';
 
@@ -23,17 +27,18 @@ class AttendanceReportScreen extends StatefulWidget {
 class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
   bool _isLoading = true;
   bool _hasError = false;
+  bool _exporting = false;
   DateTimeRange _selectedDateRange = DateTimeRange(start: DateTime.now(), end: DateTime.now());
 
   String? _selectedBranchId = 'all';
   String? _selectedEmployeeId = 'all';
-  String _statusFilter = 'all';
+  ReportStatus? _statusFilter;
 
   List<Map<String, dynamic>> _branches = [];
   List<Map<String, dynamic>> _employeesList = [];
-  List<Map<String, dynamic>> _records = [];
-
-  static const _absent = 'غائب';
+  List<WorkScheduleModel> _schedules = [];
+  Map<String, String> _leaveTypeNames = {};
+  List<ReportRow> _rows = [];
 
   @override
   void initState() {
@@ -61,91 +66,123 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
 
       final results = await Future.wait<dynamic>([
         SupabaseService.client.from('branches').select('id, name').order('name'),
-        SupabaseService.client.from('employees').select('id, full_name, employee_code, branch_id, is_active').order('full_name'),
+        SupabaseService.client
+            .from('employees')
+            .select('id, full_name, employee_code, branch_id, department_id, join_date, is_active')
+            .order('full_name'),
+        SupabaseService.client.from('work_schedules').select(),
+        SupabaseService.client.from('system_settings').select('value').eq('key', 'leave_policy').maybeSingle(),
       ]);
       if (mounted) {
         _branches = List<Map<String, dynamic>>.from(results[0] as Iterable<dynamic>);
         _employeesList = List<Map<String, dynamic>>.from(results[1] as Iterable<dynamic>);
+        _schedules = rowsOf(results[2]).map(WorkScheduleModel.fromMap).toList();
+        final types = rowOf(results[3])?['value'] is Map ? (rowOf(results[3])!['value'] as Map)['active_types'] : null;
+        _leaveTypeNames = {
+          if (types is List)
+            for (final t in types)
+              if (t is Map && t['id'] != null) t['id'].toString(): 'إجازة ${t['name'].toString().replaceFirst(RegExp(r'^إجازة\s*'), '')}',
+        };
       }
     } catch (e) {
-      debugPrint('Error loading branches/employees: $e');
+      debugPrint('Error loading report lookups: $e');
     }
     unawaited(_loadRecords());
   }
 
+  String _branchName(String? id) => _branches.where((b) => b['id'] == id).firstOrNull?['name']?.toString() ?? '';
+
+  static DateTime _day(DateTime d) => DateTime(d.year, d.month, d.day);
+  static String _iso(DateTime d) => d.toIso8601String().split('T')[0];
+
   Future<void> _loadRecords() async {
     setState(() => _isLoading = true);
     try {
-      final startStr = _selectedDateRange.start.toIso8601String().split('T')[0];
-      final endStr = _selectedDateRange.end.toIso8601String().split('T')[0];
+      final from = _day(_selectedDateRange.start);
+      final to = _day(_selectedDateRange.end);
 
-      var query = SupabaseService.client
-          .from('attendance')
-          .select('id, check_in_time, check_out_time, check_in_lat, check_in_lng, check_out_lat, check_out_lng, status, work_date, employees!inner(id, full_name, employee_code, branch_id)')
-          .gte('work_date', startStr)
-          .lte('work_date', endStr);
+      final employees = [
+        for (final e in _employeesList)
+          if (e['is_active'] != false &&
+              (_selectedEmployeeId == 'all' || e['id'] == _selectedEmployeeId) &&
+              (_selectedBranchId == 'all' || e['branch_id'] == _selectedBranchId))
+            ReportEmployee(
+              id: e['id'].toString(),
+              name: (e['full_name'] ?? 'موظف').toString(),
+              code: (e['employee_code'] ?? '').toString(),
+              branchId: e['branch_id']?.toString(),
+              departmentId: e['department_id']?.toString(),
+              branchName: _branchName(e['branch_id']?.toString()),
+              joinDate: DateTime.tryParse((e['join_date'] ?? '').toString()),
+            ),
+      ];
+      final ids = employees.isEmpty ? ['00000000-0000-0000-0000-000000000000'] : [for (final e in employees) e.id];
 
-      if (_selectedEmployeeId != null && _selectedEmployeeId != 'all') {
-        query = query.eq('employee_id', _selectedEmployeeId!);
-      }
-      if (_selectedBranchId != null && _selectedBranchId != 'all') {
-        query = query.eq('employees.branch_id', _selectedBranchId!);
-      }
-
-      final data = await query.order('work_date', ascending: false).order('check_in_time', ascending: false).limit(300);
-      final List<Map<String, dynamic>> processed = [];
-      final Set<String> employeesWithRecords = {};
-
-      for (final record in data) {
-        final emp = record['employees'];
-        if (emp is! Map) continue;
-        employeesWithRecords.add(emp['id'].toString());
-        final status = switch (record['status']) {
-          'late' => 'تأخير',
-          'absent' => _absent,
-          'half_day' => 'نصف يوم',
-          _ => 'حاضر',
-        };
-        processed.add({
-          'id': record['id'],
-          'employee_name': emp['full_name'],
-          'employee_code': emp['employee_code'],
-          'check_in': record['check_in_time'],
-          'check_out': record['check_out_time'],
-          'check_in_lat': record['check_in_lat'],
-          'check_in_lng': record['check_in_lng'],
-          'check_out_lat': record['check_out_lat'],
-          'check_out_lng': record['check_out_lng'],
-          'work_date': record['work_date'],
-          'status': status,
-        });
+      // الصفحات تضمن جلب كل السجلات حتى لو تجاوزت حدّ 1000 سطر لكل طلب
+      final attendanceRows = <Map<String, dynamic>>[];
+      for (var offset = 0;; offset += 1000) {
+        final page = await SupabaseService.client
+            .from('attendance')
+            .select('id, employee_id, check_in_time, check_out_time, check_in_lat, check_in_lng, check_out_lat, check_out_lng, status, work_date')
+            .inFilter('employee_id', ids)
+            .gte('work_date', _iso(from))
+            .lte('work_date', _iso(to))
+            .order('work_date')
+            .range(offset, offset + 999);
+        attendanceRows.addAll(rowsOf(page));
+        if (page.length < 1000) break;
       }
 
-      // الموظف النشط بلا أي سجل في الفترة = غائب
-      for (final emp in _employeesList) {
-        if (emp['is_active'] == false) continue;
-        if (_selectedEmployeeId != null && _selectedEmployeeId != 'all' && emp['id'] != _selectedEmployeeId) continue;
-        if (_selectedBranchId != null && _selectedBranchId != 'all' && emp['branch_id'] != _selectedBranchId) continue;
-        if (!employeesWithRecords.contains(emp['id'].toString())) {
-          processed.add({
-            'id': 'virtual_${emp['id']}',
-            'employee_name': emp['full_name'],
-            'employee_code': emp['employee_code'] ?? '',
-            'work_date': endStr,
-            'status': _absent,
-          });
-        }
-      }
+      final leaveRows = rowsOf(await SupabaseService.client
+          .from('leave_requests')
+          .select('employee_id, start_date, end_date, leave_type, is_hourly, is_paid, start_hour, end_hour')
+          .eq('status', 'approved')
+          .inFilter('employee_id', ids)
+          .lte('start_date', DateTime(to.year, to.month, to.day, 23, 59, 59).toUtc().toIso8601String())
+          .gte('end_date', from.toUtc().toIso8601String()));
 
-      processed.sort((a, b) {
-        if (a['status'] == _absent && b['status'] != _absent) return 1;
-        if (a['status'] != _absent && b['status'] == _absent) return -1;
-        return (a['employee_name'] ?? '').toString().compareTo((b['employee_name'] ?? '').toString());
-      });
+      String hhmm(Object? t) => t == null ? '' : t.toString().substring(0, t.toString().length >= 5 ? 5 : t.toString().length);
+
+      final rows = buildDailyReport(
+        from: from,
+        to: to,
+        today: DateTime.now(),
+        employees: employees,
+        schedules: _schedules,
+        attendance: [
+          for (final a in attendanceRows)
+            ReportAttendance(
+              id: a.str('id') ?? '',
+              employeeId: a.str('employee_id') ?? '',
+              date: DateTime.parse(a.str('work_date')!),
+              status: a.str('status') ?? 'present',
+              checkIn: a.date('check_in_time'),
+              checkOut: a.date('check_out_time'),
+              checkInLat: a.dbl('check_in_lat'),
+              checkInLng: a.dbl('check_in_lng'),
+              checkOutLat: a.dbl('check_out_lat'),
+              checkOutLng: a.dbl('check_out_lng'),
+            ),
+        ],
+        leaves: [
+          for (final l in leaveRows)
+            if (l.date('start_date') != null && l.date('end_date') != null)
+              ReportLeave(
+                employeeId: l.str('employee_id') ?? '',
+                from: l.date('start_date')!,
+                to: l.date('end_date')!,
+                typeName: _leaveTypeNames[l.str('leave_type')] ?? leaveTypeArabic(l.str('leave_type')),
+                isHourly: l.boolean('is_hourly') ?? false,
+                isPaid: l.boolean('is_paid') ?? true,
+                startHour: hhmm(l['start_hour']),
+                endHour: hhmm(l['end_hour']),
+              ),
+        ],
+      );
 
       if (mounted) {
         setState(() {
-          _records = processed;
+          _rows = rows;
           _hasError = false;
         });
       }
@@ -154,6 +191,62 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
       if (mounted) setState(() => _hasError = true);
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _exportExcel() async {
+    if (_rows.isEmpty) {
+      AppSnack.info(context, 'لا توجد بيانات للتصدير');
+      return;
+    }
+    setState(() => _exporting = true);
+    try {
+      final branch = _selectedBranchId == 'all' ? 'كل الفروع' : _branchName(_selectedBranchId);
+      final employee = _employeesList.where((e) => e['id'] == _selectedEmployeeId).firstOrNull?['full_name']?.toString();
+      final path = await ExcelExportService.generateAttendanceReportExcel(
+        rows: _rows,
+        from: _selectedDateRange.start,
+        to: _selectedDateRange.end,
+        scopeLabel: employee ?? branch,
+      );
+      if (!mounted) return;
+      await ExcelExportService.openExcelFile(path);
+      if (!mounted) return;
+      unawaited(showAppSheet<void>(
+        context,
+        title: 'التقرير جاهز',
+        builder: (ctx) => Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text('حُفظت نسخة Excel في مجلد التنزيلات: ورقة "يوم بيوم" وورقة "ملخص الموظفين".', style: AppText.bodySm),
+            const SizedBox(height: AppSpace.lg),
+            AppButton(
+              label: 'فتح التقرير',
+              icon: Icons.visibility_rounded,
+              expand: true,
+              onPressed: () {
+                Navigator.pop(ctx);
+                ExcelExportService.openExcelFile(path);
+              },
+            ),
+            const SizedBox(height: AppSpace.sm),
+            AppButton.secondary(
+              label: 'مشاركة',
+              icon: Icons.ios_share_rounded,
+              expand: true,
+              onPressed: () {
+                Navigator.pop(ctx);
+                ExcelExportService.shareExcelFile(path, text: 'تقرير الحضور والغياب - HR Pro');
+              },
+            ),
+          ],
+        ),
+      ));
+    } catch (e) {
+      debugPrint('Excel export failed: $e');
+      if (mounted) AppSnack.error(context, 'تعذّر إنشاء ملف Excel');
+    } finally {
+      if (mounted) setState(() => _exporting = false);
     }
   }
 
@@ -317,37 +410,75 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
     return '${Fmt.date(s)} - ${Fmt.date(e)}';
   }
 
+  static int _statusOrder(ReportStatus s) => switch (s) {
+        ReportStatus.absent => 0,
+        ReportStatus.late => 1,
+        ReportStatus.earlyLeave => 2,
+        ReportStatus.leave => 3,
+        ReportStatus.present => 4,
+        ReportStatus.dayOff => 5,
+      };
+
   @override
   Widget build(BuildContext context) {
-    final present = _records.where((r) => r['status'] == 'حاضر').length;
-    final late = _records.where((r) => r['status'] == 'تأخير').length;
-    final absent = _records.where((r) => r['status'] == _absent).length;
-    final rate = _records.isEmpty ? 0 : ((_records.length - absent) / _records.length * 100).round();
-    final visible = _statusFilter == 'all' ? _records : _records.where((r) => r['status'] == _statusFilter).toList();
+    final working = _rows.where((r) => r.status != ReportStatus.dayOff).toList();
+    final totals = reportTotals(working);
+    final visible = working.where((r) => _statusFilter == null || r.status == _statusFilter).toList()
+      ..sort((a, b) {
+        final d = b.date.compareTo(a.date);
+        if (d != 0) return d;
+        final s = _statusOrder(a.status).compareTo(_statusOrder(b.status));
+        return s != 0 ? s : a.employee.name.compareTo(b.employee.name);
+      });
+    final multiDay = !DateUtils.isSameDay(_selectedDateRange.start, _selectedDateRange.end);
     final branchName = _branches.where((b) => b['id'] == _selectedBranchId).firstOrNull?['name']?.toString();
     final employeeName = _employeesList.where((e) => e['id'] == _selectedEmployeeId).firstOrNull?['full_name']?.toString();
 
     final List<Widget> list;
-    if (_isLoading && _records.isEmpty) {
+    if (_isLoading && _rows.isEmpty) {
       list = const [SkeletonList(itemHeight: 96)];
-    } else if (_hasError && _records.isEmpty) {
+    } else if (_hasError && _rows.isEmpty) {
       list = [ErrorView(onRetry: _loadRecords)];
     } else if (visible.isEmpty) {
       list = const [EmptyView(title: 'لا توجد سجلات', message: 'غيّر الفترة أو الفلاتر.', icon: Icons.event_busy_rounded, compact: true)];
     } else {
-      list = [
-        for (var i = 0; i < visible.length; i++)
-          Padding(
-            padding: const EdgeInsets.only(bottom: AppSpace.sm),
-            child: FadeSlideIn(index: i, child: _recordCard(visible[i])),
-          ),
-      ];
+      list = [];
+      DateTime? lastDay;
+      for (var i = 0; i < visible.length; i++) {
+        final row = visible[i];
+        if (multiDay && (lastDay == null || !DateUtils.isSameDay(lastDay, row.date))) {
+          final dayRows = visible.where((r) => DateUtils.isSameDay(r.date, row.date));
+          final dayTotals = reportTotals(dayRows);
+          list.add(SectionHeader(
+            Fmt.dateWithDay(row.date),
+            trailing: Text(
+              'حاضر ${dayTotals.attended} · غائب ${dayTotals.absent} · مجاز ${dayTotals.leave}',
+              style: AppText.caption,
+            ),
+            padding: EdgeInsets.only(top: lastDay == null ? 0 : AppSpace.lg, bottom: AppSpace.sm),
+          ));
+        }
+        lastDay = row.date;
+        list.add(Padding(
+          padding: const EdgeInsets.only(bottom: AppSpace.sm),
+          child: FadeSlideIn(index: i < 20 ? i : 20, child: _recordCard(row)),
+        ));
+      }
     }
 
     return Scaffold(
       backgroundColor: AppColors.bg,
       appBar: AppBar(
         title: const Text('تقارير الحضور'),
+        actions: [
+          IconButton(
+            tooltip: 'تصدير Excel',
+            onPressed: _exporting || _isLoading ? null : _exportExcel,
+            icon: _exporting
+                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.table_view_rounded, color: AppColors.brand),
+          ),
+        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(52),
           child: Padding(
@@ -372,19 +503,27 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
               child: ResponsiveGrid(
                 minItemWidth: 120,
                 children: [
-                  KpiTile(label: 'حاضر', value: present, icon: Icons.how_to_reg_rounded, tone: AppTone.success),
-                  KpiTile(label: 'متأخر', value: late, icon: Icons.schedule_rounded, tone: AppTone.warning),
-                  KpiTile(label: 'غائب', value: absent, icon: Icons.person_off_rounded, tone: AppTone.danger),
-                  KpiTile(label: 'نسبة الحضور', value: rate, icon: Icons.percent_rounded, format: (v) => '${v.round()}%'),
+                  KpiTile(label: 'حضور', value: totals.attended, icon: Icons.how_to_reg_rounded, tone: AppTone.success),
+                  KpiTile(label: 'متأخر', value: totals.late, icon: Icons.schedule_rounded, tone: AppTone.warning),
+                  KpiTile(label: 'غياب', value: totals.absent, icon: Icons.person_off_rounded, tone: AppTone.danger),
+                  KpiTile(label: 'مجاز', value: totals.leave, icon: Icons.beach_access_rounded, tone: AppTone.info),
+                  KpiTile(label: 'نسبة الحضور', value: totals.rate, icon: Icons.percent_rounded, format: (v) => '${v.round()}%'),
                 ],
               ),
             ),
             const SizedBox(height: AppSpace.lg),
-            AppChoiceChips<String>(
+            AppChoiceChips<ReportStatus?>(
               scrollable: true,
               value: _statusFilter,
               onChanged: (v) => setState(() => _statusFilter = v),
-              options: const [('all', 'الكل', null), ('حاضر', 'حاضر', null), ('تأخير', 'متأخر', null), ('نصف يوم', 'نصف يوم', null), (_absent, 'غائب', null)],
+              options: const [
+                (null, 'الكل', null),
+                (ReportStatus.present, 'حاضر', null),
+                (ReportStatus.late, 'متأخر', null),
+                (ReportStatus.earlyLeave, 'خروج مبكر', null),
+                (ReportStatus.absent, 'غائب', null),
+                (ReportStatus.leave, 'مجاز', null),
+              ],
             ),
             const SizedBox(height: AppSpace.md),
             for (final w in list) ContentWidth(child: w),
@@ -394,18 +533,17 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
     );
   }
 
-  Widget _recordCard(Map<String, dynamic> r) {
-    final status = r['status'].toString();
-    final isAbsent = status == _absent;
-    final tone = switch (status) {
-      'حاضر' => AppTone.success,
-      'تأخير' => AppTone.warning,
-      'نصف يوم' => AppTone.info,
+  Widget _recordCard(ReportRow r) {
+    final att = r.attendance;
+    final tone = switch (r.status) {
+      ReportStatus.present => AppTone.success,
+      ReportStatus.late => AppTone.warning,
+      ReportStatus.earlyLeave => AppTone.warning,
+      ReportStatus.leave => AppTone.info,
       _ => AppTone.danger,
     };
-    final checkIn = DateTime.tryParse(r['check_in']?.toString() ?? '');
-    final checkOut = DateTime.tryParse(r['check_out']?.toString() ?? '');
-    final name = (r['employee_name'] ?? 'موظف').toString();
+    final name = r.employee.name;
+    final showTimes = att != null && r.status.attended;
 
     return AppCard(
       padding: const EdgeInsets.all(AppSpace.md),
@@ -422,7 +560,7 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
                   children: [
                     Text(name, style: AppText.subtitle, maxLines: 1, overflow: TextOverflow.ellipsis),
                     Text(
-                      '${(r['employee_code'] ?? '').toString().isEmpty ? '' : '${r['employee_code']} · '}${Fmt.dateWithDay(DateTime.tryParse(r['work_date']?.toString() ?? ''))}',
+                      '${r.employee.code.isEmpty ? '' : '${r.employee.code} · '}${Fmt.dateWithDay(r.date)}',
                       style: AppText.caption,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -430,17 +568,37 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
                   ],
                 ),
               ),
-              StatusBadge(status, tone: tone, dot: true),
+              StatusBadge(r.status.arabic, tone: tone, dot: true),
             ],
           ),
-          if (!isAbsent) ...[
+          if (r.note.isNotEmpty) ...[
             const SizedBox(height: AppSpace.sm),
             Row(
               children: [
-                Expanded(child: _TimeButton(icon: Icons.login_rounded, label: 'حضور', time: checkIn, onMap: () => _openMap(r['check_in_lat'], r['check_in_lng']))),
+                Icon(r.leave != null ? Icons.beach_access_rounded : Icons.info_outline_rounded, size: 16, color: AppColors.textMuted),
+                const SizedBox(width: AppSpace.xs),
+                Expanded(child: Text(r.note, style: AppText.bodySm)),
+              ],
+            ),
+          ],
+          if (showTimes) ...[
+            const SizedBox(height: AppSpace.sm),
+            Row(
+              children: [
+                Expanded(child: _TimeButton(icon: Icons.login_rounded, label: 'حضور', time: att.checkIn, onMap: () => _openMap(att.checkInLat, att.checkInLng))),
                 const SizedBox(width: AppSpace.sm),
-                Expanded(child: _TimeButton(icon: Icons.logout_rounded, label: 'انصراف', time: checkOut, onMap: () => _openMap(r['check_out_lat'], r['check_out_lng']))),
-                IconButton(tooltip: 'تعديل الأوقات', icon: const Icon(Icons.edit_calendar_rounded, color: AppColors.brand), onPressed: () => _editTimeDialog(r)),
+                Expanded(child: _TimeButton(icon: Icons.logout_rounded, label: 'انصراف', time: att.checkOut, onMap: () => _openMap(att.checkOutLat, att.checkOutLng))),
+                IconButton(
+                  tooltip: 'تعديل الأوقات',
+                  icon: const Icon(Icons.edit_calendar_rounded, color: AppColors.brand),
+                  onPressed: () => _editTimeDialog({
+                    'id': att.id,
+                    'employee_name': name,
+                    'work_date': _iso(r.date),
+                    'check_in': att.checkIn?.toIso8601String(),
+                    'check_out': att.checkOut?.toIso8601String(),
+                  }),
+                ),
               ],
             ),
           ],
