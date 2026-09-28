@@ -1,7 +1,7 @@
 import { Archive, Banknote, CheckCircle2, Lock, LockOpen, Printer, TrendingDown, Wallet } from 'lucide-react';
 import { Badge, Button, PageHeader, StatTile } from '@/components/ui';
 import { formatIQD } from '@/lib/format';
-import { ARABIC_MONTHS } from '@/lib/dates';
+import { currentPayrollMonth, payrollMonthOptions } from '../period';
 
 type Props = {
   isMonthArchived: boolean;
@@ -33,6 +33,12 @@ export function PayrollHeader({
   onMonthChange,
 }: Props) {
   const allIssued = issuedCount === rowCount && rowCount > 0;
+  const selectedMonth = `${currentYearVal}-${currentMonthVal}`;
+  // المسيرات بالتسلسل حول مسير اليوم، وتشمل المختار دائماً
+  const options = payrollMonthOptions(currentPayrollMonth());
+  const monthOptions = options.some((o) => o.value === selectedMonth)
+    ? options
+    : [...options, ...payrollMonthOptions(selectedMonth, 26, 0, 0)].sort((a, b) => a.value.localeCompare(b.value));
   return (
     <div className="space-y-6 print:hidden">
       <PageHeader
@@ -57,25 +63,16 @@ export function PayrollHeader({
         }
         actions={
           <>
-            <div className="flex items-center gap-1 h-9 rounded-xl bg-slate-950/70 border border-slate-800 px-1">
+            <div className="flex items-center h-9 rounded-xl bg-slate-950/70 border border-slate-800 px-1">
               <select
-                aria-label="الشهر"
-                value={currentMonthVal}
-                onChange={(e) => onMonthChange(`${currentYearVal}-${e.target.value}`)}
-                className="h-7 bg-transparent text-xs font-bold text-white outline-none cursor-pointer px-1"
-              >
-                {Object.entries(ARABIC_MONTHS).map(([num, name]) => (
-                  <option key={num} value={num} className="bg-slate-900">{name}</option>
-                ))}
-              </select>
-              <select
-                aria-label="السنة"
-                value={currentYearVal}
-                onChange={(e) => onMonthChange(`${e.target.value}-${currentMonthVal}`)}
+                aria-label="مسير الشهر"
+                value={selectedMonth}
+                onChange={(e) => onMonthChange(e.target.value)}
                 className="h-7 bg-transparent text-xs font-bold text-white outline-none cursor-pointer px-1 font-mono"
+                dir="ltr"
               >
-                {Array.from({ length: 9 }, (_, i) => String(2024 + i)).map((y) => (
-                  <option key={y} value={y} className="bg-slate-900">{y}</option>
+                {monthOptions.map((o) => (
+                  <option key={o.value} value={o.value} className="bg-slate-900">{o.label}</option>
                 ))}
               </select>
             </div>
