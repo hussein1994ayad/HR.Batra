@@ -1,137 +1,90 @@
 import { describe, expect, it } from 'vitest';
-import type { AttendanceRecord, Employee, WorkSchedule } from '@/lib/db-types';
-import { buildPayrollRows, buildSlipAdjustments, sumPayroll, type PayrollInput } from './calc';
+import { buildPayrollRows, buildSlipAdjustments, describeEvent, sumPayroll, type PayrollEvent, type PayrollRun, type RunRow } from './calc';
 
-// دورة 2026-08-25 → 2026-09-24، دوام 08:00–16:00 (480 دقيقة) من الأحد للخميس.
-// الراتب 3,000,000 → أجرة اليوم 100,000.
-const employee: Employee = {
-  id: 'e1',
-  employee_code: 'E1',
-  full_name: 'موظف تجريبي',
-  is_active: true,
-  role: 'employee',
-  branch_id: 'b1',
-  department_id: null,
-  monthly_salary_iqd: 3_000_000,
-  join_date: '2025-01-01',
-  created_at: '2025-01-01T00:00:00Z',
+// مسير أيلول 2026: 1 → 26. راتب 600,000 → أجر اليوم 20,000، دوام 480 دقيقة.
+const baseRow: RunRow = {
+  employee_id: 'e1', full_name: 'موظف', branch_id: 'b1', branch_name: 'الفرع', is_active: true,
+  period_days: 26, employed_days: 26, monthly_salary: 600000, daily_rate: 20000, minute_rate: 41.666667, shift_minutes: 480,
+  basic: 600000, earnings: 3750, bonuses: 0, overtime: 3750, deductions: 48250, attendance_deductions: 41250, loans: 50000,
+  net: 505500, pending_count: 2, missing_punches: 1, absence_days: 2, late_minutes: 30, early_minutes: 0, overtime_minutes: 60,
+  paid_leave_days: 0, unpaid_leave_days: 0, slip: null,
 };
-
-const schedule: WorkSchedule = {
-  id: 's1',
-  branch_id: 'b1',
-  name: 'دوام الفرع',
-  check_in_time: '08:00:00',
-  check_out_time: '16:00:00',
-  grace_period_minutes: 15,
-  work_days: [0, 1, 2, 3, 4],
+const run: PayrollRun = {
+  period: { period_month: '2026-09', start_date: '2026-09-01', cutoff_date: '2026-09-26', payment_date: '2026-09-30', status: 'open' },
+  rows: [baseRow],
 };
-
-const att = (date: string, status: string, checkIn: string | null, checkOut: string | null): AttendanceRecord => ({
-  id: `a-${date}`,
-  employee_id: 'e1',
-  branch_id: 'b1',
-  work_date: date,
-  status,
-  check_in_time: checkIn,
-  check_out_time: checkOut,
-  deduction_status: 'applied',
+const ev = (id: string, type: PayrollEvent['event_type'], amount: number, direction: -1 | 0 | 1, extra: Partial<PayrollEvent> = {}): PayrollEvent => ({
+  id, employee_id: 'e1', event_date: '2026-09-10', event_type: type, minutes: 0, days: 0, amount, direction,
+  payroll_month: '2026-09', status: 'approved', source: 'attendance', ...extra,
 });
-
-const baseInput = (): PayrollInput => ({
-  employees: [employee],
-  workSchedules: [schedule],
-  attendanceLogs: [
-    att('2026-08-26', 'late', '2026-08-26T05:30:00Z', '2026-08-26T13:00:00Z'), // تأخير 30 دقيقة
-    att('2026-08-27', 'absent', null, null),                                    // غياب
-    att('2026-08-30', 'half_day', '2026-08-30T05:00:00Z', null),                // نصف يوم
-    att('2026-08-31', 'present', '2026-08-31T05:00:00Z', '2026-08-31T12:00:00Z'), // خروج مبكر ساعة
-  ],
-  leaveRequests: [{
-    id: 'l1', employee_id: 'e1', leave_type: 'annual', is_hourly: false, is_paid: true, status: 'approved',
-    start_date: '2026-09-01T00:00:00', end_date: '2026-09-01T00:00:00',
-  }],
-  bonusesAndDeductions: [
-    { id: 'bd1', employee_id: 'e1', type: 'bonus', amount: 50_000, reason: 'مكافأة', issue_date: '2026-09-10' },
-    { id: 'bd2', employee_id: 'e1', type: 'deduction', amount: 20_000, reason: 'خصم', issue_date: '2026-09-11' },
-  ],
-  loanInstallments: [{
-    id: 'i1', loan_id: 'loan1', due_date: '2026-09-20', amount: 100_000, is_paid: false,
-    loans: { employee_id: 'e1' },
-  }],
-  existingSlips: [],
-  payrollOverrides: {},
-  excusedDays: {},
-  selectedMonth: '2026-09',
-  startDate: '2026-08-25',
-  endDate: '2026-09-24',
-  now: new Date('2026-10-01T12:00:00'),
-});
+const events: PayrollEvent[] = [
+  ev('a1', 'absence', 20000, -1, { days: 1, event_date: '2026-09-10' }),
+  ev('a2', 'absence', 20000, -1, { days: 1, event_date: '2026-09-26' }),
+  ev('l1', 'late', 1250, -1, { minutes: 30, event_date: '2026-09-24' }),
+  ev('o1', 'overtime', 3750, 1, { minutes: 60 }),
+  ev('m1', 'manual_deduction', 7000, -1, { source: 'manual', notes: 'كسر زجاج' }),
+  ev('p1', 'early_leave', 5000, -1, { status: 'pending', minutes: 120 }),
+  ev('v1', 'absence', 20000, -1, { status: 'void' }),
+];
 
 describe('buildPayrollRows', () => {
-  it('computes attendance deductions, bonuses, loans and net salary', () => {
-    const [row] = buildPayrollRows(baseInput());
+  const [row] = buildPayrollRows({ run, events, overrides: {}, attendanceEmployeeIds: ['e1'] });
 
-    expect(row.absenceDeduction).toBe(100_000);
-    expect(row.halfDayDeduction).toBe(50_000);
-    expect(row.totalLateMinutes).toBe(30);
-    expect(row.latenessDeduction).toBe(6_250);
-    expect(row.totalEarlyExitMinutes).toBe(60);
-    expect(row.earlyExitDeduction).toBe(12_500);
-    expect(row.totalAttendanceDeductions).toBe(168_750);
-    expect(row.totalBonuses).toBe(50_000);
-    expect(row.totalDeductions).toBe(188_750);
-    expect(row.loanDeduction).toBe(100_000);
-    expect(row.loanInstallmentIds).toEqual(['i1']);
-    expect(row.netSalary).toBe(3_000_000 + 50_000 - 188_750 - 100_000);
-    expect(row.paidLeavesCount).toBe(1);
-    expect(row.isIssued).toBe(false);
+  it('shows the server numbers as they are', () => {
+    expect(row.basic).toBe(600000);
+    expect(row.totalBonuses).toBe(3750);
+    expect(row.totalAttendanceDeductions).toBe(41250);
+    expect(row.totalDeductions).toBe(48250);
+    expect(row.loanDeduction).toBe(50000);
+    expect(row.netSalary).toBe(600000 + 3750 - 48250 - 50000);
+    expect(row.dailyRate).toBe(20000);
   });
 
-  it('applies manual overrides and records them as slip adjustments', () => {
-    const input = baseInput();
-    input.payrollOverrides = { e1: { bonuses: 80_000 } };
-    const [row] = buildPayrollRows(input);
-
-    expect(row.totalBonuses).toBe(80_000);
-    expect(row.isBonusesOverridden).toBe(true);
-
-    const adjustments = buildSlipAdjustments(row, input);
-    expect(adjustments).toContainEqual({
-      type: 'bonus', amount: 30_000, reason: 'تسوية زيادة مكافآت يدوياً لشهر 2026-09',
-      issue_date: '2026-09-24', skip_if_exists: false,
-    });
-    // تفاصيل خصومات الحضور تُسجّل بدون تكرار
-    expect(adjustments.filter(a => a.skip_if_exists).map(a => a.amount)).toEqual([100_000, 50_000, 6_250, 12_500]);
+  it('splits approved events into lists and ignores void/pending in totals', () => {
+    expect(row.absenceDeduction).toBe(40000);
+    expect(row.latenessDeduction).toBe(1250);
+    expect(row.earlyExitDeduction).toBe(0);
+    expect(row.bonusesList.map((b) => b.id)).toEqual(['o1']);
+    expect(row.otherDeductionsList).toEqual([{ id: 'm1', reason: 'كسر زجاج', issue_date: '2026-09-10', amount: 7000 }]);
+    expect(row.events.some((e) => e.id === 'v1')).toBe(false);
+    expect(row.pendingCount).toBe(2);
   });
 
-  it('shows the stored figures once the slip is issued', () => {
-    const input = baseInput();
-    input.existingSlips = [{
-      id: 'slip1', employee_id: 'e1', work_month: '2026-09', basic_salary: 3_000_000, allowances: 0,
-      deductions: 0, loans_deduction: 0, net_salary: 2_900_000, status: 'published',
-    }];
-    const [row] = buildPayrollRows(input);
-    expect(row.isIssued).toBe(true);
-    expect(row.netSalary).toBe(2_900_000);
+  it('applies manual overrides and recomputes the net', () => {
+    const [o] = buildPayrollRows({ run, events, overrides: { e1: { bonuses: 10000, attendanceDeductions: 20000 } } });
+    expect(o.totalBonuses).toBe(10000);
+    expect(o.totalDeductions).toBe(20000 + 7000);
+    expect(o.netSalary).toBe(600000 + 10000 - 27000 - 50000);
+    expect(buildSlipAdjustments(o, '2026-09')).toEqual([
+      { type: 'bonus', amount: 6250, reason: 'تعديل يدوي بزيادة المكافآت لمسير 2026-09' },
+      { type: 'bonus', amount: 21250, reason: 'تعديل يدوي بتخفيض خصومات الدوام لمسير 2026-09' },
+    ]);
+    expect(buildSlipAdjustments(row, '2026-09')).toEqual([]);
   });
 
-  it('prorates the basic salary for mid-cycle joiners', () => {
-    const input = baseInput();
-    input.employees = [{ ...employee, join_date: '2026-09-10' }];
-    const [row] = buildPayrollRows(input);
-    // 31 يوم في الدورة، 15 يوم عمل منذ المباشرة
-    expect(row.basic).toBe(Math.round((3_000_000 / 31) * 15));
+  it('an approved slip is shown with its stored numbers', () => {
+    const slipRun: PayrollRun = {
+      ...run,
+      rows: [{ ...baseRow, slip: { id: 's1', basic_salary: 600000, allowances: 0, deductions: 20000, loans_deduction: 0, net_salary: 580000, legacy: false } }],
+    };
+    const [s] = buildPayrollRows({ run: slipRun, events, overrides: { e1: { bonuses: 99 } } });
+    expect(s.isIssued).toBe(true);
+    expect(s.netSalary).toBe(580000);
+    expect(s.totalAttendanceDeductions).toBe(20000);
+    expect(s.pendingCount).toBe(0);
   });
 
-  it('skips employees who joined after the cycle', () => {
-    const input = baseInput();
-    input.employees = [{ ...employee, join_date: '2026-10-05' }];
-    expect(buildPayrollRows(input)).toHaveLength(0);
+  it('flags missing attendance and negative nets', () => {
+    const [m] = buildPayrollRows({ run: { ...run, rows: [{ ...baseRow, loans: 900000 }] }, events: [], overrides: {}, attendanceEmployeeIds: [] });
+    expect(m.isAttendanceMissing).toBe(true);
+    expect(m.isNetNegative).toBe(true);
+    expect(sumPayroll([row]).attendanceDeductions).toBe(41250);
   });
+});
 
-  it('sums columns', () => {
-    const rows = buildPayrollRows(baseInput());
-    expect(sumPayroll(rows)).toMatchObject({ basic: 3_000_000, bonuses: 50_000, loans: 100_000, otherDeductions: 20_000 });
+describe('describeEvent', () => {
+  it('uses minutes for partial events', () => {
+    expect(describeEvent(events[2])).toBe('تأخير 30 دقيقة');
+    expect(describeEvent(events[0])).toBe('غياب');
   });
 });

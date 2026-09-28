@@ -91,10 +91,8 @@ export default function TrackingPage() {
             <div className={cn('transition-opacity', stale)}>
               <DecisionsTable
                 decisionsList={t.decisionsList}
-                selectedAmounts={t.selectedAmounts}
                 selectedReasons={t.selectedReasons}
                 busyKey={t.busyKey}
-                onAmountChange={(key, value) => t.setSelectedAmounts(prev => ({ ...prev, [key]: value }))}
                 onReasonChange={(key, value) => t.setSelectedReasons(prev => ({ ...prev, [key]: value }))}
                 onDecide={t.decide}
               />

@@ -15,6 +15,7 @@ import type { Decision, DetectedStop } from './types';
 
 const EMPTY: TrackingDataset = {
   geofenceZones: [], branches: [], employees: [], workSchedules: [], leaveRequests: [], attendanceLogs: [], securityLogs: [],
+  payrollAmounts: {},
 };
 const BAGHDAD: [number, number] = [33.3152, 44.3661];
 
@@ -33,7 +34,6 @@ export function useTracking() {
   const [activeTab, setActiveTab] = useState<'monitoring' | 'decisions'>('monitoring');
 
   const [selectedReasons, setSelectedReasons] = useState<Record<string, string>>({});
-  const [selectedAmounts, setSelectedAmounts] = useState<Record<string, string>>({});
 
   // مسار الحركة
   const [selectedEmployeeForTrail, setSelectedEmployeeForTrail] = useState<string | null>(null);
@@ -95,7 +95,7 @@ export function useTracking() {
   const decisionsList = useMemo(() => buildDecisions({
     startDate, endDate, selectedBranch, selectedEmployee,
     employees: data.employees, workSchedules: data.workSchedules,
-    leaveRequests: data.leaveRequests, attendanceLogs: data.attendanceLogs,
+    leaveRequests: data.leaveRequests, attendanceLogs: data.attendanceLogs, payrollAmounts: data.payrollAmounts,
   }), [data, startDate, endDate, selectedBranch, selectedEmployee]);
 
   const attendanceRows = useMemo(() => buildAttendanceRows(data.attendanceLogs, decisionsList), [data.attendanceLogs, decisionsList]);
@@ -149,15 +149,15 @@ export function useTracking() {
   const checkoutNow = (recordId: string) =>
     run(`checkout_${recordId}`, () => forceCheckout(recordId), 'تم تسجيل خروج الموظف بنجاح!', () => 'حدث خطأ أثناء تسجيل الخروج.');
 
-  const decide = (item: Decision, status: 'applied' | 'ignored', reason: string, amount: number) =>
+  const decide = (item: Decision, status: 'applied' | 'ignored', reason: string) =>
     run(decisionKey(item), () => saveDecision({
-      employee: item.employee, type: item.type, date: item.date, status, recordId: item.id, reason, amount, fallbackBranchId,
+      employee: item.employee, type: item.type, date: item.date, status, recordId: item.id, reason, fallbackBranchId,
     }), 'تم حفظ القرار وإرسال إشعار للموظف بنجاح! 🔔', (err) => `حدث خطأ أثناء حفظ القرار: ${errorMessage(err)}`);
 
   const exportReport = () => {
     try {
       exportDisciplineReport({
-        rows: attendanceRows, decisionsList, selectedAmounts,
+        rows: attendanceRows, decisionsList,
         leaveRequests: data.leaveRequests, securityLogs: data.securityLogs,
         branches: data.branches, employees: data.employees,
         startDate, endDate, selectedBranch, selectedEmployee,
@@ -172,7 +172,7 @@ export function useTracking() {
     startDate, setStartDate, endDate, setEndDate,
     selectedBranch, changeBranch, selectedEmployee, setSelectedEmployee,
     activeTab, setActiveTab,
-    selectedAmounts, setSelectedAmounts, selectedReasons, setSelectedReasons,
+    selectedReasons, setSelectedReasons,
     selectedEmployeeForTrail, setSelectedEmployeeForTrail, liveTrackingActive, setLiveTrackingActive,
     trailCoordinates, detectedStops, mapView, markers, polygons,
     decisionsList, pendingDecisions, attendanceRows,

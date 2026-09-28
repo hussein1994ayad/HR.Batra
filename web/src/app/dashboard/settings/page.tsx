@@ -28,7 +28,7 @@ import { supabase } from '@/lib/supabase';
 import { confetti } from '@/lib/lazy';
 import { DatabasePurgeSection } from '@/features/settings/components/DatabasePurgeSection';
 import { useQuery } from '@/lib/useQuery';
-import { getCycleDates } from '@/lib/payroll';
+import { currentPayrollMonth, previewPayrollPeriod } from '@/features/payroll/period';
 import { DEFAULT_WORK_DAYS } from '@/lib/attendance';
 import { WEEKDAYS_AR, errorMessage, formatDateTime, formatTime12h } from '@/lib/format';
 import type { Announcement, Branch, Department, Employee, LeaveTypeOption, WorkSchedule } from '@/lib/types';
@@ -49,6 +49,7 @@ import {
   SegmentedTabs,
   Select,
   TableEmpty,
+  Toggle,
   cn,
 } from '@/components/ui';
 
@@ -65,8 +66,11 @@ interface CompanySettings {
 interface SettingsData {
   company: CompanySettings | null;
   trackingDays: number;
-  cycleStartDay: number;
-  cycleEndDay: number;
+  cutoffDay: number;
+  paymentDay: number;
+  overtimeEnabled: boolean;
+  overtimeMultiplier: number;
+  overtimeMinMinutes: number;
   defaultAnnual: number;
   defaultSick: number;
   hourlyMonthlyHours: number;
@@ -105,8 +109,11 @@ async function fetchSettings(): Promise<SettingsData> {
   return {
     company: (comp.data as CompanySettings | null) ?? null,
     trackingDays: archive.data?.value?.tracking_archive_days || 180,
-    cycleStartDay: payroll.data?.value?.cycle_start_day || 25,
-    cycleEndDay: payroll.data?.value?.cycle_end_day || 24,
+    cutoffDay: payroll.data?.value?.cutoff_day || 26,
+    paymentDay: payroll.data?.value?.payment_day || 30,
+    overtimeEnabled: payroll.data?.value?.overtime_enabled === true,
+    overtimeMultiplier: Number(payroll.data?.value?.overtime_multiplier) || 1,
+    overtimeMinMinutes: payroll.data?.value?.overtime_min_minutes ?? 30,
     defaultAnnual: lp?.default_annual || 21,
     defaultSick: lp?.default_sick || 15,
     hourlyMonthlyHours: lp?.hourly_monthly_hours ?? 8,
@@ -177,8 +184,11 @@ function GeneralSettings({ initial, onSaved }: { initial: SettingsData; onSaved:
     logo_url: c?.logo_url ?? '',
   });
   const [trackingDays, setTrackingDays] = useState(initial.trackingDays);
-  const [cycleStart, setCycleStart] = useState(initial.cycleStartDay);
-  const [cycleEnd, setCycleEnd] = useState(initial.cycleEndDay);
+  const [cutoffDay, setCutoffDay] = useState(initial.cutoffDay);
+  const [paymentDay, setPaymentDay] = useState(initial.paymentDay);
+  const [overtimeEnabled, setOvertimeEnabled] = useState(initial.overtimeEnabled);
+  const [overtimeMultiplier, setOvertimeMultiplier] = useState(initial.overtimeMultiplier);
+  const [overtimeMinMinutes, setOvertimeMinMinutes] = useState(initial.overtimeMinMinutes);
   const [defaultAnnual, setDefaultAnnual] = useState(initial.defaultAnnual);
   const [defaultSick, setDefaultSick] = useState(initial.defaultSick);
   const [hourlyMonthlyHours, setHourlyMonthlyHours] = useState(initial.hourlyMonthlyHours);
@@ -187,9 +197,7 @@ function GeneralSettings({ initial, onSaved }: { initial: SettingsData; onSaved:
   const [newTypeId, setNewTypeId] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const now = new Date();
-  const currentMonth = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}`;
-  const cyclePreview = getCycleDates(currentMonth, cycleStart, cycleEnd);
+  const cyclePreview = previewPayrollPeriod(currentPayrollMonth(cutoffDay), cutoffDay, paymentDay);
 
   const addLeaveType = () => {
     const id = newTypeId.trim().toLowerCase().replace(/\s+/g, '_');
@@ -233,13 +241,18 @@ function GeneralSettings({ initial, onSaved }: { initial: SettingsData; onSaved:
           },
           description: 'سياسة الإجازات العامة وأنواعها المتاحة بالشركة',
         },
-        {
-          key: 'payroll_policy',
-          value: { cycle_start_day: Number(cycleStart), cycle_end_day: Number(cycleEnd) },
-          description: 'إعدادات تحديد دورة الحسابات المالية والرواتب الشهرية',
-        },
       ]);
       if (sysErr) throw sysErr;
+
+      // سياسة الرواتب عبر السيرفر (يتحقق من القيم ويحافظ على بقية المفاتيح)
+      const { error: payErr } = await supabase.rpc('set_payroll_policy', {
+        p_cutoff_day: Number(cutoffDay),
+        p_payment_day: Number(paymentDay),
+        p_overtime_enabled: overtimeEnabled,
+        p_overtime_multiplier: Number(overtimeMultiplier),
+        p_overtime_min_minutes: Number(overtimeMinMinutes),
+      });
+      if (payErr) throw payErr;
 
       confetti({ particleCount: 80, spread: 60, colors: ['#818CF8', '#10B981'] });
       toast.success('تم حفظ الإعدادات');
@@ -368,18 +381,46 @@ function GeneralSettings({ initial, onSaved }: { initial: SettingsData; onSaved:
 
       <div className="space-y-6">
         <Card>
-          <CardHeader icon={Banknote} tone="emerald" title="الدورة المالية للرواتب" />
+          <CardHeader icon={Banknote} tone="emerald" title="مسير الرواتب" />
           <div className="grid grid-cols-2 gap-3">
-            <Field label="يوم البداية">
-              <Input type="number" min={1} max={31} required value={cycleStart} onChange={(e) => setCycleStart(Number(e.target.value))} className="text-center" />
+            <Field label="يوم قطع المسير" hint="الحركات بعده تُرحَّل للشهر التالي">
+              <Input type="number" min={1} max={28} required value={cutoffDay} onChange={(e) => setCutoffDay(Number(e.target.value))} className="text-center" />
             </Field>
-            <Field label="يوم النهاية">
-              <Input type="number" min={1} max={31} required value={cycleEnd} onChange={(e) => setCycleEnd(Number(e.target.value))} className="text-center" />
+            <Field label="يوم صرف الرواتب">
+              <Input type="number" min={1} max={31} required value={paymentDay} onChange={(e) => setPaymentDay(Number(e.target.value))} className="text-center" />
             </Field>
           </div>
           <InfoNote tone="emerald" icon={CalendarRange} className="mt-4">
-            دورة الشهر الحالي: <span className="font-mono font-bold" dir="ltr">{cyclePreview.start}</span> ← <span className="font-mono font-bold" dir="ltr">{cyclePreview.end}</span>
+            المسير الحالي: <span className="font-mono font-bold" dir="ltr">{cyclePreview.start}</span> ← <span className="font-mono font-bold" dir="ltr">{cyclePreview.end}</span>
+            {' '}· الصرف <span className="font-mono font-bold" dir="ltr">{cyclePreview.payment}</span>
+            <span className="block mt-1 text-slate-400">أجر اليوم = الراتب ÷ 30 دائماً. تغيير يوم القطع يطبَّق على المسيرات الجديدة فقط.</span>
           </InfoNote>
+
+          <div className="mt-5 pt-4 border-t border-slate-800/70 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-sm font-bold text-slate-200 flex items-center gap-1.5">
+                <Clock className="w-4 h-4 text-indigo-300" /> الساعات الإضافية
+              </span>
+              <Toggle
+                checked={overtimeEnabled}
+                onChange={setOvertimeEnabled}
+                label={<span className={overtimeEnabled ? 'text-emerald-300' : 'text-slate-400'}>{overtimeEnabled ? 'مفعّلة' : 'متوقفة'}</span>}
+              />
+            </div>
+            {overtimeEnabled && (
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="معامل الأجر" hint="1 = نفس أجر الدقيقة">
+                  <Input type="number" min={0.1} step={0.25} required value={overtimeMultiplier} onChange={(e) => setOvertimeMultiplier(Number(e.target.value))} className="text-center" dir="ltr" />
+                </Field>
+                <Field label="أقل مدة (دقيقة)">
+                  <Input type="number" min={0} required value={overtimeMinMinutes} onChange={(e) => setOvertimeMinMinutes(Number(e.target.value))} className="text-center" dir="ltr" />
+                </Field>
+              </div>
+            )}
+            <p className="text-[11px] text-slate-500">
+              تُحسب بعد نهاية الدوام، ولا تُضاف للراتب إلا بعد اعتمادك لكل يوم من صفحة الرواتب أو القرارات.
+            </p>
+          </div>
         </Card>
 
         <Card>

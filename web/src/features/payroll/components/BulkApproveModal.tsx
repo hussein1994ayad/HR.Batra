@@ -36,9 +36,9 @@ export function BulkApproveModal({ branchName, selectedMonth, startDate, endDate
             <p className="text-[11px] text-slate-400 mb-1">إجمالي الصافي المستحق</p>
             <p className="text-2xl font-extrabold text-emerald-300">{formatIQD(totals.net)}</p>
           </div>
-          {pendingRows.some((r) => r.isNetNegative || r.unconfirmedAbsencesCount > 0) && (
+          {pendingRows.some((r) => r.isNetNegative || r.pendingCount > 0) && (
             <InfoNote tone="amber" icon={AlertTriangle} className="mb-2">
-              بعض الموظفين لديهم تنبيهات (صافي سالب أو غياب غير مثبت). راجعهم قبل الاعتماد.
+              بعض الموظفين لديهم تنبيهات (صافي سالب أو حركات بانتظار قرارك). راجعهم قبل الاعتماد.
             </InfoNote>
           )}
           <InfoNote tone="slate" icon={Info}>

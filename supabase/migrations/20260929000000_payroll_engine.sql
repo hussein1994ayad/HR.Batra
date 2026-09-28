@@ -42,6 +42,30 @@ SET value = value
      )
 WHERE key = 'payroll_policy';
 
+-- نسخة الموقع القديمة تحفظ payroll_policy كاملاً بمفتاحي الدورة فقط: نحافظ على بقية المفاتيح،
+-- ومفتاحا الدورة يُشتقّان دائماً من يوم القطع (للنسخ القديمة التي تقرأهما).
+CREATE OR REPLACE FUNCTION public.keep_payroll_policy_keys()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = public
+AS $$
+DECLARE
+  v_cutoff int;
+BEGIN
+  IF NEW.key <> 'payroll_policy' THEN RETURN NEW; END IF;
+  IF TG_OP = 'UPDATE' THEN
+    NEW.value := COALESCE(OLD.value, '{}'::jsonb) || COALESCE(NEW.value, '{}'::jsonb);
+  END IF;
+  v_cutoff := COALESCE((NEW.value ->> 'cutoff_day')::int, 26);
+  NEW.value := NEW.value || jsonb_build_object('cycle_start_day', v_cutoff + 1, 'cycle_end_day', v_cutoff);
+  RETURN NEW;
+END;
+$$;
+DROP TRIGGER IF EXISTS trg_keep_payroll_policy_keys ON public.system_settings;
+CREATE TRIGGER trg_keep_payroll_policy_keys
+BEFORE INSERT OR UPDATE ON public.system_settings
+FOR EACH ROW EXECUTE FUNCTION public.keep_payroll_policy_keys();
+
 CREATE OR REPLACE FUNCTION public.payroll_policy()
 RETURNS jsonb
 LANGUAGE sql
@@ -937,6 +961,41 @@ DECLARE
   v_rows jsonb;
 BEGIN
   PERFORM public.require_admin();
+  IF p_month !~ '^\d{4}-\d{2}$' THEN
+    RAISE EXCEPTION 'صيغة الشهر غير صحيحة.' USING ERRCODE = '22023';
+  END IF;
+
+  -- أشهر قبل نظام المسيرات: عرض الكشوف القديمة كما حُفظت (بدون حساب)
+  IF p_month < (SELECT min(period_month) FROM payroll_periods) THEN
+    SELECT COALESCE(jsonb_agg(jsonb_build_object(
+             'employee_id', e.id, 'full_name', e.full_name, 'branch_id', e.branch_id, 'branch_name', b.name,
+             'join_date', e.join_date, 'termination_date', e.termination_date, 'is_active', e.is_active,
+             'period_days', 0, 'employed_days', 0, 'monthly_salary', COALESCE(e.monthly_salary_iqd, 0),
+             'daily_rate', COALESCE(e.monthly_salary_iqd, 0) / 30.0, 'minute_rate', 0, 'shift_minutes', 480,
+             'basic', s.basic_salary, 'earnings', s.allowances, 'bonuses', s.allowances, 'overtime', 0,
+             'deductions', s.deductions, 'attendance_deductions', 0, 'loans', s.loans_deduction, 'net', s.net_salary,
+             'pending_count', 0, 'missing_punches', 0, 'absence_days', 0, 'late_minutes', 0, 'early_minutes', 0,
+             'overtime_minutes', 0, 'paid_leave_days', 0, 'unpaid_leave_days', 0,
+             'slip', jsonb_build_object('id', s.id, 'basic_salary', s.basic_salary, 'allowances', s.allowances,
+                                        'deductions', s.deductions, 'loans_deduction', s.loans_deduction,
+                                        'net_salary', s.net_salary, 'created_at', s.created_at, 'legacy', true))
+           ORDER BY e.full_name), '[]'::jsonb)
+    INTO v_rows
+    FROM salary_slips s
+    JOIN employees e ON e.id = s.employee_id
+    LEFT JOIN branches b ON b.id = e.branch_id
+    WHERE s.work_month = p_month;
+
+    RETURN jsonb_build_object(
+      'period', jsonb_build_object(
+        'period_month', p_month,
+        'start_date', to_char((p_month || '-01')::date, 'YYYY-MM-DD'),
+        'cutoff_date', to_char((p_month || '-01')::date + interval '1 month - 1 day', 'YYYY-MM-DD'),
+        'payment_date', NULL, 'status', 'closed', 'legacy', true,
+        'archived', EXISTS (SELECT 1 FROM archived_months WHERE work_month = p_month)),
+      'rows', v_rows);
+  END IF;
+
   v_p := public.ensure_payroll_period(p_month);
   PERFORM public.sync_payroll_period(p_month);
 

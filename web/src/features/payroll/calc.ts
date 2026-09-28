@@ -1,405 +1,254 @@
 // =========================================================================
-// حساب كشف الرواتب — منطق نقي بدون React أو Supabase (قابل للاختبار)
+// صفوف جدول الرواتب — منطق نقي بدون React أو Supabase (قابل للاختبار)
 // =========================================================================
-// منقول كما هو من صفحة الرواتب؛ الفرق الوحيد أن "الآن" يُمرَّر كمعامل (now)
-// بدل new Date() حتى يمكن اختبار الحساب بتاريخ ثابت.
+// الحساب نفسه يجري في السيرفر (محرّك الرواتب: get_payroll_run / payroll_events):
+//   أجر اليوم = الراتب ÷ 30، أجر الدقيقة = أجر اليوم ÷ دقائق دوام الموظف،
+//   المسير من اليوم التالي لقطع الشهر السابق حتى يوم القطع (26).
+// هنا فقط: تحويل نتيجة السيرفر لصفوف الجدول، وتطبيق التعديلات اليدوية قبل الاعتماد
+// (تُرسل للسيرفر كمكافأة/خصم بسبب واضح).
 
-import type {
-  AttendanceRecord, BonusDeduction, Employee, LeaveRequest, LoanInstallment, SalarySlip, WorkSchedule,
-} from '@/lib/db-types';
-import { formatLateDurationArabic, getBaghdadMinutesFromIso, parseScheduleMinutes } from '@/lib/dates';
-import { resolveWorkSchedule } from '@/lib/schedules';
-import type { DetailLog, ExcusedDays, PayrollOverrides, SlipAdjustment } from './types';
+import type { PayrollOverrides, SlipAdjustment } from './types';
 
-export interface PayrollInput {
-  employees: Employee[];
-  workSchedules: WorkSchedule[];
-  attendanceLogs: AttendanceRecord[];
-  leaveRequests: LeaveRequest[];
-  bonusesAndDeductions: BonusDeduction[];
-  loanInstallments: LoanInstallment[];
-  existingSlips: SalarySlip[];
-  payrollOverrides: PayrollOverrides;
-  excusedDays: ExcusedDays;
-  selectedMonth: string;
-  startDate: string;
-  endDate: string;
-  /** اللحظة الحالية (للاختبار). */
-  now?: Date;
+export type PayrollEventType =
+  | 'absence' | 'late' | 'early_leave' | 'missing_punch' | 'unpaid_leave' | 'paid_leave' | 'overtime'
+  | 'manual_deduction' | 'bonus' | 'allowance' | 'advance' | 'adjustment' | 'other';
+
+export type PayrollEventStatus = 'pending' | 'approved' | 'ignored' | 'void';
+
+export interface PayrollEvent {
+  id: string;
+  employee_id: string;
+  event_date: string;
+  event_type: PayrollEventType;
+  minutes: number;
+  days: number;
+  amount: number;
+  direction: -1 | 0 | 1;
+  payroll_month: string;
+  carried_from?: string | null;
+  status: PayrollEventStatus;
+  source: string;
+  notes?: string | null;
+  decision_reason?: string | null;
+  salary_slip_id?: string | null;
 }
 
-/** صفوف جدول الرواتب: بيانات الموظف + الحضور + الخصومات + الصافي. */
-export function buildPayrollRows(input: PayrollInput) {
-  const {
-    employees, workSchedules, attendanceLogs, leaveRequests, bonusesAndDeductions,
-    loanInstallments, existingSlips, payrollOverrides, excusedDays, selectedMonth, startDate, endDate,
-  } = input;
-  const now = input.now ?? new Date();
+export interface PayrollPeriod {
+  period_month: string;
+  start_date: string;
+  cutoff_date: string;
+  payment_date: string;
+  status: 'open' | 'closed';
+  closed_at?: string | null;
+  reopened_at?: string | null;
+  reopen_reason?: string | null;
+  archived?: boolean;
+  /** شهر قبل نظام المسيرات: كشوف قديمة للعرض فقط. */
+  legacy?: boolean;
+}
 
-  // Filter out employees who joined AFTER the end of this payroll cycle
-  const validEmployees = employees.filter(emp => {
-    const effectiveJoinDate = emp.join_date || emp.created_at;
-    if (!effectiveJoinDate) return true;
-    const createdDate = new Date(effectiveJoinDate).getTime();
-    const cycleEnd = new Date(endDate + 'T23:59:59.999Z').getTime();
-    return createdDate <= cycleEnd;
-  });
+/** صف موظف كما يرجعه get_payroll_run. */
+export interface RunRow {
+  employee_id: string;
+  full_name: string;
+  branch_id: string | null;
+  branch_name: string | null;
+  join_date?: string | null;
+  termination_date?: string | null;
+  is_active: boolean;
+  period_days: number;
+  employed_days: number;
+  monthly_salary: number;
+  daily_rate: number;
+  minute_rate: number;
+  shift_minutes: number;
+  basic: number;
+  earnings: number;
+  bonuses: number;
+  overtime: number;
+  deductions: number;
+  attendance_deductions: number;
+  loans: number;
+  net: number;
+  pending_count: number;
+  missing_punches: number;
+  absence_days: number;
+  late_minutes: number;
+  early_minutes: number;
+  overtime_minutes: number;
+  paid_leave_days: number;
+  unpaid_leave_days: number;
+  slip: null | {
+    id: string;
+    basic_salary: number;
+    allowances: number;
+    deductions: number;
+    loans_deduction: number;
+    net_salary: number;
+    created_at?: string;
+    legacy: boolean;
+  };
+}
 
-  // Compile processed payroll data with smart attendance & absence calculation
-  const processedPayroll = validEmployees.map(emp => {
-    let nominalBasic = emp.monthly_salary_iqd || 0;
-    
-    if (emp.future_salary_iqd && emp.future_salary_month) {
-      const futureMonthStr = emp.future_salary_month.substring(0, 7);
-      if (selectedMonth >= futureMonthStr) {
-        nominalBasic = emp.future_salary_iqd;
-      }
-    }
+export interface PayrollRun {
+  period: PayrollPeriod;
+  rows: RunRow[];
+}
 
-    let basic = nominalBasic;
-    const start = new Date(startDate);
-    const end = new Date(endDate);
+/** قيد مكافأة/خصم يُعرض في تفاصيل الموظف. */
+export interface EntryItem {
+  id: string;
+  reason: string;
+  issue_date: string;
+  amount: number;
+}
 
-    // Prorate salary if the employee joined mid-cycle
-    const effectiveJoinDateStr = emp.join_date;
-    if (effectiveJoinDateStr) {
-      const joinDate = new Date(effectiveJoinDateStr);
-      const joinDay = new Date(joinDate.getFullYear(), joinDate.getMonth(), joinDate.getDate());
-      const startDay = new Date(start.getFullYear(), start.getMonth(), start.getDate());
-      
-      if (joinDay > startDay) {
-        const totalCycleDays = Math.round((end.getTime() - startDay.getTime()) / (1000 * 3600 * 24)) + 1;
-        const daysWorkedInCycle = Math.round((end.getTime() - joinDay.getTime()) / (1000 * 3600 * 24)) + 1;
-        
-        if (daysWorkedInCycle > 0 && daysWorkedInCycle < totalCycleDays) {
-          basic = Math.round((nominalBasic / totalCycleDays) * daysWorkedInCycle);
-        }
-      }
-    }
-    
-    // Dynamic Attendance Calculations
-    
-    // Define the limit day (if selectedRange is current month, calculate up to today)
-    const today = new Date(now);
-    const todayNormalized = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+export const EVENT_LABELS: Record<PayrollEventType, string> = {
+  absence: 'غياب',
+  late: 'تأخير',
+  early_leave: 'خروج مبكر',
+  missing_punch: 'بصمة ناقصة',
+  unpaid_leave: 'إجازة بدون راتب',
+  paid_leave: 'إجازة مدفوعة',
+  overtime: 'ساعات إضافية',
+  manual_deduction: 'خصم',
+  bonus: 'مكافأة',
+  allowance: 'مخصصات',
+  advance: 'سلفة',
+  adjustment: 'تسوية',
+  other: 'أخرى',
+};
 
-    // Get work schedules for the employee (employee-specific -> department -> default)
-    // Default working schedule in Iraq is Saturday(6) to Thursday(4)
-    const empSched = resolveWorkSchedule(emp, workSchedules);
-    const workDays = empSched ? empSched.work_days : [6, 0, 1, 2, 3, 4];
+/** الحركات التي تنتظر قرار الإدارة (اعتماد أو إعفاء). */
+export const DECIDABLE: PayrollEventType[] = ['absence', 'late', 'early_leave', 'missing_punch', 'overtime'];
 
-    let presentsCount = 0;
-    let latesCount = 0;
-    let totalLateMinutes = 0;
-    let earlyExitsCount = 0;
-    let totalEarlyExitMinutes = 0;
-    let halfDaysCount = 0;
-    let absencesCount = 0;
-    let paidLeavesCount = 0;
-    let scheduledWorkDays = 0;
-    let unconfirmedAbsencesCount = 0;
+const ATTENDANCE_TYPES: PayrollEventType[] = ['absence', 'late', 'early_leave', 'unpaid_leave'];
+const n = (v: unknown) => Number(v) || 0;
 
-    const detailLogs: DetailLog[] = [];
-    const empExcuses = excusedDays[emp.id] || [];
+export interface PayrollRowsInput {
+  run: PayrollRun;
+  events: PayrollEvent[];
+  overrides: PayrollOverrides;
+  /** موظفون لديهم طلب إجازة معلّق يتقاطع مع المسير. */
+  pendingLeaveEmployeeIds?: string[];
+  /** موظفون لديهم سجل حضور واحد على الأقل في المسير. */
+  attendanceEmployeeIds?: string[];
+}
 
-    let joinDay: Date | null = null;
-    if (emp.created_at) {
-      const jd = new Date(emp.created_at);
-      joinDay = new Date(jd.getFullYear(), jd.getMonth(), jd.getDate());
-    }
+/** صفوف جدول الرواتب من نتيجة السيرفر + التعديلات اليدوية غير المحفوظة. */
+export function buildPayrollRows({ run, events, overrides, pendingLeaveEmployeeIds = [], attendanceEmployeeIds }: PayrollRowsInput) {
+  const byEmployee = new Map<string, PayrollEvent[]>();
+  for (const e of events) {
+    if (e.status === 'void') continue;
+    const list = byEmployee.get(e.employee_id) ?? [];
+    list.push(e);
+    byEmployee.set(e.employee_id, list);
+  }
 
-    const loopDate = new Date(start);
-    while (loopDate <= end) {
-      const year = loopDate.getFullYear();
-      const month = loopDate.getMonth() + 1;
-      const day = loopDate.getDate();
-      const dateStr = `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
-      
-      const weekday = loopDate.getDay(); // JS getDay: 0 is Sunday, 1 is Monday... 6 is Saturday
-      const isWorkingDay = workDays.includes(weekday);
-      
-      if (isWorkingDay) {
-        const isBeforeJoining = joinDay && loopDate < joinDay;
+  return run.rows.map((r) => {
+    const empEvents = (byEmployee.get(r.employee_id) ?? []).sort((a, b) => a.event_date.localeCompare(b.event_date));
+    const approved = empEvents.filter((e) => e.status === 'approved');
+    const sumOf = (types: PayrollEventType[]) =>
+      approved.filter((e) => types.includes(e.event_type)).reduce((acc, e) => acc + n(e.amount), 0);
+    const countOf = (type: PayrollEventType) => approved.filter((e) => e.event_type === type).length;
 
-        if (isBeforeJoining) {
-          detailLogs.push({
-            date: dateStr,
-            status: 'قبل التعيين 🕒',
-            time: '-',
-            note: 'هذا اليوم يسبق تاريخ مباشرة الموظف للعمل',
-            isAbsenceDay: false
-          });
-        } else {
-          const isPastOrToday = loopDate <= todayNormalized;
-          if (isPastOrToday) {
-            scheduledWorkDays++;
-          }
+    const toEntry = (e: PayrollEvent): EntryItem => ({
+      id: e.id,
+      reason: e.notes || EVENT_LABELS[e.event_type],
+      issue_date: e.event_date,
+      amount: n(e.amount),
+    });
+    const isAttendance = (e: PayrollEvent) => ATTENDANCE_TYPES.includes(e.event_type);
+    const bonusesList = approved.filter((e) => e.direction === 1).map(toEntry);
+    const otherDeductionsList = approved.filter((e) => e.direction === -1 && !isAttendance(e)).map(toEntry);
 
-          const isExcused = empExcuses.includes(dateStr);
-          
-          // Check attendance records
-          const attRecord = attendanceLogs.find(log => log.employee_id === emp.id && log.work_date === dateStr);
-          
-          // Check approved leaves
-          const isDateWithinRange = (date: Date, startStr: string, endStr: string) => {
-            const d = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
-            const s = new Date(new Date(startStr).getFullYear(), new Date(startStr).getMonth(), new Date(startStr).getDate()).getTime();
-            const e = new Date(new Date(endStr).getFullYear(), new Date(endStr).getMonth(), new Date(endStr).getDate()).getTime();
-            return d >= s && d <= e;
-          };
-          
-          const leaveRecord = leaveRequests.find(l => l.employee_id === emp.id && l.status === 'approved' && isDateWithinRange(loopDate, l.start_date, l.end_date));
+    const computedBonuses = n(r.earnings);
+    const computedAttendanceDeductions = n(r.attendance_deductions);
+    const computedOtherDeductions = n(r.deductions) - computedAttendanceDeductions;
 
-          if (attRecord) {
-            const status = attRecord.status;
-            const isApplied = attRecord.deduction_status === 'applied';
-            const isIgnored = attRecord.deduction_status === 'ignored';
+    const o = overrides[r.employee_id] ?? {};
+    const totalBonuses = o.bonuses ?? computedBonuses;
+    const attendanceDeductions = o.attendanceDeductions ?? computedAttendanceDeductions;
+    const otherDeductions = o.otherDeductions ?? computedOtherDeductions;
 
-            let earlyExitMins = 0;
-            if (attRecord.check_out_time) {
-              const schedCheckOut = empSched ? empSched.check_out_time : '17:00:00';
-              const schedOutMins = parseScheduleMinutes(schedCheckOut);
-              const actualOutMins = getBaghdadMinutesFromIso(attRecord.check_out_time);
-              const diffEarly = schedOutMins - actualOutMins;
-              if (diffEarly > 0) {
-                earlyExitMins = diffEarly;
-              }
-            }
+    let basic = n(r.basic);
+    let bonusesShown = totalBonuses;
+    let attendanceShown = attendanceDeductions;
+    let deductionsShown = attendanceDeductions + otherDeductions;
+    let loans = n(r.loans);
+    let net = basic + totalBonuses - deductionsShown - loans;
 
-            if (isPastOrToday) {
-              if (status === 'present') presentsCount++;
-              else if (status === 'late') {
-                presentsCount++;
-                if (isApplied) {
-                  latesCount++;
-                  // Calculate late minutes
-                  const schedCheckIn = empSched ? empSched.check_in_time : '09:00:00';
-                  const schedInMins = parseScheduleMinutes(schedCheckIn);
-                  const actualInMins = attRecord.check_in_time ? getBaghdadMinutesFromIso(attRecord.check_in_time) : schedInMins;
-                  const diffLate = actualInMins - schedInMins;
-                  const lateMins = diffLate > 0 ? diffLate : 0;
-                  totalLateMinutes += lateMins;
-                }
-              }
-              else if (status === 'half_day') halfDaysCount++;
-              else if (status === 'absent') {
-                if (isApplied) absencesCount++;
-              }
-
-              // Early exit check
-              if (earlyExitMins > 0 && isApplied) {
-                earlyExitsCount++;
-                totalEarlyExitMinutes += earlyExitMins;
-              }
-            }
-            
-            let statusAr = 'حاضر ✅';
-            const noteParts = [];
-            if (status === 'late') {
-              statusAr = isApplied ? 'متأخر (تم تطبيق الخصم) ⚠️' : (isIgnored ? 'متأخر (تم تجاهل الخصم) 🟢' : 'متأخر (معلق) ⏳');
-              // Calculate late minutes for display
-              const schedCheckIn = empSched ? empSched.check_in_time : '09:00:00';
-              const schedInMins = parseScheduleMinutes(schedCheckIn);
-              const actualInMins = attRecord.check_in_time ? getBaghdadMinutesFromIso(attRecord.check_in_time) : schedInMins;
-              const diffLate = actualInMins - schedInMins;
-              const lateMins = diffLate > 0 ? diffLate : 0;
-              noteParts.push(`تأخير: ${formatLateDurationArabic(lateMins)}`);
-            } else if (status === 'half_day') {
-              statusAr = 'نصف يوم 🌓';
-              noteParts.push('دوام غير مكتمل');
-            } else if (status === 'absent') {
-              statusAr = isApplied ? 'غياب (تم تطبيق الخصم) ❌' : 'غياب (تم تجاهل الخصم) 🟢';
-              noteParts.push(attRecord.deduction_reason || 'غياب غير مبرر');
-            }
-
-            if (earlyExitMins > 0) {
-              noteParts.push(`خروج مبكر: ${formatLateDurationArabic(earlyExitMins)}`);
-              if (status === 'present') {
-                statusAr = isApplied ? 'خروج مبكر (خصم) ⚠️' : 'خروج مبكر (تجاهل الخصم) 🟢';
-              }
-            }
-
-            const noteAr = noteParts.length > 0 ? noteParts.join(' | ') : 'بصمة دوام اعتيادية';
-
-            detailLogs.push({
-              date: dateStr,
-              status: statusAr,
-              time: attRecord.check_in_time ? new Date(attRecord.check_in_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : '-',
-              note: noteAr,
-              isAbsenceDay: false
-            });
-          } else if (leaveRecord) {
-            if (isPastOrToday) {
-              if (leaveRecord.is_paid) {
-                paidLeavesCount++;
-              } else {
-                absencesCount++;
-              }
-            }
-            detailLogs.push({
-              date: dateStr,
-              status: leaveRecord.is_paid ? 'إجازة معتمدة 🌴' : 'إجازة بدون راتب ❌',
-              time: '-',
-              note: leaveRecord.reason ? `سبب الإجازة: ${leaveRecord.reason}` : 'إجازة إدارية معتمدة',
-              isAbsenceDay: false
-            });
-          } else {
-            // No attendance record and no leave
-            const isPast = loopDate < todayNormalized || (loopDate.getTime() === todayNormalized.getTime() && today.getHours() >= 17);
-            if (isPast) {
-              if (isExcused) {
-                if (isPastOrToday) {
-                  presentsCount++; // Treated as present (excused)
-                }
-                detailLogs.push({
-                  date: dateStr,
-                  status: 'معفى (عذر إداري) 🟢',
-                  time: '-',
-                  note: 'غياب تم إعفاؤه إدارياً بواسطة المدير المباشر',
-                  isAbsenceDay: true,
-                  isExcused: true
-                });
-              } else {
-                // Not excused, no attendance, no leave -> Unconfirmed absence (no auto-deduction)
-                if (isPastOrToday) {
-                  unconfirmedAbsencesCount++;
-                }
-                detailLogs.push({
-                  date: dateStr,
-                  status: 'يوم بدون حضور ⚠️',
-                  time: '-',
-                  note: 'لم يتم تسجيل حضور، ولم يتم تطبيق خصم غياب من قبل الإدارة بعد',
-                  isAbsenceDay: false,
-                  isExcused: false
-                });
-              }
-            } else {
-              detailLogs.push({
-                date: dateStr,
-                status: 'لم يحن بعد ⏳',
-                time: '-',
-                note: loopDate.getTime() === todayNormalized.getTime() ? 'قيد الانتظار لموعد الدوام اليوم' : 'يوم عمل مجدول مستقبلي',
-                isAbsenceDay: false
-              });
-            }
-          }
-        }
-      }
-
-      // Advance loopDate by 1 day
-      loopDate.setDate(loopDate.getDate() + 1);
-    }
-
-    // Salary deductions calculation
-    let workdayMinutes = 480; // Default fallback: 8 hours (480 mins)
-    if (empSched && empSched.check_in_time && empSched.check_out_time) {
-      const [inH, inM] = empSched.check_in_time.split(':').map(Number);
-      const [outH, outM] = empSched.check_out_time.split(':').map(Number);
-      const inMinutes = inH * 60 + inM;
-      const outMinutes = outH * 60 + outM;
-      if (outMinutes > inMinutes) {
-        workdayMinutes = outMinutes - inMinutes;
-      }
-    }
-
-    // Use nominalBasic for daily wage calculations, so mid-month joiners aren't under-penalized
-    const dailyWage = nominalBasic / 30;
-    const absenceDeduction = Math.round(absencesCount * dailyWage);
-    const halfDayDeduction = Math.round(halfDaysCount * dailyWage * 0.5);
-    const latenessDeduction = Math.round(totalLateMinutes * (dailyWage / workdayMinutes));
-    const earlyExitDeduction = Math.round(totalEarlyExitMinutes * (dailyWage / workdayMinutes));
-
-    // Apply overrides
-    const empOverrides = payrollOverrides[emp.id] || {};
-
-    const computedAttendanceDeductions = absenceDeduction + halfDayDeduction + latenessDeduction + earlyExitDeduction;
-    const finalAttendanceDeductions = empOverrides.attendanceDeductions !== undefined 
-      ? empOverrides.attendanceDeductions 
-      : computedAttendanceDeductions;
-
-    const empBDs = bonusesAndDeductions.filter(bd => bd.employee_id === emp.id);
-    
-    const computedBonuses = empBDs.filter(bd => bd.type === 'bonus').reduce((sum, bd) => sum + Number(bd.amount), 0);
-    const finalBonuses = empOverrides.bonuses !== undefined 
-      ? empOverrides.bonuses 
-      : computedBonuses;
-
-    const computedOtherDeductions = empBDs.filter(bd => bd.type === 'deduction').reduce((sum, bd) => sum + Number(bd.amount), 0);
-    const finalOtherDeductions = empOverrides.otherDeductions !== undefined 
-      ? empOverrides.otherDeductions 
-      : computedOtherDeductions;
-
-    const finalDeductions = finalOtherDeductions + finalAttendanceDeductions;
-    
-    const empLoans = loanInstallments.filter(l => l.loans?.employee_id === emp.id);
-    const loanDeduction = empLoans.reduce((sum, l) => sum + Number(l.amount), 0);
-    const loanInstallmentIds = empLoans.map(l => l.id);
-
-    const netSalary = basic + finalBonuses - finalDeductions - loanDeduction;
-    const isIssued = existingSlips.some(slip => slip.employee_id === emp.id);
-
-    let displayBasic = basic;
-    let displayBonuses = finalBonuses;
-    let displayAttendanceDeductions = finalAttendanceDeductions;
-    let displayDeductions = finalDeductions;
-    let displayLoanDeduction = loanDeduction;
-    let displayNetSalary = netSalary;
-
-    const issuedSlip = existingSlips.find(slip => slip.employee_id === emp.id);
-    if (issuedSlip) {
-      displayBasic = Number(issuedSlip.basic_salary);
-      displayBonuses = Number(issuedSlip.allowances);
-      displayLoanDeduction = Number(issuedSlip.loans_deduction);
-      displayDeductions = Number(issuedSlip.deductions);
-      displayNetSalary = Number(issuedSlip.net_salary);
-      displayAttendanceDeductions = Math.min(displayDeductions, finalAttendanceDeductions);
+    const slip = r.slip;
+    if (slip) {
+      // الكشف المعتمد ثابت: نعرض أرقامه كما حُفظت
+      basic = n(slip.basic_salary);
+      bonusesShown = n(slip.allowances);
+      deductionsShown = n(slip.deductions);
+      attendanceShown = Math.min(deductionsShown, computedAttendanceDeductions);
+      loans = n(slip.loans_deduction);
+      net = n(slip.net_salary);
     }
 
     return {
-      ...emp,
-      basic: displayBasic,
-      scheduledWorkDays,
-      presentsCount,
-      latesCount,
-      totalLateMinutes,
-      latenessDeduction,
-      earlyExitsCount,
-      totalEarlyExitMinutes,
-      earlyExitDeduction,
-      halfDaysCount,
-      absencesCount,
-      paidLeavesCount,
-      absenceDeduction,
-      halfDayDeduction,
-      totalAttendanceDeductions: displayAttendanceDeductions,
-      totalBonuses: displayBonuses,
-      totalDeductions: displayDeductions,
-      loanDeduction: displayLoanDeduction,
-      loanInstallmentIds,
-      netSalary: displayNetSalary,
-      isIssued,
-      detailLogs,
-      bonusesList: empBDs.filter(bd => bd.type === 'bonus'),
-      otherDeductionsList: empBDs.filter(bd => bd.type === 'deduction'),
-      loanInstallmentsList: empLoans,
-      
-      // Smart Validation Flags
-      isNetNegative: !isIssued && displayNetSalary < 0,
-      isAttendanceMissing: !isIssued && scheduledWorkDays > 0 && presentsCount === 0 && absencesCount === 0 && halfDaysCount === 0 && paidLeavesCount === 0,
-      hasPendingLeave: !isIssued && leaveRequests.some(l => l.employee_id === emp.id && l.status === 'pending'),
-      unconfirmedAbsencesCount: isIssued ? 0 : unconfirmedAbsencesCount,
+      id: r.employee_id,
+      full_name: r.full_name,
+      branch_id: r.branch_id,
+      branches: r.branch_name ? { name: r.branch_name } : null,
+      joinDate: r.join_date ?? null,
+      terminationDate: r.termination_date ?? null,
+      isActive: r.is_active,
 
-      // Overridden flags for styling and database adjustments
-      isBonusesOverridden: empOverrides.bonuses !== undefined,
-      isAttendanceDeductionsOverridden: empOverrides.attendanceDeductions !== undefined,
-      isOtherDeductionsOverridden: empOverrides.otherDeductions !== undefined,
-      computedAttendanceDeductions,
+      monthlySalary: n(r.monthly_salary),
+      dailyRate: n(r.daily_rate),
+      minuteRate: n(r.minute_rate),
+      shiftMinutes: n(r.shift_minutes),
+      periodDays: n(r.period_days),
+      employedDays: n(r.employed_days),
+
+      basic,
+      totalBonuses: bonusesShown,
+      totalAttendanceDeductions: attendanceShown,
+      totalDeductions: deductionsShown,
+      loanDeduction: loans,
+      netSalary: net,
+
+      absencesCount: n(r.absence_days),
+      absenceDeduction: sumOf(['absence']),
+      latesCount: countOf('late'),
+      totalLateMinutes: n(r.late_minutes),
+      latenessDeduction: sumOf(['late']),
+      earlyExitsCount: countOf('early_leave'),
+      totalEarlyExitMinutes: n(r.early_minutes),
+      earlyExitDeduction: sumOf(['early_leave']),
+      unpaidLeaveDays: n(r.unpaid_leave_days),
+      unpaidLeaveDeduction: sumOf(['unpaid_leave']),
+      overtimeMinutes: n(r.overtime_minutes),
+      overtimeAmount: n(r.overtime),
+      paidLeavesCount: n(r.paid_leave_days),
+      pendingCount: slip ? 0 : n(r.pending_count),
+      missingPunches: n(r.missing_punches),
+
+      events: empEvents,
+      bonusesList,
+      otherDeductionsList,
+
+      isIssued: !!slip,
+      slipId: slip?.id ?? null,
+      isLegacySlip: !!slip?.legacy,
+
+      isNetNegative: !slip && net < 0,
+      isAttendanceMissing: !slip && attendanceEmployeeIds !== undefined && !attendanceEmployeeIds.includes(r.employee_id)
+        && n(r.employed_days) > 0,
+      hasPendingLeave: !slip && pendingLeaveEmployeeIds.includes(r.employee_id),
+
+      isBonusesOverridden: o.bonuses !== undefined,
+      isAttendanceDeductionsOverridden: o.attendanceDeductions !== undefined,
+      isOtherDeductionsOverridden: o.otherDeductions !== undefined,
       computedBonuses,
-      computedOtherDeductions
+      computedAttendanceDeductions,
+      computedOtherDeductions,
     };
   });
-
-  return processedPayroll;
 }
 
 export type PayrollRow = ReturnType<typeof buildPayrollRows>[number];
@@ -418,38 +267,41 @@ export function sumPayroll(rows: PayrollRow[]) {
   };
 }
 
-/** قيود المكافآت والخصومات التي تُنشأ مع كشف الراتب (تسويات يدوية + تفاصيل خصومات الحضور). */
-export function buildSlipAdjustments(
-  empData: PayrollRow,
-  period: { selectedMonth: string; startDate: string; endDate: string },
-): SlipAdjustment[] {
-  const { selectedMonth, startDate, endDate } = period;
-  const adjustments: SlipAdjustment[] = [];
-  const add = (type: SlipAdjustment['type'], amount: number, reason: string, skipIfExists = false) => {
-    if (amount > 0) adjustments.push({ type, amount, reason, issue_date: endDate, skip_if_exists: skipIfExists });
+/**
+ * التعديلات اليدوية على خانات الجدول ← مكافأة/خصم يُضاف مع الكشف بسبب واضح.
+ * السيرفر يحسب كل شيء آخر من الحركات.
+ */
+export function buildSlipAdjustments(row: PayrollRow, month: string): SlipAdjustment[] {
+  const out: SlipAdjustment[] = [];
+  const push = (diff: number, raise: string, lower: string, raiseType: SlipAdjustment['type']) => {
+    const amount = Math.round(Math.abs(diff));
+    if (amount === 0) return;
+    const lowerType: SlipAdjustment['type'] = raiseType === 'bonus' ? 'deduction' : 'bonus';
+    out.push(diff > 0
+      ? { type: raiseType, amount, reason: `${raise} لمسير ${month}` }
+      : { type: lowerType, amount, reason: `${lower} لمسير ${month}` });
   };
 
-  if (empData.isBonusesOverridden) {
-    const diff = empData.totalBonuses - empData.computedBonuses;
-    if (diff > 0) add('bonus', diff, `تسوية زيادة مكافآت يدوياً لشهر ${selectedMonth}`);
-    else add('deduction', Math.abs(diff), `تسوية تخفيض مكافآت يدوياً لشهر ${selectedMonth}`);
+  if (row.isBonusesOverridden) {
+    push(row.totalBonuses - row.computedBonuses, 'تعديل يدوي بزيادة المكافآت', 'تعديل يدوي بتخفيض المكافآت', 'bonus');
   }
-
-  if (empData.isOtherDeductionsOverridden) {
-    const diff = (empData.totalDeductions - empData.totalAttendanceDeductions) - empData.computedOtherDeductions;
-    if (diff > 0) add('deduction', diff, `تسوية زيادة خصومات يدوياً لشهر ${selectedMonth}`);
-    else add('bonus', Math.abs(diff), `تسوية تخفيض خصومات يدوياً لشهر ${selectedMonth}`);
+  if (row.isAttendanceDeductionsOverridden) {
+    push(row.totalAttendanceDeductions - row.computedAttendanceDeductions,
+      'تعديل يدوي بزيادة خصومات الدوام', 'تعديل يدوي بتخفيض خصومات الدوام', 'deduction');
   }
-
-  if (empData.isAttendanceDeductionsOverridden) {
-    add('deduction', empData.totalAttendanceDeductions, `خصم غياب وحضور معدل يدوياً للفترة من ${startDate} إلى ${endDate}`);
-  } else if (empData.totalAttendanceDeductions > 0) {
-    // تفاصيل خصومات الحضور التلقائية للتدقيق (لا تُكرر إن وُجدت سابقاً)
-    add('deduction', empData.absenceDeduction, `خصم غياب غير مبرر (${empData.absencesCount} يوم) للفترة من ${startDate} إلى ${endDate}`, true);
-    add('deduction', empData.halfDayDeduction, `خصم نصف يوم (${empData.halfDaysCount} يوم) للفترة من ${startDate} إلى ${endDate}`, true);
-    add('deduction', empData.latenessDeduction, `خصم تأخير الحضور (${formatLateDurationArabic(empData.totalLateMinutes)}) للفترة من ${startDate} إلى ${endDate}`, true);
-    add('deduction', empData.earlyExitDeduction, `خصم خروج مبكر (${formatLateDurationArabic(empData.totalEarlyExitMinutes)}) للفترة من ${startDate} إلى ${endDate}`, true);
+  if (row.isOtherDeductionsOverridden) {
+    const other = row.totalDeductions - row.totalAttendanceDeductions;
+    push(other - row.computedOtherDeductions, 'تعديل يدوي بزيادة الخصومات', 'تعديل يدوي بتخفيض الخصومات', 'deduction');
   }
+  return out;
+}
 
-  return adjustments;
+/** وصف مختصر لحركة: "غياب يوم" / "تأخير 30 دقيقة" / "إجازة زمنية 120 دقيقة". */
+export function describeEvent(e: PayrollEvent): string {
+  const label = EVENT_LABELS[e.event_type] ?? e.event_type;
+  const minutes = n(e.minutes);
+  const days = n(e.days);
+  if (minutes > 0) return `${label} ${minutes} دقيقة`;
+  if (days > 0 && days !== 1) return `${label} ${days} يوم`;
+  return label;
 }

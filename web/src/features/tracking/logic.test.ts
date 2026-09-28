@@ -38,7 +38,7 @@ describe('buildDecisions', () => {
     ];
     const list = buildDecisions({ ...base, attendanceLogs });
     expect(list.map(d => d.type)).toEqual(['late', 'absent', 'virtual_absent']);
-    expect(list[0].suggestedAmount).toBe(20 * 50); // 20 دقيقة تأخير
+    expect(list[0].suggestedAmount).toBe(0); // المبلغ من محرّك الرواتب فقط (لا مبالغ ثابتة)
     expect(list[2].date).toBe('2026-09-03');
 
     const rows = buildAttendanceRows(attendanceLogs, list);

@@ -2,13 +2,12 @@
 
 import * as XLSX from 'xlsx';
 import type { Branch, LeaveRequest } from '@/lib/db-types';
-import { decisionKey, formatHours } from './logic';
+import { formatHours } from './logic';
 import type { AttendanceRow, Decision, MockGpsAttempt, TrackedEmployee } from './types';
 
 export function exportDisciplineReport(input: {
   rows: AttendanceRow[];
   decisionsList: Decision[];
-  selectedAmounts: Record<string, string>;
   leaveRequests: LeaveRequest[];
   securityLogs: MockGpsAttempt[];
   branches: Branch[];
@@ -19,7 +18,7 @@ export function exportDisciplineReport(input: {
   selectedEmployee: string;
 }): void {
   const {
-    rows, decisionsList, selectedAmounts, leaveRequests, securityLogs, branches, employees,
+    rows, decisionsList, leaveRequests, securityLogs, branches, employees,
     startDate, endDate, selectedBranch, selectedEmployee,
   } = input;
   const fullList = rows;
@@ -48,19 +47,18 @@ export function exportDisciplineReport(input: {
     let decStatusStr = 'لا يوجد خصم';
     let decAmountStr = '-';
     if (dec) {
-      // نفس مفتاح المبلغ المستعمل في جدول القرارات
-      const rowKey = decisionKey(dec);
+      // المبلغ كما يحسبه محرّك الرواتب
       if (dec.deductionStatus === 'applied') {
         decStatusStr = 'تم اعتماد الخصم ✅';
-        const amt = selectedAmounts[rowKey] || dec.suggestedAmount || 0;
+        const amt = dec.suggestedAmount || 0;
         decAmountStr = `${Number(amt).toLocaleString('ar-IQ')} د.ع`;
       } else if (dec.deductionStatus === 'ignored') {
         decStatusStr = 'معفى من الخصم 🔓';
         decAmountStr = '0 د.ع (إعفاء)';
       } else {
         decStatusStr = 'بانتظار القرار ⏳';
-        const amt = selectedAmounts[rowKey] || dec.suggestedAmount || 0;
-        decAmountStr = `${Number(amt).toLocaleString('ar-IQ')} د.ع (مقترح)`;
+        const amt = dec.suggestedAmount || 0;
+        decAmountStr = amt > 0 ? `${Number(amt).toLocaleString('ar-IQ')} د.ع (عند الاعتماد)` : '-';
       }
     }
 

@@ -39,5 +39,6 @@ export type Decision = {
   typeName: string;
   deductionStatus: string;
   reason: string;
+  /** مبلغ الخصم كما يحسبه محرّك الرواتب (0 إن لم يُحسب بعد). */
   suggestedAmount: number;
 };

@@ -4,81 +4,67 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import confetti from 'canvas-confetti';
 import toast from 'react-hot-toast';
 import { errorMessage } from '@/lib/error-utils';
-import { getCycleDates } from '@/lib/dates';
 import {
-  approveSalarySlip, archivePayrollMonth, fetchPayrollDataset, fetchPayrollPolicy, insertBonusDeduction,
-  notifyBranchPayslips, revertSalarySlip, type PayrollDataset,
+  approvePayrollSlip, archivePayrollMonth, closePayrollPeriod, decidePayrollEvent, fetchPayrollDataset,
+  insertBonusDeduction, notifyBranchPayslips, reopenPayrollPeriod, revertPayrollSlip, type PayrollDataset,
 } from './api';
 import { buildPayrollRows, buildSlipAdjustments, sumPayroll, type PayrollRow } from './calc';
-import type { ExcusedDays, OverrideField, PayrollOverrides } from './types';
+import { currentPayrollMonth } from './period';
+import type { OverrideField, PayrollOverrides } from './types';
 
 const EMPTY_DATASET: PayrollDataset = {
-  branches: [], employees: [], bonusesAndDeductions: [], loanInstallments: [], attendanceLogs: [],
-  leaveRequests: [], workSchedules: [], existingSlips: [], archivedMonths: [],
+  run: null, events: [], branches: [], pendingLeaveEmployeeIds: [], attendanceEmployeeIds: [],
 };
 
-const currentMonth = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}`;
-};
-
-/** حالة صفحة الرواتب: البيانات، الفلاتر، التعديلات اليدوية، والإجراءات. */
+/** حالة صفحة الرواتب: مسير الشهر من السيرفر، الفلاتر، التعديلات اليدوية، والإجراءات. */
 export function usePayroll() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [sendingNotifs, setSendingNotifs] = useState(false);
   const [data, setData] = useState<PayrollDataset>(EMPTY_DATASET);
 
-  const [selectedMonth, setSelectedMonth] = useState(currentMonth);
-  const [cycleStartDay, setCycleStartDay] = useState(25);
-  const [cycleEndDay, setCycleEndDay] = useState(24);
-  const [period, setPeriod] = useState(() => getCycleDates(currentMonth()));
-  const { start: startDate, end: endDate } = period;
-
+  const [selectedMonth, setSelectedMonth] = useState(() => currentPayrollMonth());
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedBranch, setSelectedBranch] = useState('all');
   const [payrollOverrides, setPayrollOverrides] = useState<PayrollOverrides>({});
-  const [excusedDays, setExcusedDays] = useState<ExcusedDays>({});
+
+  const period = data.run?.period ?? null;
+  const startDate = period?.start_date ?? '';
+  const endDate = period?.cutoff_date ?? '';
 
   const loadData = useCallback(async () => {
-    if (!startDate || !endDate) return;
     setLoading(true);
     try {
-      const policy = await fetchPayrollPolicy();
-      if (policy) {
-        setCycleStartDay(policy.startDay);
-        setCycleEndDay(policy.endDay);
-        const expected = getCycleDates(selectedMonth, policy.startDay, policy.endDay);
-        if (expected.start !== startDate || expected.end !== endDate) {
-          setPeriod(expected); // يعيد التحميل بالفترة الصحيحة
-          return;
-        }
-      }
-      setData(await fetchPayrollDataset(startDate, endDate, selectedMonth));
+      setData(await fetchPayrollDataset(selectedMonth));
     } catch (err: unknown) {
       console.error(err);
+      setData(EMPTY_DATASET);
       toast.error(`تعذر تحميل بيانات الرواتب: ${errorMessage(err)}`);
     } finally {
       setLoading(false);
     }
-  }, [startDate, endDate, selectedMonth]);
+  }, [selectedMonth]);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- جلب البيانات عند تغيّر الفترة
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- جلب البيانات عند تغيّر الشهر
     void loadData();
   }, [loadData]);
 
   const changeMonth = (month: string) => {
     setSelectedMonth(month);
-    setPeriod(getCycleDates(month, cycleStartDay, cycleEndDay));
+    setPayrollOverrides({});
   };
 
   // ------------------------------------------------------------------
-  // الحساب
+  // الصفوف (أرقام السيرفر + التعديلات اليدوية)
   // ------------------------------------------------------------------
-  const rows = useMemo(() => buildPayrollRows({
-    ...data, payrollOverrides, excusedDays, selectedMonth, startDate, endDate,
-  }), [data, payrollOverrides, excusedDays, selectedMonth, startDate, endDate]);
+  const rows = useMemo(() => (data.run ? buildPayrollRows({
+    run: data.run,
+    events: data.events,
+    overrides: payrollOverrides,
+    pendingLeaveEmployeeIds: data.pendingLeaveEmployeeIds,
+    attendanceEmployeeIds: data.attendanceEmployeeIds,
+  }) : []), [data, payrollOverrides]);
 
   const filteredRows = useMemo(() => rows.filter(row => {
     const matchesSearch = (row.full_name || '').toLowerCase().includes(searchTerm.toLowerCase());
@@ -88,16 +74,18 @@ export function usePayroll() {
 
   const totals = useMemo(() => sumPayroll(filteredRows), [filteredRows]);
   const pendingRows = useMemo(() => filteredRows.filter(r => !r.isIssued), [filteredRows]);
-  const isMonthArchived = data.archivedMonths.includes(selectedMonth);
-  const isSlipIssued = (employeeId: string) =>
-    data.existingSlips.some(s => s.employee_id === employeeId && s.work_month === selectedMonth);
+  const isMonthArchived = !!period?.archived;
+  const isPeriodClosed = period?.status === 'closed';
+  /** لا اعتماد ولا تعديل: الشهر مؤرشف أو المسير مغلق. */
+  const isLocked = isMonthArchived || isPeriodClosed;
+  const pendingDecisions = useMemo(() => rows.reduce((acc, r) => acc + r.pendingCount, 0), [rows]);
 
   // ------------------------------------------------------------------
-  // التعديلات اليدوية والإعفاءات
+  // التعديلات اليدوية
   // ------------------------------------------------------------------
   const saveOverride = (employeeId: string, field: OverrideField, value: number) => {
     setPayrollOverrides(prev => ({ ...prev, [employeeId]: { ...prev[employeeId], [field]: value } }));
-    toast.success('تم تعديل القيمة وتحديث صافي الراتب! 💸');
+    toast.success('تم تعديل القيمة — ستُحفظ كمكافأة/خصم عند الاعتماد 💸');
   };
 
   const clearOverride = (employeeId: string, field: OverrideField) => {
@@ -109,55 +97,74 @@ export function usePayroll() {
       else updated[employeeId] = empOverrides;
       return updated;
     });
-    toast.success('تمت استعادة القيمة التلقائية المحتسبة! 🔄');
+    toast.success('تمت استعادة القيمة المحتسبة! 🔄');
   };
 
-  const toggleExcuseDay = (employeeId: string, dateStr: string) => {
-    setExcusedDays(prev => {
-      const current = prev[employeeId] || [];
-      const updated = current.includes(dateStr) ? current.filter(d => d !== dateStr) : [...current, dateStr];
-      return { ...prev, [employeeId]: updated };
+  const clearEmployeeOverrides = (employeeId: string) =>
+    setPayrollOverrides(prev => {
+      const updated = { ...prev };
+      delete updated[employeeId];
+      return updated;
     });
-  };
 
   // ------------------------------------------------------------------
   // الإجراءات
   // ------------------------------------------------------------------
-  const addBonusDeduction = async (entry: { employeeId: string; type: 'bonus' | 'deduction'; amount: number; reason: string }) => {
-    setActionLoading('add_bd');
+  const run = async <T,>(key: string, fn: () => Promise<T>, onError: string): Promise<T | undefined> => {
+    setActionLoading(key);
     try {
-      await insertBonusDeduction(entry);
-      confetti({ particleCount: 50, spread: 40 });
-      toast.success('تم إضافة السجل بنجاح! ✅');
-      await loadData();
-      return true;
-    } catch {
-      toast.error('حدث خطأ أثناء الإضافة');
-      return false;
+      return await fn();
+    } catch (err: unknown) {
+      toast.error(`${onError}: ${errorMessage(err)}`);
+      return undefined;
     } finally {
       setActionLoading(null);
     }
   };
 
-  const approveRow = (row: PayrollRow) =>
-    approveSalarySlip(row, selectedMonth, buildSlipAdjustments(row, { selectedMonth, startDate, endDate }));
+  const addBonusDeduction = async (entry: { employeeId: string; type: 'bonus' | 'deduction'; amount: number; reason: string }) => {
+    // القيد يُسجَّل بآخر يوم في المسير المعروض حتى يدخل فيه (أو بتاريخ اليوم إن كان أقدم)
+    const today = new Date().toISOString().slice(0, 10);
+    const issueDate = endDate && today > endDate ? endDate : today < startDate ? startDate : today;
+    const ok = await run('add_bd', async () => {
+      await insertBonusDeduction({ ...entry, issueDate });
+      return true;
+    }, 'حدث خطأ أثناء الإضافة');
+    if (!ok) return false;
+    confetti({ particleCount: 50, spread: 40 });
+    toast.success('تم إضافة السجل بنجاح! ✅');
+    await loadData();
+    return true;
+  };
+
+  const decideEvent = async (eventId: string, approve: boolean, reason?: string) => {
+    const ok = await run(`decide_${eventId}`, async () => {
+      await decidePayrollEvent(eventId, approve, reason);
+      return true;
+    }, 'تعذر حفظ القرار');
+    if (!ok) return;
+    toast.success(approve ? 'تم اعتماد الحركة ✅' : 'تم الإعفاء 🟢');
+    await loadData();
+  };
+
+  const approveRow = async (row: PayrollRow) => {
+    await approvePayrollSlip(row.id, selectedMonth, buildSlipAdjustments(row, selectedMonth));
+    clearEmployeeOverrides(row.id);
+  };
 
   const generateSlip = async (row: PayrollRow) => {
-    if (isSlipIssued(row.id)) {
+    if (row.isIssued) {
       toast.error('تم صرف الراتب مسبقاً لهذا الموظف في هذا الشهر.');
       return;
     }
-    setActionLoading(`slip_${row.id}`);
-    try {
+    const ok = await run(`slip_${row.id}`, async () => {
       await approveRow(row);
-      confetti({ particleCount: 100, spread: 60, colors: ['#10B981', '#059669'] });
-      toast.success('تم اعتماد راتب الموظف بنجاح! 💸');
-      await loadData();
-    } catch (err: unknown) {
-      toast.error(`فشل اعتماد الراتب: ${errorMessage(err)}`);
-    } finally {
-      setActionLoading(null);
-    }
+      return true;
+    }, 'فشل اعتماد الراتب');
+    if (!ok) return;
+    confetti({ particleCount: 100, spread: 60, colors: ['#10B981', '#059669'] });
+    toast.success('تم اعتماد راتب الموظف بنجاح! 💸');
+    await loadData();
   };
 
   const bulkGenerateSlips = async (rowsToProcess: PayrollRow[]) => {
@@ -166,7 +173,7 @@ export function usePayroll() {
     const failed: string[] = [];
     try {
       for (const row of rowsToProcess) {
-        if (isSlipIssued(row.id)) continue;
+        if (row.isIssued) continue;
         try {
           await approveRow(row);
           successCount++;
@@ -188,23 +195,52 @@ export function usePayroll() {
   };
 
   const revertSlip = async (row: PayrollRow) => {
-    if (isMonthArchived) {
-      toast.error('هذا الشهر مؤرشف مالياً ومقفل تماماً 🔒');
+    if (isLocked) {
+      toast.error(isMonthArchived ? 'هذا الشهر مؤرشف مالياً ومقفل تماماً 🔒' : 'المسير مغلق. أعد فتحه أولاً 🔒');
       return;
     }
-    const slip = data.existingSlips.find(s => s.employee_id === row.id);
-    if (!slip) return;
+    if (!row.slipId) return;
+    const slipId = row.slipId;
+    const ok = await run(`revert_${row.id}`, async () => {
+      await revertPayrollSlip(slipId);
+      return true;
+    }, 'فشل في التراجع عن الاعتماد');
+    if (!ok) return;
+    toast.success('تم التراجع عن اعتماد الراتب بنجاح! 🔄');
+    await loadData();
+  };
 
-    setActionLoading(`revert_${row.id}`);
-    try {
-      await revertSalarySlip(slip.id, startDate, endDate);
-      toast.success('تم التراجع عن اعتماد الراتب بنجاح! 🔄');
-      await loadData();
-    } catch (err: unknown) {
-      toast.error(`فشل في التراجع عن الاعتماد: ${errorMessage(err)}`);
-    } finally {
-      setActionLoading(null);
+  const closePeriod = async () => {
+    const confirmed = window.confirm(
+      `إغلاق مسير (${selectedMonth})؟\n\n` +
+      `- لن يمكن اعتماد أو إلغاء أي كشف في هذا المسير.\n` +
+      `- أي تعديل لاحق على أيامه (غياب/تأخير/إعفاء) يُحسب تلقائياً كتسوية في أول مسير مفتوح.\n` +
+      `- الحركات المعلّقة بدون قرار تنتقل للمسير التالي.\n` +
+      `- يمكن إعادة فتحه لاحقاً مع كتابة السبب.`,
+    );
+    if (!confirmed) return;
+    const result = await run('close_period', () => closePayrollPeriod(selectedMonth), 'تعذر إغلاق المسير');
+    if (!result) return;
+    if (!result.success) {
+      let msg = result.error ?? '';
+      if (result.missing_employees?.length) msg += `\n\nبدون كشف معتمد:\n- ${result.missing_employees.join('\n- ')}`;
+      alert(msg);
+      return;
     }
+    toast.success(result.message || 'تم إغلاق المسير 🔒');
+    await loadData();
+  };
+
+  const reopenPeriod = async () => {
+    const reason = window.prompt('سبب إعادة فتح المسير (يُسجَّل للتدقيق):')?.trim();
+    if (!reason) return;
+    const ok = await run('reopen_period', async () => {
+      await reopenPayrollPeriod(selectedMonth, reason);
+      return true;
+    }, 'تعذر إعادة فتح المسير');
+    if (!ok) return;
+    toast.success('تمت إعادة فتح المسير 🔓');
+    await loadData();
   };
 
   const sendBranchNotifications = async () => {
@@ -229,6 +265,10 @@ export function usePayroll() {
   };
 
   const archiveMonth = async () => {
+    if (!isPeriodClosed && !period?.legacy) {
+      toast.error('أغلق المسير أولاً قبل الأرشفة 🔒');
+      return;
+    }
     const confirmed = window.confirm(
       `⚠️ تحذير أمني: هل أنت متأكد من أرشفة كشوف الرواتب لشهر (${selectedMonth})؟\n\n` +
       `عند الأرشفة:\n` +
@@ -240,37 +280,32 @@ export function usePayroll() {
     );
     if (!confirmed) return;
 
-    setActionLoading('archive_month');
-    try {
-      const result = await archivePayrollMonth(selectedMonth, cycleStartDay, cycleEndDay);
-      if (result && result.success === false) {
-        let msg = result.error ?? '';
-        if (result.missing_employees?.length) {
-          msg += `\n\nالموظفون الذين لم يتم اعتماد رواتبهم بعد:\n- ` + result.missing_employees.join('\n- ');
-        }
-        alert(msg);
-        toast.error(result.error || 'فشلت عملية الأرشفة');
-      } else {
-        toast.success(result?.message || 'تمت أرشفة الشهر بنجاح! 📦');
-        confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
-        await loadData();
+    const result = await run('archive_month', () => archivePayrollMonth(selectedMonth), 'خطأ أثناء الأرشفة');
+    if (!result) return;
+    if (result.success === false) {
+      let msg = result.error ?? '';
+      if (result.missing_employees?.length) {
+        msg += `\n\nالموظفون الذين لم يتم اعتماد رواتبهم بعد:\n- ` + result.missing_employees.join('\n- ');
       }
-    } catch (err: unknown) {
-      console.error(err);
-      toast.error(`خطأ أثناء الأرشفة: ${errorMessage(err)}`);
-    } finally {
-      setActionLoading(null);
+      alert(msg);
+      toast.error(result.error || 'فشلت عملية الأرشفة');
+      return;
     }
+    toast.success(result.message || 'تمت أرشفة الشهر بنجاح! 📦');
+    confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+    await loadData();
   };
 
   return {
     loading, actionLoading, sendingNotifs,
     branches: data.branches,
-    selectedMonth, startDate, endDate, changeMonth,
+    period, selectedMonth, startDate, endDate, changeMonth,
     searchTerm, setSearchTerm, selectedBranch, setSelectedBranch,
-    rows, filteredRows, pendingRows, totals, isMonthArchived,
-    payrollOverrides, saveOverride, clearOverride, toggleExcuseDay,
-    addBonusDeduction, generateSlip, bulkGenerateSlips, revertSlip, sendBranchNotifications, archiveMonth,
+    rows, filteredRows, pendingRows, totals, pendingDecisions,
+    isMonthArchived, isPeriodClosed, isLocked,
+    payrollOverrides, saveOverride, clearOverride,
+    addBonusDeduction, decideEvent, generateSlip, bulkGenerateSlips, revertSlip,
+    closePeriod, reopenPeriod, sendBranchNotifications, archiveMonth,
   };
 }
 

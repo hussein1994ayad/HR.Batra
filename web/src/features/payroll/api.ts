@@ -1,79 +1,48 @@
 // استعلامات Supabase الخاصة بصفحة الرواتب.
+// الحساب كله في السيرفر (محرّك الرواتب)؛ الموقع يعرض النتيجة ويرسل القرارات.
 
 import { supabase } from '@/lib/supabase';
-import type {
-  AttendanceRecord, BonusDeduction, Branch, Employee, LeaveRequest, LoanInstallment, SalarySlip, WorkSchedule,
-} from '@/lib/db-types';
+import type { Branch } from '@/lib/db-types';
+import type { PayrollEvent, PayrollRun } from './calc';
 import type { SlipAdjustment } from './types';
-import type { PayrollRow } from './calc';
 
 export interface PayrollDataset {
+  run: PayrollRun | null;
+  events: PayrollEvent[];
   branches: Pick<Branch, 'id' | 'name'>[];
-  employees: Employee[];
-  bonusesAndDeductions: BonusDeduction[];
-  loanInstallments: LoanInstallment[];
-  attendanceLogs: AttendanceRecord[];
-  leaveRequests: LeaveRequest[];
-  workSchedules: WorkSchedule[];
-  existingSlips: SalarySlip[];
-  archivedMonths: string[];
+  pendingLeaveEmployeeIds: string[];
+  attendanceEmployeeIds: string[];
 }
 
-/** يوم بداية ونهاية الدورة المالية من system_settings (payroll_policy)، أو null إن لم تُضبط. */
-export async function fetchPayrollPolicy(): Promise<{ startDay: number; endDay: number } | null> {
-  const { data, error } = await supabase
-    .from('system_settings')
-    .select('value')
-    .eq('key', 'payroll_policy')
-    .maybeSingle();
+/** مسير شهر (YYYY-MM): السيرفر يزامن الحركات ثم يرجع الفترة وصف لكل موظف. */
+export async function fetchPayrollDataset(month: string): Promise<PayrollDataset> {
+  const { data: run, error } = await supabase.rpc('get_payroll_run', { p_month: month });
   if (error) throw error;
-  if (!data?.value) return null;
-  return {
-    startDay: data.value.cycle_start_day || 25,
-    endDay: data.value.cycle_end_day || 24,
-  };
-}
+  const period = (run as PayrollRun).period;
 
-/** كل البيانات التي يحتاجها حساب رواتب دورة معيّنة. */
-export async function fetchPayrollDataset(startDate: string, endDate: string, month: string): Promise<PayrollDataset> {
-  const [resBrs, resEmps, resBds, resLoans, resAtt, resLvs, resScheds, resSlips, resArchived] = await Promise.all([
+  const [resEvents, resBranches, resLeaves, resAtt] = await Promise.all([
+    supabase.rpc('get_payroll_events', { p_month: month }),
     supabase.from('branches').select('id, name'),
-    supabase.from('employees')
-      .select('id, full_name, monthly_salary_iqd, future_salary_iqd, future_salary_month, branch_id, department_id, created_at, join_date, branches(name)')
-      .eq('is_active', true)
-      .order('full_name'),
-    supabase.from('bonuses_deductions').select('*').gte('issue_date', startDate).lte('issue_date', endDate),
-    supabase.from('loan_installments')
-      .select('*, loans!inner(employee_id)')
-      .gte('due_date', startDate)
-      .lte('due_date', endDate)
-      .eq('is_paid', false),
-    supabase.from('attendance').select('*').gte('work_date', startDate).lte('work_date', endDate),
     supabase.from('leave_requests')
-      .select('*')
-      .in('status', ['approved', 'pending'])
-      .lte('start_date', endDate)
-      .gte('end_date', startDate),
-    supabase.from('work_schedules').select('*'),
-    supabase.from('salary_slips').select('*').eq('work_month', month),
-    supabase.from('archived_months').select('work_month'),
+      .select('employee_id')
+      .eq('status', 'pending')
+      .lte('start_date', `${period.cutoff_date}T23:59:59`)
+      .gte('end_date', period.start_date),
+    supabase.from('attendance')
+      .select('employee_id')
+      .gte('work_date', period.start_date)
+      .lte('work_date', period.cutoff_date),
   ]);
-
-  const firstError = [resBrs, resEmps, resBds, resLoans, resAtt, resLvs, resScheds, resSlips, resArchived]
-    .find(r => r.error)?.error;
+  const firstError = [resEvents, resBranches, resLeaves, resAtt].find(r => r.error)?.error;
   if (firstError) throw firstError;
 
+  const ids = (rows: { employee_id: string }[] | null) => [...new Set((rows ?? []).map(r => r.employee_id))];
   return {
-    branches: resBrs.data ?? [],
-    // supabase-js بدون أنواع مولّدة يستنتج العلاقة branches كمصفوفة، وهي فعلياً كائن واحد
-    employees: (resEmps.data ?? []) as unknown as Employee[],
-    bonusesAndDeductions: resBds.data ?? [],
-    loanInstallments: resLoans.data ?? [],
-    attendanceLogs: resAtt.data ?? [],
-    leaveRequests: resLvs.data ?? [],
-    workSchedules: resScheds.data ?? [],
-    existingSlips: resSlips.data ?? [],
-    archivedMonths: (resArchived.data ?? []).map((r: { work_month: string }) => r.work_month),
+    run: run as PayrollRun,
+    events: (resEvents.data ?? []) as PayrollEvent[],
+    branches: resBranches.data ?? [],
+    pendingLeaveEmployeeIds: ids(resLeaves.data),
+    attendanceEmployeeIds: ids(resAtt.data),
   };
 }
 
@@ -82,6 +51,8 @@ export async function insertBonusDeduction(entry: {
   type: 'bonus' | 'deduction';
   amount: number;
   reason: string;
+  /** تاريخ القيد (يحدد مسيره: حتى يوم القطع لنفس الشهر، بعده للشهر التالي). */
+  issueDate: string;
 }): Promise<void> {
   const { data: { user } } = await supabase.auth.getUser();
   const { error } = await supabase.from('bonuses_deductions').insert({
@@ -89,35 +60,50 @@ export async function insertBonusDeduction(entry: {
     type: entry.type,
     amount: entry.amount,
     reason: entry.reason,
-    issue_date: new Date().toISOString().split('T')[0],
+    issue_date: entry.issueDate,
     created_by: user?.id,
   });
   if (error) throw error;
 }
 
-/** الكشف + تسديد الأقساط + القيود كلها في transaction واحدة بالسيرفر. */
-export async function approveSalarySlip(row: PayrollRow, month: string, adjustments: SlipAdjustment[]): Promise<void> {
-  const { error } = await supabase.rpc('approve_salary_slip', {
-    p_employee_id: row.id,
-    p_work_month: month,
-    p_basic_salary: row.basic,
-    p_allowances: row.totalBonuses,
-    p_deductions: row.totalDeductions,
-    p_loans_deduction: row.loanDeduction,
-    p_net_salary: row.netSalary,
-    p_installment_ids: row.loanInstallmentIds ?? [],
+/** اعتماد كشف موظف: السيرفر يحسب الأرقام ويحفظ التفاصيل ويسدد الأقساط (transaction واحدة). */
+export async function approvePayrollSlip(employeeId: string, month: string, adjustments: SlipAdjustment[]): Promise<void> {
+  const { error } = await supabase.rpc('approve_payroll_slip', {
+    p_employee_id: employeeId,
+    p_month: month,
     p_adjustments: adjustments,
   });
   if (error) throw error;
 }
 
-/** يحذف الكشف ويُرجع نفس الأقساط والقيود التي أنشأها (transaction واحدة). */
-export async function revertSalarySlip(slipId: string, periodStart: string, periodEnd: string): Promise<void> {
-  const { error } = await supabase.rpc('revert_salary_slip', {
-    p_slip_id: slipId,
-    p_period_start: periodStart,
-    p_period_end: periodEnd,
+/** إلغاء اعتماد كشف (المسير يجب أن يكون مفتوحاً). */
+export async function revertPayrollSlip(slipId: string): Promise<void> {
+  const { error } = await supabase.rpc('revert_payroll_slip', { p_slip_id: slipId });
+  if (error) throw error;
+}
+
+/** قرار الإدارة على حركة: اعتماد الخصم/الإضافي أو الإعفاء منه. */
+export async function decidePayrollEvent(eventId: string, approve: boolean, reason?: string): Promise<void> {
+  const { error } = await supabase.rpc('decide_payroll_event', {
+    p_event_id: eventId,
+    p_approve: approve,
+    p_reason: reason ?? null,
   });
+  if (error) throw error;
+}
+
+export type PeriodResult =
+  | { success: true; message?: string }
+  | { success: false; error?: string; missing_employees?: string[] };
+
+export async function closePayrollPeriod(month: string): Promise<PeriodResult> {
+  const { data, error } = await supabase.rpc('close_payroll_period', { p_month: month });
+  if (error) throw error;
+  return data as PeriodResult;
+}
+
+export async function reopenPayrollPeriod(month: string, reason: string): Promise<void> {
+  const { error } = await supabase.rpc('reopen_payroll_period', { p_month: month, p_reason: reason });
   if (error) throw error;
 }
 
@@ -145,7 +131,7 @@ export async function notifyBranchPayslips(branchId: string, month: string): Pro
   const { error: notifErr } = await supabase.from('notifications').insert(slips.map(slip => ({
     employee_id: slip.employee_id,
     title: 'اعتماد ونشر كشف الراتب 💸',
-    body: `تم اعتماد وصرف كشف راتبك لشهر (${month}) بصافي مستلم قدره (${slip.net_salary.toLocaleString()} د.ع). يمكنك الاطلاع عليه من التطبيق.`,
+    body: `تم اعتماد وصرف كشف راتبك لشهر (${month}) بصافي مستلم قدره (${Number(slip.net_salary).toLocaleString('en-US')} د.ع). يمكنك الاطلاع عليه من التطبيق.`,
     type: 'salary',
     is_read: false,
   })));
@@ -153,16 +139,13 @@ export async function notifyBranchPayslips(branchId: string, month: string): Pro
   return { sent: slips.length };
 }
 
-export type ArchiveResult =
-  | { success: true; message?: string }
-  | { success: false; error?: string; missing_employees?: string[] };
-
-export async function archivePayrollMonth(month: string, cycleStartDay: number, cycleEndDay: number): Promise<ArchiveResult> {
+export async function archivePayrollMonth(month: string): Promise<PeriodResult> {
+  // أشهر المحرّك تُؤرشف بتواريخ مسيرها المحفوظة؛ الأيام هنا للأشهر القديمة فقط
   const { data, error } = await supabase.rpc('safe_archive_payroll_month', {
     target_month: month,
-    cycle_start_day: cycleStartDay,
-    cycle_end_day: cycleEndDay,
+    cycle_start_day: 1,
+    cycle_end_day: 31,
   });
   if (error) throw error;
-  return data as ArchiveResult;
+  return data as PeriodResult;
 }

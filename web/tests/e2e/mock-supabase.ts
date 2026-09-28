@@ -3,6 +3,7 @@
 // tests can assert which writes the UI performed.
 
 import type { Page, Request } from '@playwright/test';
+import { currentPayrollMonth } from '../../src/features/payroll/period';
 
 export const PROJECT_REF = 'jgjlmddphhncatrhqrej';
 export const ADMIN = { id: 'admin-1', email: 'admin@hrpro.com', password: 'secret123', full_name: 'حسين أياد' };
@@ -106,6 +107,36 @@ function applyFilters(rows: Row[], url: URL): Row[] {
   return out;
 }
 
+/** مسير الشهر الحالي كما يرجعه محرّك الرواتب (get_payroll_run) لموظفي الـ fixtures. */
+export function payrollRunFixture() {
+  const month = currentPayrollMonth();
+  const today = localDate();
+  const row = (id: string, name: string, branch: string, branchName: string, salary: number, extra: Record<string, unknown> = {}) => ({
+    employee_id: id, full_name: name, branch_id: branch, branch_name: branchName, is_active: true,
+    period_days: 30, employed_days: 30, monthly_salary: salary, daily_rate: salary / 30, minute_rate: salary / 30 / 480, shift_minutes: 480,
+    basic: salary, earnings: 0, bonuses: 0, overtime: 0, deductions: 0, attendance_deductions: 0, loans: 0, net: salary,
+    pending_count: 0, missing_punches: 0, absence_days: 0, late_minutes: 0, early_minutes: 0, overtime_minutes: 0,
+    paid_leave_days: 0, unpaid_leave_days: 0, slip: null, ...extra,
+  });
+  return {
+    get_payroll_run: {
+      period: { period_month: month, start_date: `${month}-01`, cutoff_date: `${month}-26`, payment_date: `${month}-30`, status: 'open', archived: false },
+      rows: [
+        row(ADMIN.id, ADMIN.full_name, 'b1', 'فرع الكرادة', 2000000),
+        // 900,000 + 50,000 مكافأة − 20,000 خصم − 100,000 قسط سلفة
+        row('e1', 'زينب علي', 'b1', 'فرع الكرادة', 900000, { earnings: 50000, bonuses: 50000, deductions: 20000, loans: 100000, net: 830000 }),
+        row('e2', 'مصطفى حسن', 'b2', 'فرع المنصور', 750000, { deductions: 25000, attendance_deductions: 25000, absence_days: 1, net: 725000, pending_count: 1 }),
+      ],
+    },
+    get_payroll_events: [
+      { id: 'pe1', employee_id: 'e1', event_date: today, event_type: 'bonus', minutes: 0, days: 0, amount: 50000, direction: 1, payroll_month: month, status: 'approved', source: 'manual', notes: 'مكافأة أداء' },
+      { id: 'pe2', employee_id: 'e1', event_date: today, event_type: 'manual_deduction', minutes: 0, days: 0, amount: 20000, direction: -1, payroll_month: month, status: 'approved', source: 'manual', notes: 'خصم إداري' },
+      { id: 'pe3', employee_id: 'e2', event_date: today, event_type: 'absence', minutes: 0, days: 1, amount: 25000, direction: -1, payroll_month: month, status: 'approved', source: 'attendance' },
+      { id: 'pe4', employee_id: 'e2', event_date: today, event_type: 'late', minutes: 40, days: 0, amount: 1042, direction: -1, payroll_month: month, status: 'pending', source: 'attendance' },
+    ],
+  };
+}
+
 export interface MockOptions {
   fixtures?: Record<string, Row[]>;
   loggedIn?: boolean;
@@ -115,7 +146,7 @@ export interface MockOptions {
 export async function mockSupabase(page: Page, options: MockOptions = {}) {
   const fixtures = options.fixtures ?? defaultFixtures();
   const calls: RecordedCall[] = [];
-  const rpc = { get_storage_stats: [{ bucket_name: 'employee-documents', total_size: 52428800 }], perform_daily_cleanup: null, ...options.rpc };
+  const rpc = { get_storage_stats: [{ bucket_name: 'employee-documents', total_size: 52428800 }], perform_daily_cleanup: null, ...payrollRunFixture(), ...options.rpc };
 
   if (options.loggedIn !== false) {
     const session = sessionFor();

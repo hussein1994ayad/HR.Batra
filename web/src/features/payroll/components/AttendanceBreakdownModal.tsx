@@ -1,27 +1,33 @@
-import { Banknote, CalendarRange, Clock, Info, Plus, Printer, RotateCcw, TrendingDown, TrendingUp } from 'lucide-react';
-import type { BonusDeduction } from '@/lib/db-types';
+import { Banknote, CalendarRange, Check, Clock, Info, Plus, Printer, TrendingDown, TrendingUp, X } from 'lucide-react';
 import { Badge, Button, InfoNote, Modal, StatTile, type Tone } from '@/components/ui';
 import { formatIQD } from '@/lib/format';
-import type { PayrollRow } from '../calc';
+import { DECIDABLE, describeEvent, type EntryItem, type PayrollEvent, type PayrollRow } from '../calc';
 
 type Props = {
   row: PayrollRow;
   startDate: string;
   endDate: string;
+  locked: boolean;
+  actionLoading: string | null;
   onClose: () => void;
   onAddAdjustment: (type: 'bonus' | 'deduction') => void;
-  onToggleExcuse: (date: string) => void;
+  onDecide: (eventId: string, approve: boolean) => void;
 };
 
-function dayTone(status: string): Tone {
-  if (status.includes('حاضر') || status.includes('معفى')) return 'emerald';
-  if (status.includes('غياب')) return 'rose';
-  if (status.includes('إجازة')) return 'sky';
-  if (status.includes('تأخير') || status.includes('نصف')) return 'amber';
-  return 'slate';
+const STATUS: Record<PayrollEvent['status'], { label: string; tone: Tone }> = {
+  pending: { label: 'بانتظار القرار', tone: 'amber' },
+  approved: { label: 'محتسب', tone: 'rose' },
+  ignored: { label: 'معفى', tone: 'emerald' },
+  void: { label: 'ملغى', tone: 'slate' },
+};
+
+function statusOf(e: PayrollEvent) {
+  if (e.status === 'approved' && e.direction === 1) return { label: 'مضاف', tone: 'emerald' as Tone };
+  if (e.status === 'approved' && e.direction === 0) return { label: 'بدون أثر مالي', tone: 'sky' as Tone };
+  return STATUS[e.status];
 }
 
-function EntryList({ items, sign, tone, empty }: { items: BonusDeduction[]; sign: '+' | '−'; tone: 'emerald' | 'rose'; empty: string }) {
+function EntryList({ items, sign, tone, empty }: { items: EntryItem[]; sign: '+' | '−'; tone: 'emerald' | 'rose'; empty: string }) {
   if (items.length === 0) return <p className="text-center py-4 text-xs text-slate-500">{empty}</p>;
   return (
     <div className="space-y-2 max-h-[140px] overflow-y-auto">
@@ -40,30 +46,33 @@ function EntryList({ items, sign, tone, empty }: { items: BonusDeduction[]; sign
   );
 }
 
-/** تفاصيل حضور وخصومات موظف خلال الدورة مع إمكانية إعفاء أيام الغياب. */
-export function AttendanceBreakdownModal({ row, startDate, endDate, onClose, onAddAdjustment, onToggleExcuse }: Props) {
+/** تفاصيل حركات موظف في المسير (غياب، تأخير، خروج مبكر، إضافي...) مع قرار الإدارة على المعلّق منها. */
+export function AttendanceBreakdownModal({ row, startDate, endDate, locked, actionLoading, onClose, onAddAdjustment, onDecide }: Props) {
   const lateHint = [row.latesCount > 0 && `${row.latesCount} تأخير`, row.earlyExitsCount > 0 && `${row.earlyExitsCount} خروج مبكر`]
     .filter(Boolean).join(' · ');
+  const canDecide = !locked && !row.isIssued;
 
   return (
     <Modal title="تفاصيل الحضور والخصومات" subtitle={`${row.full_name} · ${startDate} ← ${endDate}`} icon={CalendarRange} tone="indigo" size="lg" onClose={onClose}>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
-        <StatTile label="أيام العمل" value={row.scheduledWorkDays} tone="slate" className="!p-3" />
-        <StatTile label="الحضور" value={row.presentsCount} tone="emerald" className="!p-3" hint={lateHint || undefined} />
-        <StatTile label="غيابات بخصم" value={row.absencesCount} tone="rose" className="!p-3" />
+        <StatTile label="بانتظار القرار" value={row.pendingCount} tone={row.pendingCount > 0 ? 'amber' : 'slate'} className="!p-3" />
+        <StatTile label="غيابات بخصم" value={row.absencesCount} tone="rose" className="!p-3" hint={lateHint || undefined} />
+        <StatTile label="دقائق التأخير" value={row.totalLateMinutes} tone="amber" className="!p-3" />
         <StatTile label="إجازات مدفوعة" value={row.paidLeavesCount} tone="sky" className="!p-3" />
       </div>
 
       <InfoNote tone="indigo" icon={Info} className="mb-5">
-        <p>أجرة اليوم = {formatIQD(row.basic)} ÷ 30 = <b>{formatIQD(row.basic / 30)}</b></p>
-        {row.absencesCount > 0 && <p>خصم الغياب = {row.absencesCount} يوم × أجرة اليوم = <b>{formatIQD(row.absenceDeduction)}</b></p>}
-        {row.halfDaysCount > 0 && <p>خصم أنصاف الأيام = {row.halfDaysCount} × نصف أجرة يوم = <b>{formatIQD(row.halfDayDeduction)}</b></p>}
-        {row.totalLateMinutes > 0 && (
-          <p>خصم التأخير = {row.totalLateMinutes} دقيقة × (أجرة اليوم ÷ 480 دقيقة) = <b>{formatIQD(row.latenessDeduction)}</b></p>
+        <p>أجر اليوم = {formatIQD(row.monthlySalary)} ÷ 30 = <b>{formatIQD(row.dailyRate)}</b></p>
+        <p>
+          أجر الدقيقة = أجر اليوم ÷ {row.shiftMinutes} دقيقة دوام = <b>{row.minuteRate.toLocaleString('en-US', { maximumFractionDigits: 2 })} د.ع</b>
+        </p>
+        {row.employedDays < row.periodDays && (
+          <p>الأساسي = {row.employedDays} يوم خدمة × أجر اليوم = <b>{formatIQD(row.basic)}</b></p>
         )}
-        {row.totalEarlyExitMinutes > 0 && (
-          <p>خصم الخروج المبكر = {row.totalEarlyExitMinutes} دقيقة = <b>{formatIQD(row.earlyExitDeduction)}</b></p>
-        )}
+        {row.absenceDeduction > 0 && <p>خصم الغياب = {row.absencesCount} يوم = <b>{formatIQD(row.absenceDeduction)}</b></p>}
+        {row.latenessDeduction > 0 && <p>خصم التأخير = {row.totalLateMinutes} دقيقة = <b>{formatIQD(row.latenessDeduction)}</b></p>}
+        {row.earlyExitDeduction > 0 && <p>خصم الخروج المبكر = {row.totalEarlyExitMinutes} دقيقة = <b>{formatIQD(row.earlyExitDeduction)}</b></p>}
+        {row.unpaidLeaveDeduction > 0 && <p>إجازات بدون راتب = <b>{formatIQD(row.unpaidLeaveDeduction)}</b></p>}
         <p className="mt-1 pt-1 border-t border-indigo-500/20">إجمالي خصومات الدوام = <b className="text-white">{formatIQD(row.totalAttendanceDeductions)}</b></p>
       </InfoNote>
 
@@ -71,49 +80,68 @@ export function AttendanceBreakdownModal({ row, startDate, endDate, onClose, onA
         <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-4">
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-bold text-emerald-300 flex items-center gap-1.5">
-              <TrendingUp className="w-4 h-4" /> المكافآت ({formatIQD(row.totalBonuses)})
+              <TrendingUp className="w-4 h-4" /> المكافآت والإضافي ({formatIQD(row.totalBonuses)})
             </span>
-            <Button size="xs" variant="soft-success" icon={Plus} onClick={() => onAddAdjustment('bonus')}>إضافة</Button>
+            {!locked && <Button size="xs" variant="soft-success" icon={Plus} onClick={() => onAddAdjustment('bonus')}>إضافة</Button>}
           </div>
-          <EntryList items={row.bonusesList ?? []} sign="+" tone="emerald" empty="لا توجد مكافآت خلال هذه الدورة" />
+          <EntryList items={row.bonusesList} sign="+" tone="emerald" empty="لا توجد مكافآت خلال هذا المسير" />
         </div>
         <div className="rounded-2xl border border-rose-500/20 bg-rose-500/5 p-4">
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-bold text-rose-300 flex items-center gap-1.5">
-              <TrendingDown className="w-4 h-4" /> الخصومات ({formatIQD((row.totalDeductions || 0) - (row.totalAttendanceDeductions || 0))})
+              <TrendingDown className="w-4 h-4" /> الخصومات ({formatIQD(row.totalDeductions - row.totalAttendanceDeductions)})
             </span>
-            <Button size="xs" variant="soft-danger" icon={Plus} onClick={() => onAddAdjustment('deduction')}>إضافة</Button>
+            {!locked && <Button size="xs" variant="soft-danger" icon={Plus} onClick={() => onAddAdjustment('deduction')}>إضافة</Button>}
           </div>
-          <EntryList items={row.otherDeductionsList ?? []} sign="−" tone="rose" empty="لا توجد خصومات إدارية خلال هذه الدورة" />
+          <EntryList items={row.otherDeductionsList} sign="−" tone="rose" empty="لا توجد خصومات إدارية خلال هذا المسير" />
         </div>
       </div>
 
       {row.loanDeduction > 0 && (
         <InfoNote tone="orange" icon={Banknote} className="mb-5">
-          قسط السلفة المستحق لهذا الشهر: <b className="font-mono">−{row.loanDeduction.toLocaleString('en-US')} د.ع</b>
+          قسط السلفة المستحق لهذا المسير: <b className="font-mono">−{row.loanDeduction.toLocaleString('en-US')} د.ع</b>
         </InfoNote>
       )}
 
       <p className="text-[11px] text-slate-400 mb-2 flex items-center gap-1.5">
-        <Clock className="w-3.5 h-3.5" /> يوميات الدورة — يمكنك إعفاء أيام الغياب المعفاة إدارياً
+        <Clock className="w-3.5 h-3.5" /> حركات المسير — الغياب والتأخير والخروج المبكر لا تُخصم إلا بعد اعتمادك
       </p>
       <div className="max-h-[300px] overflow-y-auto rounded-2xl border border-slate-800/80 divide-y divide-slate-800/70">
-        {row.detailLogs.map((log) => (
-          <div key={log.date} className="p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-            <div className="flex items-center gap-2.5">
-              <span className="font-mono text-slate-400" dir="ltr">{log.date}</span>
-              <Badge tone={dayTone(log.status)}>{log.status}</Badge>
-              {log.time !== '-' && <span className="text-slate-500 font-mono" dir="ltr">{log.time}</span>}
+        {row.events.length === 0 && <p className="text-center py-6 text-xs text-slate-500">لا توجد حركات في هذا المسير</p>}
+        {row.events.map((e) => {
+          const st = statusOf(e);
+          const busy = actionLoading === `decide_${e.id}`;
+          const decidable = canDecide && e.status === 'pending' && DECIDABLE.includes(e.event_type) && !e.salary_slip_id;
+          return (
+            <div key={e.id} className="p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-mono text-slate-400" dir="ltr">{e.event_date}</span>
+                <span className="font-bold text-white">{describeEvent(e)}</span>
+                <Badge tone={st.tone}>{st.label}</Badge>
+                {e.carried_from && <Badge tone="violet">مرحّل من {e.carried_from}</Badge>}
+                {e.notes && <span className="text-slate-500">{e.notes}</span>}
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {Number(e.amount) > 0 && (
+                  <span className={`font-mono font-bold ${e.direction === 1 ? 'text-emerald-300' : 'text-rose-300'}`}>
+                    {e.direction === 1 ? '+' : '−'}{Number(e.amount).toLocaleString('en-US')}
+                  </span>
+                )}
+                {decidable && (
+                  <>
+                    <Button size="xs" variant={e.direction === 1 ? 'soft-success' : 'soft-danger'} icon={Check} loading={busy}
+                      onClick={() => onDecide(e.id, true)}>
+                      {e.direction === 1 ? 'اعتماد' : e.event_type === 'missing_punch' ? 'تأكيد' : 'خصم'}
+                    </Button>
+                    <Button size="xs" variant="soft-success" icon={X} disabled={busy} onClick={() => onDecide(e.id, false)}>
+                      {e.direction === 1 ? 'رفض' : 'إعفاء'}
+                    </Button>
+                  </>
+                )}
+              </div>
             </div>
-            {log.isAbsenceDay ? (
-              <Button size="xs" variant={log.isExcused ? 'soft-danger' : 'soft-success'} icon={RotateCcw} disabled={row.isIssued} onClick={() => onToggleExcuse(log.date)}>
-                {log.isExcused ? 'إلغاء الإعفاء' : 'إعفاء'}
-              </Button>
-            ) : (
-              <span className="text-[11px] text-slate-500 sm:text-left">{log.note}</span>
-            )}
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       <div className="flex justify-between items-center pt-4 mt-5 border-t border-slate-800/80">

@@ -241,6 +241,18 @@ const legacyEv = await ev(IDS.emp2, '2026-11-03', 'absence');
 check('event inside a month with a legacy (browser) slip is treated as already paid',
   legacyEv.payroll_month === '2026-11' && legacyEv.salary_slip_id !== null);
 
+// ---------------- التوافق مع النسخ القديمة ----------------
+await db.query(`INSERT INTO system_settings (key, value) VALUES ('payroll_policy', '{"cycle_start_day": 1, "cycle_end_day": 31}')
+  ON CONFLICT (key) DO UPDATE SET value = excluded.value`);
+const pol = (await one(`SELECT value FROM system_settings WHERE key='payroll_policy'`)).value;
+check('old settings page overwrite keeps the engine keys (cutoff 26, cycle 27→26)',
+  pol.cutoff_day === 26 && pol.cycle_start_day === 27 && pol.cycle_end_day === 26 && pol.no_record_from === '2026-09-02', JSON.stringify(pol));
+await db.query(`INSERT INTO salary_slips (employee_id, work_month, basic_salary, net_salary, status) VALUES ($1, '2026-08', 1000000, 990000, 'published')`, [IDS.emp]);
+const legacyRun = await run('2026-08');
+check('months before the engine show their stored slips (read-only)',
+  legacyRun.period.legacy === true && legacyRun.rows.length === 1 && N(legacyRun.rows[0].net) === 990000 && legacyRun.rows[0].slip.legacy === true,
+  JSON.stringify(legacyRun));
+
 // ---------------- الصلاحيات ----------------
 await expectError('employee cannot run payroll', as(db, 'emp', `SELECT get_payroll_run('2026-09')`), 'غير مصرح');
 await expectError('employee cannot decide events', as(db, 'emp', `SELECT decide_payroll_event($1, false, NULL)`, [el.id]), 'غير مصرح');

@@ -1,27 +1,25 @@
 import { Gavel } from 'lucide-react';
-import { AmountInput, Avatar, Badge, Button, Card, CardHeader, DataTable, Input, TableEmpty } from '@/components/ui';
+import { Avatar, Badge, Button, Card, CardHeader, DataTable, Input, TableEmpty } from '@/components/ui';
 import { decisionKey } from '../logic';
 import type { Decision } from '../types';
 
 type Props = {
   decisionsList: Decision[];
-  selectedAmounts: Record<string, string>;
   selectedReasons: Record<string, string>;
   busyKey?: string | null;
-  onAmountChange: (key: string, value: string) => void;
   onReasonChange: (key: string, value: string) => void;
-  onDecide: (item: Decision, status: 'applied' | 'ignored', reason: string, amount: number) => void;
+  onDecide: (item: Decision, status: 'applied' | 'ignored', reason: string) => void;
 };
 
 /** قرارات الخصم أو الإعفاء لكل غياب وتأخير في الفترة. */
-export function DecisionsTable({ decisionsList, selectedAmounts, selectedReasons, busyKey, onAmountChange, onReasonChange, onDecide }: Props) {
+export function DecisionsTable({ decisionsList, selectedReasons, busyKey, onReasonChange, onDecide }: Props) {
   return (
     <Card>
       <CardHeader
         icon={Gavel}
         tone="amber"
         title="قرارات الغياب والتأخير"
-        description="«تطبيق» يخصم المبلغ من صافي الراتب، و«تجاهل» يعفي الموظف دون التأثير على راتبه"
+        description="«تطبيق» يخصم المبلغ المحسوب (أجر اليوم = الراتب ÷ 30، والتأخير بالدقيقة من بداية الدوام)، و«تجاهل» يعفي الموظف"
       />
       <DataTable>
         <thead>
@@ -41,7 +39,6 @@ export function DecisionsTable({ decisionsList, selectedAmounts, selectedReasons
           ) : (
             decisionsList.map((item) => {
               const key = decisionKey(item);
-              const amount = selectedAmounts[key] !== undefined ? Number(selectedAmounts[key]) || 0 : item.suggestedAmount;
               const reason = selectedReasons[key] ?? item.reason;
               const busy = busyKey === key;
               return (
@@ -63,7 +60,13 @@ export function DecisionsTable({ decisionsList, selectedAmounts, selectedReasons
                   </td>
                   <td className="whitespace-nowrap">{item.duration}</td>
                   <td>
-                    <AmountInput value={amount} onValueChange={(v) => onAmountChange(key, String(v))} className="h-8 w-28 text-xs" />
+                    {item.suggestedAmount > 0 ? (
+                      <span className={`font-mono font-bold whitespace-nowrap ${item.deductionStatus === 'ignored' ? 'text-slate-500 line-through' : 'text-rose-300'}`}>
+                        {item.suggestedAmount.toLocaleString('en-US')}
+                      </span>
+                    ) : (
+                      <span className="text-[11px] text-slate-500">يُحسب تلقائياً</span>
+                    )}
                   </td>
                   <td>
                     <Input value={reason} onChange={(e) => onReasonChange(key, e.target.value)} className="h-8 min-w-[200px] text-xs" />
@@ -74,7 +77,7 @@ export function DecisionsTable({ decisionsList, selectedAmounts, selectedReasons
                         size="xs"
                         variant={item.deductionStatus === 'applied' ? 'success' : 'soft-success'}
                         disabled={busy}
-                        onClick={() => onDecide(item, 'applied', reason, amount)}
+                        onClick={() => onDecide(item, 'applied', reason)}
                       >
                         تطبيق
                       </Button>
@@ -82,7 +85,7 @@ export function DecisionsTable({ decisionsList, selectedAmounts, selectedReasons
                         size="xs"
                         variant={item.deductionStatus === 'ignored' ? 'secondary' : 'ghost'}
                         disabled={busy}
-                        onClick={() => onDecide(item, 'ignored', reason, 0)}
+                        onClick={() => onDecide(item, 'ignored', reason)}
                       >
                         تجاهل
                       </Button>
