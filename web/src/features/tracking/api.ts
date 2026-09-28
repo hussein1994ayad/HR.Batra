@@ -12,6 +12,8 @@ export interface TrackingDataset {
   leaveRequests: LeaveRequest[];
   attendanceLogs: AttendanceRecord[];
   securityLogs: MockGpsAttempt[];
+  /** مبلغ الخصم كما يحسبه محرّك الرواتب: `${employeeId}_${date}_${late|absent}` → د.ع */
+  payrollAmounts: Record<string, number>;
 }
 
 export async function fetchTrackingDataset(filters: {
@@ -36,6 +38,7 @@ export async function fetchTrackingDataset(filters: {
 
   let attendanceLogs: AttendanceRecord[] = [];
   let securityLogs: MockGpsAttempt[] = [];
+  const payrollAmounts: Record<string, number> = {};
   if (startDate && endDate) {
     let attQuery = supabase.from('attendance')
       .select('*, employees!employee_id(full_name, branch_id)')
@@ -43,12 +46,22 @@ export async function fetchTrackingDataset(filters: {
       .lte('work_date', endDate);
     if (selectedEmployee !== 'all') attQuery = attQuery.eq('employee_id', selectedEmployee);
 
-    const [resAtt, resMock] = await Promise.all([
+    const [resAtt, resMock, resEvents] = await Promise.all([
       attQuery,
       supabase.from('mock_gps_attempts').select('*, employees(full_name)').order('timestamp', { ascending: false }),
+      supabase.from('payroll_events')
+        .select('employee_id, event_date, event_type, amount')
+        .in('event_type', ['absence', 'late'])
+        .neq('status', 'void')
+        .gte('event_date', startDate)
+        .lte('event_date', endDate),
     ]);
     if (resAtt.error) throw resAtt.error;
     if (resMock.error) throw resMock.error;
+    // الأيام قبل نظام المسيرات ليس لها حركات؛ خطأ هنا لا يمنع عرض الصفحة
+    for (const e of (resEvents.data ?? []) as { employee_id: string; event_date: string; event_type: string; amount: number }[]) {
+      payrollAmounts[`${e.employee_id}_${e.event_date}_${e.event_type === 'late' ? 'late' : 'absent'}`] = Number(e.amount) || 0;
+    }
 
     attendanceLogs = resAtt.data ?? [];
     if (selectedBranch !== 'all') {
@@ -66,6 +79,7 @@ export async function fetchTrackingDataset(filters: {
     leaveRequests: resLeaves.data ?? [],
     attendanceLogs,
     securityLogs,
+    payrollAmounts,
   };
 }
 
@@ -150,7 +164,11 @@ export async function forceCheckout(recordId: string) {
   if (error) throw error;
 }
 
-/** قرار خصم/إعفاء لمخالفة غياب أو تأخير، مع إشعار الموظف حسب القواعد. */
+/**
+ * قرار خصم/إعفاء لمخالفة غياب أو تأخير، مع إشعار الموظف حسب القواعد.
+ * المبلغ لا يُكتب هنا: محرّك الرواتب يحسبه من سجل الحضور (أجر اليوم ÷ 30، والتأخير بالدقيقة)
+ * — كان يُضاف قيد خصم منفصل فوق خصم الحضور فيُخصم الموظف مرتين.
+ */
 export async function saveDecision(decision: {
   employee: TrackedEmployee;
   type: string;
@@ -158,26 +176,14 @@ export async function saveDecision(decision: {
   status: 'applied' | 'ignored';
   recordId: string | null;
   reason: string;
-  amount: number;
   fallbackBranchId: string | null;
 }) {
-  const { employee, type, date, status, recordId, reason, amount } = decision;
+  const { employee, type, date, status, recordId, reason } = decision;
 
   // يُفحص قبل إضافة الخصم حتى لا يبقى خصم بدون تسجيل الغياب
   const branchId = employee.branch_id || decision.fallbackBranchId;
   if (type === 'virtual_absent' && !branchId) {
     throw new Error('الموظف غير مرتبط بفرع، يرجى ربطه بفرع أولاً.');
-  }
-
-  if (status === 'applied' && amount > 0) {
-    const { error } = await supabase.from('bonuses_deductions').insert({
-      employee_id: employee.id,
-      type: 'deduction',
-      amount,
-      reason,
-      issue_date: date,
-    });
-    if (error) throw error;
   }
 
   if (type === 'virtual_absent') {

@@ -51,6 +51,14 @@ export default function PayrollPage() {
         currentYearVal={currentYearVal}
         startDate={p.startDate}
         endDate={p.endDate}
+        paymentDate={p.period?.payment_date}
+        periodStatus={p.period?.status ?? null}
+        legacy={!!p.period?.legacy}
+        pendingDecisions={p.pendingDecisions}
+        closing={p.actionLoading === 'close_period'}
+        reopening={p.actionLoading === 'reopen_period'}
+        onClosePeriod={p.closePeriod}
+        onReopenPeriod={p.reopenPeriod}
         totals={p.totals}
         issuedCount={p.filteredRows.filter(r => r.isIssued).length}
         rowCount={p.filteredRows.length}
@@ -69,6 +77,8 @@ export default function PayrollPage() {
           onStatusFilterChange={setStatusFilter}
           pendingCount={p.pendingRows.length}
           isMonthArchived={p.isMonthArchived}
+          locked={p.isLocked}
+          canArchive={p.isPeriodClosed || !!p.period?.legacy}
           sendingNotifs={p.sendingNotifs}
           archiving={p.actionLoading === 'archive_month'}
           onOpenBulk={() => setShowBulkModal(true)}
@@ -80,6 +90,7 @@ export default function PayrollPage() {
           rows={visibleRows}
           totals={visibleTotals}
           isMonthArchived={p.isMonthArchived}
+          locked={p.isLocked}
           actionLoading={p.actionLoading}
           payrollOverrides={p.payrollOverrides}
           onSaveOverride={p.saveOverride}
@@ -109,9 +120,11 @@ export default function PayrollPage() {
           row={breakdownRow}
           startDate={p.startDate}
           endDate={p.endDate}
+          locked={p.isLocked}
+          actionLoading={p.actionLoading}
           onClose={() => setBreakdownEmployeeId(null)}
           onAddAdjustment={(type) => setAdjustmentFor({ row: breakdownRow, type })}
-          onToggleExcuse={(date) => p.toggleExcuseDay(breakdownRow.id, date)}
+          onDecide={(id, approve) => void p.decideEvent(id, approve)}
         />
       )}
 

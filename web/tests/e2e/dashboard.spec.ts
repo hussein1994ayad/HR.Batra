@@ -150,18 +150,33 @@ test.describe('workflows', () => {
     expect(api.writes('loan_installments', 'POST')).toHaveLength(0);
   });
 
-  test('computes and approves a salary', async ({ page }) => {
+  test('shows the server payroll and approves a salary', async ({ page }) => {
     const api = await mockSupabase(page);
     await page.goto('/dashboard/payroll');
+    await expect.poll(() => api.writes('rpc:get_payroll_run', 'POST').length).toBeGreaterThan(0);
+    const month = (api.writes('rpc:get_payroll_run', 'POST')[0].body as { p_month: string }).p_month;
     const row = page.locator('tr', { hasText: 'زينب علي' });
-    // 900,000 + 50,000 bonus − 20,000 deduction − 100,000 loan installment
+    // 900,000 + 50,000 مكافأة − 20,000 خصم − 100,000 قسط سلفة (محسوبة في السيرفر)
     await expect(row).toContainText('830,000 د.ع');
+    await expect(page.getByText('المسير مفتوح')).toBeVisible();
     await row.getByRole('button', { name: 'اعتماد' }).click();
-    // الكشف والأقساط والقيود تُعتمد في معاملة واحدة على السيرفر (approve_salary_slip)
-    await expect.poll(() => api.writes('rpc:approve_salary_slip', 'POST').length).toBe(1);
-    expect(api.writes('rpc:approve_salary_slip', 'POST')[0].body).toMatchObject({
-      p_employee_id: 'e1', p_basic_salary: 900000, p_net_salary: 830000, p_loans_deduction: 100000, p_installment_ids: ['i2'],
-    });
+    // السيرفر يحسب الكشف ويعتمده؛ الموقع يرسل الموظف والشهر والتعديلات اليدوية فقط
+    await expect.poll(() => api.writes('rpc:approve_payroll_slip', 'POST').length).toBe(1);
+    expect(api.writes('rpc:approve_payroll_slip', 'POST')[0].body).toEqual({ p_employee_id: 'e1', p_month: month, p_adjustments: [] });
+    expect(api.writes('rpc:approve_salary_slip', 'POST')).toHaveLength(0);
+  });
+
+  test('decides a pending late event from the payroll details', async ({ page }) => {
+    const api = await mockSupabase(page);
+    await page.goto('/dashboard/payroll');
+    const row = page.locator('tr', { hasText: 'مصطفى حسن' });
+    await expect(row).toContainText('بانتظار قرار (1)');
+    await row.getByRole('button', { name: 'تفاصيل الحضور والخصم' }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog).toContainText('تأخير 40 دقيقة');
+    await dialog.getByRole('button', { name: 'إعفاء' }).click();
+    await expect.poll(() => api.writes('rpc:decide_payroll_event', 'POST').length).toBe(1);
+    expect(api.writes('rpc:decide_payroll_event', 'POST')[0].body).toMatchObject({ p_event_id: 'pe4', p_approve: false });
   });
 
   test('opens the add-employee form from the overview and never shows passwords', async ({ page }) => {
@@ -197,17 +212,22 @@ test.describe('workflows', () => {
     await row.getByRole('button', { name: 'تطبيق' }).click();
     await expect.poll(() => api.writes('attendance', 'POST').length).toBe(1);
     expect(api.writes('attendance', 'POST')[0].body).toMatchObject({ employee_id: 'e2', status: 'absent', deduction_status: 'applied' });
-    expect(api.writes('bonuses_deductions', 'POST')[0].body).toMatchObject({ employee_id: 'e2', type: 'deduction', amount: 25000 });
+    // المبلغ يحسبه محرّك الرواتب من سجل الحضور: لا قيد خصم منفصل (كان يُخصم مرتين)
+    expect(api.writes('bonuses_deductions', 'POST')).toHaveLength(0);
   });
 
   test('saves settings', async ({ page }) => {
     const api = await mockSupabase(page);
     await page.goto('/dashboard/settings');
-    await page.getByLabel('يوم البداية').fill('1');
-    await page.getByLabel('يوم النهاية').fill('30');
+    await page.getByLabel('يوم قطع المسير').fill('25');
+    await page.getByLabel('يوم صرف الرواتب').fill('28');
     await page.getByRole('button', { name: 'حفظ الإعدادات' }).click();
-    await expect.poll(() => api.writes('system_settings', 'POST').length).toBe(1);
-    const saved = api.writes('system_settings', 'POST')[0].body as Array<{ key: string; value: Record<string, number> }>;
-    expect(saved.find((s) => s.key === 'payroll_policy')?.value).toEqual({ cycle_start_day: 1, cycle_end_day: 30 });
+    await expect.poll(() => api.writes('rpc:set_payroll_policy', 'POST').length).toBe(1);
+    expect(api.writes('rpc:set_payroll_policy', 'POST')[0].body).toEqual({
+      p_cutoff_day: 25, p_payment_day: 28, p_overtime_enabled: false, p_overtime_multiplier: 1, p_overtime_min_minutes: 30,
+    });
+    // سياسة الرواتب لا تُكتب مباشرة (كانت تمسح بقية الإعدادات)
+    const saved = api.writes('system_settings', 'POST')[0].body as Array<{ key: string }>;
+    expect(saved.some((s) => s.key === 'payroll_policy')).toBe(false);
   });
 });

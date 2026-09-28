@@ -14,6 +14,10 @@ type Props = {
   onStatusFilterChange: (value: PayrollStatusFilter) => void;
   pendingCount: number;
   isMonthArchived: boolean;
+  /** المسير مغلق: لا اعتماد. */
+  locked: boolean;
+  /** الأرشفة متاحة بعد إغلاق المسير فقط. */
+  canArchive: boolean;
   sendingNotifs: boolean;
   archiving: boolean;
   onOpenBulk: () => void;
@@ -24,7 +28,7 @@ type Props = {
 /** البحث والفلاتر، واعتماد رواتب الفرع، وإشعار الفرع، وأرشفة الشهر. */
 export function PayrollToolbar({
   searchTerm, onSearchChange, selectedBranch, onBranchChange, branches, statusFilter, onStatusFilterChange, pendingCount,
-  isMonthArchived, sendingNotifs, archiving, onOpenBulk, onSendBranchNotifications, onArchiveMonth,
+  isMonthArchived, locked, canArchive, sendingNotifs, archiving, onOpenBulk, onSendBranchNotifications, onArchiveMonth,
 }: Props) {
   return (
     <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3 mb-5 print:hidden">
@@ -49,7 +53,7 @@ export function PayrollToolbar({
           <Badge tone="violet" className="h-9 px-3"><Archive className="w-3.5 h-3.5" /> مؤرشف ومغلق مالياً</Badge>
         ) : (
           <>
-            <Button variant="success" icon={CheckCircle2} disabled={pendingCount === 0} onClick={onOpenBulk}>
+            <Button variant="success" icon={CheckCircle2} disabled={pendingCount === 0 || locked} onClick={onOpenBulk}>
               اعتماد رواتب {selectedBranch === 'all' ? 'الكل' : 'الفرع'} ({pendingCount})
             </Button>
             {selectedBranch !== 'all' && (
@@ -57,9 +61,11 @@ export function PayrollToolbar({
                 إشعار الفرع بالكشوف
               </Button>
             )}
-            <Button variant="soft" icon={Archive} loading={archiving} onClick={onArchiveMonth}>
-              أرشفة وإغلاق الشهر
-            </Button>
+            {canArchive && (
+              <Button variant="soft" icon={Archive} loading={archiving} onClick={onArchiveMonth}>
+                أرشفة الشهر
+              </Button>
+            )}
           </>
         )}
       </div>

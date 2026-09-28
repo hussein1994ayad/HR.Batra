@@ -74,6 +74,56 @@ class DashboardSnapshot {
   });
 }
 
+/// يربط قرارات اليوم بحركات محرّك الرواتب (المبلغ المحسوب ومعرّف الحركة)، ويضيف
+/// الخروج المبكر والبصمة الناقصة المعلّقة التي لا يقابلها سجل غياب/تأخير.
+List<PendingDecision> attachEngineEvents(
+  List<PendingDecision> decisions,
+  List<JsonRow> events,
+  Map<String, ({String name, String? branchId})> employees,
+  String day,
+) {
+  final used = <String>{};
+  JsonRow? find(String employeeId, List<String> types) {
+    for (final type in types) {
+      for (final e in events) {
+        if (e.str('employee_id') == employeeId && e.str('event_type') == type) return e;
+      }
+    }
+    return null;
+  }
+
+  final out = <PendingDecision>[
+    for (final d in decisions)
+      () {
+        final e = find(d.employeeId, d.engineEventTypes);
+        if (e == null) return d;
+        used.add(e.str('id') ?? '');
+        return d.withEngineEvent(id: e.str('id') ?? '', amount: e.dbl('amount') ?? 0, minutes: e.integer('minutes'));
+      }(),
+  ];
+
+  for (final e in events) {
+    final type = e.str('event_type');
+    final id = e.str('id') ?? '';
+    if (used.contains(id) || e.str('status') != 'pending') continue;
+    if (type != 'early_leave' && type != 'missing_punch') continue;
+    final emp = employees[e.str('employee_id')];
+    if (emp == null) continue;
+    out.add(PendingDecision(
+      employeeId: e.str('employee_id') ?? '',
+      employeeName: emp.name,
+      branchId: emp.branchId,
+      status: type!,
+      workDate: day,
+      attendanceId: e.str('source_id'),
+      eventId: id,
+      engineAmount: e.dbl('amount') ?? 0,
+      engineMinutes: e.integer('minutes'),
+    ));
+  }
+  return out;
+}
+
 class AdminDashboardRepository {
   AdminDashboardRepository({SupabaseClient? client}) : _db = client ?? SupabaseService.client;
   final SupabaseClient _db;
@@ -138,6 +188,13 @@ class AdminDashboardRepository {
             .inFilter('status', ['absent', 'late', 'half_day'])
             .or('deduction_status.is.null,deduction_status.eq.pending')
             .eq('work_date', dayStr)),
+      // حركات محرّك الرواتب لليوم: مبلغ الخصم المحسوب + الخروج المبكر والبصمة الناقصة بانتظار القرار
+      if (date != null)
+        scoped(_db.from('payroll_events')
+            .select('id, employee_id, event_type, amount, minutes, status, source_id')
+            .inFilter('event_type', ['absence', 'late', 'early_leave', 'missing_punch'])
+            .neq('status', 'void')
+            .eq('event_date', dayStr)),
     ]);
 
     final attendance = rowsOf(results[0]);
@@ -172,6 +229,11 @@ class AdminDashboardRepository {
         ));
       }
     }
+    final withEngine = date == null
+        ? decisions
+        : attachEngineEvents(decisions, rowsOf(results[9]), {
+            for (final e in employees) e.id: (name: e.fullName, branchId: e.branchId),
+          }, dayStr);
 
     return DashboardSnapshot(
       present: summary.present,
@@ -180,7 +242,7 @@ class AdminDashboardRepository {
       loans: rowsOf(results[2]).map(LoanModel.fromMap).toList(),
       devices: rowsOf(results[3]).map(DeviceRequest.fromMap).toList(),
       securityLogs: securityLogs,
-      decisions: decisions,
+      decisions: withEngine,
       schedules: schedules,
     );
   }

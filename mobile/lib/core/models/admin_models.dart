@@ -80,13 +80,22 @@ class PendingDecision {
   final String employeeName;
   final String? branchId;
 
-  /// 'absent' | 'late' | 'half_day'
+  /// 'absent' | 'late' | 'half_day' (سجلات قديمة) | 'early_leave' | 'missing_punch' (من محرّك الرواتب)
   final String status;
 
   /// YYYY-MM-DD
   final String workDate;
   final DateTime? checkInTime;
   final DateTime? checkOutTime;
+
+  /// حركة محرّك الرواتب لهذا اليوم (إن وُجدت): القرار يُرسل لها مباشرة.
+  final String? eventId;
+
+  /// مبلغ الخصم كما يحسبه محرّك الرواتب (أجر اليوم = الراتب ÷ 30، والتأخير بالدقيقة).
+  final double? engineAmount;
+
+  /// دقائق التأخير/الخروج المبكر كما يحسبها المحرّك.
+  final int? engineMinutes;
 
   const PendingDecision({
     required this.employeeId,
@@ -97,7 +106,34 @@ class PendingDecision {
     this.branchId,
     this.checkInTime,
     this.checkOutTime,
+    this.eventId,
+    this.engineAmount,
+    this.engineMinutes,
   });
+
+  /// نوع حركة المحرّك المقابلة: الغياب/التأخير، والخروج المبكر لسجلات "نصف يوم" القديمة
+  /// (أو بصمة ناقصة إن لم توجد بصمة حضور).
+  List<String> get engineEventTypes => switch (status) {
+        'late' => const ['late'],
+        'half_day' => const ['early_leave', 'missing_punch'],
+        'early_leave' => const ['early_leave'],
+        'missing_punch' => const ['missing_punch'],
+        _ => const ['absence'],
+      };
+
+  PendingDecision withEngineEvent({required String id, required double amount, int? minutes}) => PendingDecision(
+        employeeId: employeeId,
+        employeeName: employeeName,
+        status: status,
+        workDate: workDate,
+        attendanceId: attendanceId,
+        branchId: branchId,
+        checkInTime: checkInTime,
+        checkOutTime: checkOutTime,
+        eventId: id,
+        engineAmount: amount,
+        engineMinutes: minutes,
+      );
 
   factory PendingDecision.fromAttendance(JsonRow map) {
     final employee = map.obj('employees');
@@ -120,12 +156,19 @@ class PendingDecision {
       case 'late':
         return 'تأخير';
       case 'half_day':
-        return 'نصف يوم';
+        return checkInTime == null ? 'بصمة ناقصة' : 'خروج مبكر';
+      case 'early_leave':
+        return 'خروج مبكر';
+      case 'missing_punch':
+        return 'بصمة ناقصة';
       default:
         return 'غياب';
     }
   }
 
   /// مفتاح ثابت للقائمة (يحفظ حالة حقول الإدخال عند إعادة البناء).
-  String get key => attendanceId ?? 'virtual_${employeeId}_$workDate';
+  String get key => switch (status) {
+        'early_leave' || 'missing_punch' => eventId ?? '${status}_${employeeId}_$workDate',
+        _ => attendanceId ?? 'virtual_${employeeId}_$workDate',
+      };
 }

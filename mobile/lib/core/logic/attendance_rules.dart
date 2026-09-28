@@ -7,10 +7,6 @@
 
 import '../models/work_schedule_model.dart';
 
-/// الغرامة المقترحة لكل دقيقة تأخير، وليوم الغياب (د.ع).
-const double kLatePenaltyPerMinute = 50;
-const double kAbsencePenalty = 25000;
-
 /// جدول الدوام الفعلي: جدول الموظف ← جدول قسمه ← جدول فرعه، والأحدث عند التساوي.
 WorkScheduleModel? resolveWorkSchedule({
   required String employeeId,
@@ -90,6 +86,3 @@ DaySummary summarizeDay({
   return DaySummary(present: present, absent: absent, missingEmployeeIds: missing);
 }
 
-/// مبلغ الخصم المقترح لقرار (غياب ثابت، تأخير/نصف يوم بالدقيقة).
-double suggestedPenalty(String status, int missedMinutes) =>
-    status == 'absent' ? kAbsencePenalty : missedMinutes * kLatePenaltyPerMinute;

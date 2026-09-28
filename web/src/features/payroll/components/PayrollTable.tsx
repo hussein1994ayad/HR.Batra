@@ -12,6 +12,8 @@ type Props = {
   rows: PayrollRow[];
   totals: ReturnType<typeof sumPayroll>;
   isMonthArchived: boolean;
+  /** المسير مغلق أو الشهر مؤرشف: لا تعديل ولا اعتماد. */
+  locked: boolean;
   actionLoading: string | null;
   payrollOverrides: PayrollOverrides;
   onSaveOverride: (employeeId: string, field: OverrideField, value: number) => void;
@@ -24,7 +26,7 @@ type Props = {
 
 /** جدول رواتب الموظفين مع المجاميع والإجراءات لكل موظف. */
 export function PayrollTable({
-  rows, totals, isMonthArchived, actionLoading, payrollOverrides,
+  rows, totals, isMonthArchived, locked, actionLoading, payrollOverrides,
   onSaveOverride, onClearOverride, onShowBreakdown, onAddAdjustment, onGenerateSlip, onRevertSlip,
 }: Props) {
   const confirm = useConfirm();
@@ -36,7 +38,7 @@ export function PayrollTable({
       displayValue={value}
       colorClass={color}
       prefixSign={sign}
-      disabled={isMonthArchived}
+      disabled={locked || row.isIssued}
       isOverridden={payrollOverrides[row.id]?.[field] !== undefined}
       onSave={(v) => onSaveOverride(row.id, field, v)}
       onClear={() => onClearOverride(row.id, field)}
@@ -46,7 +48,7 @@ export function PayrollTable({
   const revert = async (row: PayrollRow) => {
     const ok = await confirm({
       title: 'إلغاء اعتماد الراتب؟',
-      message: 'ستُمسح قيود الخصم التلقائية وتعود أقساط السلف غير مدفوعة، ويمكن تعديل الراتب واعتماده مجدداً.',
+      message: 'تعود أقساط السلف غير مدفوعة وتُلغى التعديلات اليدوية للكشف، ويمكن مراجعة الراتب واعتماده مجدداً.',
       confirmLabel: 'إلغاء الاعتماد',
       tone: 'warning',
     });
@@ -83,7 +85,7 @@ export function PayrollTable({
                       {row.isNetNegative && <Badge tone="rose">صافي سالب</Badge>}
                       {row.isAttendanceMissing && <Badge tone="amber">لا بصمات</Badge>}
                       {row.hasPendingLeave && <Badge tone="sky">إجازة معلقة</Badge>}
-                      {row.unconfirmedAbsencesCount > 0 && <Badge tone="orange">غياب غير مثبت ({row.unconfirmedAbsencesCount})</Badge>}
+                      {row.pendingCount > 0 && <Badge tone="orange">بانتظار قرار ({row.pendingCount})</Badge>}
                     </div>
                     {isMonthArchived ? (
                       <p className="mt-1 text-[10px] text-slate-500">تم أرشفة السجلات التفصيلية</p>
@@ -104,7 +106,7 @@ export function PayrollTable({
               <td>
                 {cell(row, 'attendanceDeductions', row.totalAttendanceDeductions, 'text-amber-300', '−')}
                 {!row.isAttendanceDeductionsOverridden && row.totalAttendanceDeductions > 0 && (
-                  <span className="block text-[10px] text-slate-500 mt-0.5">{row.absencesCount} غياب · {row.halfDaysCount} نصف يوم</span>
+                  <span className="block text-[10px] text-slate-500 mt-0.5">{row.absencesCount} غياب · {row.totalLateMinutes} د تأخير</span>
                 )}
               </td>
               <td>{cell(row, 'otherDeductions', row.totalDeductions - row.totalAttendanceDeductions, 'text-rose-300', '−')}</td>
@@ -114,16 +116,16 @@ export function PayrollTable({
               </td>
               <td className="!text-left print:hidden">
                 <div className="flex items-center justify-end gap-1.5">
-                  {!isMonthArchived && <IconButton icon={Plus} label="إضافة مكافأة أو خصم" tone="slate" onClick={() => onAddAdjustment(row)} />}
+                  {!locked && <IconButton icon={Plus} label="إضافة مكافأة أو خصم" tone="slate" onClick={() => onAddAdjustment(row)} />}
                   {row.isIssued ? (
                     <>
                       <Badge tone="emerald" dot>معتمد</Badge>
-                      {!isMonthArchived && (
+                      {!locked && (
                         <IconButton icon={Undo2} label="إلغاء الاعتماد" tone="amber" loading={actionLoading === `revert_${row.id}`} onClick={() => void revert(row)} />
                       )}
                     </>
                   ) : (
-                    !isMonthArchived && (
+                    !locked && (
                       <Button
                         size="xs"
                         variant="soft-success"

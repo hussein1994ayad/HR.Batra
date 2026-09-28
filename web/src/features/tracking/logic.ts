@@ -217,10 +217,14 @@ export function buildDecisions(input: {
   attendanceLogs: AttendanceRecord[];
   selectedBranch: string;
   selectedEmployee: string;
+  /** مبالغ محرّك الرواتب لكل يوم (انظر fetchTrackingDataset). */
+  payrollAmounts?: Record<string, number>;
 }): Decision[] {
   const {
     startDate, endDate, employees, workSchedules, leaveRequests, attendanceLogs, selectedBranch, selectedEmployee,
   } = input;
+  const payrollAmounts = input.payrollAmounts ?? {};
+  const amountOf = (empId: string, date: string, kind: 'late' | 'absent') => payrollAmounts[`${empId}_${date}_${kind}`] ?? 0;
 if (!startDate || !endDate) return [];
 const list: Decision[] = [];
 
@@ -280,7 +284,7 @@ allDates.forEach(dateStr => {
           typeName: 'التأخير الصباحي',
           deductionStatus: attRecord.deduction_status || 'pending',
           reason: attRecord.deduction_reason || `التأخير: ${formatLateDurationArabic(lateMinutes)}`,
-          suggestedAmount: lateMinutes * 50
+          suggestedAmount: amountOf(emp.id, dateStr, 'late')
         });
       } else if (attRecord.status === 'absent') {
         list.push({
@@ -293,7 +297,7 @@ allDates.forEach(dateStr => {
           typeName: 'الغياب',
           deductionStatus: attRecord.deduction_status || 'pending',
           reason: attRecord.deduction_reason || 'الغياب بدون إجازة',
-          suggestedAmount: 25000
+          suggestedAmount: amountOf(emp.id, dateStr, 'absent')
         });
       }
     } else {
@@ -308,7 +312,7 @@ allDates.forEach(dateStr => {
           typeName: 'الغياب',
           deductionStatus: 'pending',
           reason: 'الغياب بدون إجازة',
-          suggestedAmount: 25000
+          suggestedAmount: amountOf(emp.id, dateStr, 'absent')
         });
       }
     }

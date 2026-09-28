@@ -42,7 +42,7 @@ class DecisionsTab extends StatelessWidget {
   final bool hasDate;
   final List<PendingDecision> decisions;
   final WorkScheduleModel? Function(PendingDecision) scheduleFor;
-  final void Function(PendingDecision item, {required bool deduct, required String reason, required double amount}) onDecide;
+  final void Function(PendingDecision item, {required bool deduct, required String reason}) onDecide;
   final String? busyKey;
 
   @override
@@ -59,7 +59,7 @@ class DecisionsTab extends StatelessWidget {
         item: item,
         schedule: scheduleFor(item),
         busy: busyKey == item.key,
-        onDecide: ({required deduct, required reason, required amount}) => onDecide(item, deduct: deduct, reason: reason, amount: amount),
+        onDecide: ({required deduct, required reason}) => onDecide(item, deduct: deduct, reason: reason),
       );
     });
   }
