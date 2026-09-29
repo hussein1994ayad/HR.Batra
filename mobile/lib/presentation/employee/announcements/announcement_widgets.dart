@@ -227,14 +227,18 @@ class _AnnouncementCarouselState extends State<AnnouncementCarousel> {
 
 /// صورة المجاز داخل حلقة ملوّنة مع شارة نوع الإجازة.
 class _LeaveAvatar extends StatelessWidget {
-  const _LeaveAvatar(this.p, {this.size = 60});
+  const _LeaveAvatar(this.p, {this.size = 60, this.toneOverride, this.icon});
   final Map<String, dynamic> p;
   final double size;
+
+  /// للمتأخرين: لون وأيقونة مختلفة
+  final AppTone? toneOverride;
+  final IconData? icon;
 
   @override
   Widget build(BuildContext context) {
     final hourly = p['is_hourly'] == true;
-    final tone = hourly ? AppTone.info : AppTone.accent;
+    final tone = toneOverride ?? (hourly ? AppTone.info : AppTone.accent);
     final name = (p['full_name'] ?? 'موظف').toString();
     return SizedBox(
       width: size + 8,
@@ -265,7 +269,7 @@ class _LeaveAvatar extends StatelessWidget {
                 shape: BoxShape.circle,
                 border: Border.all(color: AppColors.surface1, width: 2.5),
               ),
-              child: Icon(hourly ? Icons.schedule_rounded : Icons.beach_access_rounded, size: 13, color: AppColors.onStatus),
+              child: Icon(icon ?? (hourly ? Icons.schedule_rounded : Icons.beach_access_rounded), size: 13, color: AppColors.onStatus),
             ),
           ),
         ],
@@ -361,6 +365,107 @@ class OnLeaveTile extends StatelessWidget {
       title: name,
       subtitle: '${p['branch_name'] ?? '—'} · ${hourly ? 'زمنية ${onLeaveUntil(p)}' : onLeaveUntil(p)}',
       trailing: back == null ? null : StatusBadge(back, tone: tone),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// المتأخرون اليوم
+// ---------------------------------------------------------------------------
+
+/// "40 دقيقة" / "1 س 15 د"
+String lateDuration(Map<String, dynamic> p, {bool short = false}) {
+  final mins = (p['late_minutes'] as num?)?.toInt() ?? 0;
+  if (mins >= 60) return '${mins ~/ 60} س ${mins % 60} د';
+  return short ? '$mins د' : '$mins دقيقة';
+}
+
+String _punchTime(Map<String, dynamic> p) => Fmt.time(DateTime.tryParse(p['check_in_time']?.toString() ?? ''));
+
+/// شريط أفقي بالمتأخرين اليوم: الصورة، الاسم، الفرع، مدة التأخير ووقت البصمة.
+class LateStrip extends StatelessWidget {
+  const LateStrip({super.key, required this.people});
+  final List<Map<String, dynamic>> people;
+
+  @override
+  Widget build(BuildContext context) {
+    final scale = MediaQuery.textScalerOf(context).scale(1);
+    return SizedBox(
+      height: 214 * scale.clamp(1.0, 1.4),
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: people.length,
+        separatorBuilder: (_, __) => const SizedBox(width: AppSpace.md),
+        itemBuilder: (context, i) => FadeSlideIn(index: i, child: _LateCard(people[i])),
+      ),
+    );
+  }
+}
+
+class _LateCard extends StatelessWidget {
+  const _LateCard(this.p);
+  final Map<String, dynamic> p;
+
+  @override
+  Widget build(BuildContext context) {
+    const tone = AppTone.warning;
+    final name = (p['full_name'] ?? 'موظف').toString();
+    return Semantics(
+      container: true,
+      label: '$name متأخر ${lateDuration(p)}، البصمة ${_punchTime(p)}',
+      child: Container(
+        width: 150,
+        padding: const EdgeInsets.fromLTRB(AppSpace.md, AppSpace.lg, AppSpace.md, AppSpace.md),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          border: Border.all(color: tone.color.withValues(alpha: 0.2)),
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [tone.color.withValues(alpha: 0.10), AppColors.surface1],
+          ),
+        ),
+        child: Column(
+          children: [
+            _LeaveAvatar(p, toneOverride: tone, icon: Icons.alarm_rounded),
+            const SizedBox(height: AppSpace.sm),
+            Text(name, style: AppText.label, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center),
+            Text((p['branch_name'] ?? '—').toString(), style: AppText.caption, maxLines: 1, overflow: TextOverflow.ellipsis),
+            const Spacer(),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: AppSpace.sm, vertical: AppSpace.xs),
+              decoration: BoxDecoration(color: tone.container, borderRadius: AppRadius.pill),
+              child: Text(
+                'تأخير ${lateDuration(p)}',
+                style: AppText.caption.copyWith(color: tone.color, fontWeight: FontWeight.w700),
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(height: AppSpace.xs),
+            Text('البصمة ${_punchTime(p)}', style: AppText.caption, maxLines: 1),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// سطر متأخر في صفحة التعاميم.
+class LateTile extends StatelessWidget {
+  const LateTile(this.p, {super.key});
+  final Map<String, dynamic> p;
+
+  @override
+  Widget build(BuildContext context) {
+    final name = (p['full_name'] ?? 'موظف').toString();
+    return AppListTile(
+      leading: _LeaveAvatar(p, size: 40, toneOverride: AppTone.warning, icon: Icons.alarm_rounded),
+      title: name,
+      subtitle: '${p['branch_name'] ?? '—'} · البصمة ${_punchTime(p)}',
+      trailing: StatusBadge(lateDuration(p, short: true), tone: AppTone.warning),
     );
   }
 }

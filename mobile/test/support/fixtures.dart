@@ -185,6 +185,10 @@ Map<String, List<Map<String, dynamic>>> buildFixtures({String role = 'admin'}) {
       {'employee_id': 'x2', 'full_name': 'علي كريم', 'avatar_url': null, 'branch_name': 'مكتب بغداد الرئيسي', 'is_hourly': true, 'from_date': _daysAgo(0), 'to_date': _daysAgo(0), 'start_hour': '10:00:00', 'end_hour': '12:00:00'},
       {'employee_id': 'x3', 'full_name': 'مصطفى حسن', 'avatar_url': null, 'branch_name': 'فرع الكرادة', 'is_hourly': false, 'from_date': _daysAgo(3), 'to_date': _daysAgo(0), 'start_hour': null, 'end_hour': null},
     ],
+    'rpc:get_late_today': [
+      {'employee_id': 'x4', 'full_name': 'حيدر عباس', 'avatar_url': null, 'branch_name': 'مكتب بغداد الرئيسي', 'check_in_time': _iso(0, 9, 25), 'late_minutes': 25},
+      {'employee_id': 'x5', 'full_name': 'نور الهدى سالم', 'avatar_url': null, 'branch_name': 'فرع المنصور', 'check_in_time': _iso(0, 10, 15), 'late_minutes': 75},
+    ],
     'system_settings': [
       {'key': 'tracking_enabled', 'value': 'true'},
     ],

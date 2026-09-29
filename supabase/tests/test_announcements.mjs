@@ -62,4 +62,21 @@ const cols = (await as(db, 'emp2', `SELECT * FROM get_on_leave_now() LIMIT 1`)).
 check('no leave type or reason is exposed', !cols.includes('leave_type') && !cols.includes('reason'), cols.join());
 await expectError('anonymous users cannot list who is on leave', as(db, 'anon', `SELECT * FROM get_on_leave_now()`), 'permission denied');
 
+// ---------------- المتأخرون اليوم ----------------
+const today = (await db.query(`SELECT (now() AT TIME ZONE 'Asia/Baghdad')::date::text d`)).rows[0].d;
+await db.exec(`
+  INSERT INTO work_schedules (branch_id, name, check_in_time, check_out_time, grace_period_minutes, work_days)
+    VALUES ('${IDS.branch}', 'دوام', '09:00', '17:00', 15, '{0,1,2,3,4,5,6}');
+  DELETE FROM attendance WHERE work_date = '${today}';
+  INSERT INTO attendance (employee_id, branch_id, work_date, status, check_in_time) VALUES
+    ('${IDS.emp}', '${IDS.branch}', '${today}', 'late', '${today} 09:40:00+03'),
+    ('${IDS.manager}', '${IDS.branch}', '${today}', 'present', '${today} 08:55:00+03');
+`);
+const late = (await as(db, 'emp2', `SELECT full_name, late_minutes, branch_name FROM get_late_today()`)).rows;
+check('late today lists only late arrivals with minutes from the shift start',
+  late.length === 1 && late[0].full_name === 'موظف' && late[0].late_minutes === 40 && late[0].branch_name === 'الفرع الرئيسي', JSON.stringify(late));
+const lateCols = (await as(db, 'emp2', `SELECT * FROM get_late_today() LIMIT 1`)).fields.map((f) => f.name);
+check('late list exposes no deduction, reason or location', !lateCols.some((c) => /deduct|reason|_lat$|_lng$|latitude|longitude/.test(c)), lateCols.join());
+await expectError('anonymous users cannot list who is late', as(db, 'anon', `SELECT * FROM get_late_today()`), 'permission denied');
+
 done();
