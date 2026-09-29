@@ -52,7 +52,7 @@ class ExcelExportService {
 
     // ضبط عرض الأعمدة
     sheet.setColumnWidthInPixels(1, 45);  // A: التسلسل
-    sheet.setColumnWidthInPixels(2, 140); // B: تاريخ الاستحقاق
+    sheet.setColumnWidthInPixels(2, 190); // B: شهر الاستحقاق
     sheet.setColumnWidthInPixels(3, 140); // C: مبلغ القسط
     sheet.setColumnWidthInPixels(4, 130); // D: حالة السداد
     sheet.setColumnWidthInPixels(5, 140); // E: تاريخ التسديد الفعلي
@@ -185,7 +185,7 @@ class ExcelExportService {
     tableHeaderTitle.cellStyle.vAlign = xlsio.VAlignType.center;
 
     // عناوين أعمدة الجدول
-    final List<String> colHeaders = ['ت', 'تاريخ الاستحقاق', 'مبلغ القسط', 'حالة السداد', 'تاريخ التسديد', 'ملاحظات وتفاصيل'];
+    final List<String> colHeaders = ['ت', 'شهر القسط', 'مبلغ القسط', 'حالة السداد', 'تاريخ التسديد', 'ملاحظات وتفاصيل'];
     for (int c = 0; c < colHeaders.length; c++) {
       final cell = sheet.getRangeByIndex(12, c + 1);
       cell.setText(colHeaders[c]);
@@ -221,7 +221,7 @@ class ExcelExportService {
 
       // تاريخ الاستحقاق
       final cellDue = sheet.getRangeByIndex(startRow, 2);
-      cellDue.setText(dueDate);
+      cellDue.setText('شهر ${inst.dueDate.month} سنة ${inst.dueDate.year} · $dueDate');
       cellDue.cellStyle.hAlign = xlsio.HAlignType.center;
 
       // مبلغ القسط

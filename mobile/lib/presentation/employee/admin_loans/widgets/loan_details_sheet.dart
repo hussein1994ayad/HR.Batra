@@ -189,7 +189,8 @@ class _InstallmentTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(Fmt.date(installment.dueDate, withYear: true), style: AppText.bodySm.copyWith(color: AppColors.textPrimary)),
+                Text('قسط ${Fmt.monthOf(installment.dueDate)}', style: AppText.bodySm.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
+                Text('يستحق ${Fmt.date(installment.dueDate, withYear: true)}', style: AppText.caption),
                 if (paid && installment.paidAt != null)
                   Text('سُدّد ${Fmt.date(installment.paidAt, withYear: true)}${installment.isCash ? ' نقداً' : ''}', style: AppText.caption.copyWith(color: AppColors.success)),
               ],
