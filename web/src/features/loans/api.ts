@@ -4,7 +4,7 @@
 
 import { supabase } from '@/lib/supabase';
 import type { Loan, LoanInstallment } from '@/lib/db-types';
-import { addMonths, buildInstallmentSchedule, firstOfNextMonth } from './logic';
+import { addMonths } from './logic';
 import type { ApprovalDraft, EditLoanDraft, PaymentMethod } from './types';
 
 const EMPLOYEE_JOIN = 'employees!loans_employee_id_fkey(full_name, monthly_salary_iqd)';
@@ -52,45 +52,19 @@ export async function approveLoan(draft: ApprovalDraft) {
   if (error) throw error;
 }
 
-/** يعدّل السلفة ويعيد توليد الأقساط غير المدفوعة ابتداءً من الشهر القادم، ثم يُشعر الموظف. */
+/**
+ * يعدّل السلفة ويعيد جدولة الأقساط غير المدفوعة من الشهر القادم (reschedule_loan).
+ * كله على السيرفر في معاملة واحدة: كان الحذف يولّد أقساطاً تلقائياً ثم يُضاف الجدول
+ * الجديد فوقها فتتضاعف الأقساط. المتبقي = المبلغ − المسدَّد، والسيرفر يُشعر الموظف.
+ */
 export async function rescheduleLoan(draft: EditLoanDraft) {
-  const loanId = draft.loan.id;
-  const amount = Math.round(draft.amount);
-  const installmentAmount = Math.round(draft.installmentAmount);
-  const remaining = Math.round(draft.remainingAmount);
-  const count = Number(draft.installmentCount);
-
-  const { error: updErr } = await supabase
-    .from('loans')
-    .update({ amount, installment_amount: installmentAmount, installment_count: count, remaining_amount: remaining })
-    .eq('id', loanId);
-  if (updErr) throw updErr;
-
-  const { count: paidCount, error: paidErr } = await supabase
-    .from('loan_installments')
-    .select('id', { count: 'exact', head: true })
-    .eq('loan_id', loanId)
-    .eq('is_paid', true);
-  if (paidErr) throw paidErr;
-
-  const { error: delErr } = await supabase.from('loan_installments').delete().eq('loan_id', loanId).eq('is_paid', false);
-  if (delErr) throw delErr;
-
-  const remainingCount = count - (paidCount ?? 0);
-  if (remainingCount > 0) {
-    const schedule = buildInstallmentSchedule(remaining, remainingCount, firstOfNextMonth());
-    const { error } = await supabase
-      .from('loan_installments')
-      .insert(schedule.map(s => ({ ...s, loan_id: loanId, is_paid: false })));
-    if (error) throw error;
-  }
-
-  await supabase.from('notifications').insert({
-    employee_id: draft.loan.employee_id,
-    title: 'تعديل تفاصيل السلفة 💸',
-    body: `قامت الإدارة بتعديل تفاصيل سلفة العمل الخاصة بك (المبلغ الكلي الجديد: ${amount.toLocaleString()} د.ع، القسط الشهري الجديد: ${installmentAmount.toLocaleString()} د.ع).`,
-    type: 'loan',
+  const { error } = await supabase.rpc('reschedule_loan', {
+    p_loan_id: draft.loan.id,
+    p_amount: Math.round(draft.amount),
+    p_installment_amount: Math.round(draft.installmentAmount),
+    p_count: Number(draft.installmentCount),
   });
+  if (error) throw error;
 }
 
 // ------------------------------------------------------------------

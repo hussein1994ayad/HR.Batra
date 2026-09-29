@@ -262,6 +262,9 @@ allDates.forEach(dateStr => {
     const isWorkingDay = workDays.includes(weekday);
 
     if (!isWorkingDay) return;
+    // قبل المباشرة أو بعد آخر يوم عمل: لا حضور مطلوب (نفس محرّك الرواتب)
+    if (emp.join_date && dateStr < emp.join_date) return;
+    if (emp.termination_date && dateStr > emp.termination_date) return;
 
     const leaveRecord = leaveRequests.find(l => l.employee_id === emp.id && isDateWithinRange(dateStr, l.start_date, l.end_date));
 

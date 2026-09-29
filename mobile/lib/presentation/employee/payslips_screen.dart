@@ -24,6 +24,9 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
   String? _exportingSlipId;
   Map<String, dynamic>? _employeeProfile;
   List<Map<String, dynamic>> _slips = [];
+
+  /// مسير الشهر الحالي قبل الاعتماد (get_my_payroll_preview)
+  Map<String, dynamic>? _preview;
   final Map<String, List<Map<String, dynamic>>> _slipsDetails = {}; // Record of slip_id -> list of details
   int _cycleStartDay = 25;
   int _cycleEndDay = 24;
@@ -112,8 +115,17 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
             .maybeSingle(),
       ]);
 
+      Map<String, dynamic>? preview;
+      try {
+        final p = await SupabaseService.client.rpc<dynamic>('get_my_payroll_preview');
+        if (p is Map) preview = Map<String, dynamic>.from(p);
+      } catch (e) {
+        debugPrint('تعذّر تحميل مسير الشهر الحالي: $e');
+      }
+
       if (!mounted) return;
       setState(() {
+        _preview = preview;
         _slips = List<Map<String, dynamic>>.from(results[0] as List);
         _hasError = false;
         if (results[1] != null) {
@@ -304,12 +316,16 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
     } else if (_hasError && _slips.isEmpty) {
       body = [ErrorView(onRetry: _loadPayslips)];
     } else if (_slips.isEmpty) {
-      body = const [EmptyView(title: 'لا توجد كشوف رواتب بعد', message: 'يظهر كشف الشهر هنا بعد اعتماده من الإدارة.', icon: Icons.receipt_long_rounded)];
+      body = [
+        if (_preview != null) ...[CurrentPayrollCard(preview: _preview!), const SizedBox(height: AppSpace.lg)],
+        const EmptyView(title: 'لا توجد كشوف رواتب بعد', message: 'يظهر كشف الشهر هنا بعد اعتماده من الإدارة.', icon: Icons.receipt_long_rounded),
+      ];
     } else {
       final latest = _slips.first;
       final (lm, ly) = _monthOf((latest['work_month'] ?? '').toString());
       final recent = _slips.take(6).toList().reversed.toList();
       body = [
+        if (_preview != null) ...[CurrentPayrollCard(preview: _preview!), const SizedBox(height: AppSpace.lg)],
         AppCard(
           padding: const EdgeInsets.all(AppSpace.xl),
           child: Column(
@@ -400,6 +416,94 @@ String _lineReason(Map<String, dynamic> l) {
           : label;
   final carried = (l['carried_from'] ?? '').toString();
   return carried.isEmpty ? base : '$base (مرحّل من $carried)';
+}
+
+/// راتب الشهر الحالي قبل الاعتماد: الأساسي، الإضافات، الخصومات، الأقساط، والمتوقع،
+/// مع كل حركة وحالتها (بانتظار قرار الإدارة / محتسبة / معفى منها).
+class CurrentPayrollCard extends StatelessWidget {
+  const CurrentPayrollCard({super.key, required this.preview});
+  final Map<String, dynamic> preview;
+
+  static double _n(Object? v) => (v as num?)?.toDouble() ?? double.tryParse(v?.toString() ?? '') ?? 0;
+
+  static const _labels = {
+    'absence': 'غياب',
+    'late': 'تأخير',
+    'early_leave': 'خروج مبكر',
+    'missing_punch': 'بصمة ناقصة',
+    'unpaid_leave': 'إجازة بدون راتب',
+    'paid_leave': 'إجازة مدفوعة',
+    'overtime': 'ساعات إضافية',
+    'manual_deduction': 'خصم',
+    'bonus': 'مكافأة',
+    'adjustment': 'تسوية',
+  };
+
+  static String _status(Object? s) => switch (s) {
+        'pending' => 'بانتظار القرار',
+        'ignored' => 'معفى',
+        _ => 'محتسب',
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    final s = Map<String, dynamic>.from((preview['summary'] as Map?) ?? const {});
+    final period = Map<String, dynamic>.from((preview['period'] as Map?) ?? const {});
+    final events = [for (final e in (preview['events'] as List? ?? const [])) Map<String, dynamic>.from(e as Map)];
+    final month = (period['period_month'] ?? '').toString().split('-');
+    final m = month.length == 2 ? int.tryParse(month[1]) ?? 1 : 1;
+    final y = int.tryParse(month.first) ?? DateTime.now().year;
+    final issued = s['slip'] != null;
+    final pending = events.where((e) => e['status'] == 'pending' && e['event_type'] != 'missing_punch').length;
+
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const ToneIcon(Icons.pending_actions_rounded, tone: AppTone.info),
+              const SizedBox(width: AppSpace.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('راتب ${Fmt.monthNumber(m, y)}', style: AppText.subtitle),
+                    Text(issued ? 'اعتُمد الكشف' : 'قبل الاعتماد · قد يتغير حتى نهاية المسير', style: AppText.caption),
+                  ],
+                ),
+              ),
+              if (pending > 0) StatusBadge('$pending بانتظار قرار', tone: AppTone.warning),
+            ],
+          ),
+          const SizedBox(height: AppSpace.md),
+          KeyValueRow('الراتب الأساسي', Fmt.iqd(_n(s['basic']))),
+          if (_n(s['earnings']) > 0) KeyValueRow('مكافآت وإضافي', '+${Fmt.iqd(_n(s['earnings']))}', valueColor: AppColors.success),
+          if (_n(s['deductions']) > 0) KeyValueRow('غياب وتأخير وخصومات', '-${Fmt.iqd(_n(s['deductions']))}', valueColor: AppColors.danger),
+          if (_n(s['loans']) > 0) KeyValueRow('قسط السلفة', '-${Fmt.iqd(_n(s['loans']))}', valueColor: AppColors.danger),
+          const Divider(height: AppSpace.xl),
+          KeyValueRow('الصافي المتوقع', Fmt.iqd(_n(s['net'])), valueColor: AppColors.brand, bold: true),
+          if (events.isNotEmpty) ...[
+            const SizedBox(height: AppSpace.md),
+            Text('الحركات', style: AppText.label.copyWith(color: AppColors.textSecondary)),
+            const SizedBox(height: AppSpace.xs),
+            for (final e in events)
+              KeyValueRow(
+                '${_labels[e['event_type']] ?? e['event_type']}'
+                '${_n(e['minutes']) > 0 ? ' ${_n(e['minutes']).round()} د' : ''}'
+                ' · ${Fmt.date(DateTime.tryParse(e['event_date']?.toString() ?? ''))} · ${_status(e['status'])}',
+                _n(e['amount']) <= 0 ? '—' : '${_n(e['direction']) > 0 ? '+' : '-'}${Fmt.iqd(_n(e['amount']))}',
+                valueColor: e['status'] == 'ignored'
+                    ? AppColors.textMuted
+                    : _n(e['direction']) > 0
+                        ? AppColors.success
+                        : AppColors.danger,
+              ),
+          ],
+        ],
+      ),
+    );
+  }
 }
 
 class _SlipDetails extends StatelessWidget {

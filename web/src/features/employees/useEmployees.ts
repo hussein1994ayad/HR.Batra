@@ -147,9 +147,9 @@ export function useEmployees(ask: Ask) {
       warnFailedUploads(failedUploads);
     }, 'فشل تعديل بيانات الموظف');
 
-  const removeEmployee = (emp: Employee, deleteType: DeleteType, reason: string) =>
+  const removeEmployee = (emp: Employee, deleteType: DeleteType, reason: string, lastDay?: string) =>
     run('delete_emp', async () => {
-      await archiveOrDeleteEmployee(emp, deleteType, reason);
+      await archiveOrDeleteEmployee(emp, deleteType, reason, lastDay);
       await refreshAll();
       void celebrate(['#EF4444', '#F59E0B']);
       toast.success('تم تنفيذ عملية الحذف/الأرشفة المطلوبة للموظف بنجاح! ✅');

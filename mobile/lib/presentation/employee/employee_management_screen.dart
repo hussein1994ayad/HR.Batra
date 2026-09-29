@@ -92,10 +92,25 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
       confirmLabel: isActive ? 'تعطيل' : 'تفعيل',
       destructive: isActive,
     );
-    if (!ok) return;
+    if (!ok || !mounted) return;
+    // آخر يوم عمل فعلي: يُحسب راتب المسير الأخير حتى هذا اليوم
+    DateTime? lastDay;
+    if (isActive) {
+      lastDay = await showDatePicker(
+        context: context,
+        initialDate: DateTime.now(),
+        firstDate: DateTime.now().subtract(const Duration(days: 120)),
+        lastDate: DateTime.now().add(const Duration(days: 60)),
+        helpText: 'آخر يوم عمل',
+      );
+      if (lastDay == null || !mounted) return;
+    }
     try {
       setState(() => _isLoading = true);
-      await SupabaseService.client.from('employees').update({'is_active': !isActive}).eq('id', emp['id'] as String);
+      await SupabaseService.client.from('employees').update({
+        'is_active': !isActive,
+        if (lastDay != null) 'termination_date': '${lastDay.year}-${lastDay.month.toString().padLeft(2, '0')}-${lastDay.day.toString().padLeft(2, '0')}',
+      }).eq('id', emp['id'] as String);
       if (mounted) AppSnack.show(context, isActive ? 'عُطّل الحساب' : 'فُعّل الحساب', tone: isActive ? AppTone.warning : AppTone.success);
       unawaited(_loadEmployees());
     } catch (e) {

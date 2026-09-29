@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 import type { User } from '@supabase/supabase-js';
 import { ConfirmProvider } from '@/components/confirm';
+import { RoleContext, canSeePath, isAdminOnlyPath, type DashboardRole } from '@/lib/role';
 import type { AppNotification } from '@/lib/types';
 import { useIsClient } from '@/lib/useIsClient';
 
@@ -172,6 +173,7 @@ export default function DashboardLayout({
   const [collapsed, setCollapsed] = useState(false);
   const [adminUser, setAdminUser] = useState<User | null>(null);
   const [adminName, setAdminName] = useState<string>('مدير النظام');
+  const [role, setRole] = useState<DashboardRole>('admin');
   const [pendingLeaves, setPendingLeaves] = useState(0);
   const [pendingLoans, setPendingLoans] = useState(0);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -226,6 +228,7 @@ export default function DashboardLayout({
             if (parsed) {
               if (parsed.user) setAdminUser(parsed.user);
               if (parsed.name) setAdminName(parsed.name);
+              if (parsed.role === 'manager') setRole('manager');
               setPendingLeaves(parsed.pendingLeaves || 0);
               setPendingLoans(parsed.pendingLoans || 0);
               setLoading(false); // Render layout instantly!
@@ -258,6 +261,7 @@ export default function DashboardLayout({
 
         setAdminUser(session.user);
         setAdminName(emp.full_name);
+        setRole(emp.role === 'manager' ? 'manager' : 'admin');
 
         // Fetch notification counts and unread notifications concurrently
         const [
@@ -278,6 +282,7 @@ export default function DashboardLayout({
         localStorage.setItem('batra_cache_admin', JSON.stringify({
           user: session.user,
           name: emp.full_name,
+          role: emp.role,
           pendingLeaves: leavesCount || 0,
           pendingLoans: loansCount || 0
         }));
@@ -407,6 +412,10 @@ export default function DashboardLayout({
     }
   };
 
+  useEffect(() => {
+    if (role === 'manager' && isAdminOnlyPath(pathname)) router.replace('/dashboard');
+  }, [role, pathname, router]);
+
   const badgeFor = (item: SidebarItem) => {
     if (item.badgeKey === 'leaves') return pendingLeaves;
     if (item.badgeKey === 'loans') return pendingLoans;
@@ -421,7 +430,7 @@ export default function DashboardLayout({
   }, [pathname]);
 
   const totalNotifs = pendingLeaves + pendingLoans + systemNotifs.length;
-  const roleLabel = adminUser?.email === 'admin@hrpro.com' ? 'مسؤول النظام' : 'مدير الموارد';
+  const roleLabel = role === 'manager' ? 'مدير فرع' : 'مسؤول النظام';
 
   const renderNav = (isCollapsed: boolean) => (
     <nav className="flex-1 px-3 py-4 overflow-y-auto no-scrollbar">
@@ -433,7 +442,7 @@ export default function DashboardLayout({
             <p className="px-3 mb-2 text-[10px] font-bold tracking-wider text-slate-500">{group.label}</p>
           )}
           <div className="space-y-0.5">
-            {group.items.map((item) => {
+            {group.items.filter((item) => canSeePath(role, item.href)).map((item) => {
               const isActive = activeItem?.href === item.href;
               const Icon = item.icon;
               const badge = badgeFor(item);
@@ -764,9 +773,11 @@ export default function DashboardLayout({
             ) : (
               <ErrorBoundary>
                 <ConfirmProvider>
-                  <div key={pathname} className="animate-fade flex-1 flex flex-col">
-                    {children}
-                  </div>
+                  <RoleContext.Provider value={role}>
+                    <div key={pathname} className="animate-fade flex-1 flex flex-col">
+                      {role === 'manager' && isAdminOnlyPath(pathname) ? null : children}
+                    </div>
+                  </RoleContext.Provider>
                 </ConfirmProvider>
               </ErrorBoundary>
             )}
@@ -776,6 +787,7 @@ export default function DashboardLayout({
 
       {paletteOpen && (
         <CommandPalette
+          role={role}
           onClose={() => setPaletteOpen(false)}
           onNavigate={(href) => { setPaletteOpen(false); router.push(href); }}
           currentHref={activeItem?.href}
@@ -813,10 +825,12 @@ export default function DashboardLayout({
 }
 
 function CommandPalette({
+  role,
   onClose,
   onNavigate,
   currentHref,
 }: {
+  role: DashboardRole;
   onClose: () => void;
   onNavigate: (href: string) => void;
   currentHref?: string;
@@ -827,9 +841,10 @@ function CommandPalette({
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return ALL_ITEMS;
-    return ALL_ITEMS.filter((i) => i.name.toLowerCase().includes(q) || i.description.toLowerCase().includes(q));
-  }, [query]);
+    const visible = ALL_ITEMS.filter((i) => canSeePath(role, i.href));
+    if (!q) return visible;
+    return visible.filter((i) => i.name.toLowerCase().includes(q) || i.description.toLowerCase().includes(q));
+  }, [query, role]);
 
   useEffect(() => {
     const el = listRef.current?.querySelector<HTMLElement>(`[data-idx="${index}"]`);

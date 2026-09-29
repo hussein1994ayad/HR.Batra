@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { ADMIN, mockSupabase } from './mock-supabase';
+import { ADMIN, defaultFixtures, mockSupabase } from './mock-supabase';
 
 function collectPageErrors(page: Page) {
   const errors: string[] = [];
@@ -214,6 +214,34 @@ test.describe('workflows', () => {
     expect(api.writes('attendance', 'POST')[0].body).toMatchObject({ employee_id: 'e2', status: 'absent', deduction_status: 'applied' });
     // المبلغ يحسبه محرّك الرواتب من سجل الحضور: لا قيد خصم منفصل (كان يُخصم مرتين)
     expect(api.writes('bonuses_deductions', 'POST')).toHaveLength(0);
+  });
+
+  test('edits an advance in one server call (no doubled installments)', async ({ page }) => {
+    const api = await mockSupabase(page);
+    await page.goto('/dashboard/loans');
+    await page.getByRole('button', { name: 'جدول الأقساط' }).first().click();
+    await page.getByRole('button', { name: 'تعديل السلفة وإعادة الجدولة' }).click();
+    await page.getByRole('button', { name: 'حفظ وإعادة الجدولة' }).click();
+    await expect.poll(() => api.writes('rpc:reschedule_loan', 'POST').length).toBe(1);
+    expect(api.writes('rpc:reschedule_loan', 'POST')[0].body).toMatchObject({ p_loan_id: 'ln2', p_amount: 300000, p_installment_amount: 100000, p_count: 3 });
+    // الطريقة القديمة كانت تحذف الأقساط ثم تضيف جدولاً جديداً من المتصفح
+    expect(api.writes('loan_installments', 'DELETE')).toHaveLength(0);
+    expect(api.writes('loan_installments', 'POST')).toHaveLength(0);
+  });
+
+  test('a branch manager does not see admin-only pages', async ({ page }) => {
+    const fixtures = defaultFixtures();
+    fixtures.employees = fixtures.employees.map((e) => (e.id === ADMIN.id ? { ...e, role: 'manager' } : e));
+    await mockSupabase(page, { fixtures });
+    await page.goto('/dashboard');
+    const nav = page.getByRole('navigation').first();
+    await expect(nav.getByRole('link', { name: /الحضور والتتبع/ })).toBeVisible();
+    for (const name of ['الرواتب والمكافآت', 'السلف والأقساط', 'الإعدادات', 'التخزين', 'سلة المحذوفات']) {
+      await expect(nav.getByRole('link', { name: new RegExp(name) })).toHaveCount(0);
+    }
+    // فتح صفحة الرواتب بالرابط مباشرة يرجع للرئيسية
+    await page.goto('/dashboard/payroll');
+    await expect(page).toHaveURL(/\/dashboard\/?$/);
   });
 
   test('saves settings', async ({ page }) => {

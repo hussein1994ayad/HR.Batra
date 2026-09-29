@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { Archive, Clock, ShieldAlert, Trash2 } from 'lucide-react';
 import type { Employee } from '@/lib/db-types';
 import { Field, Input, Modal, ModalFooter, cn, type Tone } from '@/components/ui';
+import { getLocalDateStr } from '@/lib/dates';
 import type { DeleteType } from '../types';
 
 const DELETE_OPTIONS: { value: DeleteType; icon: typeof Archive; tone: Tone; title: string; body: string }[] = [
@@ -19,14 +20,14 @@ const DELETE_OPTIONS: { value: DeleteType; icon: typeof Archive; tone: Tone; tit
     icon: Clock,
     tone: 'amber',
     title: 'حذف مجدول بعد 30 يوماً',
-    body: 'يُجمّد الحساب فوراً ويُحذف ملفه وسجلاته تلقائياً بعد 30 يوماً.',
+    body: 'يُجمّد الحساب فوراً، وبعد 30 يوماً يُحذف حساب الدخول وبياناته الشخصية. تبقى كشوف رواتبه وسلفه وحضوره.',
   },
   {
     value: 'immediate',
     icon: ShieldAlert,
     tone: 'rose',
     title: 'حذف فوري ونهائي',
-    body: 'يحذف الحساب وكل البصمات والسلف والإجازات نهائياً بدون أي إمكانية للاسترجاع!',
+    body: 'يحذف حساب الدخول ويُخفي البيانات الشخصية فوراً ولا يمكن استرجاعه. تبقى كشوف رواتبه وسلفه وحضوره للمحاسبة.',
   },
 ];
 
@@ -34,17 +35,19 @@ type Props = {
   employeeToDelete: Employee;
   saving: boolean;
   onClose: () => void;
-  onSubmit: (deleteType: DeleteType, reason: string) => void;
+  onSubmit: (deleteType: DeleteType, reason: string, lastDay: string) => void;
 };
 
 /** اختيار طريقة إنهاء خدمة الموظف: أرشفة، حذف مجدول، أو حذف فوري. */
 export function DeleteEmployeeModal({ employeeToDelete, saving, onClose, onSubmit }: Props) {
   const [type, setType] = useState<DeleteType>('archive');
   const [reason, setReason] = useState('');
+  // آخر يوم عمل فعلي: يُحسب راتبه حتى هذا اليوم (كان يُعتمد يوم الضغط على الزر)
+  const [lastDay, setLastDay] = useState(() => getLocalDateStr());
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit(type, reason);
+    onSubmit(type, reason, lastDay);
   };
 
   return (
@@ -77,6 +80,9 @@ export function DeleteEmployeeModal({ employeeToDelete, saving, onClose, onSubmi
             );
           })}
         </div>
+        <Field label="آخر يوم عمل" hint="يُحسب راتبه في المسير الأخير حتى هذا اليوم.">
+          <Input type="date" required value={lastDay} onChange={(e) => setLastDay(e.target.value)} dir="ltr" />
+        </Field>
         <Field label="السبب (اختياري)">
           <Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="مثال: استقالة، انتهاء العقد..." />
         </Field>
