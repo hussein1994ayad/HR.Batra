@@ -119,7 +119,7 @@ class FakeBackend {
     SharedPreferences.setMockInitialValues({});
     await Supabase.initialize(
       url: 'https://fake.supabase.test',
-      anonKey: 'test-anon-key',
+      publishableKey: 'test-anon-key',
       httpClient: MockClient(_handle),
       debug: false,
       authOptions: const FlutterAuthClientOptions(
