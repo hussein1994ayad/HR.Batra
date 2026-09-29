@@ -116,6 +116,9 @@ class ReportRow {
   final int lateMinutes;
   final int earlyMinutes;
 
+  /// اسم العطلة الرسمية لهذا اليوم (إن كان عطلة)
+  final String? holidayName;
+
   const ReportRow({
     required this.date,
     required this.employee,
@@ -124,6 +127,7 @@ class ReportRow {
     this.leave,
     this.lateMinutes = 0,
     this.earlyMinutes = 0,
+    this.holidayName,
   });
 
   /// ملاحظة مختصرة للقائمة والإكسل.
@@ -133,6 +137,7 @@ class ReportRow {
       if (earlyMinutes > 0) 'خروج مبكر $earlyMinutes دقيقة',
       if (attendance != null && attendance!.checkIn != null && attendance!.checkOut == null && status.attended) 'بدون بصمة انصراف',
       if (leave != null) leave!.label,
+      if (holidayName != null) 'عطلة رسمية: $holidayName',
     ];
     return parts.join(' · ');
   }
@@ -149,7 +154,10 @@ List<ReportRow> buildDailyReport({
   required List<ReportAttendance> attendance,
   required List<ReportLeave> leaves,
   required List<WorkScheduleModel> schedules,
+  /// العطل الرسمية: التاريخ ← الاسم
+  Map<DateTime, String> holidays = const {},
 }) {
+  final holidayByDay = {for (final e in holidays.entries) _d(e.key): e.value};
   final last = _d(to).isAfter(_d(today)) ? _d(today) : _d(to);
   final byKey = {for (final a in attendance) '${a.employeeId}|${_d(a.date).toIso8601String()}': a};
   final rows = <ReportRow>[];
@@ -182,9 +190,9 @@ List<ReportRow> buildDailyReport({
           lateMinutes: late > grace || att.status == 'late' ? late : 0,
           earlyMinutes: early > grace ? early : 0,
         ));
-      } else if (att == null && !isWorkingDay(day, schedule)) {
-        // العطلة داخل الإجازة تبقى عطلة (رصيد الإجازة يُحسب بأيام الدوام فقط)
-        rows.add(ReportRow(date: day, employee: emp, status: ReportStatus.dayOff));
+      } else if (att == null && (!isWorkingDay(day, schedule) || holidayByDay.containsKey(day))) {
+        // العطلة (الأسبوعية أو الرسمية) داخل الإجازة تبقى عطلة (رصيد الإجازة يُحسب بأيام الدوام فقط)
+        rows.add(ReportRow(date: day, employee: emp, status: ReportStatus.dayOff, holidayName: holidayByDay[day]));
       } else if (fullLeave != null) {
         rows.add(ReportRow(date: day, employee: emp, status: ReportStatus.leave, attendance: att, leave: fullLeave));
       } else {

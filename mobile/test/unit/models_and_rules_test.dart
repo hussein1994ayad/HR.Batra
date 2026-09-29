@@ -144,6 +144,21 @@ void main() {
       expect(earlyLeaveMinutes(DateTime(2026, 9, 24, 15), s), 60);
     });
 
+    test('day summary: nobody is absent on an official holiday', () {
+      final day = DateTime(2026, 9, 24); // خميس: يوم دوام
+      final s = summarizeDay(
+        date: day,
+        employees: const [(id: 'e1', departmentId: null, branchId: null), (id: 'e2', departmentId: null, branchId: null)],
+        statusByEmployee: const {'e2': 'present'},
+        onLeave: const {},
+        schedules: const [],
+        isHoliday: true,
+      );
+      expect(s.absent, 0);
+      expect(s.present, 1);
+      expect(s.missingEmployeeIds, isEmpty);
+    });
+
     test('day summary skips days off and approved leave', () {
       // 2026-09-25 جمعة: خارج الدوام الافتراضي
       final friday = DateTime(2026, 9, 25);

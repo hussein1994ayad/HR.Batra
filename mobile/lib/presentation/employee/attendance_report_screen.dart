@@ -141,6 +141,12 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
           .lte('start_date', DateTime(to.year, to.month, to.day, 23, 59, 59).toUtc().toIso8601String())
           .gte('end_date', from.toUtc().toIso8601String()));
 
+      final holidayRows = rowsOf(await SupabaseService.client
+          .from('official_holidays')
+          .select('holiday_date, name')
+          .gte('holiday_date', _iso(from))
+          .lte('holiday_date', _iso(to)));
+
       String hhmm(Object? t) => t == null ? '' : t.toString().substring(0, t.toString().length >= 5 ? 5 : t.toString().length);
 
       final rows = buildDailyReport(
@@ -149,6 +155,10 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
         today: DateTime.now(),
         employees: employees,
         schedules: _schedules,
+        holidays: {
+          for (final h in holidayRows)
+            if (DateTime.tryParse(h.str('holiday_date') ?? '') != null) DateTime.parse(h.str('holiday_date')!): h.str('name') ?? 'عطلة',
+        },
         attendance: [
           for (final a in attendanceRows)
             ReportAttendance(
