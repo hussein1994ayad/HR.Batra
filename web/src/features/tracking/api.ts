@@ -3,6 +3,7 @@
 import { supabase } from '@/lib/supabase';
 import type { AttendanceRecord, Branch, LeaveRequest, LocationPoint, WorkSchedule } from '@/lib/db-types';
 import type { MockGpsAttempt, RawZone, TrackedEmployee } from './types';
+import { fetchAllRows } from '@/lib/fetch-all';
 
 export interface TrackingDataset {
   geofenceZones: RawZone[];
@@ -33,9 +34,11 @@ export async function fetchTrackingDataset(filters: {
       .eq('is_active', true)
       .order('full_name'),
     supabase.from('work_schedules').select('*'),
-    supabase.from('leave_requests').select('*').eq('status', 'approved'),
+    // الإجازات المعتمدة تتراكم مع السنين: كل الصفحات
+    fetchAllRows<LeaveRequest>((from, to) =>
+      supabase.from('leave_requests').select('*').eq('status', 'approved').order('id').range(from, to)),
   ]);
-  const firstError = [resZones, resBranches, resEmps, resScheds, resLeaves].find(r => r.error)?.error;
+  const firstError = [resZones, resBranches, resEmps, resScheds].find(r => r.error)?.error;
   if (firstError) throw firstError;
 
   let attendanceLogs: AttendanceRecord[] = [];
@@ -43,32 +46,42 @@ export async function fetchTrackingDataset(filters: {
   const payrollAmounts: Record<string, number> = {};
   let holidays: string[] = [];
   if (startDate && endDate) {
-    let attQuery = supabase.from('attendance')
-      .select('*, employees!employee_id(full_name, branch_id)')
-      .gte('work_date', startDate)
-      .lte('work_date', endDate);
-    if (selectedEmployee !== 'all') attQuery = attQuery.eq('employee_id', selectedEmployee);
+    // فترة طويلة × كل الموظفين تتجاوز حد الـ 1000 صف: كل الصفحات حتى لا ينقص التقرير
+    const attendancePage = (from: number, to: number) => {
+      let q = supabase.from('attendance')
+        .select('*, employees!employee_id(full_name, branch_id)')
+        .gte('work_date', startDate)
+        .lte('work_date', endDate);
+      if (selectedEmployee !== 'all') q = q.eq('employee_id', selectedEmployee);
+      return q.order('id').range(from, to);
+    };
+    type EventRow = { employee_id: string; event_date: string; event_type: string; amount: number };
 
-    const [resAtt, resMock, resEvents, resHolidays] = await Promise.all([
-      attQuery,
-      supabase.from('mock_gps_attempts').select('*, employees(full_name)').order('timestamp', { ascending: false }),
-      supabase.from('payroll_events')
+    const [attendanceRows, resMock, events, resHolidays] = await Promise.all([
+      fetchAllRows<AttendanceRecord>(attendancePage),
+      // محاولات الموقع الوهمي للفترة المختارة فقط (كانت تُجلب كلها منذ أول يوم)
+      supabase.from('mock_gps_attempts').select('*, employees(full_name)')
+        .gte('timestamp', new Date(`${startDate}T00:00:00`).toISOString())
+        .lte('timestamp', new Date(`${endDate}T23:59:59.999`).toISOString())
+        .order('timestamp', { ascending: false }),
+      // الأيام قبل نظام المسيرات ليس لها حركات؛ خطأ هنا لا يمنع عرض الصفحة
+      fetchAllRows<EventRow>((from, to) => supabase.from('payroll_events')
         .select('employee_id, event_date, event_type, amount')
         .in('event_type', ['absence', 'late'])
         .neq('status', 'void')
         .gte('event_date', startDate)
-        .lte('event_date', endDate),
+        .lte('event_date', endDate)
+        .order('id')
+        .range(from, to)).catch(() => [] as EventRow[]),
       supabase.from('official_holidays').select('holiday_date').gte('holiday_date', startDate).lte('holiday_date', endDate),
     ]);
     holidays = (resHolidays.data ?? []).map((h: { holiday_date: string }) => h.holiday_date);
-    if (resAtt.error) throw resAtt.error;
     if (resMock.error) throw resMock.error;
-    // الأيام قبل نظام المسيرات ليس لها حركات؛ خطأ هنا لا يمنع عرض الصفحة
-    for (const e of (resEvents.data ?? []) as { employee_id: string; event_date: string; event_type: string; amount: number }[]) {
+    for (const e of events) {
       payrollAmounts[`${e.employee_id}_${e.event_date}_${e.event_type === 'late' ? 'late' : 'absent'}`] = Number(e.amount) || 0;
     }
 
-    attendanceLogs = resAtt.data ?? [];
+    attendanceLogs = attendanceRows;
     if (selectedBranch !== 'all') {
       attendanceLogs = attendanceLogs.filter(log => log.employees?.branch_id === selectedBranch);
     }
@@ -81,7 +94,7 @@ export async function fetchTrackingDataset(filters: {
     // supabase-js بدون أنواع مولّدة يستنتج العلاقة departments كمصفوفة، وهي فعلياً كائن واحد
     employees: (resEmps.data ?? []) as unknown as TrackedEmployee[],
     workSchedules: resScheds.data ?? [],
-    leaveRequests: resLeaves.data ?? [],
+    leaveRequests: resLeaves,
     attendanceLogs,
     securityLogs,
     payrollAmounts,

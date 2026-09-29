@@ -56,7 +56,7 @@ export default function TrackingPage() {
               attendanceCount={t.attendanceLogs.length}
               lateCount={t.attendanceLogs.filter(a => a.status === 'late').length}
               mockAttempts={t.securityLogs.length}
-              activeZones={t.geofenceZones.length}
+              activeZones={t.branches.filter(b => b.latitude != null && b.longitude != null && (b.radius_meters ?? 0) > 0).length}
             />
           </div>
 

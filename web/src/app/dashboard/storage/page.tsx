@@ -157,6 +157,7 @@ export default function StoragePage() {
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- جلب الإحصائيات عند فتح الصفحة
     fetchAllStats();
   }, []);
 
