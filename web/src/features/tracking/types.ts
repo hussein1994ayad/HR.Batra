@@ -21,6 +21,9 @@ export type MockGpsAttempt = {
 
 export type TrackedEmployee = Pick<Employee, 'id' | 'full_name' | 'branch_id' | 'department_id' | 'role'> & {
   departments?: { name: string } | null;
+  /** لا غياب قبل المباشرة ولا بعد آخر يوم عمل */
+  join_date?: string | null;
+  termination_date?: string | null;
 };
 
 export type AttendanceRow = AttendanceRecord & { is_virtual: boolean };

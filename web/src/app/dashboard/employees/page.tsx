@@ -11,6 +11,7 @@ import {
   SegmentedTabs, StatTile, TableEmpty, cn, type Tone,
 } from '@/components/ui';
 import { formatDate, formatIQD } from '@/lib/format';
+import { useRole } from '@/lib/role';
 import { useEmployees } from '@/features/employees/useEmployees';
 import { daysUntil, filterEmployees } from '@/features/employees/logic';
 import { DeleteEmployeeModal } from '@/features/employees/components/DeleteEmployeeModal';
@@ -31,6 +32,8 @@ const ARCHIVE_META: Record<string, { label: string; tone: Tone }> = {
 
 export default function EmployeesPage() {
   const confirm = useConfirm();
+  // مدير الفرع لا يرى الرواتب (الرواتب للأدمن فقط)
+  const showSalary = useRole() === 'admin';
   const e = useEmployees(confirm);
   const [tab, setTab] = useState<'active' | 'archived'>('active');
   const [search, setSearch] = useState('');
@@ -140,7 +143,7 @@ export default function EmployeesPage() {
                 <th>الهاتف</th>
                 <th>الفرع</th>
                 <th>الصلاحية</th>
-                <th>الراتب الأساسي</th>
+                {showSalary && <th>الراتب الأساسي</th>}
                 <th>الجهاز</th>
                 <th className="!text-left">الإجراءات</th>
               </tr>
@@ -170,7 +173,7 @@ export default function EmployeesPage() {
                       <td className="font-mono" dir="ltr">{emp.phone || '—'}</td>
                       <td>{emp.branches?.name || <span className="text-slate-600">—</span>}</td>
                       <td><Badge tone={role.tone}>{role.label}</Badge></td>
-                      <td className="font-bold text-slate-200 whitespace-nowrap">{formatIQD(emp.monthly_salary_iqd)}</td>
+                      {showSalary && <td className="font-bold text-slate-200 whitespace-nowrap">{formatIQD(emp.monthly_salary_iqd)}</td>}
                       <td>{isLocked ? <Badge tone="emerald" dot>مربوط</Badge> : <Badge tone="slate">غير مربوط</Badge>}</td>
                       <td className="!text-left">
                         <div className="flex justify-end gap-1.5">
@@ -281,8 +284,8 @@ export default function EmployeesPage() {
           employeeToDelete={deleting}
           saving={busy === 'delete_emp'}
           onClose={() => setDeleting(null)}
-          onSubmit={async (deleteType, reason) => {
-            if (await e.removeEmployee(deleting, deleteType, reason)) setDeleting(null);
+          onSubmit={async (deleteType, reason, lastDay) => {
+            if (await e.removeEmployee(deleting, deleteType, reason, lastDay)) setDeleting(null);
           }}
         />
       )}

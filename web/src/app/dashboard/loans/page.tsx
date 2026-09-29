@@ -552,7 +552,7 @@ export default function LoansPage() {
 
       {/* Edit loan */}
       {editDraft && (
-        <Modal title="تعديل السلفة وإعادة الجدولة" subtitle="تُحذف الأقساط غير المدفوعة ويُعاد توليدها ابتداءً من الشهر القادم" icon={Pencil} tone="sky" onClose={() => setEditDraft(null)}>
+        <Modal title="تعديل السلفة وإعادة الجدولة" subtitle="الأقساط غير المدفوعة يُعاد توزيعها بالتساوي ابتداءً من الشهر القادم (المسدَّد لا يتغير)" icon={Pencil} tone="sky" onClose={() => setEditDraft(null)}>
           <form onSubmit={submitEdit} className="grid grid-cols-2 gap-4">
             <Field label="المبلغ الإجمالي (د.ع)">
               <AmountInput required value={editDraft.amount} onValueChange={(v) => setEditDraft({ ...editDraft, amount: v })} />
@@ -563,8 +563,10 @@ export default function LoansPage() {
             <Field label="عدد الأقساط الكلي">
               <AmountInput required value={editDraft.installmentCount} onValueChange={(v) => setEditDraft({ ...editDraft, installmentCount: v })} />
             </Field>
-            <Field label="المبلغ المتبقي (د.ع)">
-              <AmountInput required value={editDraft.remainingAmount} onValueChange={(v) => setEditDraft({ ...editDraft, remainingAmount: v })} />
+            <Field label="المبلغ المتبقي (يُحسب تلقائياً)" hint="المبلغ الإجمالي − ما سُدِّد">
+              <div className="h-10 flex items-center px-3 rounded-xl bg-slate-950/60 border border-slate-800 font-mono font-bold text-slate-200" dir="ltr">
+                {formatIQD(Math.max(editDraft.amount - (Number(editDraft.loan.amount) - Number(editDraft.loan.remaining_amount)), 0))}
+              </div>
             </Field>
             <div className="col-span-2">
               <ModalFooter onCancel={() => setEditDraft(null)} loading={busy === 'edit'} submitLabel="حفظ وإعادة الجدولة" submitIcon={Save} />

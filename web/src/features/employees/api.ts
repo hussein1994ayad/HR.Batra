@@ -196,14 +196,21 @@ const ARCHIVE_TYPES: Record<DeleteType, { type: string; reason: string }> = {
 };
 
 /** حذف فوري (RPC) أو تعطيل الحساب، ثم تسجيل الإجراء في الأرشيف. */
-export async function archiveOrDeleteEmployee(employee: Employee, deleteType: DeleteType, reason: string) {
+export async function archiveOrDeleteEmployee(employee: Employee, deleteType: DeleteType, reason: string, lastDay?: string) {
   const { data: { session } } = await supabase.auth.getSession();
 
   if (deleteType === 'immediate') {
     const { error } = await supabase.rpc('hard_delete_employee', { p_employee_id: employee.id });
     if (error) throw error;
+    if (lastDay) {
+      const { error: dateErr } = await supabase.from('employees').update({ termination_date: lastDay }).eq('id', employee.id);
+      if (dateErr) throw dateErr;
+    }
   } else {
-    const { error } = await supabase.from('employees').update({ is_active: false }).eq('id', employee.id);
+    // آخر يوم عمل فعلي يحدد راتب المسير الأخير (بدونه يُعتمد تاريخ اليوم)
+    const { error } = await supabase.from('employees')
+      .update({ is_active: false, ...(lastDay ? { termination_date: lastDay } : {}) })
+      .eq('id', employee.id);
     if (error) throw error;
   }
 
@@ -228,7 +235,7 @@ export async function archiveOrDeleteEmployee(employee: Employee, deleteType: De
 }
 
 export async function restoreArchivedEmployee(record: ArchivedEmployee) {
-  const { error: updErr } = await supabase.from('employees').update({ is_active: true }).eq('id', record.employee_id);
+  const { error: updErr } = await supabase.from('employees').update({ is_active: true, termination_date: null }).eq('id', record.employee_id);
   if (updErr) throw updErr;
   const { error } = await supabase.from('archived_employees').delete().eq('id', record.id);
   if (error) throw error;

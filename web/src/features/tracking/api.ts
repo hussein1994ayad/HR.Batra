@@ -29,7 +29,7 @@ export async function fetchTrackingDataset(filters: {
     supabase.from('geofence_zones').select('*').eq('is_active', true),
     supabase.from('branches').select('*'),
     supabase.from('employees')
-      .select('id, full_name, branch_id, department_id, role, departments:departments!employees_department_id_fkey(name)')
+      .select('id, full_name, branch_id, department_id, role, join_date, termination_date, departments:departments!employees_department_id_fkey(name)')
       .eq('is_active', true)
       .order('full_name'),
     supabase.from('work_schedules').select('*'),

@@ -5,6 +5,7 @@ import { Download, Eye, FileImage, FileText, FolderOpen, Pencil, Share2 } from '
 import type { Employee } from '@/lib/db-types';
 import { Avatar, Badge, Button, EmptyState, IconButton, Modal, type Tone } from '@/components/ui';
 import { formatIQD } from '@/lib/format';
+import { useRole } from '@/lib/role';
 import { openStorageUrl, resolveStorageUrl } from '@/lib/signed-urls';
 import { LeaveBalanceCard } from './LeaveBalanceCard';
 
@@ -33,6 +34,7 @@ function Detail({ label, children }: { label: string; children: React.ReactNode 
 /** ملف الموظف الشامل مع قائمة الوثائق المرفوعة. */
 export function EmployeeProfileModal({ profileEmployee: emp, onClose, onEdit, onPreview }: Props) {
   const docs = emp.document_urls ?? [];
+  const showSalary = useRole() === 'admin';
   const role = ROLE_META[emp.role] ?? ROLE_META.employee;
 
   const copyLinks = async () => {
@@ -63,7 +65,7 @@ export function EmployeeProfileModal({ profileEmployee: emp, onClose, onEdit, on
         <Detail label="البريد الإلكتروني"><span dir="ltr">{emp.email || '—'}</span></Detail>
         <Detail label="رقم الهاتف"><span dir="ltr">{emp.phone || '—'}</span></Detail>
         <Detail label="الفرع">{emp.branches?.name || '—'}</Detail>
-        <Detail label="الراتب الأساسي">{formatIQD(emp.monthly_salary_iqd)}</Detail>
+        {showSalary && <Detail label="الراتب الأساسي">{formatIQD(emp.monthly_salary_iqd)}</Detail>}
         <Detail label="قفل الهاتف">{emp.device_id_lock ? 'مقفل على جهاز' : 'غير مقيد'}</Detail>
         <Detail label="تاريخ المباشرة"><span dir="ltr">{emp.join_date || '—'}</span></Detail>
       </div>
