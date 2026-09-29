@@ -235,7 +235,7 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
   String? _validateDates() {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    if (_startDay.isBefore(today)) return 'لا يمكن طلب إجازة لتاريخ مضى';
+    if (_startDay.isBefore(today.subtract(const Duration(days: 30)))) return 'لا يمكن طلب إجازة لتاريخ مضى عليه أكثر من 30 يوماً';
     if (!_isHourly && _endDay.isBefore(_startDay)) return 'تاريخ النهاية يجب أن يكون بعد تاريخ البداية أو مساوياً له';
     if (_isHourly && _hourlyMinutes <= 0) return 'وقت النهاية يجب أن يكون بعد وقت البداية';
 
@@ -544,7 +544,7 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
             scrollable: true,
             value: _historyFilter,
             onChanged: (v) => setState(() => _historyFilter = v),
-            options: const [('all', 'الكل', null), ('pending', 'قيد المراجعة', null), ('approved', 'مقبولة', null), ('rejected', 'مرفوضة', null)],
+            options: const [('all', 'الكل', null), ('pending', 'قيد المراجعة', null), ('approved', 'مقبولة', null), ('rejected', 'مرفوضة', null), ('cancelled', 'ملغاة', null)],
           ),
           const SizedBox(height: AppSpace.md),
           if (items.isEmpty)
@@ -562,13 +562,34 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
                 child: FadeSlideIn(
                   index: i,
                   child: ContentWidth(
-                    child: _LeaveCard(req: items[i], typeName: _typeLabel(items[i]['leave_type'])),
+                    child: _LeaveCard(req: items[i], typeName: _typeLabel(items[i]['leave_type']), onCancel: _cancelLeave),
                   ),
                 ),
               ),
         ],
       ),
     );
+  }
+
+  /// إلغاء طلب إجازة ما زال قيد المراجعة (بعد القرار يُطلب من الإدارة).
+  Future<void> _cancelLeave(Map<String, dynamic> req) async {
+    final ok = await showAppConfirm(
+      context,
+      title: 'إلغاء طلب الإجازة؟',
+      message: 'يُلغى الطلب ولا يصل للإدارة، وتگدر تقدّم طلب جديد بنفس الأيام.',
+      confirmLabel: 'إلغاء الطلب',
+      destructive: true,
+    );
+    if (!ok || !mounted) return;
+    try {
+      await SupabaseService.client.from('leave_requests').update({'status': 'cancelled'}).eq('id', req['id'] as String).eq('status', 'pending');
+      if (!mounted) return;
+      AppSnack.success(context, 'أُلغي طلب الإجازة');
+      unawaited(_loadHistory());
+      unawaited(_loadBalance());
+    } catch (e) {
+      if (mounted) AppSnack.error(context, 'تعذّر إلغاء الطلب: ${errorText(e)}');
+    }
   }
 
   String _typeLabel(Object? type) {
@@ -629,10 +650,11 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
 }
 
 class _LeaveCard extends StatelessWidget {
-  const _LeaveCard({required this.req, required this.typeName});
+  const _LeaveCard({required this.req, required this.typeName, this.onCancel});
 
   final Map<String, dynamic> req;
   final String typeName;
+  final void Function(Map<String, dynamic> req)? onCancel;
 
   @override
   Widget build(BuildContext context) {
@@ -691,7 +713,18 @@ class _LeaveCard extends StatelessWidget {
             ),
           ],
           const SizedBox(height: AppSpace.xs),
-          Text('قُدّم ${Fmt.relative(DateTime.tryParse(req['created_at']?.toString() ?? ''))}', style: AppText.overline),
+          Row(
+            children: [
+              Expanded(child: Text('قُدّم ${Fmt.relative(DateTime.tryParse(req['created_at']?.toString() ?? ''))}', style: AppText.overline)),
+              if (req['status'] == 'pending' && onCancel != null)
+                AppButton.ghost(
+                  label: 'إلغاء الطلب',
+                  icon: Icons.close_rounded,
+                  size: AppButtonSize.small,
+                  onPressed: () => onCancel!(req),
+                ),
+            ],
+          ),
         ],
       ),
     );

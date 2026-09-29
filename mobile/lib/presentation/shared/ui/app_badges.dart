@@ -15,7 +15,8 @@ class StatusBadge extends StatelessWidget {
   factory StatusBadge.request(String? status, {Key? key}) {
     return switch (status) {
       'approved' || 'paid' || 'completed' || 'issued' => StatusBadge('مقبول', key: key, tone: AppTone.success, icon: Icons.check_circle_rounded),
-      'rejected' || 'cancelled' => StatusBadge('مرفوض', key: key, tone: AppTone.danger, icon: Icons.cancel_rounded),
+      'rejected' => StatusBadge('مرفوض', key: key, tone: AppTone.danger, icon: Icons.cancel_rounded),
+      'cancelled' => StatusBadge('ملغى', key: key, icon: Icons.block_rounded),
       'pending' => StatusBadge('قيد المراجعة', key: key, tone: AppTone.warning, icon: Icons.schedule_rounded),
       _ => StatusBadge(status ?? '—', key: key),
     };
