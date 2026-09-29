@@ -18,3 +18,17 @@ export function writeLocalCache<T extends object>(key: string, patch: T) {
     // تجاهل
   }
 }
+
+/**
+ * يمسح كل كاش اللوحة (batra_cache_*) من المتصفح: بيانات الموظفين والرواتب والفروع.
+ * يُستدعى عند تسجيل الخروج أو انتهاء الجلسة حتى لا تبقى بيانات حساسة على جهاز مشترك.
+ */
+export function clearLocalCaches() {
+  try {
+    for (const key of Object.keys(localStorage)) {
+      if (key.startsWith('batra_cache_')) localStorage.removeItem(key);
+    }
+  } catch {
+    // تجاهل
+  }
+}

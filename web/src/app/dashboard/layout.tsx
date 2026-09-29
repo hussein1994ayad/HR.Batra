@@ -34,6 +34,7 @@ import { ConfirmProvider } from '@/components/confirm';
 import { RoleContext, canSeePath, isAdminOnlyPath, type DashboardRole } from '@/lib/role';
 import type { AppNotification } from '@/lib/types';
 import { useIsClient } from '@/lib/useIsClient';
+import { clearLocalCaches } from '@/lib/local-cache';
 
 interface SidebarItem {
   name: string;
@@ -121,8 +122,7 @@ class ErrorBoundary extends React.Component<
           <div className="flex flex-wrap gap-3">
             <button
               onClick={() => {
-                localStorage.removeItem('batra_cache_dashboard');
-                localStorage.removeItem('batra_cache_admin');
+                clearLocalCaches();
                 window.location.reload();
               }}
               className="px-5 py-2.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold transition-all cursor-pointer active:scale-95"
@@ -239,8 +239,10 @@ export default function DashboardLayout({
         }
 
         const { data: { session } } = await supabase.auth.getSession();
+        // كاش مستخدم آخر على نفس المتصفح: يُمسح قبل عرض أي شيء منه
+        if (session && cachedAdmin && !cachedAdmin.includes(session.user.id)) clearLocalCaches();
         if (!session) {
-          localStorage.removeItem('batra_cache_admin');
+          clearLocalCaches();
           router.replace('/login');
           return;
         }
@@ -253,7 +255,7 @@ export default function DashboardLayout({
           .single();
 
         if (error || !emp || (emp.role !== 'admin' && emp.role !== 'manager')) {
-          localStorage.removeItem('batra_cache_admin');
+          clearLocalCaches();
           await supabase.auth.signOut();
           router.replace('/login');
           return;
@@ -290,7 +292,7 @@ export default function DashboardLayout({
         setLoading(false);
       } catch (err) {
         console.error('Auth check failed:', err);
-        localStorage.removeItem('batra_cache_admin');
+        clearLocalCaches();
         router.replace('/login');
       }
     };
@@ -396,8 +398,7 @@ export default function DashboardLayout({
 
   const handleLogout = async () => {
     setShowLogoutConfirm(false);
-    localStorage.removeItem('batra_cache_admin');
-    localStorage.removeItem('batra_cache_dashboard');
+    clearLocalCaches();
     await supabase.auth.signOut();
     router.replace('/login');
   };

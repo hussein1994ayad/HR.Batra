@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { clearLocalCaches } from '@/lib/local-cache';
 
 /**
  * DashboardErrorBoundary — يمسك الأخطاء غير المُتوقّعة في شجرة الـ dashboard
@@ -32,12 +33,7 @@ export class DashboardErrorBoundary extends React.Component<
   }
 
   private clearCacheAndReload = () => {
-    try {
-      localStorage.removeItem('batra_cache_dashboard');
-      localStorage.removeItem('batra_cache_admin');
-    } catch {
-      // localStorage قد يفشل في وضع Private/Incognito — تجاهل
-    }
+    clearLocalCaches();
     window.location.reload();
   };
 
