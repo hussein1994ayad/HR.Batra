@@ -329,7 +329,7 @@ class _HomeScreenState extends State<HomeScreen> {
         actionLabel: 'عرض الكل',
         onAction: _openAnnouncements,
       ),
-      _Announcements(loading: _isLoading && _announcements.isEmpty, items: _announcements),
+      _Announcements(loading: _isLoading && _announcements.isEmpty, items: _announcements, onOpen: _openAnnouncements),
       if (_onLeave.isNotEmpty) ...[
         SectionHeader(
           'المجازون اليوم',
@@ -642,27 +642,20 @@ class _QuickActions extends StatelessWidget {
 }
 
 class _Announcements extends StatelessWidget {
-  const _Announcements({required this.loading, required this.items});
+  const _Announcements({required this.loading, required this.items, this.onOpen});
   final bool loading;
   final List<Map<String, dynamic>> items;
+  final VoidCallback? onOpen;
 
   @override
   Widget build(BuildContext context) {
-    if (loading) return const SkeletonList(count: 2, itemHeight: 88);
+    if (loading) return const SkeletonList(count: 1, itemHeight: 196);
     if (items.isEmpty) {
       return const AppCard(
         child: EmptyView(title: 'لا توجد تعاميم جديدة', message: 'ستظهر هنا إعلانات الإدارة.', icon: Icons.campaign_rounded, compact: true),
       );
     }
-    return Column(
-      children: [
-        for (var i = 0; i < items.length; i++)
-          Padding(
-            padding: const EdgeInsets.only(bottom: AppSpace.md),
-            child: FadeSlideIn(index: i, child: AnnouncementCard(items[i])),
-          ),
-      ],
-    );
+    return FadeSlideIn(child: AnnouncementCarousel(items: items, onOpen: onOpen));
   }
 }
 
