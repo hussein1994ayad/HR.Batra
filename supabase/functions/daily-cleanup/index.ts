@@ -1,107 +1,64 @@
 // =========================================================================
-// نظام HR Pro v6.0 - Edge Function للتنظيف اليومي (daily-cleanup)
-// يشتغل تلقائياً عبر نظام الجدولة الزمني لتفريغ سلة المحذوفات وأرشفة بيانات المواقع
+// HR Pro — daily-cleanup: الحذف الفعلي لملفات سلة المحذوفات من التخزين
 // =========================================================================
+// تستدعيها مهمة pg_cron اليومية (daily_trash_storage_cleanup) بعد perform_daily_cleanup.
+// تُنشر بـ --no-verify-jwt مثل push-notification لأن المهمة لا تحمل مفتاحاً.
+// آمنة حتى لو استدعاها أي أحد: تحذف فقط الملفات التي تجاوزت موعد حذفها المجدول
+// (30 يوماً في السلة) ولم تُسترجع — نفس ما كانت ستحذفه المهمة على أي حال.
+// =========================================================================
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "jsr:@supabase/supabase-js@2";
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+const BUCKETS: Record<string, string> = {
+  avatar: "avatars",
+  document: "employee-documents",
+  pledge: "loan-pledges",
+  logo: "company-logos",
+};
 
-const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+// حد أعلى لكل تشغيل: الباقي يُحذف في اليوم التالي
+const MAX_FILES_PER_RUN = 500;
 
-serve(async (req) => {
-  // التحقق من طريقة الطلب للوظيفة
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { 
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-      }
-    });
-  }
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+
+Deno.serve(async (req: Request) => {
+  if (req.method !== "POST") return json({ error: "method not allowed" }, 405);
 
   try {
-    console.log("بدء تشغيل عملية التنظيف اليومي المؤتمتة...");
-
-    // 1. إنشاء زبون بـ Service Role لتخطي قيود الـ RLS والتحكم المطلق بالتخزين وحذف الملفات نهائياً
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-
-    // 2. استدعاء الدالة المخزنة في قاعدة البيانات لإتمام التنظيف وأرشفة بيانات التتبع
-    const { data: expiredFiles, error: cleanupError } = await supabase.rpc('perform_daily_cleanup');
-
-    if (cleanupError) {
-      console.error("خطأ أثناء تنفيذ دالة perform_daily_cleanup في قاعدة البيانات:", cleanupError);
-      throw cleanupError;
-    }
-
-    console.log(`تم الكشف عن ${expiredFiles?.length || 0} ملفاً منتهياً في سلة المحذوفات (تجاوزت 30 يوماً).`);
-
-    let successfullyDeletedCount = 0;
-
-    // 3. حذف الملفات الفعلي من مجلدات التخزين
-    if (expiredFiles && expiredFiles.length > 0) {
-      for (const file of expiredFiles) {
-        const { expired_file_path, expired_bucket_id, file_record_id } = file;
-        
-        console.log(`جاري الحذف التام والنهائي للملف: [${expired_file_path}] من المجلد [${expired_bucket_id}]`);
-        
-        // حذف الملف الفعلي من مجلد التخزين (Storage Bucket)
-        const { error: deleteStorageError } = await supabase.storage
-          .from(expired_bucket_id)
-          .remove([expired_file_path]);
-
-        if (deleteStorageError) {
-          console.error(`فشل حذف الملف [${expired_file_path}] من التخزين:`, deleteStorageError);
-        } else {
-          console.log(`تم حذف الملف [${expired_file_path}] بنجاح من التخزين.`);
-          
-          // بعد التأكد من الحذف من التخزين، نمسح السجل نهائياً من قاعدة البيانات في جدول deleted_files
-          const { error: deleteRecordError } = await supabase
-            .from('deleted_files')
-            .delete()
-            .eq('id', file_record_id);
-
-          if (deleteRecordError) {
-            console.error(`خطأ في مسح سجل سلة المحذوفات للمعرف [${file_record_id}]:`, deleteRecordError);
-          } else {
-            successfullyDeletedCount++;
-          }
-        }
-      }
-    }
-
-    console.log(`تم الانتهاء بنجاح. الملفات المحذوفة نهائياً: ${successfullyDeletedCount}/${expiredFiles?.length || 0}`);
-
-    return new Response(
-      JSON.stringify({ 
-        success: true, 
-        message: "تم إجراء عملية التنظيف اليومي وتفريغ سلة المحذوفات وأرشفة بيانات التتبع بنجاح.",
-        total_expired_detected: expiredFiles?.length || 0,
-        successfully_deleted_from_storage: successfullyDeletedCount
-      }),
-      {
-        headers: { 
-          "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*"
-        },
-        status: 200,
-      }
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
     );
 
-  } catch (error) {
-    console.error("حدث خطأ غير متوقع أثناء عملية التنظيف اليومي:", error);
-    return new Response(
-      JSON.stringify({ 
-        success: false, 
-        error: error.message 
-      }),
-      {
-        headers: { 
-          "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*"
-        },
-        status: 500,
+    const { data: expired, error } = await supabase
+      .from("deleted_files")
+      .select("id, file_path, file_type")
+      .lte("scheduled_deletion_date", new Date().toISOString())
+      .is("restored_at", null)
+      .limit(MAX_FILES_PER_RUN);
+    if (error) throw error;
+
+    let deleted = 0;
+    for (const file of expired ?? []) {
+      const bucket = BUCKETS[file.file_type] ?? "employee-documents";
+      const { error: storageError } = await supabase.storage.from(bucket).remove([file.file_path]);
+      if (storageError) {
+        console.error(`daily-cleanup: storage remove failed for ${bucket}/${file.file_path}:`, storageError.message);
+        continue;
       }
-    );
+      const { error: rowError } = await supabase.from("deleted_files").delete().eq("id", file.id);
+      if (rowError) {
+        console.error(`daily-cleanup: could not delete trash row ${file.id}:`, rowError.message);
+        continue;
+      }
+      deleted++;
+    }
+
+    console.log(`daily-cleanup: removed ${deleted}/${expired?.length ?? 0} expired trash files`);
+    return json({ success: true, expired: expired?.length ?? 0, deleted });
+  } catch (e) {
+    console.error("daily-cleanup failed:", e);
+    return json({ success: false, error: e instanceof Error ? e.message : String(e) }, 500);
   }
 });
