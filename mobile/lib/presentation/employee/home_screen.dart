@@ -39,6 +39,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isLoading = true;
   List<Map<String, dynamic>> _announcements = [];
   List<Map<String, dynamic>> _onLeave = [];
+  List<Map<String, dynamic>> _lateToday = [];
   Map<String, dynamic>? _todayAttendance;
   String _userRole = 'employee';
   int _unreadNotificationsCount = 0;
@@ -280,8 +281,17 @@ class _HomeScreenState extends State<HomeScreen> {
   // المجازون الآن (منفصل: فشله لا يوقف باقي الرئيسية)
   Future<void> _loadOnLeave() async {
     try {
-      final data = await SupabaseService.client.rpc<dynamic>('get_on_leave_now');
-      if (mounted && data is List) setState(() => _onLeave = List<Map<String, dynamic>>.from(data));
+      final r = await Future.wait<dynamic>([
+        SupabaseService.client.rpc<dynamic>('get_on_leave_now'),
+        // المتأخرون اليوم (قد لا تكون الدالة منشورة بعد على السيرفر: لا يوقف المجازين)
+        SupabaseService.client.rpc<dynamic>('get_late_today').catchError((Object _) => <dynamic>[]),
+      ]);
+      if (mounted) {
+        setState(() {
+          if (r[0] is List) _onLeave = List<Map<String, dynamic>>.from(r[0] as List);
+          if (r[1] is List) _lateToday = List<Map<String, dynamic>>.from(r[1] as List);
+        });
+      }
     } catch (e) {
       debugPrint('Error loading on-leave list: $e');
     }
@@ -329,7 +339,7 @@ class _HomeScreenState extends State<HomeScreen> {
         actionLabel: 'عرض الكل',
         onAction: _openAnnouncements,
       ),
-      _Announcements(loading: _isLoading && _announcements.isEmpty, items: _announcements),
+      _Announcements(loading: _isLoading && _announcements.isEmpty, items: _announcements, onOpen: _openAnnouncements),
       if (_onLeave.isNotEmpty) ...[
         SectionHeader(
           'المجازون اليوم',
@@ -338,6 +348,15 @@ class _HomeScreenState extends State<HomeScreen> {
           onAction: _openAnnouncements,
         ),
         OnLeaveStrip(people: _onLeave),
+      ],
+      if (_lateToday.isNotEmpty) ...[
+        SectionHeader(
+          'المتأخرون اليوم',
+          trailing: StatusBadge('${_lateToday.length}', tone: AppTone.warning),
+          actionLabel: 'عرض الكل',
+          onAction: _openAnnouncements,
+        ),
+        LateStrip(people: _lateToday),
       ],
     ];
 
@@ -642,27 +661,20 @@ class _QuickActions extends StatelessWidget {
 }
 
 class _Announcements extends StatelessWidget {
-  const _Announcements({required this.loading, required this.items});
+  const _Announcements({required this.loading, required this.items, this.onOpen});
   final bool loading;
   final List<Map<String, dynamic>> items;
+  final VoidCallback? onOpen;
 
   @override
   Widget build(BuildContext context) {
-    if (loading) return const SkeletonList(count: 2, itemHeight: 88);
+    if (loading) return const SkeletonList(count: 1, itemHeight: 196);
     if (items.isEmpty) {
       return const AppCard(
         child: EmptyView(title: 'لا توجد تعاميم جديدة', message: 'ستظهر هنا إعلانات الإدارة.', icon: Icons.campaign_rounded, compact: true),
       );
     }
-    return Column(
-      children: [
-        for (var i = 0; i < items.length; i++)
-          Padding(
-            padding: const EdgeInsets.only(bottom: AppSpace.md),
-            child: FadeSlideIn(index: i, child: AnnouncementCard(items[i])),
-          ),
-      ],
-    );
+    return FadeSlideIn(child: AnnouncementCarousel(items: items, onOpen: onOpen));
   }
 }
 

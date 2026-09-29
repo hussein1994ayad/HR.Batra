@@ -23,6 +23,7 @@ class _AnnouncementsBoardScreenState extends State<AnnouncementsBoardScreen> {
   bool _failed = false;
   List<Map<String, dynamic>> _announcements = [];
   List<Map<String, dynamic>> _onLeave = [];
+  List<Map<String, dynamic>> _late = [];
 
   @override
   void initState() {
@@ -35,11 +36,13 @@ class _AnnouncementsBoardScreenState extends State<AnnouncementsBoardScreen> {
       final r = await Future.wait<dynamic>([
         SupabaseService.client.rpc<dynamic>('get_active_announcements', params: {'p_limit': 50}),
         SupabaseService.client.rpc<dynamic>('get_on_leave_now'),
+        SupabaseService.client.rpc<dynamic>('get_late_today').catchError((Object _) => <dynamic>[]),
       ]);
       if (!mounted) return;
       setState(() {
         _announcements = List<Map<String, dynamic>>.from(r[0] as List);
         _onLeave = List<Map<String, dynamic>>.from(r[1] as List);
+        _late = List<Map<String, dynamic>>.from(r[2] as List);
         _failed = false;
       });
     } catch (e) {
@@ -75,6 +78,13 @@ class _AnnouncementsBoardScreenState extends State<AnnouncementsBoardScreen> {
               ],
             ),
           ),
+        if (_late.isNotEmpty) ...[
+          SectionHeader('المتأخرون اليوم', trailing: StatusBadge('${_late.length}', tone: AppTone.warning)),
+          AppCard(
+            padding: const EdgeInsets.symmetric(vertical: AppSpace.xs),
+            child: Column(children: [for (final p in _late) LateTile(p)]),
+          ),
+        ],
         const SectionHeader('التعاميم السارية'),
         if (_announcements.isEmpty)
           const AppCard(child: EmptyView(title: 'لا توجد تعاميم حالياً', message: 'ستظهر هنا إعلانات الإدارة.', icon: Icons.campaign_rounded, compact: true))
