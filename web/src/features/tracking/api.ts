@@ -14,6 +14,8 @@ export interface TrackingDataset {
   securityLogs: MockGpsAttempt[];
   /** مبلغ الخصم كما يحسبه محرّك الرواتب: `${employeeId}_${date}_${late|absent}` → د.ع */
   payrollAmounts: Record<string, number>;
+  /** العطل الرسمية YYYY-MM-DD (لا غياب فيها) */
+  holidays: string[];
 }
 
 export async function fetchTrackingDataset(filters: {
@@ -39,6 +41,7 @@ export async function fetchTrackingDataset(filters: {
   let attendanceLogs: AttendanceRecord[] = [];
   let securityLogs: MockGpsAttempt[] = [];
   const payrollAmounts: Record<string, number> = {};
+  let holidays: string[] = [];
   if (startDate && endDate) {
     let attQuery = supabase.from('attendance')
       .select('*, employees!employee_id(full_name, branch_id)')
@@ -46,7 +49,7 @@ export async function fetchTrackingDataset(filters: {
       .lte('work_date', endDate);
     if (selectedEmployee !== 'all') attQuery = attQuery.eq('employee_id', selectedEmployee);
 
-    const [resAtt, resMock, resEvents] = await Promise.all([
+    const [resAtt, resMock, resEvents, resHolidays] = await Promise.all([
       attQuery,
       supabase.from('mock_gps_attempts').select('*, employees(full_name)').order('timestamp', { ascending: false }),
       supabase.from('payroll_events')
@@ -55,7 +58,9 @@ export async function fetchTrackingDataset(filters: {
         .neq('status', 'void')
         .gte('event_date', startDate)
         .lte('event_date', endDate),
+      supabase.from('official_holidays').select('holiday_date').gte('holiday_date', startDate).lte('holiday_date', endDate),
     ]);
+    holidays = (resHolidays.data ?? []).map((h: { holiday_date: string }) => h.holiday_date);
     if (resAtt.error) throw resAtt.error;
     if (resMock.error) throw resMock.error;
     // الأيام قبل نظام المسيرات ليس لها حركات؛ خطأ هنا لا يمنع عرض الصفحة
@@ -80,6 +85,7 @@ export async function fetchTrackingDataset(filters: {
     attendanceLogs,
     securityLogs,
     payrollAmounts,
+    holidays,
   };
 }
 

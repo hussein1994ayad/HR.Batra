@@ -124,7 +124,7 @@ export function AttendanceBreakdownModal({ row, startDate, endDate, locked, acti
               <div className="flex items-center gap-2 shrink-0">
                 {Number(e.amount) > 0 && (
                   <span className={`font-mono font-bold ${e.direction === 1 ? 'text-emerald-300' : 'text-rose-300'}`}>
-                    {e.direction === 1 ? '+' : '−'}{Number(e.amount).toLocaleString('en-US')}
+                    {e.direction === 1 ? '+' : '−'}{Math.round(Number(e.amount)).toLocaleString('en-US')}
                   </span>
                 )}
                 {decidable && (

@@ -78,6 +78,8 @@ export interface RunRow {
   overtime_minutes: number;
   paid_leave_days: number;
   unpaid_leave_days: number;
+  /** ترك العمل خلال المسير: ما يبقى من السلف بعد أقساط هذا المسير */
+  loan_balance_after_exit?: number;
   slip: null | {
     id: string;
     basic_salary: number;
@@ -156,7 +158,7 @@ export function buildPayrollRows({ run, events, overrides, pendingLeaveEmployeeI
       id: e.id,
       reason: e.notes || EVENT_LABELS[e.event_type],
       issue_date: e.event_date,
-      amount: n(e.amount),
+      amount: Math.round(n(e.amount)),
     });
     const isAttendance = (e: PayrollEvent) => ATTENDANCE_TYPES.includes(e.event_type);
     const bonusesList = approved.filter((e) => e.direction === 1).map(toEntry);
@@ -227,6 +229,7 @@ export function buildPayrollRows({ run, events, overrides, pendingLeaveEmployeeI
       paidLeavesCount: n(r.paid_leave_days),
       pendingCount: slip ? 0 : n(r.pending_count),
       missingPunches: n(r.missing_punches),
+      loanBalanceAfterExit: n(r.loan_balance_after_exit),
 
       events: empEvents,
       bonusesList,
