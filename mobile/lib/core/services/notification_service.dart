@@ -308,6 +308,7 @@ class NotificationService {
         db.from('attendance').select('check_in_time, check_out_time').eq('employee_id', user.id).eq('work_date', todayStr).maybeSingle(),
         db.from('leave_requests').select('start_date, end_date').eq('employee_id', user.id).eq('status', 'approved')
             .eq('is_hourly', false).gte('end_date', today.toUtc().toIso8601String()),
+        db.from('official_holidays').select('holiday_date').gte('holiday_date', todayStr),
       ]);
       final att = results[0] as Map<String, dynamic>?;
       final leaveDays = <DateTime>{};
@@ -318,6 +319,12 @@ class NotificationService {
         for (var d = DateTime(from.year, from.month, from.day); !d.isAfter(to); d = DateTime(d.year, d.month, d.day + 1)) {
           leaveDays.add(d);
         }
+      }
+
+      // العطل الرسمية: لا تذكير (مثل أيام الإجازة)
+      for (final h in (results[2] as List<dynamic>).cast<Map<String, dynamic>>()) {
+        final d = DateTime.tryParse(h['holiday_date'].toString());
+        if (d != null) leaveDays.add(DateTime(d.year, d.month, d.day));
       }
 
       final plan = planAttendanceReminders(

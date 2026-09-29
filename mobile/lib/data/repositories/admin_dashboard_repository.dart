@@ -197,6 +197,7 @@ class AdminDashboardRepository {
             .eq('event_date', dayStr)),
     ]);
 
+    final isHoliday = rowOf(await _db.from('official_holidays').select('holiday_date').eq('holiday_date', dayStr).maybeSingle()) != null;
     final attendance = rowsOf(results[0]);
     final schedules = rowsOf(results[6]).map(WorkScheduleModel.fromMap).toList();
     final onLeave = rowsOf(results[7]).map((r) => r.str('employee_id') ?? '').toSet();
@@ -207,6 +208,7 @@ class AdminDashboardRepository {
       statusByEmployee: {for (final r in attendance) r.str('employee_id') ?? '': r.str('status') ?? ''},
       onLeave: onLeave,
       schedules: schedules,
+      isHoliday: isHoliday,
     );
 
     final securityLogs = [

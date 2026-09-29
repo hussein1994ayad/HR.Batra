@@ -41,6 +41,9 @@ class _EmployeeFormState extends State<_EmployeeForm> {
   final _salary = TextEditingController();
   String _role = 'employee';
   String? _branchId;
+
+  /// تاريخ المباشرة الفعلي (يحدّد نسبة راتب أول شهر) — افتراضياً اليوم ويمكن تغييره
+  DateTime _joinDate = DateTime.now();
   final List<File> _documents = [];
   bool _saving = false;
   bool _showPassword = true;
@@ -84,7 +87,7 @@ class _EmployeeFormState extends State<_EmployeeForm> {
         'p_document_urls': uploadedDocs,
         'p_employee_code': empCode,
         'p_employee_id': newEmpId,
-        'p_join_date': DateTime.now().toIso8601String().split('T')[0],
+        'p_join_date': '${_joinDate.year}-${_joinDate.month.toString().padLeft(2, '0')}-${_joinDate.day.toString().padLeft(2, '0')}',
       });
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
@@ -187,6 +190,22 @@ class _EmployeeFormState extends State<_EmployeeForm> {
                 onTap: () async {
                   final id = await showAppOptions(context, title: 'الفرع', current: _branchId, options: [for (final b in widget.branches) (b['id'] as String, b['name'].toString())]);
                   if (id != null) setState(() => _branchId = id);
+                },
+              ),
+              const SizedBox(height: AppSpace.md),
+              AppPickerField(
+                label: 'تاريخ المباشرة',
+                icon: Icons.event_available_rounded,
+                value: Fmt.date(_joinDate, withYear: true),
+                onTap: () async {
+                  final d = await showDatePicker(
+                    context: context,
+                    initialDate: _joinDate,
+                    firstDate: DateTime(2000),
+                    lastDate: DateTime.now().add(const Duration(days: 365)),
+                    helpText: 'تاريخ مباشرة الموظف',
+                  );
+                  if (d != null) setState(() => _joinDate = d);
                 },
               ),
               const SizedBox(height: AppSpace.md),

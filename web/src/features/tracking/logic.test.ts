@@ -41,6 +41,9 @@ describe('buildDecisions', () => {
     expect(list[0].suggestedAmount).toBe(0); // المبلغ من محرّك الرواتب فقط (لا مبالغ ثابتة)
     expect(list[2].date).toBe('2026-09-03');
 
+    // يوم عطلة رسمية: لا غياب افتراضي
+    expect(buildDecisions({ ...base, attendanceLogs, holidays: ['2026-09-03'] }).map(d => d.type)).toEqual(['late', 'absent']);
+
     const rows = buildAttendanceRows(attendanceLogs, list);
     expect(rows.filter(r => r.is_virtual)).toHaveLength(1);
   });

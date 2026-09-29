@@ -74,6 +74,12 @@ describe('buildPayrollRows', () => {
     expect(s.pendingCount).toBe(0);
   });
 
+  it('flags a leaver who still owes a loan', () => {
+    const [x] = buildPayrollRows({ run: { ...run, rows: [{ ...baseRow, termination_date: '2026-09-20', loan_balance_after_exit: 200000 }] }, events: [], overrides: {} });
+    expect(x.loanBalanceAfterExit).toBe(200000);
+    expect(row.loanBalanceAfterExit).toBe(0);
+  });
+
   it('flags missing attendance and negative nets', () => {
     const [m] = buildPayrollRows({ run: { ...run, rows: [{ ...baseRow, loans: 900000 }] }, events: [], overrides: {}, attendanceEmployeeIds: [] });
     expect(m.isAttendanceMissing).toBe(true);

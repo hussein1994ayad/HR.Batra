@@ -40,6 +40,7 @@ const ev = (emp, date, type) => one(
 const run = async (month) => (await as(db, 'admin', `SELECT get_payroll_run($1) r`, [month])).rows[0].r;
 const row = async (month, emp) => (await run(month)).rows.find((r) => r.employee_id === emp);
 const N = (x) => Number(x);
+const r2 = (x) => Math.round(x * 100) / 100;
 
 // ---------------- المسيرات ----------------
 const sep = await one(`SELECT * FROM payroll_periods WHERE period_month='2026-09'`);
@@ -86,7 +87,7 @@ const l28 = await ev(E3, '2026-09-28', 'late');
 check('8) late 30 min counted from shift start = 30 × (20,000 ÷ 480) = 1,250 in September',
   l26 && N(l26.minutes) === 30 && N(l26.amount) === 1250 && l26.payroll_month === '2026-09', JSON.stringify(l26));
 check('   late is pending until the admin decides (not auto-deducted)', l26.status === 'pending');
-check('9) late on day 28 → October', l28 && l28.payroll_month === '2026-10' && N(l28.amount) === Math.round(40 * 20000 / 480));
+check('9) late on day 28 → October', l28 && l28.payroll_month === '2026-10' && N(l28.amount) === r2(40 * 20000 / 480));
 await expectOk('admin approves the late deduction', as(db, 'admin', `SELECT decide_payroll_event($1, true, 'تأخير متكرر')`, [l26.id]));
 check('   approval updates attendance too (compat with screens)',
   (await one(`SELECT deduction_status FROM attendance WHERE employee_id=$1 AND work_date='2026-09-24'`, [E3])).deduction_status === 'applied');
@@ -107,15 +108,15 @@ check('   unpaid leave day = 20,000', oct.filter((r) => r.event_type === 'unpaid
 // ---------------- 11) دوام مختلف (6 ساعات) ----------------
 await attend(E4, '2026-09-15', '08:30', '14:00', 'late', 'applied');
 const l6 = await ev(E4, '2026-09-15', 'late');
-check('11) 6-hour shift: minute = 20,000 ÷ 360 → 30 min late = 1,667',
-  l6 && N(l6.amount) === Math.round(30 * 20000 / 360) && Math.abs(N(l6.minute_rate) - 20000 / 360) < 0.001, JSON.stringify(l6));
+check('11) 6-hour shift: minute = 20,000 ÷ 360 → 30 min late = 1,666.67',
+  l6 && N(l6.amount) === r2(30 * 20000 / 360) && Math.abs(N(l6.minute_rate) - 20000 / 360) < 0.001, JSON.stringify(l6));
 
 // ---------------- 12) غياب جزئي: إجازة زمنية بدون راتب ----------------
 await db.query(`INSERT INTO leave_requests (employee_id, start_date, end_date, leave_type, is_hourly, start_hour, end_hour, is_paid, status)
   VALUES ($1, '2026-09-16T05:00:00Z', '2026-09-16T07:00:00Z', 'other', true, '08:00', '10:00', false, 'approved')`, [E4]);
 const hl = await ev(E4, '2026-09-16', 'unpaid_leave');
 check('12) 2-hour unpaid leave = 120 × minute rate, not a full day',
-  hl && N(hl.minutes) === 120 && N(hl.amount) === Math.round(120 * 20000 / 360), JSON.stringify(hl));
+  hl && N(hl.minutes) === 120 && N(hl.amount) === r2(120 * 20000 / 360), JSON.stringify(hl));
 await db.query(`INSERT INTO leave_requests (employee_id, start_date, end_date, leave_type, is_hourly, start_hour, end_hour, is_paid, status)
   VALUES ($1, '2026-09-17T05:00:00Z', '2026-09-17T07:00:00Z', 'other', true, '08:00', '10:00', true, 'approved')`, [E4]);
 check('   paid hourly leave deducts nothing', N((await ev(E4, '2026-09-17', 'paid_leave')).amount) === 0);
@@ -236,11 +237,133 @@ check('old-client decision is deducted once (attendance), not twice',
   oct5.length === 1 && oct5[0].event_type === 'absence' && N(oct5[0].amount) === 20000, JSON.stringify(oct5));
 
 // ---------------- كشف قديم داخل مسير المحرّك ----------------
-await db.query(`INSERT INTO salary_slips (employee_id, work_month, basic_salary, net_salary, status) VALUES ($1, '2026-11', 900000, 880000, 'published')`, [IDS.emp2]);
+// كشف قديم لشهر تشرين الثاني أُنشئ يوم 10 تشرين الثاني
+await db.query(`INSERT INTO salary_slips (employee_id, work_month, basic_salary, net_salary, status, created_at)
+  VALUES ($1, '2026-11', 900000, 880000, 'published', '2026-11-10 12:00+03')`, [IDS.emp2]);
 await absent(IDS.emp2, '2026-11-03');
 const legacyEv = await ev(IDS.emp2, '2026-11-03', 'absence');
-check('event inside a month with a legacy (browser) slip is treated as already paid',
+check('event dated before a legacy (browser) slip was made is treated as already paid',
   legacyEv.payroll_month === '2026-11' && legacyEv.salary_slip_id !== null);
+await absent(IDS.emp2, '2026-11-20');
+const afterLegacy = await ev(IDS.emp2, '2026-11-20', 'absence');
+check('QA#8: event dated after the legacy slip is NOT lost — carried to the next open payroll',
+  afterLegacy.salary_slip_id === null && afterLegacy.payroll_month === '2026-12', JSON.stringify(afterLegacy));
+
+// ---------------- تصليحات الفحص الشامل (QA) ----------------
+const Q = '00000000-0000-0000-0000-0000000000f7'; // 1,000,000 — دوام E3 نفسه (09:00-17:00)
+await db.exec(`
+  INSERT INTO employees (id, employee_code, full_name, branch_id, monthly_salary_iqd, join_date, must_change_password)
+    VALUES ('${Q}', 'Q1', 'موظف فحص', '${IDS.branch}', 1000000, '2026-01-01', false);
+  INSERT INTO work_schedules (employee_id, name, check_in_time, check_out_time, grace_period_minutes, work_days)
+    VALUES ('${Q}', 'صباحي', '09:00', '17:00', 15, '{0,1,2,3,4,5,6}');
+`);
+const qEvents = async (d) => q(`SELECT event_type, minutes, amount, status FROM payroll_events WHERE employee_id=$1 AND event_date=$2 AND status<>'void' ORDER BY event_type`, [Q, d]);
+
+// QA#3: إجازة زمنية مدفوعة 09-11 ثم بصمة 11:00 → لا تأخير
+await db.query(`INSERT INTO leave_requests (employee_id, start_date, end_date, leave_type, is_hourly, start_hour, end_hour, is_paid, status)
+  VALUES ($1, '2026-12-07T06:00:00Z', '2026-12-07T08:00:00Z', 'other', true, '09:00', '11:00', true, 'approved')`, [Q]);
+await attend(Q, '2026-12-07', '11:00', '17:00', 'late', 'applied');
+check('QA#3: paid hourly leave 09-11 + punch 11:00 → no late deduction',
+  (await qEvents('2026-12-07')).every((e) => e.event_type !== 'late'), JSON.stringify(await qEvents('2026-12-07')));
+// بصمة 11:30 → تأخير 30 دقيقة فقط (بعد نهاية الإجازة)
+await attend(Q, '2026-12-08', '11:30', '17:00', 'late', 'applied');
+await db.query(`INSERT INTO leave_requests (employee_id, start_date, end_date, leave_type, is_hourly, start_hour, end_hour, is_paid, status)
+  VALUES ($1, '2026-12-08T06:00:00Z', '2026-12-08T08:00:00Z', 'other', true, '09:00', '11:00', true, 'approved')`, [Q]);
+const late8 = (await qEvents('2026-12-08')).find((e) => e.event_type === 'late');
+check('   leave 09-11 + punch 11:30 → only 30 minutes late', late8 && N(late8.minutes) === 30, JSON.stringify(await qEvents('2026-12-08')));
+
+// QA#9: إجازة زمنية بدون راتب 15-17 + انصراف 15:00 → خصم الإجازة فقط، لا خروج مبكر
+await db.query(`INSERT INTO leave_requests (employee_id, start_date, end_date, leave_type, is_hourly, start_hour, end_hour, is_paid, status)
+  VALUES ($1, '2026-12-09T12:00:00Z', '2026-12-09T14:00:00Z', 'other', true, '15:00', '17:00', false, 'approved')`, [Q]);
+await attend(Q, '2026-12-09', '09:00', '15:00');
+const ev9 = await qEvents('2026-12-09');
+check('QA#9: unpaid hourly leave 15-17 + leaving at 15:00 → deducted once (the leave), no early-leave',
+  ev9.length === 1 && ev9[0].event_type === 'unpaid_leave' && N(ev9[0].amount) === r2(120 * 1000000 / 30 / 480), JSON.stringify(ev9));
+
+// QA#4: يوم مسجّل غياب ثم إجازة سنوية مدفوعة معتمدة → الإجازة تُحتسب، لا خصم
+await absent(Q, '2026-12-10');
+await db.query(`INSERT INTO leave_requests (employee_id, start_date, end_date, leave_type, is_paid, status)
+  VALUES ($1, '2026-12-09T21:00:00Z', '2026-12-09T21:00:00Z', 'annual', true, 'approved')`, [Q]);
+const ev10 = await qEvents('2026-12-10');
+check('QA#4: paid leave approved for a day marked absent → no absence deduction',
+  ev10.length === 1 && ev10[0].event_type === 'paid_leave' && N(ev10[0].amount) === 0, JSON.stringify(ev10));
+
+// QA#15: راتب 1,000,000، غياب يومين، قسط 100,000 → 833,333 (تقريب على المجموع)
+await absent(Q, '2026-12-14');
+await absent(Q, '2026-12-15');
+const qLoan = (await q(`INSERT INTO loans (employee_id, amount, installment_amount, installment_count, remaining_amount, pledge_url, status)
+  VALUES ($1, 300000, 100000, 3, 300000, 'x', 'approved') RETURNING id`, [Q]))[0].id;
+await db.exec(`INSERT INTO loan_installments (loan_id, due_date, amount) VALUES ('${qLoan}', '2026-12-15', 100000), ('${qLoan}', '2027-01-15', 100000), ('${qLoan}', '2027-02-15', 100000)`);
+const sQ = (await q(`SELECT payroll_employee_summary($1, '2026-12') s`, [Q]))[0].s;
+// غياب 14 و15 (يومان)؛ مدفوعة 7 و10 بلا خصم؛ إجازة زمنية 9 = 4,166.67؛ تأخير 30 د يوم 8 معلّق
+// حساب مستقل: غياب يومين + إجازة زمنية بدون راتب 120 د + تأخير 30 د (بعد الإجازة المدفوعة) + قسط 100,000
+const dailyQ = 1000000 / 30, minuteQ = dailyQ / 480;
+const exactDed = 2 * dailyQ + 120 * minuteQ + 30 * minuteQ; // 77,083.33
+check('QA#15: net rounds on the total — 1,000,000 − 77,083.33 − 100,000 = 822,916.67 → 822,917',
+  N(sQ.deductions) === Math.round(exactDed) && N(sQ.net) === Math.round(1000000 - exactDed - 100000), JSON.stringify({ d: sQ.deductions, net: sQ.net, exact: 1000000 - exactDed - 100000 }));
+
+// QA#10: سلفة نقدية لا تُخصم من الراتب
+const cashLoan = (await q(`INSERT INTO loans (employee_id, amount, installment_amount, installment_count, remaining_amount, pledge_url, status, payment_method)
+  VALUES ($1, 50000, 50000, 1, 50000, 'x', 'approved', 'cash') RETURNING id`, [Q]))[0].id;
+await db.exec(`INSERT INTO loan_installments (loan_id, due_date, amount) VALUES ('${cashLoan}', '2026-12-20', 50000)`);
+check('QA#10: a cash loan is not deducted from the salary',
+  N((await q(`SELECT payroll_employee_summary($1, '2026-12') s`, [Q]))[0].s.loans) === 100000);
+
+// QA#11: ترك العمل وعليه سلفة → تنبيه بالرصيد الباقي
+await db.exec(`UPDATE employees SET is_active = false, termination_date = '2026-12-20' WHERE id = '${Q}'`);
+check('QA#11: leaving with a loan shows the balance still owed after the final slip',
+  N((await q(`SELECT payroll_employee_summary($1, '2026-12') s`, [Q]))[0].s.loan_balance_after_exit) === 200000);
+await db.exec(`UPDATE employees SET is_active = true, termination_date = NULL WHERE id = '${Q}'`);
+
+// QA#13: العطلة الرسمية — لا غياب "بدون بصمة" ولا تذكير
+const pastDay = (await q(`SELECT ((now() AT TIME ZONE 'Asia/Baghdad')::date - 2)::text d`))[0].d;
+const pastMonth = (await q(`SELECT payroll_natural_month($1::date) m`, [pastDay]))[0].m;
+await as(db, 'admin', `SELECT get_payroll_run($1)`, [pastMonth]);
+const beforeHoliday = (await q(`SELECT count(*)::int n FROM payroll_events WHERE event_date=$1 AND source='no_record' AND status<>'void'`, [pastDay]))[0].n;
+await expectError('employee cannot add official holidays', as(db, 'emp', `INSERT INTO official_holidays (holiday_date, name) VALUES ($1, 'x')`, [pastDay]), 'row-level security');
+await expectOk('admin adds an official holiday', as(db, 'admin', `INSERT INTO official_holidays (holiday_date, name) VALUES ($1, 'عطلة رسمية')`, [pastDay]));
+const afterHoliday = (await q(`SELECT count(*)::int n FROM payroll_events WHERE event_date=$1 AND source='no_record' AND status<>'void'`, [pastDay]))[0].n;
+check('QA#13: an official holiday removes the pending "no punch" absences of that day', beforeHoliday > 0 && afterHoliday === 0, `${beforeHoliday} → ${afterHoliday}`);
+await db.exec(`INSERT INTO official_holidays (holiday_date, name) VALUES ((now() AT TIME ZONE 'Asia/Baghdad')::date, 'اليوم عطلة') ON CONFLICT DO NOTHING`);
+check('   no punch reminders on an official holiday', (await q(`SELECT check_and_send_attendance_reminders() n`))[0].n === 0);
+
+// QA#2 و#6: المدير لا يضيف مكافآت، ولا يقرّر على نفسه أو على فرع آخر، ويرى حركات فرعه فقط
+await expectError('QA#2: manager cannot add a bonus (even for himself)',
+  as(db, 'manager', `INSERT INTO bonuses_deductions (employee_id, type, amount, reason, issue_date) VALUES ($1, 'bonus', 99999, 'x', '2026-12-01')`, [IDS.manager]), 'row-level security');
+await expectOk('   admin (also an employee) can still add bonuses/deductions',
+  as(db, 'admin', `INSERT INTO bonuses_deductions (employee_id, type, amount, reason, issue_date) VALUES ($1, 'bonus', 1000, 'أدمن', '2026-12-01')`, [IDS.admin]));
+const B2 = '00000000-0000-0000-0000-0000000000b2';
+const OT = '00000000-0000-0000-0000-0000000000f8';
+await db.exec(`INSERT INTO branches (id, name, latitude, longitude, radius_meters) VALUES ('${B2}', 'فرع آخر', 33, 44, 100);
+  INSERT INTO employees (id, employee_code, full_name, branch_id, monthly_salary_iqd, join_date, must_change_password) VALUES ('${OT}', 'Q2', 'فرع آخر', '${B2}', 600000, '2026-01-01', false);
+  INSERT INTO attendance (employee_id, branch_id, work_date, status, deduction_status) VALUES ('${OT}', '${B2}', '2026-12-02', 'absent', 'pending'), ('${IDS.manager}', '${IDS.branch}', '2026-12-02', 'absent', 'pending');`);
+const otherEv = (await q(`SELECT id FROM payroll_events WHERE employee_id=$1 AND event_type='absence'`, [OT]))[0].id;
+const selfEv = (await q(`SELECT id FROM payroll_events WHERE employee_id=$1 AND event_date='2026-12-02'`, [IDS.manager]))[0].id;
+await expectError('QA#6: manager cannot decide for another branch', as(db, 'manager', `SELECT decide_payroll_event($1, true, NULL)`, [otherEv]), 'فرع آخر');
+await expectError('   manager cannot decide his own deductions', as(db, 'manager', `SELECT decide_payroll_event($1, false, NULL)`, [selfEv]), 'حركاتك');
+const mgrSees = (await as(db, 'manager', `SELECT DISTINCT employee_id FROM payroll_events`)).rows.map((r) => r.employee_id);
+check('   manager reads payroll events of his branch only', !mgrSees.includes(OT) && mgrSees.includes(IDS.emp), JSON.stringify(mgrSees));
+const mgrPending = (await as(db, 'manager', `SELECT DISTINCT employee_id FROM get_pending_payroll_decisions()`)).rows.map((r) => r.employee_id);
+check('   manager pending list excludes other branches and himself', !mgrPending.includes(OT) && !mgrPending.includes(IDS.manager), JSON.stringify(mgrPending));
+
+// QA#7 و#16: قيم غير صحيحة
+await expectError('QA#7: negative bonus is rejected', as(db, 'admin', `INSERT INTO bonuses_deductions (employee_id, type, amount, reason, issue_date) VALUES ($1, 'bonus', -50000, 'x', '2026-12-01')`, [Q]), 'chk_bd_amount_positive');
+await expectError('   zero deduction is rejected', as(db, 'admin', `INSERT INTO bonuses_deductions (employee_id, type, amount, reason, issue_date) VALUES ($1, 'deduction', 0, 'x', '2026-12-01')`, [Q]), 'chk_bd_amount_positive');
+await expectError('QA#16: negative salary is rejected', db.query(`UPDATE employees SET monthly_salary_iqd = -5 WHERE id=$1`, [Q]), 'chk_employees_salary_non_negative');
+await expectError('   installment larger than the loan is rejected', as(db, 'emp', `INSERT INTO loans (employee_id, amount, installment_amount, installment_count, remaining_amount, pledge_url, status)
+  VALUES ($1, 100000, 500000, 1, 100000, 'x', 'pending')`, [IDS.emp]), 'chk_loans_installment_le_amount');
+
+// QA#1: الحذف المجدول لا يمسح التاريخ المالي
+const slipsBefore = (await q(`SELECT count(*)::int n FROM salary_slips WHERE employee_id=$1`, [E4]))[0].n;
+await db.exec(`INSERT INTO archived_employees (employee_id, full_name, archive_type, scheduled_deletion_date) VALUES ('${E4}', 'موظف ست ساعات', 'scheduled_deletion', now() - interval '1 day')`);
+await db.exec(`SELECT set_config('request.jwt.claim.sub', '', false), set_config('request.jwt.claim.role', '', false)`); // مهمة النظام الليلية
+await db.query(`SELECT * FROM perform_daily_cleanup()`);
+const emp3 = (await q(`SELECT full_name, is_active FROM employees WHERE id=$1`, [E4]))[0];
+check('QA#1: scheduled deletion anonymises the employee but keeps salary slips, loans and attendance',
+  emp3 && emp3.full_name === 'مستخدم محذوف' && !emp3.is_active
+  && (await q(`SELECT count(*)::int n FROM salary_slips WHERE employee_id=$1`, [E4]))[0].n === slipsBefore && slipsBefore > 0
+  && (await q(`SELECT count(*)::int n FROM attendance WHERE employee_id=$1`, [E4]))[0].n > 0,
+  JSON.stringify({ emp3, slipsBefore }));
 
 // ---------------- التوافق مع النسخ القديمة ----------------
 await db.query(`INSERT INTO system_settings (key, value) VALUES ('payroll_policy', '{"cycle_start_day": 1, "cycle_end_day": 31}')

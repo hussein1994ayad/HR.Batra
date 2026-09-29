@@ -86,6 +86,9 @@ export function PayrollTable({
                       {row.isAttendanceMissing && <Badge tone="amber">لا بصمات</Badge>}
                       {row.hasPendingLeave && <Badge tone="sky">إجازة معلقة</Badge>}
                       {row.pendingCount > 0 && <Badge tone="orange">بانتظار قرار ({row.pendingCount})</Badge>}
+                      {row.loanBalanceAfterExit > 0 && (
+                        <Badge tone="rose">ترك العمل وعليه سلفة {row.loanBalanceAfterExit.toLocaleString('en-US')}</Badge>
+                      )}
                     </div>
                     {isMonthArchived ? (
                       <p className="mt-1 text-[10px] text-slate-500">تم أرشفة السجلات التفصيلية</p>

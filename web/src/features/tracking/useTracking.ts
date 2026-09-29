@@ -16,6 +16,7 @@ import type { Decision, DetectedStop } from './types';
 const EMPTY: TrackingDataset = {
   geofenceZones: [], branches: [], employees: [], workSchedules: [], leaveRequests: [], attendanceLogs: [], securityLogs: [],
   payrollAmounts: {},
+  holidays: [],
 };
 const BAGHDAD: [number, number] = [33.3152, 44.3661];
 
@@ -95,7 +96,7 @@ export function useTracking() {
   const decisionsList = useMemo(() => buildDecisions({
     startDate, endDate, selectedBranch, selectedEmployee,
     employees: data.employees, workSchedules: data.workSchedules,
-    leaveRequests: data.leaveRequests, attendanceLogs: data.attendanceLogs, payrollAmounts: data.payrollAmounts,
+    leaveRequests: data.leaveRequests, attendanceLogs: data.attendanceLogs, payrollAmounts: data.payrollAmounts, holidays: data.holidays,
   }), [data, startDate, endDate, selectedBranch, selectedEmployee]);
 
   const attendanceRows = useMemo(() => buildAttendanceRows(data.attendanceLogs, decisionsList), [data.attendanceLogs, decisionsList]);

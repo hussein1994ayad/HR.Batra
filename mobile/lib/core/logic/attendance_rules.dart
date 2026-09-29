@@ -64,6 +64,8 @@ DaySummary summarizeDay({
   required Map<String, String> statusByEmployee,
   required Set<String> onLeave,
   required List<WorkScheduleModel> schedules,
+  /// عطلة رسمية: لا يُحسب غياب لمن لم يبصم
+  bool isHoliday = false,
 }) {
   int present = 0;
   int absent = 0;
@@ -74,7 +76,7 @@ DaySummary summarizeDay({
     final status = statusByEmployee[emp.id];
     if (status == 'present' || status == 'late' || status == 'half_day') {
       present++;
-    } else if (!isWorkingDay(date, schedule)) {
+    } else if (isHoliday || !isWorkingDay(date, schedule)) {
       continue;
     } else if (status == 'absent') {
       absent++;

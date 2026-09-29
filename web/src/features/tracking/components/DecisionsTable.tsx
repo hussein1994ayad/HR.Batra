@@ -62,7 +62,7 @@ export function DecisionsTable({ decisionsList, selectedReasons, busyKey, onReas
                   <td>
                     {item.suggestedAmount > 0 ? (
                       <span className={`font-mono font-bold whitespace-nowrap ${item.deductionStatus === 'ignored' ? 'text-slate-500 line-through' : 'text-rose-300'}`}>
-                        {item.suggestedAmount.toLocaleString('en-US')}
+                        {Math.round(item.suggestedAmount).toLocaleString('en-US')}
                       </span>
                     ) : (
                       <span className="text-[11px] text-slate-500">يُحسب تلقائياً</span>

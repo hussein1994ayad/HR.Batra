@@ -48,9 +48,10 @@ describe('filterEmployees', () => {
 });
 
 describe('employeeToFormValues', () => {
-  it('falls back to created_at for the join date', () => {
+  it('leaves a missing join date empty (not the date the employee was added)', () => {
     const values = employeeToFormValues(emp({ full_name: 'x', created_at: '2026-03-10T08:00:00Z', monthly_salary_iqd: null }));
-    expect(values.joinDate).toBe('2026-03-10');
+    expect(values.joinDate).toBe('');
+    expect(employeeToFormValues(emp({ full_name: 'y', join_date: '2025-01-05' })).joinDate).toBe('2025-01-05');
     expect(values.monthlySalary).toBe(0);
     expect(values.email).toBe('');
   });

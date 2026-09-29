@@ -66,6 +66,22 @@ void main() {
     expect(of(24).note, 'إجازة زمنية 10:00 - 12:00 (بدون راتب)');
   });
 
+  test('an official holiday is a day off, not an absence (unless the employee punched)', () {
+    final rows = buildDailyReport(
+      from: from, to: to, today: DateTime(2026, 9, 30),
+      employees: const [ali, sara], leaves: const [], schedules: const [schedule],
+      attendance: [
+        ReportAttendance(id: 'h1', employeeId: 'e2', date: DateTime(2026, 9, 23), status: 'present',
+            checkIn: DateTime(2026, 9, 23, 9), checkOut: DateTime(2026, 9, 23, 17)),
+      ],
+      holidays: {DateTime(2026, 9, 23): 'عطلة وطنية'},
+    );
+    final aliDay = rows.firstWhere((r) => r.employee.id == 'e1' && r.date.day == 23);
+    expect(aliDay.status, ReportStatus.dayOff);
+    expect(aliDay.note, 'عطلة رسمية: عطلة وطنية');
+    expect(rows.firstWhere((r) => r.employee.id == 'e2' && r.date.day == 23).status, ReportStatus.present);
+  });
+
   test('days after today and before joining are not counted', () {
     final rows = buildDailyReport(
       from: from, to: to, today: DateTime(2026, 9, 22),

@@ -73,7 +73,8 @@ export function employeeToFormValues(emp: Employee): EmployeeFormValues {
     monthlySalary: emp.monthly_salary_iqd || 0,
     futureSalary: emp.future_salary_iqd || 0,
     futureSalaryMonth: emp.future_salary_month || '',
-    joinDate: emp.join_date || getLocalDateStr(emp.created_at ? new Date(emp.created_at) : new Date()),
+    // بدون تاريخ مباشرة: يبقى فارغاً حتى يُدخله الأدمن (كان يُحفظ تاريخ إضافته للنظام فيُنقص راتبه)
+    joinDate: emp.join_date || '',
   };
 }
 

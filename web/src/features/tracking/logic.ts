@@ -219,11 +219,14 @@ export function buildDecisions(input: {
   selectedEmployee: string;
   /** مبالغ محرّك الرواتب لكل يوم (انظر fetchTrackingDataset). */
   payrollAmounts?: Record<string, number>;
+  /** العطل الرسمية: لا غياب افتراضي فيها */
+  holidays?: string[];
 }): Decision[] {
   const {
     startDate, endDate, employees, workSchedules, leaveRequests, attendanceLogs, selectedBranch, selectedEmployee,
   } = input;
   const payrollAmounts = input.payrollAmounts ?? {};
+  const holidays = new Set(input.holidays ?? []);
   const amountOf = (empId: string, date: string, kind: 'late' | 'absent') => payrollAmounts[`${empId}_${date}_${kind}`] ?? 0;
 if (!startDate || !endDate) return [];
 const list: Decision[] = [];
@@ -301,7 +304,7 @@ allDates.forEach(dateStr => {
         });
       }
     } else {
-      if (!leaveRecord) {
+      if (!leaveRecord && !holidays.has(dateStr)) {
         list.push({
           id: null,
           type: 'virtual_absent',

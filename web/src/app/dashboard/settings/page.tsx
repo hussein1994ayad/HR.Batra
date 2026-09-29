@@ -27,6 +27,7 @@ import {
 import { supabase } from '@/lib/supabase';
 import { confetti } from '@/lib/lazy';
 import { DatabasePurgeSection } from '@/features/settings/components/DatabasePurgeSection';
+import { HolidaysCard } from '@/features/settings/components/HolidaysCard';
 import { useQuery } from '@/lib/useQuery';
 import { currentPayrollMonth, previewPayrollPeriod } from '@/features/payroll/period';
 import { DEFAULT_WORK_DAYS } from '@/lib/attendance';
@@ -422,6 +423,8 @@ function GeneralSettings({ initial, onSaved }: { initial: SettingsData; onSaved:
             </p>
           </div>
         </Card>
+
+        <HolidaysCard />
 
         <Card>
           <CardHeader icon={ShieldAlert} tone="amber" title="الأرشفة والتتبع" />
