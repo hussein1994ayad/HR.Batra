@@ -108,8 +108,27 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
     final (dateStr, start, end) = _dayRange;
     return Future.wait<dynamic>([
       SupabaseService.client.from('attendance').select().eq('work_date', dateStr),
-      SupabaseService.client.from('location_tracking').select().gte('timestamp', start).lte('timestamp', end).order('timestamp', ascending: true),
+      _fetchDayLocations(start, end),
     ]);
+  }
+
+  /// نقاط اليوم لكل الموظفين تتجاوز حد الـ 1000 صف للطلب الواحد، فتُجلب على صفحات
+  /// حتى لا ينقطع مسار الحركة على الخريطة بصمت.
+  Future<List<Map<String, dynamic>>> _fetchDayLocations(String start, String end) async {
+    const pageSize = 1000;
+    final rows = <Map<String, dynamic>>[];
+    for (var from = 0;; from += pageSize) {
+      final page = await SupabaseService.client
+          .from('location_tracking')
+          .select()
+          .gte('timestamp', start)
+          .lte('timestamp', end)
+          .order('timestamp', ascending: true)
+          .order('id', ascending: true)
+          .range(from, from + pageSize - 1);
+      rows.addAll(page);
+      if (page.length < pageSize) return rows;
+    }
   }
 
   Future<void> _loadAllTrackingData() async {
