@@ -273,7 +273,7 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
     final (m, y) = _monthOf(workMonth);
     await showAppSheet<void>(
       context,
-      title: 'راتب ${Fmt.monthYear(m, y)}',
+      title: 'راتب ${Fmt.monthNumber(m, y)}',
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setSheet) {
           // يُعاد الرسم عند وصول التفاصيل
@@ -315,14 +315,14 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('آخر راتب · ${Fmt.monthYear(lm, ly)}', style: AppText.bodySm),
+              Text('آخر راتب · ${Fmt.monthNumber(lm, ly)}', style: AppText.bodySm),
               const SizedBox(height: AppSpace.xs),
               AnimatedNumber(_num(latest['net_salary']), format: Fmt.iqd, style: AppText.display.copyWith(color: AppColors.brand, fontSize: 30)),
               if (recent.length > 1) ...[
                 const SizedBox(height: AppSpace.lg),
                 MiniBarChart(
                   values: [for (final s in recent) _num(s['net_salary'])],
-                  labels: [for (final s in recent) Fmt.months[_monthOf((s['work_month'] ?? '').toString()).$1 - 1].split(' ').first],
+                  labels: [for (final s in recent) 'شهر ${_monthOf((s['work_month'] ?? '').toString()).$1}'],
                   height: 72,
                   semanticLabel: 'صافي الراتب لآخر ${recent.length} أشهر',
                 ),
@@ -353,8 +353,8 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
       onTap: () => _openSlip(slip),
       child: AppListTile(
         leading: const ToneIcon(Icons.receipt_long_rounded, tone: AppTone.success),
-        title: Fmt.monthYear(m, y),
-        subtitle: deductions > 0 ? 'استقطاعات ${Fmt.iqd(deductions)}' : 'بدون استقطاعات',
+        title: 'راتب ${Fmt.monthNumber(m, y)}',
+        subtitle: '${Fmt.months[m - 1]} · ${deductions > 0 ? 'استقطاعات ${Fmt.iqd(deductions)}' : 'بدون استقطاعات'}',
         trailing: Text(Fmt.iqd(_num(slip['net_salary'])), style: AppText.subtitle.copyWith(color: AppColors.brand)),
         onTap: () => _openSlip(slip),
       ),

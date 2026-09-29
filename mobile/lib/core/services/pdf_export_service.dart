@@ -70,13 +70,13 @@ class PdfExportService {
     'تموز', 'آب', 'أيلول', 'تشرين الأول', 'تشرين الثاني', 'كانون الأول',
   ];
 
-  /// "2026-09" ← "أيلول 2026" (بدون شرطات تنعكس مع النص العربي)
+  /// "2026-09" ← "شهر 9 سنة 2026 · أيلول" (بدون أقواس: تنعكس في PDF العربي)
   @visibleForTesting
   static String monthLabel(String workMonth) {
     final parts = workMonth.split('-');
     final m = parts.length == 2 ? int.tryParse(parts[1]) : null;
     if (m == null || m < 1 || m > 12) return workMonth;
-    return '${_arabicMonths[m - 1]} ${parts[0]}';
+    return 'شهر $m سنة ${parts[0]} · ${_arabicMonths[m - 1]}';
   }
 
   /// بناء محتوى كشف الراتب PDF (بدون حفظ) — مفصول لإمكانية اختباره.

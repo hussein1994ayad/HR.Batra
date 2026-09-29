@@ -460,7 +460,7 @@ class _LoanCard extends StatelessWidget {
                       child: Row(
                         children: [
                           SizedBox(width: 28, child: Text('${i + 1}', style: AppText.caption)),
-                          Expanded(child: Text(Fmt.date(DateTime.tryParse(installments[i]['due_date']?.toString() ?? ''), withYear: true), style: AppText.bodySm)),
+                          Expanded(child: Text('قسط ${Fmt.monthOf(DateTime.tryParse(installments[i]['due_date']?.toString() ?? ''))}', style: AppText.bodySm)),
                           Text(Fmt.iqd(installments[i]['amount'] as num?), style: AppText.bodySm.copyWith(color: AppColors.textPrimary)),
                           const SizedBox(width: AppSpace.sm),
                           installments[i]['is_paid'] == true

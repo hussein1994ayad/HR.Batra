@@ -54,6 +54,12 @@ abstract final class Fmt {
   /// "أيلول 2026"
   static String monthYear(int month, int year) => '${months[month - 1]} $year';
 
+  /// "شهر 5 سنة 2026" — رقم الشهر (كما يُكتب بكشوف الرواتب والسلف)
+  static String monthNumber(int month, int year) => 'شهر $month سنة $year';
+
+  /// "شهر 11 سنة 2026" لتاريخ
+  static String monthOf(DateTime? d) => d == null ? '—' : monthNumber(d.month, d.year);
+
   /// "قبل 5 دقائق"، "قبل ساعتين"، "أمس"، أو التاريخ.
   static String relative(DateTime? t, {DateTime? now}) {
     if (t == null) return '';
