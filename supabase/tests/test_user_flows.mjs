@@ -68,8 +68,9 @@ await expectError('   manager cannot approve another branch leave', as(db, 'mana
 await expectOk('   admin approves the manager leave', as(db, 'admin', `UPDATE leave_requests SET status='approved' WHERE id=$1`, [mgrLeave]));
 await expectError('   leave more than 30 days in the past is refused', as(db, 'emp', `INSERT INTO leave_requests (employee_id, start_date, end_date, leave_type, status)
   VALUES ($1, $2::date - 40, $2::date - 39, 'sick', 'pending')`, [IDS.emp, today]), '30 يوماً');
-await expectOk('   a recent past sick leave (5 days ago) is accepted', as(db, 'emp', `INSERT INTO leave_requests (employee_id, start_date, end_date, leave_type, status)
-  VALUES ($1, ($2::date - 5)::timestamptz, ($2::date - 5)::timestamptz, 'sick', 'pending')`, [IDS.emp, today]));
+// 3 أيام متتالية: يوم واحد منها على الأقل يوم دوام مهما كان اليوم (يوم واحد قد يقع جمعة)
+await expectOk('   a recent past sick leave (a few days ago) is accepted', as(db, 'emp', `INSERT INTO leave_requests (employee_id, start_date, end_date, leave_type, status)
+  VALUES ($1, ($2::date - 7)::timestamptz, ($2::date - 5)::timestamptz, 'sick', 'pending')`, [IDS.emp, today]));
 
 // ---------------- 4) طلب سلفة مكرر ----------------
 await expectOk('4) employee requests an advance', as(db, 'emp2', `INSERT INTO loans (employee_id, amount, installment_amount, installment_count, remaining_amount, pledge_url, status)
