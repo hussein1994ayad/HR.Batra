@@ -88,4 +88,14 @@ void main() {
       await disposeScreen(tester);
     });
   }
+
+  testWidgets('branch manager dashboard: own branch only, no loans tab', (tester) async {
+    await pumpScreen(tester, const AdminDashboardScreen(), role: 'manager');
+    await _settle(tester);
+    expect(find.text('القرارات'), findsOneWidget);
+    expect(find.text('السلف'), findsNothing);
+    expect(find.text('كل الفروع'), findsNothing);
+    expect(tester.takeException(), isNull);
+    await disposeScreen(tester);
+  });
 }

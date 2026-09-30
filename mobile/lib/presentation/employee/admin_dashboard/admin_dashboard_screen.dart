@@ -28,7 +28,7 @@ class AdminDashboardScreen extends StatefulWidget {
   State<AdminDashboardScreen> createState() => _AdminDashboardScreenState();
 }
 
-class _AdminDashboardScreenState extends State<AdminDashboardScreen> with SingleTickerProviderStateMixin {
+class _AdminDashboardScreenState extends State<AdminDashboardScreen> with TickerProviderStateMixin {
   final _repo = AdminDashboardRepository();
   final _actions = AdminActionsRepository();
   late TabController _tabController = TabController(length: 5, vsync: this);
