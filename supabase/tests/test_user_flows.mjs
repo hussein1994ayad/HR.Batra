@@ -77,6 +77,13 @@ await expectOk('4) employee requests an advance', as(db, 'emp2', `INSERT INTO lo
   VALUES ($1, 300000, 100000, 3, 300000, 'x', 'pending')`, [IDS.emp2]));
 await expectError('   a second pending request is refused', as(db, 'emp2', `INSERT INTO loans (employee_id, amount, installment_amount, installment_count, remaining_amount, pledge_url, status)
   VALUES ($1, 300000, 100000, 3, 300000, 'x', 'pending')`, [IDS.emp2]), 'قيد المراجعة');
+const pendingLoan = (await q(`SELECT id FROM loans WHERE employee_id=$1 AND status='pending'`, [IDS.emp2]))[0].id;
+await expectError('   another employee cannot cancel it', as(db, 'emp', `SELECT cancel_my_loan_request($1)`, [pendingLoan]), 'لا يمكن إلغاء');
+await expectOk('   the employee cancels his pending request', as(db, 'emp2', `SELECT cancel_my_loan_request($1)`, [pendingLoan]));
+check('   status is cancelled', (await q(`SELECT status FROM loans WHERE id=$1`, [pendingLoan]))[0].status === 'cancelled');
+await expectError('   cancelling twice is refused', as(db, 'emp2', `SELECT cancel_my_loan_request($1)`, [pendingLoan]), 'لا يمكن إلغاء');
+await expectOk('   and can request again', as(db, 'emp2', `INSERT INTO loans (employee_id, amount, installment_amount, installment_count, remaining_amount, pledge_url, status)
+  VALUES ($1, 300000, 100000, 3, 300000, 'x', 'pending')`, [IDS.emp2]));
 
 // ---------------- 5) مسير هذا الشهر للموظف ----------------
 await db.exec(`INSERT INTO attendance (employee_id, branch_id, work_date, status, deduction_status) VALUES ('${IDS.emp}', '${IDS.branch}', '${dayOffset(-1)}', 'absent', 'applied')
@@ -93,5 +100,13 @@ await db.query(`INSERT INTO salary_slips (employee_id, work_month, basic_salary,
 await db.exec(`UPDATE employees SET is_active = false, termination_date = '2026-09-29' WHERE id = '${IDS.emp2}'`);
 const run = (await as(db, 'admin', `SELECT get_payroll_run('2026-11') r`)).rows[0].r;
 check('6) an approved slip stays visible after the employee is disabled', run.rows.some((r) => r.employee_id === IDS.emp2 && r.slip));
+
+// ---------------- 7) الحذف للأدمن فقط ----------------
+await expectError('7) branch manager cannot delete an employee', as(db, 'manager', `SELECT safe_delete_employee($1)`, [IDS.emp]), 'Admin');
+await expectError('   nor through hard_delete_employee', as(db, 'manager', `SELECT hard_delete_employee($1)`, [IDS.emp]), 'Admin');
+await expectError('   an employee cannot delete anyone', as(db, 'emp', `SELECT safe_delete_employee($1)`, [IDS.emp2]), 'Admin');
+await expectError('   admin cannot delete his own account', as(db, 'admin', `SELECT safe_delete_employee($1)`, [IDS.admin]), 'حسابك');
+check('   the employee is untouched', (await q(`SELECT full_name FROM employees WHERE id=$1`, [IDS.emp]))[0].full_name !== null);
+await expectOk('   admin can delete an employee', as(db, 'admin', `SELECT safe_delete_employee($1)`, [IDS.emp2]));
 
 done();

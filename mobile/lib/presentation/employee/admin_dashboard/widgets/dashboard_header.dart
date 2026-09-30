@@ -35,9 +35,13 @@ class DashboardFiltersBar extends StatelessWidget {
     required this.branches,
     required this.employees,
     required this.onChanged,
+    this.lockedBranchId,
   });
 
   final DashboardFilter filter;
+
+  /// مدير الفرع: الفلتر مقفول على فرعه (بدون اختيار "كل الفروع")
+  final String? lockedBranchId;
   final List<BranchModel> branches;
   final List<DashboardEmployee> employees;
   final ValueChanged<DashboardFilter> onChanged;
@@ -70,6 +74,7 @@ class DashboardFiltersBar extends StatelessWidget {
             active: filter.date != null,
             onTap: () => _pickDate(context),
           ),
+          if (lockedBranchId == null)
           AppFilterPill(
             icon: Icons.store_rounded,
             label: branchName ?? 'كل الفروع',
@@ -92,9 +97,9 @@ class DashboardFiltersBar extends StatelessWidget {
               if (employeeId != null) onChanged(DashboardFilter(branchId: filter.branchId, employeeId: employeeId, date: filter.date));
             },
           ),
-          if (filter.isActive)
+          if (filter.employeeId != 'all' || filter.date != null || (lockedBranchId == null && filter.branchId != 'all'))
             TextButton.icon(
-              onPressed: () => onChanged(const DashboardFilter()),
+              onPressed: () => onChanged(DashboardFilter(branchId: lockedBranchId ?? 'all')),
               icon: const Icon(Icons.filter_alt_off_rounded, size: 18),
               label: const Text('إعادة ضبط'),
             ),

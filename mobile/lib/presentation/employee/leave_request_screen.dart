@@ -210,7 +210,10 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
   /// مدة الإجازة الساعية بالدقائق.
   int get _hourlyMinutes => (_endHour.hour * 60 + _endHour.minute) - (_startHour.hour * 60 + _startHour.minute);
 
-  String get _typeName => _leaveTypes.firstWhere((t) => t['id'] == _leaveType, orElse: () => {'name': _leaveType})['name']!;
+  /// اسم النوع بدون كلمة "إجازة" (أسماء السياسة تبدأ بها أحياناً، والنص يضيفها) — كان يظهر "إجازة إجازة سنوية"
+  static String _bareTypeName(String name) => name.replaceFirst(RegExp(r'^إجازة\s*'), '');
+
+  String get _typeName => _bareTypeName(_leaveTypes.firstWhere((t) => t['id'] == _leaveType, orElse: () => {'name': _leaveType})['name']!);
 
   String get _durationSummary {
     if (_isHourly) {
@@ -255,6 +258,8 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
 
   // مراجعة ثم إرسال الطلب
   Future<void> _submitLeaveRequest() async {
+    // يسكّر الكيبورد قبل نافذة التأكيد؛ بدونه يرجع التركيز لحقل السبب وينفتح الكيبورد بعد الإرسال
+    FocusManager.instance.primaryFocus?.unfocus();
     if (!_formKey.currentState!.validate()) return;
     final dateError = _validateDates();
     if (dateError != null) {
@@ -595,7 +600,7 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
   String _typeLabel(Object? type) {
     final id = (type ?? 'other').toString();
     final fromPolicy = _leaveTypes.where((t) => t['id'] == id);
-    if (fromPolicy.isNotEmpty) return fromPolicy.first['name']!;
+    if (fromPolicy.isNotEmpty) return _bareTypeName(fromPolicy.first['name']!);
     return switch (id) {
       'annual' => 'اعتيادية',
       'sick' => 'مرضية',

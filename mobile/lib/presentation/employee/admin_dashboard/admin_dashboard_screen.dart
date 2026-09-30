@@ -12,6 +12,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/models/models.dart';
 import '../../../core/routes/app_router.dart';
+import '../../../core/services/supabase_service.dart';
 import '../../../core/utils/error_text.dart';
 import '../../../data/repositories/admin_actions_repository.dart';
 import '../../../data/repositories/admin_dashboard_repository.dart';
@@ -27,10 +28,14 @@ class AdminDashboardScreen extends StatefulWidget {
   State<AdminDashboardScreen> createState() => _AdminDashboardScreenState();
 }
 
-class _AdminDashboardScreenState extends State<AdminDashboardScreen> with SingleTickerProviderStateMixin {
+class _AdminDashboardScreenState extends State<AdminDashboardScreen> with TickerProviderStateMixin {
   final _repo = AdminDashboardRepository();
   final _actions = AdminActionsRepository();
-  late final TabController _tabController = TabController(length: 5, vsync: this);
+  late TabController _tabController = TabController(length: 5, vsync: this);
+
+  /// مدير الفرع يشوف فرعه بس، وبدون السلف والأدوات الخاصة بالأدمن (نفس قيود الموقع)
+  bool _isAdmin = true;
+  String? _managerBranchId;
 
   bool _isLoading = true;
   DashboardFilter _filter = const DashboardFilter();
@@ -65,6 +70,20 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
         return;
       }
       _lookups = await _repo.loadLookups();
+      if (role == 'manager') {
+        final me = SupabaseService.currentUser?.id;
+        final branchId = _lookups.employees.where((e) => e.id == me).firstOrNull?.branchId;
+        if (!mounted) return;
+        final oldController = _tabController;
+        setState(() {
+          _isAdmin = false;
+          _managerBranchId = branchId;
+          // فرع غير محدد = ما يشوف أحد (بدل كل الشركة)
+          _filter = DashboardFilter(branchId: branchId ?? '__none__');
+          _tabController = TabController(length: 4, vsync: this);
+        });
+        oldController.dispose();
+      }
     } catch (e) {
       debugPrint('Error loading dashboard lookups: $e');
       if (mounted) context.go(AppRoutes.employeeHome);
@@ -123,6 +142,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
   }
 
 
+  /// أدوات الأدمن فقط (مثل الموقع: السلف، المحذوفات، التخزين)
+  static const _adminOnlyTools = {AppRoutes.adminLoans, AppRoutes.adminTrash, AppRoutes.adminStorage};
+
   static const _tools = <(IconData, String, String, AppTone)>[
     (Icons.location_searching_rounded, 'التتبع الحي', AppRoutes.adminTracking, AppTone.brand),
     (Icons.bar_chart_rounded, 'تقارير الحضور', AppRoutes.adminAttendanceReport, AppTone.info),
@@ -144,6 +166,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
         spacing: AppSpace.sm,
         children: [
           for (final (icon, label, route, tone) in _tools)
+            if (_isAdmin || !_adminOnlyTools.contains(route))
             AppCard(
               padding: const EdgeInsets.symmetric(vertical: AppSpace.md, horizontal: AppSpace.xs),
               semanticLabel: label,
@@ -169,11 +192,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
   @override
   Widget build(BuildContext context) {
     final s = _snapshot;
-    final pending = s.leaves.length + s.loans.length + s.devices.length;
+    final pending = s.leaves.length + (_isAdmin ? s.loans.length : 0) + s.devices.length;
     final tabs = [
       ('القرارات', s.decisions.length),
       ('الإجازات', s.leaves.length),
-      ('السلف', s.loans.length),
+      if (_isAdmin) ('السلف', s.loans.length),
       ('الأجهزة', s.devices.length),
       ('الأمان', s.securityLogs.length),
     ];
@@ -217,7 +240,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
             child: DashboardFiltersBar(
               filter: _filter,
               branches: _lookups.branches,
-              employees: _lookups.employees.where((e) => e.isActive).toList(),
+              lockedBranchId: _isAdmin ? null : (_managerBranchId ?? '__none__'),
+              employees: _lookups.employees.where((e) => e.isActive && (_isAdmin || e.branchId == _managerBranchId)).toList(),
               onChanged: _setFilter,
             ),
           ),
@@ -277,6 +301,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                         approve ? AppColors.success : AppColors.danger,
                       ),
                     ),
+                    if (_isAdmin)
                     LoansTab(
                       loans: s.loans,
                       busyKey: _busyKey,

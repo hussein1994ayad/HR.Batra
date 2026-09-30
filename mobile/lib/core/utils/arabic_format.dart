@@ -48,9 +48,9 @@ String formatDateSlash(DateTime date) => '${date.year}/${date.month}/${date.day}
 String isoDate(DateTime date) =>
     '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
 
-/// رقم بفواصل آلاف نقطية: 1500000 → "1.500.000".
+/// رقم بفواصل آلاف (مثل الموقع وكشوف PDF): 1500000 → "1,500,000".
 String formatThousands(num value) =>
-    value.round().toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.');
+    value.round().toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},');
 
 /// عكس [formatThousands]: يحذف النقاط والفواصل.
 double parseThousands(String text) => double.tryParse(text.replaceAll('.', '').replaceAll(',', '').trim()) ?? 0;

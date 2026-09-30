@@ -128,6 +128,7 @@ class _LoanRequestScreenState extends State<LoanRequestScreen> with SingleTicker
   }
 
   Future<void> _submitLoanRequest() async {
+    FocusManager.instance.primaryFocus?.unfocus();
     if (_pledgeFile == null) {
       AppSnack.error(context, 'صوّر التعهد الموقّع أولاً حتى نكمل الطلب');
       return;
@@ -389,15 +390,36 @@ class _LoanRequestScreenState extends State<LoanRequestScreen> with SingleTicker
         padding: const EdgeInsets.fromLTRB(AppSpace.page, AppSpace.lg, AppSpace.page, AppSpace.x4),
         itemCount: _loansHistory.length,
         separatorBuilder: (_, __) => const SizedBox(height: AppSpace.md),
-        itemBuilder: (context, index) => FadeSlideIn(index: index, child: ContentWidth(child: _LoanCard(loan: _loansHistory[index]))),
+        itemBuilder: (context, index) => FadeSlideIn(index: index, child: ContentWidth(child: _LoanCard(loan: _loansHistory[index], onCancel: _cancelLoan))),
       ),
     );
+  }
+
+  /// إلغاء طلب سلفة ما زال قيد المراجعة
+  Future<void> _cancelLoan(Map<String, dynamic> loan) async {
+    final ok = await showAppConfirm(
+      context,
+      title: 'إلغاء طلب السلفة؟',
+      message: 'يُلغى الطلب ولا يصل للإدارة، وتگدر تقدّم طلب جديد.',
+      confirmLabel: 'إلغاء الطلب',
+      destructive: true,
+    );
+    if (!ok || !mounted) return;
+    try {
+      await SupabaseService.client.rpc<void>('cancel_my_loan_request', params: {'p_loan_id': loan['id']});
+      if (!mounted) return;
+      AppSnack.success(context, 'أُلغي طلب السلفة');
+      unawaited(_loadLoansHistory());
+    } catch (e) {
+      if (mounted) AppSnack.error(context, 'تعذّر إلغاء الطلب: ${errorText(e)}');
+    }
   }
 }
 
 class _LoanCard extends StatelessWidget {
-  const _LoanCard({required this.loan});
+  const _LoanCard({required this.loan, required this.onCancel});
   final Map<String, dynamic> loan;
+  final ValueChanged<Map<String, dynamic>> onCancel;
 
   @override
   Widget build(BuildContext context) {
@@ -472,23 +494,29 @@ class _LoanCard extends StatelessWidget {
                 ],
               ),
             ),
-          if (pledge != null && pledge.isNotEmpty)
-            Align(
-              alignment: AlignmentDirectional.centerStart,
-              child: AppButton.ghost(
-                label: 'عرض التعهد',
-                icon: Icons.attach_file_rounded,
-                size: AppButtonSize.small,
-                onPressed: () async {
-                  final url = Uri.tryParse(await StorageLinks.resolve(pledge));
-                  if (url != null && await canLaunchUrl(url)) {
-                    await launchUrl(url, mode: LaunchMode.externalApplication);
-                  } else if (context.mounted) {
-                    AppSnack.error(context, 'تعذّر فتح التعهد');
-                  }
-                },
-              ),
-            ),
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            children: [
+              if (pledge != null && pledge.isNotEmpty)
+                AppButton.ghost(
+                  label: 'عرض التعهد',
+                  icon: Icons.attach_file_rounded,
+                  size: AppButtonSize.small,
+                  onPressed: () async {
+                    final url = Uri.tryParse(await StorageLinks.resolve(pledge));
+                    final opened = url != null && await launchUrl(url, mode: LaunchMode.externalApplication).catchError((_) => false);
+                    if (!opened && context.mounted) AppSnack.error(context, 'تعذّر فتح التعهد');
+                  },
+                ),
+              if (status == 'pending')
+                AppButton.ghost(
+                  label: 'إلغاء الطلب',
+                  icon: Icons.close_rounded,
+                  size: AppButtonSize.small,
+                  onPressed: () => onCancel(loan),
+                ),
+            ],
+          ),
         ],
       ),
     );

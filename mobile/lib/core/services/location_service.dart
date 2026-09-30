@@ -19,6 +19,9 @@ import 'schedule_service.dart';
 import 'supabase_service.dart';
 
 /// خدمة للتحكم في التتبع الجغرافي للموظفين في الخلفية والتحقق من السياج الجغرافي وكشف التزييف
+// الكلاس نفسه لازم يكون entry-point حتى تگدر خدمة الخلفية (كود أندرويد) توصل لـ onStart؛
+// بدونه تفشل الخدمة بـ "To access LocationService from native code, it must be annotated".
+@pragma('vm:entry-point')
 class LocationService {
   static bool _isTracking = false;
   static bool get isTracking => _isTracking;

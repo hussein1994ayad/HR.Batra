@@ -11,8 +11,8 @@ import 'package:hr_pro/core/constants/constants.dart';
 void main() {
   group('AppConstants — formatMoney', () {
     test('formats whole thousands with dot separator', () {
-      expect(AppConstants.formatMoney(1000), '1.000 د.ع');
-      expect(AppConstants.formatMoney(1500000), '1.500.000 د.ع');
+      expect(AppConstants.formatMoney(1000), '1,000 د.ع');
+      expect(AppConstants.formatMoney(1500000), '1,500,000 د.ع');
     });
 
     test('leaves small numbers without separators', () {
@@ -22,12 +22,12 @@ void main() {
     });
 
     test('rounds decimals to nearest integer', () {
-      expect(AppConstants.formatMoney(1000.4), '1.000 د.ع');
-      expect(AppConstants.formatMoney(1000.5), '1.001 د.ع');
+      expect(AppConstants.formatMoney(1000.4), '1,000 د.ع');
+      expect(AppConstants.formatMoney(1000.5), '1,001 د.ع');
     });
 
     test('handles very large amounts', () {
-      expect(AppConstants.formatMoney(1000000000), '1.000.000.000 د.ع');
+      expect(AppConstants.formatMoney(1000000000), '1,000,000,000 د.ع');
     });
 
     test('handles negative amounts', () {

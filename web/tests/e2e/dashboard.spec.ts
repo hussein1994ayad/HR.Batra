@@ -242,6 +242,10 @@ test.describe('workflows', () => {
     // فتح صفحة الرواتب بالرابط مباشرة يرجع للرئيسية
     await page.goto('/dashboard/payroll');
     await expect(page).toHaveURL(/\/dashboard\/?$/);
+    // صفحة الموظفين مسموحة، لكن بدون زر الحذف/الأرشفة
+    await page.goto('/dashboard/employees');
+    await expect(page.getByRole('button', { name: 'الملف والوثائق' }).first()).toBeVisible();
+    await expect(page.getByRole('button', { name: 'حذف أو أرشفة الموظف' })).toHaveCount(0);
   });
 
   test('saves settings', async ({ page }) => {
