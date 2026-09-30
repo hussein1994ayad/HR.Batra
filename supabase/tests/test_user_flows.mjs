@@ -77,6 +77,13 @@ await expectOk('4) employee requests an advance', as(db, 'emp2', `INSERT INTO lo
   VALUES ($1, 300000, 100000, 3, 300000, 'x', 'pending')`, [IDS.emp2]));
 await expectError('   a second pending request is refused', as(db, 'emp2', `INSERT INTO loans (employee_id, amount, installment_amount, installment_count, remaining_amount, pledge_url, status)
   VALUES ($1, 300000, 100000, 3, 300000, 'x', 'pending')`, [IDS.emp2]), 'قيد المراجعة');
+const pendingLoan = (await q(`SELECT id FROM loans WHERE employee_id=$1 AND status='pending'`, [IDS.emp2]))[0].id;
+await expectError('   another employee cannot cancel it', as(db, 'emp', `SELECT cancel_my_loan_request($1)`, [pendingLoan]), 'لا يمكن إلغاء');
+await expectOk('   the employee cancels his pending request', as(db, 'emp2', `SELECT cancel_my_loan_request($1)`, [pendingLoan]));
+check('   status is cancelled', (await q(`SELECT status FROM loans WHERE id=$1`, [pendingLoan]))[0].status === 'cancelled');
+await expectError('   cancelling twice is refused', as(db, 'emp2', `SELECT cancel_my_loan_request($1)`, [pendingLoan]), 'لا يمكن إلغاء');
+await expectOk('   and can request again', as(db, 'emp2', `INSERT INTO loans (employee_id, amount, installment_amount, installment_count, remaining_amount, pledge_url, status)
+  VALUES ($1, 300000, 100000, 3, 300000, 'x', 'pending')`, [IDS.emp2]));
 
 // ---------------- 5) مسير هذا الشهر للموظف ----------------
 await db.exec(`INSERT INTO attendance (employee_id, branch_id, work_date, status, deduction_status) VALUES ('${IDS.emp}', '${IDS.branch}', '${dayOffset(-1)}', 'absent', 'applied')

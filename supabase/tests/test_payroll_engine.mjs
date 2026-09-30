@@ -280,6 +280,15 @@ const ev9 = await qEvents('2026-12-09');
 check('QA#9: unpaid hourly leave 15-17 + leaving at 15:00 → deducted once (the leave), no early-leave',
   ev9.length === 1 && ev9[0].event_type === 'unpaid_leave' && N(ev9[0].amount) === r2(120 * 1000000 / 30 / 480), JSON.stringify(ev9));
 
+// إجازة زمنية معتمدة حتى نهاية الدوام + حضور بلا انصراف → لا "بصمة ناقصة" (ما يحتاج يرجع يبصم)
+await db.query(`INSERT INTO leave_requests (employee_id, start_date, end_date, leave_type, is_hourly, start_hour, end_hour, is_paid, status)
+  VALUES ($1, '2026-09-08T12:00:00Z', '2026-09-08T14:00:00Z', 'other', true, '15:00', '17:00', true, 'approved')`, [Q]);
+await attend(Q, '2026-09-08', '09:00', null);
+check('hourly leave until the end of the shift → no missing-punch for the absent check-out',
+  !(await ev(Q, '2026-09-08', 'missing_punch')), JSON.stringify(await qEvents('2026-09-08')));
+await attend(Q, '2026-09-09', '09:00', null);
+check('   without such leave the missing punch is still raised', !!(await ev(Q, '2026-09-09', 'missing_punch')));
+
 // QA#4: يوم مسجّل غياب ثم إجازة سنوية مدفوعة معتمدة → الإجازة تُحتسب، لا خصم
 await absent(Q, '2026-12-10');
 await db.query(`INSERT INTO leave_requests (employee_id, start_date, end_date, leave_type, is_paid, status)

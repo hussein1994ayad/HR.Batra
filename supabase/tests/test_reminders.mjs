@@ -42,7 +42,7 @@ check('no reminders on Friday (not a work day)', (await run('08:45', '2026-10-02
 const bodies = (await db.query(`SELECT title, body FROM notifications WHERE employee_id = $1 AND type = 'attendance' ORDER BY created_at`, [IDS.emp])).rows;
 check('the employee got start, check-out-soon and check-out-late reminders', bodies.length === 3, JSON.stringify(bodies));
 check('reminder texts are clean (no internal keys)', bodies.every((b) => !b.body.includes('[')), JSON.stringify(bodies));
-check('reminder shows the shift time', bodies[0].body.includes('09:00 AM'), bodies[0].body);
+check('reminder shows the shift time in Arabic (9:00 ص)', bodies[0].body.includes('9:00 ص') && !bodies[0].body.includes('AM'), bodies[0].body);
 
 await expectError('employees cannot trigger reminders', as(db, 'emp', `SELECT check_and_send_attendance_reminders()`), 'permission denied');
 await expectError('admins cannot trigger reminders from the client', as(db, 'admin', `SELECT check_and_send_attendance_reminders()`), 'permission denied');
