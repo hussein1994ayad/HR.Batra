@@ -33,7 +33,8 @@ const ARCHIVE_META: Record<string, { label: string; tone: Tone }> = {
 export default function EmployeesPage() {
   const confirm = useConfirm();
   // مدير الفرع لا يرى الرواتب (الرواتب للأدمن فقط)
-  const showSalary = useRole() === 'admin';
+  const isAdmin = useRole() === 'admin';
+  const showSalary = isAdmin;
   const e = useEmployees(confirm);
   const [tab, setTab] = useState<'active' | 'archived'>('active');
   const [search, setSearch] = useState('');
@@ -195,7 +196,10 @@ export default function EmployeesPage() {
                               onClick={() => void e.resetDevice(emp)}
                             />
                           )}
-                          <IconButton icon={Trash2} label="حذف أو أرشفة الموظف" tone="rose" onClick={() => setDeleting(emp)} />
+                          {/* الحذف والأرشفة للأدمن فقط؛ مدير الفرع لا يملك هذا الحق */}
+                          {isAdmin && (
+                            <IconButton icon={Trash2} label="حذف أو أرشفة الموظف" tone="rose" onClick={() => setDeleting(emp)} />
+                          )}
                         </div>
                       </td>
                     </tr>

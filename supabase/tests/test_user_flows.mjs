@@ -94,4 +94,12 @@ await db.exec(`UPDATE employees SET is_active = false, termination_date = '2026-
 const run = (await as(db, 'admin', `SELECT get_payroll_run('2026-11') r`)).rows[0].r;
 check('6) an approved slip stays visible after the employee is disabled', run.rows.some((r) => r.employee_id === IDS.emp2 && r.slip));
 
+// ---------------- 7) الحذف للأدمن فقط ----------------
+await expectError('7) branch manager cannot delete an employee', as(db, 'manager', `SELECT safe_delete_employee($1)`, [IDS.emp]), 'Admin');
+await expectError('   nor through hard_delete_employee', as(db, 'manager', `SELECT hard_delete_employee($1)`, [IDS.emp]), 'Admin');
+await expectError('   an employee cannot delete anyone', as(db, 'emp', `SELECT safe_delete_employee($1)`, [IDS.emp2]), 'Admin');
+await expectError('   admin cannot delete his own account', as(db, 'admin', `SELECT safe_delete_employee($1)`, [IDS.admin]), 'حسابك');
+check('   the employee is untouched', (await q(`SELECT full_name FROM employees WHERE id=$1`, [IDS.emp]))[0].full_name !== null);
+await expectOk('   admin can delete an employee', as(db, 'admin', `SELECT safe_delete_employee($1)`, [IDS.emp2]));
+
 done();

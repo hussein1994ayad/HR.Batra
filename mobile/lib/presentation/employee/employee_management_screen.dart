@@ -27,6 +27,9 @@ class EmployeeManagementScreen extends StatefulWidget {
 class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
   bool _isLoading = true;
   bool _hasError = false;
+
+  /// تعطيل/تفعيل الحساب للأدمن فقط (القاعدة ترفضه لمدير الفرع)
+  bool _isAdmin = false;
   List<Map<String, dynamic>> _employees = [];
   List<Map<String, dynamic>> _branches = [];
   String _searchQuery = '';
@@ -70,6 +73,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
 
       if (mounted) {
         setState(() {
+          _isAdmin = employeeRes['role'] == 'admin';
           _employees = List<Map<String, dynamic>>.from(results[0] as Iterable<dynamic>);
           _branches = List<Map<String, dynamic>>.from(results[1] as Iterable<dynamic>);
           _hasError = false;
@@ -320,13 +324,14 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
               const PopupMenuItem(value: 'profile', child: ListTile(leading: Icon(Icons.badge_rounded), title: Text('الملف'))),
               const PopupMenuItem(value: 'docs', child: ListTile(leading: Icon(Icons.folder_rounded), title: Text('المستمسكات'))),
               if (hasDevice) const PopupMenuItem(value: 'unbind', child: ListTile(leading: Icon(Icons.phonelink_erase_rounded), title: Text('فك ربط الجهاز'))),
-              PopupMenuItem(
-                value: 'toggle',
-                child: ListTile(
-                  leading: Icon(isActive ? Icons.block_rounded : Icons.check_circle_rounded, color: isActive ? AppColors.danger : AppColors.success),
-                  title: Text(isActive ? 'تعطيل الحساب' : 'تفعيل الحساب'),
+              if (_isAdmin)
+                PopupMenuItem(
+                  value: 'toggle',
+                  child: ListTile(
+                    leading: Icon(isActive ? Icons.block_rounded : Icons.check_circle_rounded, color: isActive ? AppColors.danger : AppColors.success),
+                    title: Text(isActive ? 'تعطيل الحساب' : 'تفعيل الحساب'),
+                  ),
                 ),
-              ),
             ],
           ),
         ],
