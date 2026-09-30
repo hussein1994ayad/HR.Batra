@@ -150,8 +150,12 @@ Future<void> capture(WidgetTester tester, String name) async {
 Future<void> disposeScreen(WidgetTester tester) async {
   await tester.pumpWidget(const SizedBox.shrink());
   final client = Supabase.instance.client;
-  await client.removeAllChannels();
-  await client.realtime.disconnect();
+  // إغلاق القنوات ينتظر رد السوكيت؛ على Linux (CI) فشل الاتصال بالخادم الوهمي يترك هذا
+  // الانتظار معلّقاً داخل الوقت الوهمي للاختبار فيتوقف 10 دقائق. يُنفَّذ بوقت حقيقي وبحد أقصى.
+  await tester.runAsync(() async {
+    await client.removeAllChannels().timeout(const Duration(seconds: 2), onTimeout: () => const []);
+    await client.realtime.disconnect().timeout(const Duration(seconds: 2), onTimeout: () {});
+  });
   // مؤقتات إعادة المحاولة الداخلية (الريل تايم، طابور البصمات) تنتهي خلال دقائق وهمية
   await tester.pump(const Duration(minutes: 5));
 }
