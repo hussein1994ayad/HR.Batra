@@ -1,10 +1,18 @@
 import type { Metadata, Viewport } from "next";
-import { Cairo } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 
-const cairo = Cairo({
-  subsets: ["arabic", "latin"],
-  weight: ["400", "500", "600", "700", "800", "900"],
+// خط Cairo من ملفات داخل المشروع (رخصة OFL في fonts/OFL.txt): البناء كان يحمّله من
+// Google Fonts وقت الـ build، وإذا فشل التحميل على سيرفر GitHub يفشل بناء الموقع كله.
+const cairo = localFont({
+  src: [
+    { path: "./fonts/Cairo-Regular.ttf", weight: "400", style: "normal" },
+    { path: "./fonts/Cairo-Medium.ttf", weight: "500", style: "normal" },
+    { path: "./fonts/Cairo-SemiBold.ttf", weight: "600", style: "normal" },
+    { path: "./fonts/Cairo-Bold.ttf", weight: "700", style: "normal" },
+    { path: "./fonts/Cairo-ExtraBold.ttf", weight: "800", style: "normal" },
+    { path: "./fonts/Cairo-Black.ttf", weight: "900", style: "normal" },
+  ],
   display: "swap",
   variable: "--font-cairo",
 });
