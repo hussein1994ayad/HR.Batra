@@ -89,8 +89,8 @@ void main() {
 
   group('Formatters', () {
     test('IQD uses dot thousands and the dinar unit', () {
-      expect(Fmt.iqd(1500000), '1.500.000 د.ع');
-      expect(Fmt.iqd(-25000), '-25.000 د.ع');
+      expect(Fmt.iqd(1500000), '1,500,000 د.ع');
+      expect(Fmt.iqd(-25000), '-25,000 د.ع');
       expect(Fmt.iqd(null), '0 د.ع');
     });
 

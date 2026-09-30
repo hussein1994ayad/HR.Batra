@@ -39,11 +39,11 @@ class AppConstants {
     defaultValue: 'https://batra-hr-pro.surge.sh/privacy',
   );
 
-  /// تنسيق مبلغ مالي بفواصل الآلاف (نقاط) + رمز العملة.
+  /// تنسيق مبلغ مالي بفواصل الآلاف (فارزة، مثل الموقع) + رمز العملة.
   static String formatMoney(num amount) {
     final String str = amount.round().toString();
     final RegExp reg = RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))');
-    return '${str.replaceAllMapped(reg, (Match m) => '${m[1]}.')} $currency';
+    return '${str.replaceAllMapped(reg, (Match m) => '${m[1]},')} $currency';
   }
 
   // ------------------------------------------------------------------------

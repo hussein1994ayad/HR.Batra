@@ -136,7 +136,7 @@ class _HomeScreenState extends State<HomeScreen> {
         });
       }
     } catch (e) {
-      debugPrint('تعذر تحديث سجل الدوام: \$e');
+      debugPrint('تعذر تحديث سجل الدوام: $e');
     }
   }
 
@@ -175,7 +175,7 @@ class _HomeScreenState extends State<HomeScreen> {
           },
         )
         .subscribe((status, [error]) {
-          debugPrint('=== attendance channel: \$status ===');
+          debugPrint('=== attendance channel: $status ===');
         });
   }
 
@@ -314,6 +314,8 @@ class _HomeScreenState extends State<HomeScreen> {
       loading: _isLoading && _todayAttendance == null,
       attendance: _todayAttendance,
       schedule: _workSchedule,
+      // مجاز الآن = ما نعرض "متأخر"
+      onLeave: _onLeave.any((p) => p['employee_id'] == SupabaseService.currentUser?.id),
       onAction: () => widget.onTabChange(1),
     );
     final side = <Widget>[
@@ -438,9 +440,10 @@ class _Header extends StatelessWidget {
 enum _DayState { notStarted, working, done }
 
 class _TodayCard extends StatelessWidget {
-  const _TodayCard({required this.loading, required this.attendance, required this.schedule, required this.onAction});
+  const _TodayCard({required this.loading, required this.attendance, required this.schedule, required this.onAction, this.onLeave = false});
 
   final bool loading;
+  final bool onLeave;
   final Map<String, dynamic>? attendance;
   final Map<String, dynamic>? schedule;
   final VoidCallback onAction;
@@ -486,11 +489,13 @@ class _TodayCard extends StatelessWidget {
     final worked = checkIn == null ? Duration.zero : (checkOut ?? now).difference(checkIn);
     final planned = _scheduledMinutes;
 
+    final lateMinutes = state == _DayState.notStarted && !onLeave ? _lateSoFar(now) : 0;
+
     final (badge, tone, bigLabel, bigValue, actionLabel, actionIcon, variant) = switch (state) {
       _DayState.notStarted => (
-          'لم تسجّل بعد',
-          AppTone.warning,
-          'يبدأ دوامك',
+          lateMinutes > 0 ? 'متأخر ${_hm(Duration(minutes: lateMinutes))}' : 'لم تسجّل بعد',
+          lateMinutes > 0 ? AppTone.danger : AppTone.warning,
+          lateMinutes > 0 ? 'بدأ دوامك' : 'يبدأ دوامك',
           Fmt.timeOfDay(schedule?['check_in_time']?.toString()),
           'تسجيل الحضور',
           Icons.fingerprint_rounded,
@@ -559,6 +564,18 @@ class _TodayCard extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  /// دقائق التأخير لحد الآن إذا ما بصم بعد (بعد السماحية، وبأيام الدوام فقط)
+  int _lateSoFar(DateTime now) {
+    final days = schedule?['work_days'];
+    if (days is List && !days.map((d) => (d as num).toInt()).contains(now.weekday % 7)) return 0;
+    final parts = schedule?['check_in_time']?.toString().split(':');
+    if (parts == null || parts.length < 2) return 0;
+    final start = (int.tryParse(parts[0]) ?? 0) * 60 + (int.tryParse(parts[1]) ?? 0);
+    final grace = (schedule?['grace_period_minutes'] as num?)?.toInt() ?? 0;
+    final late = now.hour * 60 + now.minute - start;
+    return late > grace ? late : 0;
   }
 
   static String _hm(Duration d) {

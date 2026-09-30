@@ -377,11 +377,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       title: 'التتبع الحي للموظفين',
                       onTap: () => context.push(AppRoutes.adminTracking),
                     ),
-                    AppListTile(
-                      leading: const ToneIcon(Icons.table_chart_rounded, tone: AppTone.accent),
-                      title: 'سلف الموظفين وكشوف Excel',
-                      onTap: () => context.push(AppRoutes.adminLoans),
-                    ),
+                    // السلف للأدمن فقط (مدير الفرع ما يعتمد سلف — نفس الموقع)
+                    if (AuthService.currentUserRole == 'admin')
+                      AppListTile(
+                        leading: const ToneIcon(Icons.table_chart_rounded, tone: AppTone.accent),
+                        title: 'سلف الموظفين وكشوف Excel',
+                        onTap: () => context.push(AppRoutes.adminLoans),
+                      ),
                   ],
                 ],
               ),

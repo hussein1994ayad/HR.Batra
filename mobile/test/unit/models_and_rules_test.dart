@@ -192,16 +192,17 @@ void main() {
       expect(formatTime12h(DateTime(2026, 1, 1, 0, 5)), '12:05 AM');
       expect(formatTime12h(DateTime(2026, 1, 1, 13, 30)), '1:30 PM');
       expect(isoDate(DateTime(2026, 3, 7)), '2026-03-07');
-      expect(formatThousands(1500000), '1.500.000');
-      expect(parseThousands('1.500.000'), 1500000);
+      expect(formatThousands(1500000), '1,500,000');
+      expect(parseThousands('1,500,000'), 1500000);
+      expect(parseThousands('1.500.000'), 1500000); // نصوص قديمة بالنقاط تنقرأ بعد
     });
 
     test('thousands formatter keeps the cursor after the typed digit', () {
       final result = DotThousandsSeparatorInputFormatter().formatEditUpdate(
-        const TextEditingValue(text: '100.000'),
+        const TextEditingValue(text: '100,000'),
         const TextEditingValue(text: '1000000', selection: TextSelection.collapsed(offset: 7)),
       );
-      expect(result.text, '1.000.000');
+      expect(result.text, '1,000,000');
       expect(result.selection.baseOffset, 9);
     });
   });

@@ -107,7 +107,7 @@ void main() {
       ),
     ));
     expect(find.text('الخصم المحسوب'), findsOneWidget);
-    expect(find.textContaining('1.250'), findsOneWidget);
+    expect(find.textContaining('1,250'), findsOneWidget);
     expect(find.text('الخصم (د.ع)'), findsNothing);
     await tester.tap(find.text('تطبيق الخصم'));
     expect(deducted, isTrue);

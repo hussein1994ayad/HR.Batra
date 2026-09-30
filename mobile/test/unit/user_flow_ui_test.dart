@@ -28,7 +28,7 @@ void main() {
     ));
     expect(find.text('راتب شهر 10 سنة 2026'), findsOneWidget);
     expect(find.text('الصافي المتوقع'), findsOneWidget);
-    expect(find.textContaining('818.750'), findsOneWidget);
+    expect(find.textContaining('818,750'), findsOneWidget);
     expect(find.textContaining('بانتظار القرار'), findsOneWidget);
     expect(find.text('1 بانتظار قرار'), findsOneWidget);
   });

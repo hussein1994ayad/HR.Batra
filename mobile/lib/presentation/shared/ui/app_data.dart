@@ -56,7 +56,12 @@ class KpiTile extends StatelessWidget {
               ],
             ),
             const SizedBox(height: AppSpace.sm),
-            AnimatedNumber(value, format: format, style: AppText.number.copyWith(color: tone == AppTone.neutral ? AppColors.textPrimary : tone.color)),
+            // المبالغ الكبيرة بالبطاقات الضيقة تصغر بدل ما تنقطع ("...250.00")
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: AlignmentDirectional.centerStart,
+              child: AnimatedNumber(value, format: format, style: AppText.number.copyWith(color: tone == AppTone.neutral ? AppColors.textPrimary : tone.color)),
+            ),
             if (hint != null) Text(hint!, style: AppText.caption, maxLines: 1, overflow: TextOverflow.ellipsis),
           ],
         ),

@@ -15,6 +15,7 @@ import '../../core/services/location_service.dart';
 import '../../core/services/schedule_service.dart';
 import '../../core/services/supabase_service.dart';
 import '../shared/ui/ui.dart';
+import 'attendance_history_card.dart';
 
 class AttendanceScreen extends StatefulWidget {
   const AttendanceScreen({super.key});
@@ -83,6 +84,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             _branchLat,
             _branchLng,
           );
+          // رسالة "خارج النطاق" القديمة تختفي أول ما يدخل الموظف النطاق
+          if (_inRange && (_errorMessage?.contains(_outOfRangeMessage) ?? false)) _errorMessage = null;
         });
       },
       onError: (dynamic e) {
@@ -329,6 +332,20 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   Future<void> _handleAttendanceSubmit() async {
     if (_currentPosition == null || _branchId == null || _mockDetected) return;
 
+    // الانصراف قبل نهاية الدوام يُسجَّل خروجاً مبكراً (خصم بانتظار قرار الإدارة) — نأكد أولاً
+    if (_selectedPunchType == 'check_out') {
+      final early = _punchNote(false);
+      if (early != null) {
+        final ok = await showAppConfirm(
+          context,
+          title: 'انصراف قبل نهاية الدوام؟',
+          message: '$early، ويُسجَّل خروجاً مبكراً تقرر عليه الإدارة.',
+          confirmLabel: 'تسجيل الانصراف',
+        );
+        if (!ok || !mounted) return;
+      }
+    }
+
     setState(() {
       _isSubmitting = true;
       _errorMessage = null;
@@ -348,7 +365,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       );
       if (distanceInMeters > _branchRadius) {
         final double outOfRange = distanceInMeters - _branchRadius;
-        throw Exception('أنت خارج نطاق الفرع الجغرافي المسموح به للتبصيم. المتبقي لتصل للفرع: ${outOfRange.toStringAsFixed(1)} متر.');
+        throw Exception('$_outOfRangeMessage المتبقي لتصل للفرع: ${outOfRange.toStringAsFixed(1)} متر.');
       }
       if (punchType == 'check_in' && _todayAttendance?['check_in_time'] != null) {
         throw Exception('لقد قمت بتسجيل بصمة الحضور مسبقاً لهذا اليوم!');
@@ -418,7 +435,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             const SizedBox(height: AppSpace.sm),
             Text(
               isSynced
-                  ? '${Fmt.time(DateTime.now())} — ${isCheckIn ? 'دوام موفق' : 'شكراً على يومك'}'
+                  ? '${Fmt.time(DateTime.now())} — ${_punchNote(isCheckIn) ?? (isCheckIn ? 'دوام موفق' : 'شكراً على يومك')}'
                   : 'انقطع الإنترنت، فحفظنا البصمة بالجهاز وسنرسلها تلقائياً عند عودة الاتصال.',
               style: AppText.bodySm,
               textAlign: TextAlign.center,
@@ -428,6 +445,33 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         actions: [AppButton(label: 'تم', expand: true, onPressed: () => Navigator.of(ctx).pop())],
       ),
     );
+  }
+
+  static const _outOfRangeMessage = 'أنت خارج نطاق الفرع الجغرافي المسموح به للتبصيم.';
+
+  /// دقائق الوقت الحالي بعد منتصف الليل مقارنة بوقت من الجدول (HH:mm أو HH:mm:ss)
+  static int? _minutesOf(Object? hhmm) {
+    final parts = hhmm?.toString().split(':');
+    if (parts == null || parts.length < 2) return null;
+    final h = int.tryParse(parts[0]), m = int.tryParse(parts[1]);
+    return h == null || m == null ? null : h * 60 + m;
+  }
+
+  /// تنبيه التأخير أو الخروج المبكر في رسالة البصمة (كانت تقول "دوام موفق" حتى مع تأخير ساعات)
+  String? _punchNote(bool isCheckIn) {
+    final now = DateTime.now();
+    final nowMin = now.hour * 60 + now.minute;
+    if (isCheckIn) {
+      final start = _minutesOf(_workSchedule?['check_in_time']);
+      if (start == null) return null;
+      final grace = (_workSchedule?['grace_period_minutes'] as num?)?.toInt() ?? 0;
+      final late = nowMin - start;
+      return late > grace ? 'متأخر ${Fmt.minutesLabel(late)} عن بداية الدوام' : null;
+    }
+    final end = _minutesOf(_workSchedule?['check_out_time']);
+    if (end == null) return null;
+    final early = end - nowMin;
+    return early > 0 ? 'خروج قبل نهاية الدوام بـ ${Fmt.minutesLabel(early)}' : null;
   }
 
   bool get _hasCheckIn => _todayAttendance?['check_in_time'] != null;
@@ -634,6 +678,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         ],
         const SizedBox(height: AppSpace.lg),
         _buildTodayCard(),
+        const SizedBox(height: AppSpace.lg),
+        const AttendanceHistoryCard(),
         const SizedBox(height: AppSpace.lg),
         const Row(
           crossAxisAlignment: CrossAxisAlignment.start,

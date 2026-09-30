@@ -8,8 +8,8 @@ import 'package:hr_pro/core/constants/constants.dart';
 void main() {
   group('AppConstants Tests', () {
     test('formatMoney formats amounts with dot separators correctly', () {
-      expect(AppConstants.formatMoney(1000), '1.000 د.ع');
-      expect(AppConstants.formatMoney(1500000), '1.500.000 د.ع');
+      expect(AppConstants.formatMoney(1000), '1,000 د.ع');
+      expect(AppConstants.formatMoney(1500000), '1,500,000 د.ع');
       expect(AppConstants.formatMoney(250), '250 د.ع');
     });
 
