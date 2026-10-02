@@ -3,7 +3,8 @@
 // =========================================================================
 
 import type { AttendanceRecord, LeaveRequest, WorkSchedule } from '@/lib/db-types';
-import { formatLateDurationArabic } from '@/lib/dates';
+import { formatLateDurationArabic, getLocalDateStr } from '@/lib/dates';
+import { formatClock } from '@/lib/format';
 import { resolveWorkSchedule } from '@/lib/schedules';
 import type {
   AttendanceRow, Decision, DetectedStop, MapMarker, MockGpsAttempt, RawPoint, RawZone, TrackedEmployee,
@@ -118,7 +119,7 @@ attendanceLogs.forEach((log) => {
       popupText: `
         <strong style="color: #0D9488; font-size: 13px;">حضور موظف فعال ✅</strong><br/>
         <strong>الاسم:</strong> ${log.employees?.full_name || 'موظف'}<br/>
-        <strong>الوقت:</strong> ${new Date(log.check_in_time!).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}<br/>
+        <strong>الوقت:</strong> ${formatClock(log.check_in_time!)}<br/>
         <strong>الحالة:</strong> ${log.status === 'late' ? 'متأخر ⚠️' : 'في الوقت المعتمد'}<br/>
         <strong>الجهاز:</strong> هاتف مسجل معتمد
       `
@@ -135,7 +136,7 @@ securityLogs.forEach((log) => {
       popupText: `
         <strong style="color: #EF4444; font-size: 13px;">تنبيه خرق أمني: GPS وهمي 🚨</strong><br/>
         <strong>الموظف:</strong> ${log.employees?.full_name || 'غير معروف'}<br/>
-        <strong>الوقت:</strong> ${new Date(log.timestamp).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}<br/>
+        <strong>الوقت:</strong> ${formatClock(log.timestamp)}<br/>
         <strong>التطبيق المكتشف:</strong> ${log.app_used || 'وهمي غير مصنف'}<br/>
         <span style="color: #EF4444; font-weight: bold;">تم قفل ومنع تسجيل الدوام تلقائياً!</span>
       `
@@ -168,8 +169,8 @@ detectedStops.forEach((stop, index) => {
     color: '#EAB308', // Glowing yellow for stops
     popupText: `
       <strong style="color: #EAB308; font-size: 13px;">موقع توقف مؤقت ⏳ (وقفة رقم ${index + 1})</strong><br/>
-      <strong>وقت البدء:</strong> ${stop.startTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}<br/>
-      <strong>وقت النهاية:</strong> ${stop.endTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}<br/>
+      <strong>وقت البدء:</strong> ${formatClock(stop.startTime.toISOString())}<br/>
+      <strong>وقت النهاية:</strong> ${formatClock(stop.endTime.toISOString())}<br/>
       <strong>المدة:</strong> ${formatLateDurationArabic(stop.duration)}<br/>
       <span style="color: #EAB308; font-weight: bold;">توقف الموظف في هذا الموقع لأكثر من 5 دقائق</span>
     `
@@ -240,13 +241,6 @@ while (current <= end) {
   current.setDate(current.getDate() + 1);
 }
 
-const isDateWithinRange = (dStr: string, startStr: string, endStr: string) => {
-  if (!dStr || !startStr || !endStr) return false;
-  const d = new Date(dStr).getTime();
-  const s = new Date(startStr.split('T')[0]).getTime();
-  const e = new Date(endStr.split('T')[0]).getTime();
-  return d >= s && d <= e;
-};
 
 allDates.forEach(dateStr => {
   employees.forEach(emp => {
@@ -285,7 +279,7 @@ allDates.forEach(dateStr => {
           type: 'late',
           employee: emp,
           date: dateStr,
-          time: attRecord.check_in_time ? new Date(attRecord.check_in_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : '-',
+          time: attRecord.check_in_time ? formatClock(attRecord.check_in_time) : '-',
           duration: formatLateDurationArabic(lateMinutes),
           typeName: 'التأخير الصباحي',
           deductionStatus: attRecord.deduction_status || 'pending',
@@ -327,10 +321,24 @@ allDates.forEach(dateStr => {
 return list;
 }
 
+/**
+ * هل اليوم dStr (YYYY-MM-DD محلي) داخل فترة الإجازة؟ تواريخ الإجازة مخزنة كطابع زمني UTC
+ * (منتصف ليل بغداد = 21:00 من اليوم السابق)، فتُحوَّل لليوم المحلي قبل المقارنة.
+ * قبل: قصّ النص عند "T" كان يأخذ اليوم السابق، فإجازة يوم 28 تُقرأ 27 ويظهر صاحبها "غائب".
+ */
+export function isDateWithinRange(dStr: string, startStr: string, endStr: string): boolean {
+  if (!dStr || !startStr || !endStr) return false;
+  const s = getLocalDateStr(new Date(startStr));
+  const e = getLocalDateStr(new Date(endStr));
+  return dStr >= s && dStr <= e;
+}
+
 /** سجلات الحضور + صفوف غياب افتراضية للموظفين الذين لم يبصموا في يوم عمل. */
-export function buildAttendanceRows(attendanceLogs: AttendanceRecord[], decisions: Decision[]): AttendanceRow[] {
+export function buildAttendanceRows(attendanceLogs: AttendanceRecord[], decisions: Decision[], leaveRequests: LeaveRequest[] = []): AttendanceRow[] {
+  const onLeave = (employeeId: string, date: string) => leaveRequests.some(l =>
+    l.employee_id === employeeId && l.status === 'approved' && !l.is_hourly && isDateWithinRange(date, l.start_date, l.end_date));
   return [
-    ...attendanceLogs.map(log => ({ ...log, is_virtual: false })),
+    ...attendanceLogs.map(log => ({ ...log, is_virtual: false, on_leave: onLeave(log.employee_id, log.work_date) })),
     ...decisions.filter(d => d.type === 'virtual_absent').map(d => ({
       id: `virtual_${d.employee.id}_${d.date}`,
       is_virtual: true,

@@ -36,9 +36,9 @@ describe('formatBytes', () => {
 
 describe('formatTime12h', () => {
   it('converts database time columns', () => {
-    expect(formatTime12h('09:00:00')).toBe('9:00 AM');
-    expect(formatTime12h('17:30')).toBe('5:30 PM');
-    expect(formatTime12h('00:05:00')).toBe('12:05 AM');
+    expect(formatTime12h('09:00:00')).toBe('9:00 ص');
+    expect(formatTime12h('17:30')).toBe('5:30 م');
+    expect(formatTime12h('00:05:00')).toBe('12:05 ص');
     expect(formatTime12h(null)).toBe('--:--');
   });
 });

@@ -16,6 +16,7 @@ import {
   CheckCircle2,
   XCircle,
   AlertTriangle,
+  Ban,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { confetti } from '@/lib/lazy';
@@ -47,6 +48,16 @@ async function fetchLeaves(status: RequestStatus): Promise<LeaveRequest[]> {
   return (data ?? []) as LeaveRequest[];
 }
 
+/** عدد الطلبات بكل حالة (للأرقام على التبويبات) */
+async function fetchLeaveCounts(): Promise<Record<RequestStatus, number>> {
+  const statuses: RequestStatus[] = ['pending', 'approved', 'rejected', 'cancelled'];
+  const results = await Promise.all(statuses.map((st) =>
+    supabase.from('leave_requests').select('id', { count: 'exact', head: true }).eq('status', st)));
+  const firstError = results.find((r) => r.error)?.error;
+  if (firstError) throw firstError;
+  return Object.fromEntries(statuses.map((st, i) => [st, results[i].count ?? 0])) as Record<RequestStatus, number>;
+}
+
 function leaveDays(req: LeaveRequest): number {
   const start = new Date(toDateKey(req.start_date));
   const end = new Date(toDateKey(req.end_date));
@@ -61,6 +72,7 @@ export default function LeavesPage() {
   const [paidOverride, setPaidOverride] = useState<Record<string, boolean>>({});
 
   const query = useQuery(`leaves:${activeTab}`, () => fetchLeaves(activeTab));
+  const counts = useQuery('leaves:counts', fetchLeaveCounts);
   const requests = useMemo(() => {
     const list = query.refreshing ? [] : query.data ?? [];
     const q = search.trim().toLowerCase();
@@ -94,6 +106,7 @@ export default function LeavesPage() {
       // إشعار الموظف بالقرار (مع سبب الرفض) يُرسل من قاعدة البيانات: trg_notify_employee_leave_decision
 
       query.mutate((list) => list.filter((r) => r.id !== req.id));
+      void counts.reload();
       if (approve) confetti({ particleCount: 80, spread: 60, colors: ['#10B981', '#059669', '#34D399'] });
       toast.success(approve ? 'تمت الموافقة على طلب الإجازة' : 'تم رفض طلب الإجازة');
     } catch (err) {
@@ -115,9 +128,10 @@ export default function LeavesPage() {
             value={activeTab}
             onChange={setActiveTab}
             options={[
-              { value: 'pending', label: 'معلقة', icon: Hourglass, count: activeTab === 'pending' && !isLoading ? requests.length : undefined },
-              { value: 'approved', label: 'معتمدة', icon: CheckCircle2 },
-              { value: 'rejected', label: 'مرفوضة', icon: XCircle },
+              { value: 'pending', label: 'معلقة', icon: Hourglass, count: counts.data?.pending },
+              { value: 'approved', label: 'معتمدة', icon: CheckCircle2, count: counts.data?.approved },
+              { value: 'rejected', label: 'مرفوضة', icon: XCircle, count: counts.data?.rejected },
+              { value: 'cancelled', label: 'ملغاة', icon: Ban, count: counts.data?.cancelled },
             ]}
           />
         }
@@ -222,8 +236,8 @@ export default function LeavesPage() {
                     ) : (
                       <div className="space-y-2">
                         <div className="flex flex-wrap gap-1.5">
-                          <Badge tone={activeTab === 'approved' ? 'emerald' : 'rose'} dot>
-                            {activeTab === 'approved' ? 'تمت الموافقة' : 'مرفوض'}
+                          <Badge tone={activeTab === 'approved' ? 'emerald' : activeTab === 'cancelled' ? 'slate' : 'rose'} dot>
+                            {activeTab === 'approved' ? 'تمت الموافقة' : activeTab === 'cancelled' ? 'ألغاه الموظف' : 'مرفوض'}
                           </Badge>
                           {activeTab === 'approved' && (
                             <Badge tone={req.is_paid ? 'emerald' : 'amber'}>{req.is_paid ? 'مدفوعة الراتب' : 'مستقطعة الراتب'}</Badge>

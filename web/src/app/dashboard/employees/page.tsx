@@ -63,7 +63,8 @@ export default function EmployeesPage() {
   if (e.loading) return <PageSkeleton rows={8} />;
 
   const activeCount = e.employees.filter((x) => x.is_active !== false).length;
-  const lockedCount = e.employees.filter((x) => x.device_id_lock != null).length;
+  // "مربوط" = عنده هاتف معتمد فعلاً (نفس ما يشوفه التطبيق)، مو إعداد القفل
+  const lockedCount = e.employees.filter((x) => e.boundDevices?.[x.id]).length;
   const busy = e.actionLoading;
 
   return (
@@ -155,6 +156,7 @@ export default function EmployeesPage() {
               ) : (
                 filtered.map((emp) => {
                   const isLocked = emp.device_id_lock != null;
+                  const boundModel = e.boundDevices?.[emp.id];
                   const role = ROLE_META[emp.role ?? 'employee'] ?? ROLE_META.employee;
                   const docCount = emp.document_urls?.length ?? 0;
                   return (
@@ -175,7 +177,10 @@ export default function EmployeesPage() {
                       <td>{emp.branches?.name || <span className="text-slate-600">—</span>}</td>
                       <td><Badge tone={role.tone}>{role.label}</Badge></td>
                       {showSalary && <td className="font-bold text-slate-200 whitespace-nowrap">{formatIQD(emp.monthly_salary_iqd)}</td>}
-                      <td>{isLocked ? <Badge tone="emerald" dot>مربوط</Badge> : <Badge tone="slate">غير مربوط</Badge>}</td>
+                      <td>
+                        {boundModel ? <Badge tone="emerald" dot>مربوط · {boundModel}</Badge> : <Badge tone="slate">غير مربوط</Badge>}
+                        {isLocked && !boundModel && <span className="block text-[10px] text-slate-500 mt-1">يُربط أول هاتف يدخل منه</span>}
+                      </td>
                       <td className="!text-left">
                         <div className="flex justify-end gap-1.5">
                           <IconButton icon={FolderOpen} label="الملف والوثائق" tone="violet" onClick={() => setProfile(emp)} />
@@ -187,7 +192,7 @@ export default function EmployeesPage() {
                             loading={busy === emp.id}
                             onClick={() => void e.toggleDeviceLock(emp)}
                           />
-                          {isLocked && (
+                          {(boundModel || isLocked) && (
                             <IconButton
                               icon={Smartphone}
                               label="إلغاء ربط الهاتف وربط جهاز جديد"

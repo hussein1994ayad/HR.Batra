@@ -26,7 +26,11 @@ export type TrackedEmployee = Pick<Employee, 'id' | 'full_name' | 'branch_id' | 
   termination_date?: string | null;
 };
 
-export type AttendanceRow = AttendanceRecord & { is_virtual: boolean };
+export type AttendanceRow = AttendanceRecord & {
+  is_virtual: boolean;
+  /** إجازة يوم كامل معتمدة بهذا اليوم (الرواتب تحسبها إجازة مو غياب) */
+  on_leave?: boolean;
+};
 
 export type DetectedStop = { lat: number; lng: number; startTime: Date; endTime: Date; duration: number };
 

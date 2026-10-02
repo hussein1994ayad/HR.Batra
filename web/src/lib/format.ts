@@ -24,7 +24,13 @@ export function formatClock(iso: string | null | undefined): string {
   if (!iso) return '-';
   const d = new Date(iso);
   if (isNaN(d.getTime())) return '-';
-  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+  return arabicClock(d.getHours(), d.getMinutes());
+}
+
+/** "9:05 ص" / "2:30 م" — نفس صيغة التطبيق. */
+function arabicClock(hour24: number, minute: number): string {
+  const h = hour24 % 12 === 0 ? 12 : hour24 % 12;
+  return `${h}:${minute.toString().padStart(2, '0')} ${hour24 >= 12 ? 'م' : 'ص'}`;
 }
 
 /** Converts a `HH:MM[:SS]` time column into `9:00 AM`. */
@@ -32,13 +38,10 @@ export function formatTime12h(timeStr: string | null | undefined): string {
   if (!timeStr) return '--:--';
   const parts = timeStr.split(':');
   if (parts.length < 2) return timeStr;
-  let hour = parseInt(parts[0], 10);
+  const hour = parseInt(parts[0], 10);
   const minute = parseInt(parts[1], 10);
   if (isNaN(hour) || isNaN(minute)) return timeStr;
-  const period = hour >= 12 ? 'PM' : 'AM';
-  hour = hour % 12;
-  if (hour === 0) hour = 12;
-  return `${hour}:${minute.toString().padStart(2, '0')} ${period}`;
+  return arabicClock(hour, minute);
 }
 
 export function formatDate(iso: string | null | undefined): string {

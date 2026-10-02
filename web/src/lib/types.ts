@@ -73,7 +73,7 @@ export interface Attendance {
   } | null;
 }
 
-export type RequestStatus = 'pending' | 'approved' | 'rejected';
+export type RequestStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';
 
 export interface LeaveRequest {
   id: string;

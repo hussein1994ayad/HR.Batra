@@ -32,8 +32,9 @@ export function usePayroll() {
   const startDate = period?.start_date ?? '';
   const endDate = period?.cutoff_date ?? '';
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
+  /** quiet: تحديث بالخلفية بدون هيكل التحميل (حتى تبقى النوافذ المفتوحة مثل تفاصيل الخصم) */
+  const loadData = useCallback(async (opts?: { quiet?: boolean }) => {
+    if (!opts?.quiet) setLoading(true);
     try {
       setData(await fetchPayrollDataset(selectedMonth));
     } catch (err: unknown) {
@@ -133,7 +134,7 @@ export function usePayroll() {
     if (!ok) return false;
     confetti({ particleCount: 50, spread: 40 });
     toast.success('تم إضافة السجل بنجاح! ✅');
-    await loadData();
+    await loadData({ quiet: true });
     return true;
   };
 
@@ -144,7 +145,7 @@ export function usePayroll() {
     }, 'تعذر حفظ القرار');
     if (!ok) return;
     toast.success(approve ? 'تم اعتماد الحركة ✅' : 'تم الإعفاء 🟢');
-    await loadData();
+    await loadData({ quiet: true });
   };
 
   const approveRow = async (row: PayrollRow) => {
