@@ -277,6 +277,7 @@ export default function EmployeesPage() {
           key={formTarget === 'new' ? 'new' : formTarget.id}
           employee={formTarget === 'new' ? null : formTarget}
           branches={e.branches}
+          departments={e.departments}
           saving={busy === 'create_emp' || busy === 'update_emp'}
           onClose={() => setFormTarget(null)}
           onSubmit={async (values, kept, newDocs) => {

@@ -55,6 +55,7 @@ export const emptyEmployeeForm = (): EmployeeFormValues => ({
   password: '',
   role: 'employee',
   branchId: '',
+  departmentId: '',
   monthlySalary: 0,
   futureSalary: 0,
   futureSalaryMonth: '',
@@ -70,6 +71,7 @@ export function employeeToFormValues(emp: Employee): EmployeeFormValues {
     password: '', // فارغة = بدون تغيير (كلمات السر لا تُحفظ مقروءة)
     role: emp.role,
     branchId: emp.branch_id || '',
+    departmentId: emp.department_id || '',
     monthlySalary: emp.monthly_salary_iqd || 0,
     futureSalary: emp.future_salary_iqd || 0,
     futureSalaryMonth: emp.future_salary_month || '',

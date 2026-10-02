@@ -10,7 +10,8 @@ import {
   subscribeToEmployeeLocations, updateAttendanceTimes, type TrackingDataset,
 } from './api';
 import { exportDisciplineReport } from './exportReport';
-import { analyzeTrail, buildAttendanceRows, buildDecisions, buildMapMarkers, decisionKey, parseZonePolygons } from './logic';
+import { analyzeTrail, buildAttendanceRows, buildDecisions, buildMapMarkers, decisionKey, manualAttendanceStatus, parseZonePolygons } from './logic';
+import { resolveWorkSchedule } from '@/lib/schedules';
 import type { Decision, DetectedStop } from './types';
 
 const EMPTY: TrackingDataset = {
@@ -134,7 +135,13 @@ export function useTracking() {
   };
 
   const updateTimes = (record: AttendanceRecord, checkIn: string, checkOut: string) =>
-    run('edit', () => updateAttendanceTimes(record, checkIn, checkOut, endDate),
+    run('edit', () => {
+      const emp = data.employees.find(e => e.id === record.employee_id);
+      const status = !checkIn
+        ? undefined
+        : manualAttendanceStatus(emp ? resolveWorkSchedule(emp, data.workSchedules) : undefined, checkIn);
+      return updateAttendanceTimes(record, checkIn, checkOut, endDate, status);
+    },
       'تم تحديث أوقات الدوام بنجاح! ✅', () => 'حدث خطأ أثناء التحديث.');
 
   const addManualAttendance = (entry: { employeeId: string; date: string; checkIn: string; checkOut: string }) => {
@@ -143,7 +150,9 @@ export function useTracking() {
       toast.error('حدث خطأ: الموظف المختار غير مربوط بفرع، والفرع الافتراضي للمؤسسة غير متوفر.');
       return Promise.resolve(false);
     }
-    return run('manual', () => saveManualAttendance({ ...entry, branchId }),
+    const emp = data.employees.find(e => e.id === entry.employeeId);
+    const status = manualAttendanceStatus(emp ? resolveWorkSchedule(emp, data.workSchedules) : undefined, entry.checkIn);
+    return run('manual', () => saveManualAttendance({ ...entry, branchId, status }),
       'تم تسجيل الحضور اليدوي بنجاح! ✅', (err) => `حدث خطأ: ${errorMessage(err)}`);
   };
 

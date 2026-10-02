@@ -237,6 +237,7 @@ export function buildPayrollRows({ run, events, overrides, pendingLeaveEmployeeI
 
       isIssued: !!slip,
       slipId: slip?.id ?? null,
+      slipCreatedAt: slip?.created_at ?? null,
       isLegacySlip: !!slip?.legacy,
 
       isNetNegative: !slip && net < 0,

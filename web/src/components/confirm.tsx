@@ -57,7 +57,7 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
           size="sm"
           onClose={() => settle(false)}
         >
-          {options.message && <div className="text-xs text-slate-300 leading-relaxed">{options.message}</div>}
+          {options.message && <div className="text-xs text-slate-300 leading-relaxed whitespace-pre-line">{options.message}</div>}
           <div className="flex items-center gap-2 mt-6">
             <Button variant={t.button} block onClick={() => settle(true)}>
               {options.confirmLabel ?? 'تأكيد'}

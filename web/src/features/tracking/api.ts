@@ -132,7 +132,7 @@ export function subscribeToEmployeeLocations(employeeId: string, onPoint: (point
 
 const toIso = (date: string, time: string) => (time ? new Date(`${date}T${time}:00`).toISOString() : null);
 
-export async function updateAttendanceTimes(record: AttendanceRecord, checkIn: string, checkOut: string, fallbackDate: string) {
+export async function updateAttendanceTimes(record: AttendanceRecord, checkIn: string, checkOut: string, fallbackDate: string, status?: 'present' | 'late') {
   const workDate = record.work_date || fallbackDate;
   const checkOutISO = toIso(workDate, checkOut);
   const { error } = await supabase
@@ -140,7 +140,8 @@ export async function updateAttendanceTimes(record: AttendanceRecord, checkIn: s
     .update({
       check_in_time: toIso(workDate, checkIn),
       check_out_time: checkOutISO,
-      status: checkOutISO ? 'present' : record.status,
+      // الحالة من وقت الدخول والجدول (كان يصير "حاضر" بمجرد وجود انصراف حتى لو متأخر)
+      status: status ?? (checkOutISO ? 'present' : record.status),
     })
     .eq('id', record.id);
   if (error) throw error;
@@ -153,11 +154,12 @@ export async function saveManualAttendance(entry: {
   date: string;
   checkIn: string;
   checkOut: string;
+  status: 'present' | 'late';
 }) {
   const values = {
     check_in_time: toIso(entry.date, entry.checkIn),
     check_out_time: toIso(entry.date, entry.checkOut),
-    status: 'present',
+    status: entry.status,
     branch_id: entry.branchId,
   };
   const { data: existing, error: findErr } = await supabase

@@ -45,13 +45,14 @@ type Props = {
   /** null = إضافة موظف جديد */
   employee: Employee | null;
   branches: BranchOption[];
+  departments: { id: string; name: string }[];
   saving: boolean;
   onClose: () => void;
   onSubmit: (values: EmployeeFormValues, keptDocuments: string[], newDocuments: File[]) => void;
 };
 
 /** إضافة موظف (حساب دخول عبر create_employee_secure) أو تعديل بياناته ومستمسكاته. */
-export function EmployeeFormModal({ employee, branches, saving, onClose, onSubmit }: Props) {
+export function EmployeeFormModal({ employee, branches, departments, saving, onClose, onSubmit }: Props) {
   const isEdit = !!employee;
   const [form, setForm] = useState<EmployeeFormValues>(() => (employee ? employeeToFormValues(employee) : emptyEmployeeForm()));
   const [showPassword, setShowPassword] = useState(false);
@@ -82,7 +83,7 @@ export function EmployeeFormModal({ employee, branches, saving, onClose, onSubmi
             <Input required value={form.fullName} onChange={(e) => set('fullName', e.target.value)} placeholder="محمد علي عبد الحسين" />
           </Field>
           <Field label="البريد الإلكتروني (اسم الدخول)">
-            <Input type="email" required value={form.email} onChange={(e) => set('email', e.target.value)} placeholder="name@company.com" dir="ltr" className="text-left" />
+            <Input type="email" required value={form.email} onChange={(e) => set('email', e.target.value)} placeholder="name@company.com" autoComplete="off" dir="ltr" className="text-left" />
           </Field>
           <Field label="رقم الهاتف">
             <Input type="tel" value={form.phone} onChange={(e) => set('phone', e.target.value)} placeholder="077XXXXXXXX" dir="ltr" className="text-left" />
@@ -92,6 +93,7 @@ export function EmployeeFormModal({ employee, branches, saving, onClose, onSubmi
               <Input
                 type={showPassword ? 'text' : 'password'}
                 required={!isEdit}
+                autoComplete="new-password"
                 value={form.password}
                 onChange={(e) => set('password', e.target.value)}
                 placeholder={isEdit ? 'بدون تغيير' : '••••••••'}
@@ -112,6 +114,12 @@ export function EmployeeFormModal({ employee, branches, saving, onClose, onSubmi
             <Select required value={form.branchId} onChange={(e) => set('branchId', e.target.value)}>
               <option value="">اختر الفرع...</option>
               {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+            </Select>
+          </Field>
+          <Field label="القسم">
+            <Select value={form.departmentId ?? ''} onChange={(e) => set('departmentId', e.target.value)}>
+              <option value="">القسم العام (بدون قسم)</option>
+              {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
             </Select>
           </Field>
           <Field label="الصلاحية">
