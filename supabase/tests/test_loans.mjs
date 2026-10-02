@@ -33,10 +33,11 @@ check('due dates clamp to month end', inst.map((r) => r.d).join() === '2026-01-3
 
 await expectError('a processed request cannot be approved twice', approve('admin', loan, 1000000, 3), 'مسبقاً');
 
-const second = await request('emp', 300000, 3);
-await expectError('employee with an unpaid loan cannot get another', approve('admin', second, 300000, 3), 'سلفة نشطة');
+// طلب ثاني وعنده سلفة جارية: يُرفض من وقت الطلب (قبل: كان يُقبل ويفشل بس عند الاعتماد)
+await expectError('employee with an unpaid loan cannot request another', request('emp', 300000, 3), 'سلفة جارية');
 
 await db.exec(`UPDATE loans SET remaining_amount = 0 WHERE id = '${loan}'`);
+const second = await request('emp', 300000, 3);
 await expectOk('a fully paid loan no longer blocks a new one', approve('admin', second, 300000, 3, '2026-05-15'));
 
 const notif = await db.query(`SELECT 1 FROM notifications WHERE employee_id=$1 AND type='loan'`, [IDS.emp]);
