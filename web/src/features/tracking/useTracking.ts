@@ -99,7 +99,7 @@ export function useTracking() {
     leaveRequests: data.leaveRequests, attendanceLogs: data.attendanceLogs, payrollAmounts: data.payrollAmounts, holidays: data.holidays,
   }), [data, startDate, endDate, selectedBranch, selectedEmployee]);
 
-  const attendanceRows = useMemo(() => buildAttendanceRows(data.attendanceLogs, decisionsList), [data.attendanceLogs, decisionsList]);
+  const attendanceRows = useMemo(() => buildAttendanceRows(data.attendanceLogs, decisionsList, data.leaveRequests), [data.attendanceLogs, decisionsList, data.leaveRequests]);
 
   const markers = useMemo(() => buildMapMarkers({
     attendanceLogs: data.attendanceLogs, securityLogs: data.securityLogs,

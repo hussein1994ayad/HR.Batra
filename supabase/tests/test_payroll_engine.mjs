@@ -244,8 +244,8 @@ await absent(IDS.emp2, '2026-11-03');
 const legacyEv = await ev(IDS.emp2, '2026-11-03', 'absence');
 check('event dated before a legacy (browser) slip was made is treated as already paid',
   legacyEv.payroll_month === '2026-11' && legacyEv.salary_slip_id !== null);
-await absent(IDS.emp2, '2026-11-20');
-const afterLegacy = await ev(IDS.emp2, '2026-11-20', 'absence');
+await absent(IDS.emp2, '2026-11-21');
+const afterLegacy = await ev(IDS.emp2, '2026-11-21', 'absence');
 check('QA#8: event dated after the legacy slip is NOT lost — carried to the next open payroll',
   afterLegacy.salary_slip_id === null && afterLegacy.payroll_month === '2026-12', JSON.stringify(afterLegacy));
 

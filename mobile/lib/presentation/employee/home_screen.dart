@@ -40,6 +40,9 @@ class _HomeScreenState extends State<HomeScreen> {
   List<Map<String, dynamic>> _announcements = [];
   List<Map<String, dynamic>> _onLeave = [];
   List<Map<String, dynamic>> _lateToday = [];
+
+  /// اليوم عطلة رسمية (من الإعدادات) — الكارد يگول "اليوم عطلة" بدل "لم تسجّل بعد"
+  bool _isHolidayToday = false;
   Map<String, dynamic>? _todayAttendance;
   String _userRole = 'employee';
   int _unreadNotificationsCount = 0;
@@ -242,6 +245,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final unreadRes = results[3] as List<dynamic>;
 
       unawaited(_loadOnLeave());
+      unawaited(_loadHolidayToday(todayStr));
       // تذكيرات البصمة المحلية (للآيفون) حسب الجدول والإجازات وبصمة اليوم
       unawaited(NotificationService.refreshLocalAttendanceReminders());
 
@@ -277,6 +281,15 @@ class _HomeScreenState extends State<HomeScreen> {
   // Build
   // ==========================================================================
   bool get _isManager => _userRole == 'admin' || _userRole == 'manager';
+
+  Future<void> _loadHolidayToday(String todayStr) async {
+    try {
+      final row = await SupabaseService.client.from('official_holidays').select('holiday_date').eq('holiday_date', todayStr).maybeSingle();
+      if (mounted) setState(() => _isHolidayToday = row != null);
+    } catch (e) {
+      debugPrint('تعذّر فحص العطلة الرسمية: $e');
+    }
+  }
 
   // المجازون الآن (منفصل: فشله لا يوقف باقي الرئيسية)
   Future<void> _loadOnLeave() async {
@@ -316,6 +329,7 @@ class _HomeScreenState extends State<HomeScreen> {
       schedule: _workSchedule,
       // مجاز الآن = ما نعرض "متأخر"
       onLeave: _onLeave.any((p) => p['employee_id'] == SupabaseService.currentUser?.id),
+      isHoliday: _isHolidayToday,
       onAction: () => widget.onTabChange(1),
     );
     final side = <Widget>[
@@ -440,10 +454,18 @@ class _Header extends StatelessWidget {
 enum _DayState { notStarted, working, done }
 
 class _TodayCard extends StatelessWidget {
-  const _TodayCard({required this.loading, required this.attendance, required this.schedule, required this.onAction, this.onLeave = false});
+  const _TodayCard({required this.loading, required this.attendance, required this.schedule, required this.onAction, this.onLeave = false, this.isHoliday = false});
 
   final bool loading;
   final bool onLeave;
+  final bool isHoliday;
+
+  /// يوم دوام حسب جدول الموظف (0 = الأحد) وما هو عطلة رسمية
+  bool _isWorkDay(DateTime now) {
+    if (isHoliday) return false;
+    final days = schedule?['work_days'];
+    return days is! List || days.map((d) => (d as num).toInt()).contains(now.weekday % 7);
+  }
   final Map<String, dynamic>? attendance;
   final Map<String, dynamic>? schedule;
   final VoidCallback onAction;
@@ -490,8 +512,19 @@ class _TodayCard extends StatelessWidget {
     final planned = _scheduledMinutes;
 
     final lateMinutes = state == _DayState.notStarted && !onLeave ? _lateSoFar(now) : 0;
+    final dayOff = state == _DayState.notStarted && !_isWorkDay(now);
 
     final (badge, tone, bigLabel, bigValue, actionLabel, actionIcon, variant) = switch (state) {
+      // يوم عطلة ولم يبصم: ما نطلب منه يسجّل حضور
+      _DayState.notStarted when dayOff => (
+          isHoliday ? 'عطلة رسمية' : 'يوم عطلة',
+          AppTone.info,
+          'اليوم',
+          'عطلة',
+          'عرض سجل الدوام',
+          Icons.history_rounded,
+          AppButtonVariant.secondary,
+        ),
       _DayState.notStarted => (
           lateMinutes > 0 ? 'متأخر ${_hm(Duration(minutes: lateMinutes))}' : 'لم تسجّل بعد',
           lateMinutes > 0 ? AppTone.danger : AppTone.warning,
@@ -556,7 +589,7 @@ class _TodayCard extends StatelessWidget {
           ),
           const SizedBox(height: AppSpace.xl),
           AppButton(label: actionLabel, icon: actionIcon, variant: variant, size: AppButtonSize.large, expand: true, onPressed: onAction),
-          if (state == _DayState.notStarted && schedule?['grace_period_minutes'] != null)
+          if (state == _DayState.notStarted && !dayOff && schedule?['grace_period_minutes'] != null)
             Padding(
               padding: const EdgeInsets.only(top: AppSpace.sm),
               child: Center(child: Text('سماحية التأخير ${schedule!['grace_period_minutes']} دقيقة', style: AppText.caption)),

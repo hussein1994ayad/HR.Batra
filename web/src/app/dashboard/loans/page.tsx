@@ -338,6 +338,12 @@ export default function LoansPage() {
                     <span className="text-xs text-slate-400">القسط الشهري</span>
                     <span className="text-sm font-extrabold text-sky-300">{formatIQD(amount / months)}</span>
                   </div>
+                  {/* الاعتماد يُرفض إذا عنده سلفة لم تُسدَّد (approve_loan) — ننبه قبل ما يحاول */}
+                  {active.some((l) => l.employee_id === loan.employee_id) && (
+                    <p className="rounded-xl bg-amber-500/10 border border-amber-500/20 px-3 py-2 mb-3 text-[11px] font-bold text-amber-300">
+                      عنده سلفة جارية لم تُسدَّد بعد، فما ينعتمد هذا الطلب إلا بعد إكمال سدادها.
+                    </p>
+                  )}
                   {loan.pledge_url && (
                     <button type="button" onClick={() => openStorageUrl(loan.pledge_url!).catch(() => toast.error('تعذر فتح التعهد'))} className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-300 hover:text-indigo-200 mb-3 cursor-pointer">
                     <FileText className="w-3.5 h-3.5" /> عرض التعهد الموقّع

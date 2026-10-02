@@ -2,7 +2,8 @@
 
 import * as XLSX from 'xlsx';
 import type { Branch, LeaveRequest } from '@/lib/db-types';
-import { formatHours } from './logic';
+import { formatClock } from '@/lib/format';
+import { formatHours, isDateWithinRange } from './logic';
 import type { AttendanceRow, Decision, MockGpsAttempt, TrackedEmployee } from './types';
 
 export function exportDisciplineReport(input: {
@@ -63,13 +64,8 @@ export function exportDisciplineReport(input: {
     }
 
     // Find approved leave
-    const leave = leaveRequests.find(l => {
-      if (l.employee_id !== log.employee_id) return false;
-      const dTime = new Date(log.work_date).getTime();
-      const sTime = new Date(l.start_date.split('T')[0]).getTime();
-      const eTime = new Date(l.end_date.split('T')[0]).getTime();
-      return dTime >= sTime && dTime <= eTime;
-    });
+    // نفس مقارنة صفحة الحضور (اليوم المحلي، مو تاريخ UTC)
+    const leave = leaveRequests.find(l => l.employee_id === log.employee_id && isDateWithinRange(log.work_date, l.start_date, l.end_date));
 
     // Find GPS spoofing attempts on this date
     const spoofing = securityLogs.filter(s => {
@@ -107,8 +103,8 @@ export function exportDisciplineReport(input: {
       'الفرع': branchName,
       'تاريخ الدوام': log.work_date,
       'اليوم': dayName,
-      'وقت الدخول الفعلي': log.check_in_time ? new Date(log.check_in_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : '-',
-      'وقت الخروج الفعلي': log.check_out_time ? new Date(log.check_out_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : '-',
+      'وقت الدخول الفعلي': log.check_in_time ? formatClock(log.check_in_time) : '-',
+      'وقت الخروج الفعلي': log.check_out_time ? formatClock(log.check_out_time) : '-',
       'ساعات العمل': formatHours(log.check_in_time, log.check_out_time),
       'حالة الدوام': attendanceStatus,
       'مدة التأخير': delayStr,

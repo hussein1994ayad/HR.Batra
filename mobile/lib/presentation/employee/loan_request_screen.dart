@@ -43,6 +43,9 @@ class _LoanRequestScreenState extends State<LoanRequestScreen> with SingleTicker
 
   List<Map<String, dynamic>> _loansHistory = [];
 
+  /// راتب الموظف الشهري (لشرط القسط ≤ 50% من الراتب، نفس شرط الاعتماد بالسيرفر)
+  double? _salary;
+
   late TextEditingController _amountController;
   late TextEditingController _installmentController;
 
@@ -78,9 +81,12 @@ class _LoanRequestScreenState extends State<LoanRequestScreen> with SingleTicker
           .eq('employee_id', user.id)
           .order('created_at', ascending: false);
 
+      final me = await SupabaseService.client.from('employees').select('monthly_salary_iqd').eq('id', user.id).maybeSingle();
+
       if (!mounted) return;
       setState(() {
         _loansHistory = List<Map<String, dynamic>>.from(data);
+        _salary = (me?['monthly_salary_iqd'] as num?)?.toDouble();
         _historyError = false;
       });
     } catch (e) {
@@ -124,6 +130,13 @@ class _LoanRequestScreenState extends State<LoanRequestScreen> with SingleTicker
     if (_requestedAmount <= 0) return 'اكتب مبلغ السلفة';
     if (_monthlyInstallment <= 0) return 'اكتب القسط الشهري';
     if (_monthlyInstallment > _requestedAmount) return 'القسط أكبر من مبلغ السلفة';
+    // نفس شروط الاعتماد: نخبر الموظف قبل ما يرسل طلب ما ينعتمد
+    final hasActive = _loansHistory.any((l) => l['status'] == 'approved' && ((l['remaining_amount'] as num?) ?? 0) > 0);
+    if (hasActive) return 'عندك سلفة جارية لم تُسدَّد بعد. تگدر تطلب سلفة جديدة بعد إكمال سدادها.';
+    final salary = _salary ?? 0;
+    if (salary > 0 && _monthlyInstallment > salary * 0.5) {
+      return 'القسط الشهري أكبر من نص راتبك (${Fmt.iqd(salary * 0.5)}). زيد مدة السداد أو قلّل المبلغ.';
+    }
     return null;
   }
 

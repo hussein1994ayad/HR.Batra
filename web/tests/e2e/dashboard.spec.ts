@@ -175,8 +175,15 @@ test.describe('workflows', () => {
     const dialog = page.getByRole('dialog');
     await expect(dialog).toContainText('تأخير 40 دقيقة');
     await dialog.getByRole('button', { name: 'إعفاء' }).click();
+    // قرار مالي: نافذة تأكيد أولاً، وما ينكتب شي قبلها
+    const confirmDialog = page.getByRole('dialog').filter({ hasText: 'إعفاء من هذه الحركة؟' });
+    await expect(confirmDialog).toBeVisible();
+    expect(api.writes('rpc:decide_payroll_event', 'POST')).toHaveLength(0);
+    await confirmDialog.getByRole('button', { name: 'إعفاء' }).click();
     await expect.poll(() => api.writes('rpc:decide_payroll_event', 'POST').length).toBe(1);
     expect(api.writes('rpc:decide_payroll_event', 'POST')[0].body).toMatchObject({ p_event_id: 'pe4', p_approve: false });
+    // نافذة التفاصيل تبقى مفتوحة بعد القرار
+    await expect(page.getByRole('dialog').filter({ hasText: 'تأخير 40 دقيقة' })).toBeVisible();
   });
 
   test('opens the add-employee form from the overview and never shows passwords', async ({ page }) => {

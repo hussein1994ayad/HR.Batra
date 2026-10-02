@@ -19,7 +19,7 @@ type EmployeesCache = Partial<EmployeesDataset> & { archivedEmployees?: Archived
 const readCache = () => readLocalCache<EmployeesCache>(CACHE_KEY);
 const writeCache = (patch: EmployeesCache) => writeLocalCache(CACHE_KEY, patch);
 
-const EMPTY: EmployeesDataset = { employees: [], deviceRequests: [], branches: [], departments: [] };
+const EMPTY: EmployeesDataset = { employees: [], deviceRequests: [], boundDevices: {}, branches: [], departments: [] };
 
 const celebrate = (colors?: string[]) => confetti({ particleCount: 60, spread: 45, ...(colors ? { colors } : {}) });
 
@@ -113,6 +113,11 @@ export function useEmployees(ask: Ask) {
     return run(emp.id + '_reset', async () => {
       await resetDeviceBinding(emp.id);
       patchEmployee(emp.id, { device_id_lock: 'force_lock_active' });
+      setData(prev => {
+        const boundDevices = { ...prev.boundDevices };
+        delete boundDevices[emp.id];
+        return { ...prev, boundDevices };
+      });
       toast.success('تم فك قفل وربط هاتف الموظف بنجاح ✅');
     }, 'فشل فك ربط الهاتف');
   };

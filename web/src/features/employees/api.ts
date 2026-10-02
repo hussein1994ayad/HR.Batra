@@ -11,24 +11,33 @@ const DOCS_BUCKET = 'employee-documents';
 export interface EmployeesDataset {
   employees: Employee[];
   deviceRequests: EmployeeDevice[];
+  /** الهاتف المعتمد المربوط بكل موظف (employee_id → الموديل). هذا الربط الفعلي الي يشوفه التطبيق. */
+  boundDevices: Record<string, string>;
   branches: BranchOption[];
   departments: Department[];
 }
 
 export async function fetchEmployeesDataset(): Promise<EmployeesDataset> {
-  const [emps, reqs, brs, depts] = await Promise.all([
+  const [emps, reqs, bound, brs, depts] = await Promise.all([
     supabase.from('employees').select('*, branches(name)').order('full_name', { ascending: true }),
     supabase.from('employee_devices').select('*, employees(full_name)').eq('is_approved', false),
+    supabase.from('employee_devices').select('employee_id, model').eq('is_approved', true),
     supabase.from('branches').select('id, name').order('name'),
     // تُستعمل في البحث بالقسم
     supabase.from('departments').select('id, name').order('name'),
   ]);
-  const firstError = [emps, reqs, brs, depts].find(r => r.error)?.error;
+  const firstError = [emps, reqs, bound, brs, depts].find(r => r.error)?.error;
   if (firstError) throw firstError;
+
+  const boundDevices: Record<string, string> = {};
+  for (const d of (bound.data ?? []) as { employee_id: string; model: string | null }[]) {
+    boundDevices[d.employee_id] = d.model || 'هاتف';
+  }
 
   return {
     employees: emps.data ?? [],
     deviceRequests: reqs.data ?? [],
+    boundDevices,
     branches: brs.data ?? [],
     departments: depts.data ?? [],
   };

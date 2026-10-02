@@ -2,6 +2,9 @@ import { Clock, Download, LogOut, Pencil } from 'lucide-react';
 import { Avatar, Badge, Button, Card, CardHeader, DataTable, IconButton, TableEmpty } from '@/components/ui';
 import { formatClock } from '@/lib/format';
 import { formatHours } from '../logic';
+import { getLocalDateStr } from '@/lib/dates';
+
+const todayLocal = () => getLocalDateStr(new Date());
 import type { AttendanceRow } from '../types';
 
 type Props = {
@@ -14,6 +17,7 @@ type Props = {
 
 function StatusBadge({ row }: { row: AttendanceRow }) {
   if (row.is_virtual) return <Badge tone="rose">لم يبصم</Badge>;
+  if (row.on_leave) return <Badge tone="sky" dot>إجازة</Badge>;
   if (row.status === 'late') return <Badge tone="amber" dot>متأخر</Badge>;
   if (row.status === 'absent') return <Badge tone="rose" dot>غائب</Badge>;
   if (row.status === 'half_day') return <Badge tone="violet" dot>نصف يوم</Badge>;
@@ -63,7 +67,11 @@ export function AttendanceLogTable({ attendanceRows, busyKey, onExport, onEdit, 
                 <td><StatusBadge row={log} /></td>
                 <td className="font-mono text-emerald-300" dir="ltr">{log.check_in_time ? formatClock(log.check_in_time) : '-'}</td>
                 <td className="font-mono text-slate-300" dir="ltr">
-                  {log.check_out_time ? formatClock(log.check_out_time) : log.check_in_time ? <Badge tone="sky">داخل الدوام</Badge> : '-'}
+                  {log.check_out_time
+                    ? formatClock(log.check_out_time)
+                    : log.check_in_time
+                      ? (log.work_date < todayLocal() ? <Badge tone="amber">بدون انصراف</Badge> : <Badge tone="sky">داخل الدوام</Badge>)
+                      : '-'}
                 </td>
                 <td className="font-bold text-slate-200">{formatHours(log.check_in_time, log.check_out_time)}</td>
                 <td className="!text-left">

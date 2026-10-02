@@ -271,7 +271,8 @@ export default function DashboardPage() {
   const pendingTotal = stats.pendingLeaves + stats.pendingLoans + stats.pendingDevices;
   const heroSummary = [
     pendingTotal > 0 ? `لديك ${pendingTotal} طلب بانتظار قرارك` : 'لا توجد طلبات معلقة حالياً',
-    stats.absentToday > 0 ? `و${stats.absentToday} موظف لم يسجلوا حضورهم بعد.` : 'والجميع سجلوا حضورهم اليوم.',
+    // ماكو أحد عنده دوام اليوم (جمعة/عطلة) = عطلة، مو "الجميع حضروا"
+    tracked === 0 ? 'واليوم عطلة، ماكو دوام.' : stats.absentToday > 0 ? `و${stats.absentToday} موظف لم يسجلوا حضورهم بعد.` : 'والجميع سجلوا حضورهم اليوم.',
   ].join(pendingTotal > 0 ? '، ' : ' ');
 
   const statCards: StatCardProps[] = [
@@ -465,7 +466,9 @@ export default function DashboardPage() {
         />
 
         {data.absentList.length === 0 ? (
-          <EmptyState icon={CheckCircle} tone="emerald" title="الجميع حاضرون!" description="لا توجد غيابات مسجلة لهذا اليوم." />
+          tracked === 0
+            ? <EmptyState icon={CheckCircle} tone="emerald" title="اليوم عطلة" description="ماكو أحد عنده دوام اليوم." />
+            : <EmptyState icon={CheckCircle} tone="emerald" title="الجميع حاضرون!" description="لا توجد غيابات مسجلة لهذا اليوم." />
         ) : absentGroups.length === 0 ? (
           <p className="py-10 text-center text-xs text-slate-500">لا توجد نتائج مطابقة للبحث</p>
         ) : (
