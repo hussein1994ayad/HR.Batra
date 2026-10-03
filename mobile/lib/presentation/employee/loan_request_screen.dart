@@ -43,7 +43,7 @@ class _LoanRequestScreenState extends State<LoanRequestScreen> with SingleTicker
 
   List<Map<String, dynamic>> _loansHistory = [];
 
-  /// راتب الموظف الشهري (لشرط القسط ≤ 50% من الراتب، نفس شرط الاعتماد بالسيرفر)
+  /// راتب الموظف الشهري (لتنبيه القسط فوق نص الراتب أو فوق الراتب كله)
   double? _salary;
 
   late TextEditingController _amountController;
@@ -133,11 +133,18 @@ class _LoanRequestScreenState extends State<LoanRequestScreen> with SingleTicker
     // نفس شروط الاعتماد: نخبر الموظف قبل ما يرسل طلب ما ينعتمد
     final hasActive = _loansHistory.any((l) => l['status'] == 'approved' && ((l['remaining_amount'] as num?) ?? 0) > 0);
     if (hasActive) return 'عندك سلفة جارية لم تُسدَّد بعد. تگدر تطلب سلفة جديدة بعد إكمال سدادها.';
-    final salary = _salary ?? 0;
-    if (salary > 0 && _monthlyInstallment > salary * 0.5) {
-      return 'القسط الشهري أكبر من نص راتبك (${Fmt.iqd(salary * 0.5)}). زيد مدة السداد أو قلّل المبلغ.';
-    }
+    if (_requestedAmount > 100000000) return 'المبلغ كبير جداً (أكثر من 100,000,000 د.ع). تأكد من الرقم.';
     return null;
+  }
+
+  /// تنبيه فقط (الطلب مسموح): القسط أكثر من نص الراتب، أو أكثر من الراتب كله فيطلع الراتب بالسالب.
+  String? get _salaryWarning {
+    final salary = _salary ?? 0;
+    if (salary <= 0 || _monthlyInstallment <= salary * 0.5) return null;
+    if (_monthlyInstallment > salary) {
+      return '⚠️ القسط الشهري (${Fmt.iqd(_monthlyInstallment)}) أكثر من راتبك كله (${Fmt.iqd(salary)}). راتبك راح يطلع بالسالب، والفرق تدفعه نقداً للإدارة.';
+    }
+    return '⚠️ القسط الشهري أكثر من نص راتبك (${Fmt.iqd(salary * 0.5)}). راح يبقى لك من الراتب ${Fmt.iqd(salary - _monthlyInstallment)} بس.';
   }
 
   Future<void> _submitLoanRequest() async {
@@ -155,7 +162,8 @@ class _LoanRequestScreenState extends State<LoanRequestScreen> with SingleTicker
     final confirmed = await showAppConfirm(
       context,
       title: 'إرسال طلب السلفة؟',
-      message: 'المبلغ: ${Fmt.iqd(_requestedAmount)}\nالقسط: ${Fmt.iqd(_monthlyInstallment)} شهرياً لمدة ${Fmt.monthCount(_months)}',
+      message: 'المبلغ: ${Fmt.iqd(_requestedAmount)}\nالقسط: ${Fmt.iqd(_monthlyInstallment)} شهرياً لمدة ${Fmt.monthCount(_months)}'
+          '${_salaryWarning != null ? '\n\n${_salaryWarning!}' : ''}',
       confirmLabel: 'إرسال',
     );
     if (!confirmed || !mounted) return;
@@ -327,6 +335,10 @@ class _LoanRequestScreenState extends State<LoanRequestScreen> with SingleTicker
                           Text('آخر قسط ${Fmt.iqd(_lastInstallment)}', style: AppText.caption),
                         const SizedBox(height: AppSpace.xs),
                         const Text('يُستقطع القسط من راتبك تلقائياً بعد موافقة الإدارة.', style: AppText.caption),
+                        if (_salaryWarning != null) ...[
+                          const SizedBox(height: AppSpace.sm),
+                          Text(_salaryWarning!, style: AppText.bodySm.copyWith(color: AppColors.warning)),
+                        ],
                       ],
                     ),
                   ),

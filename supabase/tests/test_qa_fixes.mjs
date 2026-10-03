@@ -39,8 +39,9 @@ check('   an absence recorded on a Friday (day off) is not deducted', (await abs
 // 3) طلب السلفة بنفس شروط الاعتماد
 const req = (who, amount, inst, n) => as(db, who, `INSERT INTO loans (employee_id, amount, installment_amount, installment_count, remaining_amount, pledge_url, status)
   VALUES ($1, $2, $3, $4, $2, 'x', 'pending') RETURNING id`, [IDS[who], amount, inst, n]);
-await expectError('3) a 900-billion request is refused (installment over 50% of salary)', req('emp', 900000000000, 100000000000, 9), '50%');
-await expectOk('   a reasonable request is accepted', req('emp', 1000000, 250000, 4));
+await expectError('3) a 900-billion request is refused (typo guard)', req('emp', 900000000000, 100000000000, 9), 'كبير جداً');
+// القسط أكثر من نص الراتب (وحتى أكثر من الراتب) مسموح: التطبيق ينبه فقط
+await expectOk('   a request above half the salary is accepted (warning only)', req('emp', 3000000, 3000000, 1));
 
 // 4) الخصم أكبر من الراتب مرفوض، والمكافأة الضخمة مرفوضة
 const bd = (type, amount) => as(db, 'admin', `INSERT INTO bonuses_deductions (employee_id, type, amount, reason, issue_date) VALUES ($1, $2, $3, 'qa', '2026-09-15')`, [IDS.emp, type, amount]);
