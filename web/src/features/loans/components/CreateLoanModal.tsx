@@ -8,6 +8,8 @@ import { Coins, Plus } from 'lucide-react';
 import { Field, Input, Modal, ModalFooter, Select } from '@/components/ui';
 import { formatIQD } from '@/lib/format';
 import { errorMessage } from '@/lib/error-utils';
+import { useConfirm } from '@/components/confirm';
+import { overHalfSalaryWarning } from '../logic';
 import { createDirectLoan, fetchLoanEmployees } from '../api';
 
 type Props = {
@@ -25,6 +27,7 @@ export function CreateLoanModal({ defaultFirstDue, onClose, onCreated }: Props) 
   const [pledge, setPledge] = useState<File | null>(null);
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
+  const confirm = useConfirm();
 
   useEffect(() => {
     fetchLoanEmployees().then(setEmployees).catch((err: unknown) => toast.error(`تعذر تحميل الموظفين: ${errorMessage(err)}`));
@@ -41,7 +44,8 @@ export function CreateLoanModal({ defaultFirstDue, onClose, onCreated }: Props) 
     if (!employeeId) return void toast.error('اختر الموظف');
     if (amountNum <= 0 || monthsNum <= 0) return void toast.error('اكتب المبلغ وعدد الأشهر');
     if (!pledge) return void toast.error('ارفع صورة التعهد الموقّع (إلزامي)');
-    if (overHalf) return void toast.error(`القسط (${formatIQD(installment)}) أكبر من نص الراتب (${formatIQD(salary * 0.5)}). زيد عدد الأشهر.`);
+    const warning = overHalfSalaryWarning(amountNum, monthsNum, salary);
+    if (warning && !(await confirm({ title: 'القسط أكثر من نص الراتب', message: warning, confirmLabel: 'إعطاء رغم ذلك', tone: 'warning' }))) return;
     setSaving(true);
     try {
       await createDirectLoan({ employeeId, amount: amountNum, months: monthsNum, firstDue, pledge, notes });
@@ -71,8 +75,8 @@ export function CreateLoanModal({ defaultFirstDue, onClose, onCreated }: Props) 
             <Input type="number" min={1} max={60} required value={months} onChange={(e) => setMonths(e.target.value)} dir="ltr" />
           </Field>
         </div>
-        <p className={overHalf ? 'text-xs font-bold text-rose-300' : 'text-xs text-slate-400'}>
-          القسط الشهري: {formatIQD(installment)}{salary > 0 && ` · الحد ${formatIQD(salary * 0.5)} (نص الراتب)`}
+        <p className={overHalf ? 'text-xs font-bold text-amber-300' : 'text-xs text-slate-400'}>
+          القسط الشهري: {formatIQD(installment)}{salary > 0 && ` · نص الراتب ${formatIQD(salary * 0.5)}${overHalf ? ' (أكثر من النص: مسموح، والباقي يتسدد نقداً)' : ''}`}
         </p>
         <Field label="تاريخ أول قسط">
           <Input type="date" required value={firstDue} onChange={(e) => setFirstDue(e.target.value)} dir="ltr" />

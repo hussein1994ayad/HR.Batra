@@ -40,7 +40,7 @@ export async function rejectLoan(loanId: string, reason: string) {
 
 /**
  * يعتمد السلفة بالمبلغ والمدة المعدّلة ويولّد أقساطها في معاملة واحدة (approve_loan).
- * نفس قواعد buildInstallmentSchedule، ويتحقق السيرفر من السلفة الجارية وحد 50% من الراتب.
+ * نفس قواعد buildInstallmentSchedule، ويتحقق السيرفر من السلفة الجارية (القسط فوق نص الراتب مسموح للأدمن).
  */
 export async function approveLoan(draft: ApprovalDraft) {
   const { error } = await supabase.rpc('approve_loan', {
@@ -129,7 +129,7 @@ export async function deleteCompletedLoan(loan: Loan) {
   if (error) throw error;
 }
 
-/** الموظفون النشطون لاختيار صاحب السلفة (مع الراتب لفحص شرط 50%). */
+/** الموظفون النشطون لاختيار صاحب السلفة (مع الراتب لتنبيه القسط فوق نص الراتب). */
 export async function fetchLoanEmployees(): Promise<{ id: string; full_name: string; monthly_salary_iqd: number | null }[]> {
   const { data, error } = await supabase
     .from('employees')

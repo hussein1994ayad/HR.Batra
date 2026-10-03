@@ -30,7 +30,7 @@ import {
   approveLoan, deleteCompletedLoan, deleteInstallment, fetchLoans as fetchLoanLists, payInstallment,
   postponeInstallments, rejectLoan as rejectLoanRequest, rescheduleLoan, revertInstallmentPayment,
 } from '@/features/loans/api';
-import { previewPayment, sameDayNextMonth, validateApproval } from '@/features/loans/logic';
+import { overHalfSalaryWarning, previewPayment, sameDayNextMonth, validateApproval } from '@/features/loans/logic';
 import type { PaymentMethod } from '@/features/loans/types';
 import { LoanStatementPrint } from '@/features/loans/components/LoanStatementPrint';
 import { CreateLoanModal } from '@/features/loans/components/CreateLoanModal';
@@ -177,11 +177,13 @@ export default function LoansPage() {
     e.preventDefault();
     if (!approval) return;
     const salary = Number((approval.loan as { employees?: { monthly_salary_iqd?: number | null } | null }).employees?.monthly_salary_iqd) || 0;
-    const invalid = validateApproval(approval.amount, approval.months, salary);
+    const invalid = validateApproval(approval.amount, approval.months);
     if (invalid) {
       toast.error(invalid);
       return;
     }
+    const warning = overHalfSalaryWarning(approval.amount, approval.months, salary);
+    if (warning && !(await confirm({ title: 'القسط أكثر من نص الراتب', message: warning, confirmLabel: 'اعتماد رغم ذلك', tone: 'warning' }))) return;
     await run(
       'approve',
       async () => {

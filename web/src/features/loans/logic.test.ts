@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Loan, LoanInstallment } from '@/lib/db-types';
 import {
   addMonths, buildInstallmentSchedule, firstOfNextMonth, nextUnpaidInstallment, sameDayNextMonth, sortInstallments,
-  previewPayment, splitAmount, splitLoansByCompletion, validateApproval,
+  overHalfSalaryWarning, previewPayment, splitAmount, splitLoansByCompletion, validateApproval,
 } from './logic';
 
 const inst = (id: string, due_date: string, is_paid = false): LoanInstallment =>
@@ -49,10 +49,14 @@ describe('default dates', () => {
 
 describe('validateApproval', () => {
   it('rejects zero values and installments above half the salary', () => {
-    expect(validateApproval(0, 5, 1_000_000)).toMatch(/أكبر من الصفر/);
-    expect(validateApproval(1_200_000, 2, 1_000_000)).toMatch(/50%/);
-    expect(validateApproval(1_200_000, 3, 1_000_000)).toBeNull();
-    expect(validateApproval(1_200_000, 1, 0)).toBeNull(); // الراتب غير معروف
+    expect(validateApproval(0, 5)).toMatch(/أكبر من الصفر/);
+    expect(validateApproval(1_200_000, 1)).toBeNull(); // فوق نص الراتب مسموح (تنبيه فقط)
+  });
+  it('warns (does not refuse) above half the salary', () => {
+    expect(overHalfSalaryWarning(1_200_000, 2, 1_000_000)).toMatch(/أكثر من نص الراتب/);
+    expect(overHalfSalaryWarning(1_200_000, 1, 1_000_000)).toMatch(/بالسالب/);
+    expect(overHalfSalaryWarning(1_200_000, 3, 1_000_000)).toBeNull();
+    expect(overHalfSalaryWarning(1_200_000, 1, 0)).toBeNull(); // الراتب غير معروف
   });
 });
 

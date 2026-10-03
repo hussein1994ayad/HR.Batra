@@ -18,7 +18,6 @@ check('a new loan request inserts and notifies admins with the installment count
 await expectError('employee cannot approve a loan', approve('emp', loan, 1000000, 3), 'غير مصرح');
 await expectError('manager cannot approve a loan', approve('manager', loan, 1000000, 3), 'غير مصرح');
 await expectError('zero months is rejected', approve('admin', loan, 1000000, 0), 'أكبر من الصفر');
-await expectError('installment above half the salary is rejected', approve('admin', loan, 1000000, 1), '50%');
 
 await expectOk('admin approves with edited months', approve('admin', loan, 1000000, 3));
 const row = (await db.query(`SELECT status, installment_count, installment_amount::int ia, remaining_amount::int ra, approved_by FROM loans WHERE id=$1`, [loan])).rows[0];
@@ -49,7 +48,6 @@ const direct = (who, amount = 600000, months = 3, pledge = 'p.png', emp = IDS.em
 
 await expectError('employee cannot create a direct loan', direct('emp'), 'غير مصرح');
 await expectError('direct loan requires a pledge photo', direct('admin', 600000, 3, ''), 'التعهد');
-await expectError('direct loan respects the 50% salary rule', direct('admin', 900000, 1), '50%');
 const created = await expectOk('admin creates a direct loan', direct('admin'));
 const directId = created?.rows[0].id;
 const dl = (await db.query(`SELECT status, notes, installment_amount::int ia, approved_by FROM loans WHERE id=$1`, [directId])).rows[0];
@@ -97,5 +95,11 @@ check('payment method and note are stored',
 const payNotifs = await db.query(`SELECT 1 FROM notifications WHERE employee_id=$1 AND title LIKE 'تسجيل دفعة%'`, [IDS.manager]);
 check('employee is notified of each payment', payNotifs.rows.length === 6, String(payNotifs.rows.length));
 await expectError('anon cannot record a payment', pay('anon', tail[0].id ?? IDS.branch, 1), 'permission denied');
+
+// الأدمن يقدر يعطي قسط أكثر من نص الراتب (الموظف يسدد الباقي نقداً)
+await db.query(`UPDATE employees SET monthly_salary_iqd=600000 WHERE id=$1`, [IDS.admin]);
+const big = await expectOk("admin may approve an installment above half the salary",
+  db.query(`SELECT public._validate_loan_terms($1::uuid, 900000::numeric, 1::int, DATE '2026-10-10', NULL::uuid)::int AS v`, [IDS.admin]));
+check("over-half installment is returned, not refused", big?.rows[0].v === 900000, JSON.stringify(big?.rows));
 
 done();
