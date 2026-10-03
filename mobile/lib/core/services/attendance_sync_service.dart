@@ -73,6 +73,7 @@ class AttendanceSyncService {
     required String type,
     required double latitude,
     required double longitude,
+    double? accuracy,
     bool isMocked = false,
   }) async {
     final punchTime = DateTime.now().toUtc();
@@ -81,6 +82,7 @@ class AttendanceSyncService {
         type: type,
         latitude: latitude,
         longitude: longitude,
+        accuracy: accuracy,
         isMocked: isMocked,
       );
     } catch (e) {
@@ -92,6 +94,7 @@ class AttendanceSyncService {
         'type': type,
         'latitude': latitude,
         'longitude': longitude,
+        'accuracy': accuracy,
         'is_mocked': isMocked,
         'user_id': SupabaseService.currentUser?.id,
         'time': punchTime.toIso8601String(),
@@ -104,6 +107,7 @@ class AttendanceSyncService {
     required String type,
     required double latitude,
     required double longitude,
+    double? accuracy,
     bool isMocked = false,
     DateTime? offlineTime,
   }) async {
@@ -115,6 +119,8 @@ class AttendanceSyncService {
         'p_longitude': longitude,
         'p_device_id': await DeviceService.getDeviceUUID(),
         'p_is_mocked': isMocked,
+        // دقة الـ GPS: السيرفر يرفض الموقع التقريبي/الضعيف
+        if (accuracy != null) 'p_accuracy': accuracy,
         if (offlineTime != null) 'p_client_time': offlineTime.toIso8601String(),
       },
     ).timeout(const Duration(seconds: 15));
@@ -230,6 +236,7 @@ class AttendanceSyncService {
           type: type,
           latitude: lat,
           longitude: lng,
+          accuracy: (punch['accuracy'] as num?)?.toDouble(),
           isMocked: punch['is_mocked'] as bool? ?? false,
           offlineTime: time,
         );

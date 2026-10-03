@@ -18,6 +18,7 @@
 
 import Foundation
 import CoreLocation
+import Security
 import UIKit
 
 @objc class LocationMonitorIOS: NSObject, CLLocationManagerDelegate {
@@ -68,12 +69,13 @@ import UIKit
         userDefaults.set(supabaseUrl, forKey: kSupabaseUrl)
         userDefaults.set(supabaseAnonKey, forKey: kSupabaseAnonKey)
         userDefaults.set(employeeId, forKey: kEmployeeId)
-        userDefaults.set(accessToken, forKey: kAccessToken)
+        SessionTokenStore.save(accessToken)
+        userDefaults.removeObject(forKey: kAccessToken) // نسخ قديمة كانت تحفظه هنا
     }
 
     /// تحديث توكن الجلسة فقط (يُستدعى عند تجديد الجلسة في Flutter).
     @objc func updateAccessToken(_ token: String) {
-        userDefaults.set(token, forKey: kAccessToken)
+        SessionTokenStore.save(token)
     }
 
     @objc func startMonitoring(branches: [[String: Any]]) {
@@ -134,6 +136,7 @@ import UIKit
         branchCache.removeAll()
         isCheckedIn = false
         userDefaults.set(false, forKey: kActiveMonitoring)
+        SessionTokenStore.clear()
         userDefaults.removeObject(forKey: kAccessToken)
         NSLog("[HR Pro iOS] Full stop — all monitoring cancelled")
     }
@@ -280,7 +283,7 @@ import UIKit
 
         guard let url = userDefaults.string(forKey: kSupabaseUrl),
               let anon = userDefaults.string(forKey: kSupabaseAnonKey),
-              let token = userDefaults.string(forKey: kAccessToken),
+              let token = SessionTokenStore.read(),
               tokenIsFresh(token),
               let requestUrl = URL(string: "\(url)/rest/v1/location_tracking")
         else {
@@ -302,5 +305,51 @@ import UIKit
                 self?.bufferPoint(point)
             }
         }.resume()
+    }
+}
+
+// =========================================================================
+// توكن الجلسة بالـ Keychain (مشفّر، ما يدخل بالنسخ الاحتياطي) بدل UserDefaults.
+// AfterFirstUnlock حتى يگدر التتبع بالخلفية يقراه والهاتف مقفول.
+// =========================================================================
+enum SessionTokenStore {
+    private static let service = "com.batra.hrpro.session"
+    private static let account = "supabase_access_token"
+
+    private static var baseQuery: [String: Any] {
+        [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+        ]
+    }
+
+    static func save(_ token: String) {
+        guard !token.isEmpty else { clear(); return }
+        let data = Data(token.utf8)
+        let status = SecItemUpdate(baseQuery as CFDictionary, [kSecValueData as String: data] as CFDictionary)
+        if status == errSecItemNotFound {
+            var attributes = baseQuery
+            attributes[kSecValueData as String] = data
+            attributes[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+            SecItemAdd(attributes as CFDictionary, nil)
+        }
+    }
+
+    static func read() -> String? {
+        var query = baseQuery
+        query[kSecReturnData as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
+        var item: CFTypeRef?
+        guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess,
+              let data = item as? Data,
+              let token = String(data: data, encoding: .utf8),
+              !token.isEmpty
+        else { return nil }
+        return token
+    }
+
+    static func clear() {
+        SecItemDelete(baseQuery as CFDictionary)
     }
 }

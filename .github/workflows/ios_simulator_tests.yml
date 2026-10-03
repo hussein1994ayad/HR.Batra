@@ -1,0 +1,138 @@
+name: iOS Simulator Tests
+
+# يشغّل التطبيق على محاكيات آيفون/آيباد حقيقية (macOS من GitHub، بدون حساب مطور):
+#  1) التطبيق الحقيقي يفتح بدون crash + الكود الأصلي (Keychain، مراقب الموقع، الموقع الدقيق)
+#  2) كل الشاشات ببيانات وهمية على كل جهاز، مع لقطة لكل شاشة وفحص المساحة الآمنة
+# النتائج واللقطات تُنشر على فرع ios-sim-results (بيانات وهمية فقط).
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "design-v2" ]
+    paths:
+      - "mobile/**"
+      - ".github/workflows/ios_simulator_tests.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ios-sim-tests
+  cancel-in-progress: true
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  SIM_LAT: "33.3128"
+  SIM_LNG: "44.3615"
+  BUNDLE_ID: com.batra.hrpro.hrPro
+
+jobs:
+  ios-sim:
+    runs-on: macos-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.9'
+          channel: 'stable'
+          cache: true
+
+      - name: Install dependencies
+        working-directory: ./mobile
+        run: flutter pub get
+
+      - name: Create simulators
+        id: sims
+        run: |
+          python3 - <<'PY' > sims.txt
+          import json, re, subprocess
+          rt = [r for r in json.loads(subprocess.check_output(['xcrun','simctl','list','runtimes','-j']))['runtimes']
+                if r.get('platform') == 'iOS' and r.get('isAvailable')]
+          runtime = rt[-1]
+          supported = {d['identifier']: d['name'] for d in runtime.get('supportedDeviceTypes', [])}
+          names = list(supported.values())
+          def pick(pred):
+              c = [n for n in names if pred(n)]
+              return c[-1] if c else None
+          wanted = [
+            ('iphone_se', pick(lambda n: n.startswith('iPhone SE'))),
+            ('iphone_mini_notch', pick(lambda n: 'mini' in n)),
+            ('iphone_pro_island', pick(lambda n: re.fullmatch(r'iPhone \d+ Pro', n) is not None)),
+            ('iphone_pro_max', pick(lambda n: re.fullmatch(r'iPhone \d+ Pro Max', n) is not None)),
+            ('ipad', pick(lambda n: n.startswith('iPad Air'))),
+          ]
+          ids = {v: k for k, v in supported.items()}
+          for label, name in wanted:
+              if not name: continue
+              udid = subprocess.check_output(['xcrun','simctl','create', f'HR-{label}', ids[name], runtime['identifier']]).decode().strip()
+              print(f"{label}|{name}|{udid}|{runtime['name']}")
+          PY
+          cat sims.txt
+
+      - name: Run tests on every simulator
+        working-directory: ./mobile
+        env:
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+        run: |
+          set +e
+          DEFINES="--dart-define=SIM_LAT=$SIM_LAT --dart-define=SIM_LNG=$SIM_LNG"
+          if [ -n "$SUPABASE_URL" ]; then DEFINES="$DEFINES --dart-define=SUPABASE_URL=$SUPABASE_URL --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY"; fi
+          OUT=build/ios_screens; mkdir -p $OUT
+          RES=$OUT/RESULTS.md
+          echo "# iOS Simulator Tests — $(date -u '+%Y-%m-%d %H:%M UTC') — commit ${GITHUB_SHA::7}" > $RES
+          echo "" >> $RES; echo "| Device | iOS | Test | Result |" >> $RES; echo "|---|---|---|---|" >> $RES
+          # نسخة مثبّتة مسبقاً حتى تنمنح صلاحية الموقع قبل أول تشغيل (flutter drive يحدّثها ويحتفظ بالصلاحيات)
+          flutter build ios --simulator --debug $DEFINES > $OUT/prebuild.log 2>&1 || echo "| — | — | prebuild | ❌ FAIL |" >> $RES
+          APP=build/ios/iphonesimulator/Runner.app
+          first=1
+          exec 3< ../sims.txt
+          while IFS='|' read -r -u 3 label name udid runtime; do
+            echo "::group::$label ($name)"
+            xcrun simctl boot "$udid"; xcrun simctl bootstatus "$udid" -b
+            [ -d "$APP" ] && xcrun simctl install "$udid" "$APP"
+            xcrun simctl location "$udid" set "$SIM_LAT,$SIM_LNG"
+            # صلاحيات الموقع مسبقاً (نفس اختيار المستخدم "دائماً")
+            xcrun simctl privacy "$udid" grant location-always "$BUNDLE_ID" || xcrun simctl privacy "$udid" grant location "$BUNDLE_ID"
+            targets="screens_gallery_test"
+            if [ $first = 1 ] || [ "$label" = "iphone_se" ]; then targets="app_launch_test $targets"; fi
+            for t in $targets; do
+              log=$OUT/$label/$t.log; mkdir -p $OUT/$label
+              SCREENS_DIR=$OUT/$label timeout 1500 flutter drive --driver=test_driver/integration_test.dart \
+                --target=integration_test/$t.dart -d "$udid" $DEFINES > "$log" 2>&1 < /dev/null
+              code=$?
+              if [ $code = 0 ]; then r="✅ PASS"; else r="❌ FAIL ($code)"; fi
+              echo "| $name | $runtime | $t | $r |" >> $RES
+              if [ $code != 0 ]; then
+                echo "" >> $OUT/FAILURES.md; echo "## $name — $t" >> $OUT/FAILURES.md; echo '```' >> $OUT/FAILURES.md
+                grep -E "EXCEPTION|Exception|Error|Expected|Actual|reason|FAIL|failed|══|overflow|unsafe|Which:|crash" "$log" | head -80 >> $OUT/FAILURES.md
+                echo '```' >> $OUT/FAILURES.md
+                xcrun simctl spawn "$udid" log show --last 15m --style compact \
+                  --predicate 'process == "Runner" AND (messageType == error OR messageType == fault OR eventMessage CONTAINS[c] "exception" OR eventMessage CONTAINS[c] "terminat")' \
+                  2>/dev/null | tail -60 > $OUT/$label/$t.device.log
+              fi
+              # عدد البصمات (crash reports) الجديدة للتطبيق
+              ls ~/Library/Logs/DiagnosticReports 2>/dev/null | grep -i runner >> $OUT/$label/crash_reports.txt
+            done
+            xcrun simctl shutdown "$udid"
+            first=0
+            echo "::endgroup::"
+          done
+          for f in ~/Library/Logs/DiagnosticReports/*Runner*; do [ -f "$f" ] && cp "$f" $OUT/; done
+          cat $RES >> $GITHUB_STEP_SUMMARY
+          [ -f $OUT/FAILURES.md ] && cat $OUT/FAILURES.md >> $GITHUB_STEP_SUMMARY
+          exit 0
+
+      - name: Publish results to branch ios-sim-results
+        if: always()
+        run: |
+          cd mobile/build/ios_screens
+          git init -q -b ios-sim-results
+          git config user.name "ios-sim-bot"; git config user.email "ios-sim-bot@users.noreply.github.com"
+          git add -A && git commit -qm "iOS simulator results for ${GITHUB_SHA::7}"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" ios-sim-results
+
+      - name: Fail if any test failed
+        run: "! grep -q 'FAIL' mobile/build/ios_screens/RESULTS.md"

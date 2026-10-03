@@ -12,6 +12,7 @@ import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 
 import '../../core/services/attendance_sync_service.dart';
 import '../../core/services/location_service.dart';
+import '../../core/services/precise_location.dart';
 import '../../core/services/schedule_service.dart';
 import '../../core/services/supabase_service.dart';
 import '../shared/ui/ui.dart';
@@ -38,6 +39,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   bool _isLocating = true;
   bool _isSubmitting = false;
   bool _mockDetected = false;
+  bool _preciseDenied = false;
   String? _errorMessage;
   Map<String, dynamic>? _todayAttendance;
   Map<String, dynamic>? _workSchedule;
@@ -180,6 +182,10 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       if (permission == LocationPermission.deniedForever) {
         throw Exception('تم رفض صلاحية الموقع الجغرافي نهائياً، يرجى تفعيلها من إعدادات الهاتف.');
       }
+
+      // الموقع الدقيق مطلوب: أندرويد 12+ وiOS 14+ يسمحون بموقع تقريبي يبعد كيلومترات
+      _preciseDenied = !await PreciseLocation.ensure();
+      if (_preciseDenied) throw Exception(PreciseLocation.reducedMessage);
 
       // 3. المرحلة الأولى الفورية (Fast-Path): قراءة آخر موقع معروف في أقل من 20ms لتجهيز الشاشة فوراً
       Position? initialPosition = await Geolocator.getLastKnownPosition();
@@ -363,6 +369,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         _branchLat,
         _branchLng,
       );
+      if (position.accuracy > PreciseLocation.maxAccuracyFor(_branchRadius)) {
+        throw Exception(PreciseLocation.lowAccuracyMessage(position.accuracy));
+      }
       if (distanceInMeters > _branchRadius) {
         final double outOfRange = distanceInMeters - _branchRadius;
         throw Exception('$_outOfRangeMessage المتبقي لتصل للفرع: ${outOfRange.toStringAsFixed(1)} متر.');
@@ -378,6 +387,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         type: punchType,
         latitude: position.latitude,
         longitude: position.longitude,
+        accuracy: position.accuracy,
         isMocked: position.isMocked,
       );
       if (!result.ok) {
@@ -619,9 +629,15 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                   ],
                 ),
                 const SizedBox(height: AppSpace.md),
-                Align(
-                  alignment: AlignmentDirectional.centerEnd,
-                  child: AppButton.secondary(label: 'إعادة المحاولة', icon: Icons.refresh_rounded, size: AppButtonSize.small, onPressed: _initLocationAndBranch),
+                Wrap(
+                  alignment: WrapAlignment.end,
+                  spacing: AppSpace.sm,
+                  runSpacing: AppSpace.sm,
+                  children: [
+                    if (_preciseDenied)
+                      const AppButton.secondary(label: 'فتح الإعدادات', icon: Icons.settings_rounded, size: AppButtonSize.small, onPressed: PreciseLocation.openSettings),
+                    AppButton.secondary(label: 'إعادة المحاولة', icon: Icons.refresh_rounded, size: AppButtonSize.small, onPressed: _initLocationAndBranch),
+                  ],
                 ),
               ],
             ),

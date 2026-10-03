@@ -32,7 +32,12 @@ check('mocked location is rejected', r.ok === false && r.code === 'mock_gps', JS
 const mocks = await db.query(`SELECT count(*)::int n FROM mock_gps_attempts WHERE employee_id = $1`, [IDS.emp]);
 check('mock attempt is recorded', mocks.rows[0].n === 1);
 
-r = await punch('emp', 'check_in', IN);
+r = await punch('emp', 'check_in', IN, `, NULL, false, NULL, 2500`);
+check('approximate location (±2.5 km) is rejected', r.ok === false && r.code === 'low_accuracy', JSON.stringify(r));
+const lowRow = await db.query(`SELECT 1 FROM attendance WHERE employee_id = $1`, [IDS.emp]);
+check('   and nothing is saved', lowRow.rows.length === 0);
+
+r = await punch('emp', 'check_in', IN, `, NULL, false, NULL, 12`);
 check('check-in succeeds with present status', r.ok === true && r.status === 'present', JSON.stringify(r));
 r = await punch('emp', 'check_in', IN);
 check('duplicate check-in is rejected', r.ok === false && r.code === 'already_checked_in');

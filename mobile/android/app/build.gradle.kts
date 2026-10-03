@@ -39,7 +39,7 @@ android {
         applicationId = "com.batra.hrpro.hr_pro"
         // ⬇️  خفّضنا minSdk من 26 إلى 24 لدعم Android 7 (Nougat) — تغطية سوقية أكبر.
         minSdk = 24
-        targetSdk = 35
+        targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }

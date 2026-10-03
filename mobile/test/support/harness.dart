@@ -23,10 +23,15 @@ import 'fake_backend.dart';
 const String kCaptureSet = String.fromEnvironment('CAPTURE');
 
 class DeviceSize {
-  const DeviceSize(this.name, this.width, this.height);
+  const DeviceSize(this.name, this.width, this.height, {this.top = 24, this.bottom = 16, this.ios = false});
   final String name;
   final double width;
   final double height;
+  /// المساحة الآمنة الحقيقية للجهاز: النوتش/Dynamic Island فوگ، وشريط الهوم/أزرار أندرويد جوه.
+  final double top;
+  final double bottom;
+  /// يرسم بأسلوب iOS (نوافذ Cupertino وغيرها) مثل الآيفون الحقيقي.
+  final bool ios;
   Size get size => Size(width, height);
   @override
   String toString() => '$name ${width.toInt()}x${height.toInt()}';
@@ -34,13 +39,14 @@ class DeviceSize {
 
 const kPhoneSizes = [
   DeviceSize('small', 320, 640),
-  DeviceSize('se', 375, 667),
-  DeviceSize('pixel', 393, 852),
-  DeviceSize('pro_max', 430, 932),
+  DeviceSize('iphone_se', 375, 667, top: 20, bottom: 0, ios: true),
+  DeviceSize('iphone_mini_notch', 375, 812, top: 50, bottom: 34, ios: true),
+  DeviceSize('iphone_pro_island', 402, 874, top: 62, bottom: 34, ios: true),
+  DeviceSize('iphone_pro_max', 440, 956, top: 62, bottom: 34, ios: true),
   DeviceSize('android', 412, 915),
 ];
-const kTabletPortrait = DeviceSize('tablet', 834, 1194);
-const kTabletLandscape = DeviceSize('tablet_land', 1194, 834);
+const kTabletPortrait = DeviceSize('ipad', 834, 1194, bottom: 20, ios: true);
+const kTabletLandscape = DeviceSize('ipad_land', 1194, 834, bottom: 20, ios: true);
 const kAllSizes = [...kPhoneSizes, kTabletPortrait, kTabletLandscape];
 const kScreenshotSize = DeviceSize('pixel', 393, 852);
 
@@ -104,8 +110,8 @@ Future<void> pumpScreen(
             size: device.size,
             devicePixelRatio: 2.0,
             textScaler: TextScaler.linear(textScale),
-            padding: const EdgeInsets.only(top: 24, bottom: 16),
-            viewPadding: const EdgeInsets.only(top: 24, bottom: 16),
+            padding: EdgeInsets.only(top: device.top, bottom: device.bottom),
+            viewPadding: EdgeInsets.only(top: device.top, bottom: device.bottom),
           ),
           child: MaterialApp.router(
             debugShowCheckedModeBanner: false,
@@ -116,8 +122,8 @@ Future<void> pumpScreen(
               GlobalWidgetsLocalizations.delegate,
               GlobalCupertinoLocalizations.delegate,
             ],
-            theme: AppTheme.darkTheme,
-            darkTheme: AppTheme.darkTheme,
+            theme: device.ios ? AppTheme.darkTheme.copyWith(platform: TargetPlatform.iOS) : AppTheme.darkTheme,
+            darkTheme: device.ios ? AppTheme.darkTheme.copyWith(platform: TargetPlatform.iOS) : AppTheme.darkTheme,
             themeMode: ThemeMode.dark,
             routerConfig: router,
           ),

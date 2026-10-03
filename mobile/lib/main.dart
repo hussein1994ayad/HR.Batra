@@ -29,6 +29,12 @@ void main() async {
 
   // Android: عرض من الحافة للحافة مع أشرطة نظام شفافة (iOS يعمل هكذا أصلاً)
   unawaited(SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge));
+  // الهاتف عمودي فقط (الواجهة مصممة للعمودي)؛ التابلت (أقصر ضلع ≥ 600) يدور بحرية
+  final view = PlatformDispatcher.instance.implicitView;
+  final display = view?.display;
+  if (display != null && display.size.shortestSide > 0 && display.size.shortestSide / display.devicePixelRatio < 600) {
+    unawaited(SystemChrome.setPreferredOrientations(const [DeviceOrientation.portraitUp]));
+  }
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
     systemNavigationBarColor: Colors.transparent,
