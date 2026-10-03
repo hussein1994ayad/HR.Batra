@@ -24,3 +24,14 @@ describe('attendance rows on an approved leave day', () => {
     expect(buildAttendanceRows([row('2026-09-28')], [], [pending, hourly])[0].on_leave).toBe(false);
   });
 });
+
+describe('manual attendance status', () => {
+  const shift = { check_in_time: '09:00:00', grace_period_minutes: 15 };
+  it('is late only after the start time plus the grace period', async () => {
+    const { manualAttendanceStatus } = await import('./logic');
+    expect(manualAttendanceStatus(shift, '09:15')).toBe('present');
+    expect(manualAttendanceStatus(shift, '09:16')).toBe('late');
+    expect(manualAttendanceStatus(shift, '09:30')).toBe('late');
+    expect(manualAttendanceStatus(undefined, '11:00')).toBe('present');
+  });
+});

@@ -6,10 +6,11 @@ import toast from 'react-hot-toast';
 import { errorMessage } from '@/lib/error-utils';
 import {
   approvePayrollSlip, archivePayrollMonth, closePayrollPeriod, decidePayrollEvent, fetchPayrollDataset,
-  insertBonusDeduction, notifyBranchPayslips, reopenPayrollPeriod, revertPayrollSlip, type PayrollDataset,
+  insertBonusDeduction, notifyBranchPayslips, notifySlipReverted, reopenPayrollPeriod, revertPayrollSlip, type PayrollDataset,
 } from './api';
 import { buildPayrollRows, buildSlipAdjustments, sumPayroll, type PayrollRow } from './calc';
-import { currentPayrollMonth } from './period';
+import { baghdadToday, currentPayrollMonth, monthLabel } from './period';
+import { useConfirm } from '@/components/confirm';
 import type { OverrideField, PayrollOverrides } from './types';
 
 const EMPTY_DATASET: PayrollDataset = {
@@ -18,6 +19,7 @@ const EMPTY_DATASET: PayrollDataset = {
 
 /** حالة صفحة الرواتب: مسير الشهر من السيرفر، الفلاتر، التعديلات اليدوية، والإجراءات. */
 export function usePayroll() {
+  const confirm = useConfirm();
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [sendingNotifs, setSendingNotifs] = useState(false);
@@ -125,7 +127,9 @@ export function usePayroll() {
 
   const addBonusDeduction = async (entry: { employeeId: string; type: 'bonus' | 'deduction'; amount: number; reason: string }) => {
     // القيد يُسجَّل بآخر يوم في المسير المعروض حتى يدخل فيه (أو بتاريخ اليوم إن كان أقدم)
-    const today = new Date().toISOString().slice(0, 10);
+    // اليوم بتوقيت بغداد: UTC كان يرجع اليوم السابق بعد منتصف الليل، فيدخل القيد بالمسير السابق
+    const today = baghdadToday();
+    const issued = rows.find(r => r.id === entry.employeeId)?.isIssued ?? false;
     const issueDate = endDate && today > endDate ? endDate : today < startDate ? startDate : today;
     const ok = await run('add_bd', async () => {
       await insertBonusDeduction({ ...entry, issueDate });
@@ -133,7 +137,9 @@ export function usePayroll() {
     }, 'حدث خطأ أثناء الإضافة');
     if (!ok) return false;
     confetti({ particleCount: 50, spread: 40 });
-    toast.success('تم إضافة السجل بنجاح! ✅');
+    toast.success(issued
+      ? 'انضاف ✅ — كشف هذا الشهر معتمد، فينحسب بمسير الشهر الجاي'
+      : 'تم إضافة السجل بنجاح! ✅', { duration: issued ? 6000 : 3000 });
     await loadData({ quiet: true });
     return true;
   };
@@ -158,6 +164,20 @@ export function usePayroll() {
       toast.error('تم صرف الراتب مسبقاً لهذا الموظف في هذا الشهر.');
       return;
     }
+    // اعتماد راتب = قرار مالي: تأكيد، وتنبيه إذا المسير ما خلص بعد
+    const midPeriod = !!endDate && baghdadToday() < endDate;
+    const confirmed = await confirm({
+      title: `اعتماد راتب ${row.full_name}؟`,
+      message: (
+        `الصافي: ${Math.round(row.netSalary).toLocaleString('en-US')} د.ع لـ${monthLabel(selectedMonth)}.` +
+        (midPeriod ? `
+
+تنبيه: المسير ما خلص بعد (ينتهي ${endDate}). أي غياب أو تأخير أو خصم بعد اليوم ينحسب بمسير الشهر الجاي.` : '')
+      ),
+      confirmLabel: 'اعتماد الراتب',
+      tone: midPeriod ? 'warning' : 'primary',
+    });
+    if (!confirmed) return;
     const ok = await run(`slip_${row.id}`, async () => {
       await approveRow(row);
       return true;
@@ -202,12 +222,19 @@ export function usePayroll() {
     }
     if (!row.slipId) return;
     const slipId = row.slipId;
+    const slipCreatedAt = row.slipCreatedAt ?? null;
     const ok = await run(`revert_${row.id}`, async () => {
       await revertPayrollSlip(slipId);
       return true;
     }, 'فشل في التراجع عن الاعتماد');
     if (!ok) return;
     toast.success('تم التراجع عن اعتماد الراتب بنجاح! 🔄');
+    // إذا وصله "تم اعتماد وصرف راتبك" نبلغه بالإلغاء
+    try {
+      await notifySlipReverted(row.id, selectedMonth, slipCreatedAt);
+    } catch (err: unknown) {
+      console.error('notifySlipReverted', err);
+    }
     await loadData();
   };
 
@@ -249,6 +276,14 @@ export function usePayroll() {
       toast.error('يرجى اختيار فرع محدد أولاً لإرسال الإشعارات له.');
       return;
     }
+    const branchName = data.branches.find(b => b.id === selectedBranch)?.name ?? 'الفرع';
+    const confirmed = await confirm({
+      title: 'إرسال إشعار كشف الراتب؟',
+      message: `يوصل إشعار "تم اعتماد وصرف راتبك لـ${monthLabel(selectedMonth)}" لموظفي ${branchName} الي كشوفهم معتمدة. الي وصلهم الإشعار قبل ما ينبعثلهم مرة ثانية.`,
+      confirmLabel: 'إرسال',
+      tone: 'primary',
+    });
+    if (!confirmed) return;
     setSendingNotifs(true);
     try {
       const result = await notifyBranchPayslips(selectedBranch, selectedMonth);
@@ -257,7 +292,7 @@ export function usePayroll() {
         return;
       }
       confetti({ particleCount: 80, spread: 50, colors: ['#3B82F6', '#60A5FA'] });
-      toast.success(`تم إرسال إشعارات كشوف الرواتب بنجاح لـ (${result.sent}) موظف في الفرع! 🔔`);
+      toast.success(`تم إرسال إشعارات كشوف الرواتب لـ (${result.sent}) موظف 🔔${result.skipped ? ` — و${result.skipped} وصلهم قبل` : ''}`);
     } catch (err: unknown) {
       toast.error(`فشل إرسال إشعارات الفرع: ${errorMessage(err)}`);
     } finally {

@@ -128,3 +128,46 @@ export async function deleteCompletedLoan(loan: Loan) {
   const { error } = await supabase.from('loans').delete().eq('id', loan.id);
   if (error) throw error;
 }
+
+/** الموظفون النشطون لاختيار صاحب السلفة (مع الراتب لفحص شرط 50%). */
+export async function fetchLoanEmployees(): Promise<{ id: string; full_name: string; monthly_salary_iqd: number | null }[]> {
+  const { data, error } = await supabase
+    .from('employees')
+    .select('id, full_name, monthly_salary_iqd')
+    .eq('is_active', true)
+    .order('full_name');
+  if (error) throw error;
+  return data ?? [];
+}
+
+/**
+ * سلفة معتمدة مباشرة لموظف (مثل زر "سلفة لموظف" بالتطبيق): يرفع صورة التعهد ثم
+ * create_direct_loan يولّد الأقساط ويبلغ الموظف بمعاملة وحدة.
+ */
+export async function createDirectLoan(entry: {
+  employeeId: string;
+  amount: number;
+  months: number;
+  firstDue: string;
+  pledge: File;
+  notes: string;
+}): Promise<void> {
+  const ext = (entry.pledge.name.split('.').pop() || 'jpg').toLowerCase();
+  const path = `pledges/${entry.employeeId}/${crypto.randomUUID()}.${ext}`;
+  const { error: upErr } = await supabase.storage.from('loan-pledges').upload(path, entry.pledge);
+  if (upErr) throw upErr;
+  const pledgeUrl = supabase.storage.from('loan-pledges').getPublicUrl(path).data.publicUrl;
+  const { error } = await supabase.rpc('create_direct_loan', {
+    p_employee_id: entry.employeeId,
+    p_amount: entry.amount,
+    p_months: entry.months,
+    p_first_due: entry.firstDue,
+    p_pledge_url: pledgeUrl,
+    p_notes: entry.notes.trim() || null,
+  });
+  if (error) {
+    // السلفة ما انعملت: نشيل الصورة الي انرفعت حتى ما تبقى يتيمة
+    await supabase.storage.from('loan-pledges').remove([path]);
+    throw error;
+  }
+}

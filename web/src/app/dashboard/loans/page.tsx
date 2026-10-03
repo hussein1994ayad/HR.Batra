@@ -5,6 +5,7 @@ import React, { useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import {
   Coins,
+  Plus,
   X,
   Calendar,
   Settings2,
@@ -32,6 +33,8 @@ import {
 import { previewPayment, sameDayNextMonth, validateApproval } from '@/features/loans/logic';
 import type { PaymentMethod } from '@/features/loans/types';
 import { LoanStatementPrint } from '@/features/loans/components/LoanStatementPrint';
+import { CreateLoanModal } from '@/features/loans/components/CreateLoanModal';
+import { baghdadToday } from '@/features/payroll/period';
 import { ReasonModal } from '@/components/ReasonModal';
 import type { Loan as DbLoan } from '@/lib/db-types';
 import type { Loan, LoanInstallment } from '@/lib/types';
@@ -92,6 +95,13 @@ interface EditDraft {
   remainingAmount: number;
 }
 
+/** أول قسط افتراضياً: يوم القطع (26) القادم بتوقيت بغداد */
+function nextCutoffDay(): string {
+  const [y, m, d] = baghdadToday().split('-').map(Number);
+  const [yy, mm] = d <= 26 ? [y, m] : m === 12 ? [y + 1, 1] : [y, m + 1];
+  return `${yy}-${String(mm).padStart(2, '0')}-26`;
+}
+
 export default function LoansPage() {
   const confirm = useConfirm();
   const query = useQuery('loans', fetchLoans);
@@ -104,6 +114,7 @@ export default function LoansPage() {
   const [editDraft, setEditDraft] = useState<EditDraft | null>(null);
   const [scheduleLoanId, setScheduleLoanId] = useState<string | null>(null);
   const [payPrompt, setPayPrompt] = useState<PayDraft | null>(null);
+  const [creating, setCreating] = useState(false);
 
   const approved = useMemo(() => query.data?.approved ?? [], [query.data]);
   const active = approved.filter((l) => Number(l.remaining_amount) > 0);
@@ -291,7 +302,23 @@ export default function LoansPage() {
 
   return (
     <div className="space-y-6 pb-12">
-      <PageHeader icon={Coins} tone="sky" title="السلف والأقساط" description="اعتماد طلبات السلف وجدولة الأقساط الشهرية ومتابعة السداد" />
+      <PageHeader
+        icon={Coins}
+        tone="sky"
+        title="السلف والأقساط"
+        description="اعتماد طلبات السلف وجدولة الأقساط الشهرية ومتابعة السداد"
+        actions={<Button icon={Plus} onClick={() => setCreating(true)}>سلفة لموظف</Button>}
+      />
+      {creating && (
+        <CreateLoanModal
+          defaultFirstDue={nextCutoffDay()}
+          onClose={() => setCreating(false)}
+          onCreated={() => {
+            setCreating(false);
+            query.reload();
+          }}
+        />
+      )}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatTile label="طلبات معلقة" value={pending.length} icon={Hourglass} tone={pending.length > 0 ? 'amber' : 'slate'} />

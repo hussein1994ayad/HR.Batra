@@ -13,10 +13,12 @@ type Props = {
   saving: boolean;
   onClose: () => void;
   onSave: (entry: { employeeId: string; date: string; checkIn: string; checkOut: string }) => void;
+  /** دوام الموظف (HH:MM) حتى تكون الأوقات الافتراضية من جدوله مو 9 لـ 5 */
+  shiftFor?: (employeeId: string) => { start: string; end: string } | undefined;
 };
 
 /** تسجيل حضور يدوي؛ يُحدَّث السجل إن كان للموظف بصمة في نفس اليوم. */
-export function ManualAttendanceModal({ employees, defaultDate, saving, onClose, onSave }: Props) {
+export function ManualAttendanceModal({ employees, defaultDate, saving, onClose, onSave, shiftFor }: Props) {
   const [employeeId, setEmployeeId] = useState('');
   const [date, setDate] = useState(defaultDate);
   const [checkIn, setCheckIn] = useState('09:00');
@@ -35,7 +37,14 @@ export function ManualAttendanceModal({ employees, defaultDate, saving, onClose,
     <Modal title="تسجيل حضور يدوي" subtitle="يُحدَّث السجل إن كان للموظف بصمة في نفس اليوم" icon={UserPlus} tone="brand" size="sm" onClose={onClose}>
       <form onSubmit={submit} className="space-y-4">
         <Field label="الموظف">
-          <Select required value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}>
+          <Select required value={employeeId} onChange={(e) => {
+            setEmployeeId(e.target.value);
+            const shift = shiftFor?.(e.target.value);
+            if (shift) {
+              setCheckIn(shift.start);
+              setCheckOut(shift.end);
+            }
+          }}>
             <option value="">اختر الموظف...</option>
             {employees.map((emp) => <option key={emp.id} value={emp.id}>{emp.full_name}</option>)}
           </Select>

@@ -5,17 +5,20 @@ import { CalendarRange } from 'lucide-react';
 import type { AttendanceRecord } from '@/lib/db-types';
 import { EmptyState, PageSkeleton, cn } from '@/components/ui';
 import { useTracking } from '@/features/tracking/useTracking';
+import { useConfirm } from '@/components/confirm';
 import { AttendanceLogTable } from '@/features/tracking/components/AttendanceLogTable';
 import { DecisionsTable } from '@/features/tracking/components/DecisionsTable';
 import { EditAttendanceModal } from '@/features/tracking/components/EditAttendanceModal';
 import { LiveTrailMap } from '@/features/tracking/components/LiveTrailMap';
 import { ManualAttendanceModal } from '@/features/tracking/components/ManualAttendanceModal';
+import { resolveWorkSchedule } from '@/lib/schedules';
 import { MonitoringStats } from '@/features/tracking/components/MonitoringStats';
 import { TrackingFilters } from '@/features/tracking/components/TrackingFilters';
 import { TrackingTabs } from '@/features/tracking/components/TrackingTabs';
 
 export default function TrackingPage() {
   const t = useTracking();
+  const confirm = useConfirm();
   const [editingRecord, setEditingRecord] = useState<AttendanceRecord | null>(null);
   const [showManualModal, setShowManualModal] = useState(false);
 
@@ -94,7 +97,18 @@ export default function TrackingPage() {
                 selectedReasons={t.selectedReasons}
                 busyKey={t.busyKey}
                 onReasonChange={(key, value) => t.setSelectedReasons(prev => ({ ...prev, [key]: value }))}
-                onDecide={t.decide}
+                onDecide={async (item, status, reason) => {
+                  // قرار مالي: تأكيد قبل الخصم أو الإعفاء (مثل صفحة الرواتب)
+                  const apply = status === 'applied';
+                  const what = item.type === 'late' ? 'التأخير' : 'الغياب';
+                  const ok = await confirm({
+                    title: apply ? `تطبيق خصم ${what}؟` : `إعفاء من ${what}؟`,
+                    message: `${item.employee.full_name} · ${item.date}\n${apply ? 'يُخصم من راتب المسير ويوصل للموظف إشعار.' : 'ما ينخصم شي ويوصل للموظف إشعار بالإعفاء.'}`,
+                    confirmLabel: apply ? 'تطبيق الخصم' : 'إعفاء',
+                    tone: apply ? 'warning' : 'primary',
+                  });
+                  if (ok) await t.decide(item, status, reason);
+                }}
               />
             </div>
           )}
@@ -117,6 +131,13 @@ export default function TrackingPage() {
           employees={t.employees}
           defaultDate={t.endDate}
           saving={t.busyKey === 'manual'}
+          shiftFor={(id) => {
+            const emp = t.employees.find((e) => e.id === id);
+            const ws = emp ? resolveWorkSchedule(emp, t.workSchedules) : undefined;
+            return ws?.check_in_time && ws.check_out_time
+              ? { start: ws.check_in_time.slice(0, 5), end: ws.check_out_time.slice(0, 5) }
+              : undefined;
+          }}
           onClose={() => setShowManualModal(false)}
           onSave={async (entry) => {
             if (await t.addManualAttendance(entry)) setShowManualModal(false);

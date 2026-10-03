@@ -183,6 +183,7 @@ export async function updateEmployee(
       full_name: values.fullName,
       role: values.role,
       branch_id: values.branchId || null,
+      department_id: values.departmentId || null,
       monthly_salary_iqd: values.monthlySalary || 0,
       future_salary_iqd: values.futureSalary || null,
       future_salary_month: values.futureSalaryMonth || null,

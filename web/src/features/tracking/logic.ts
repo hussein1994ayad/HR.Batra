@@ -374,3 +374,13 @@ export const formatTimeInputValue = (dateString?: string | null) => {
 
 /** مفتاح صف القرار (يُستعمل لحفظ المبلغ والسبب المعدّلين). */
 export const decisionKey = (d: Pick<Decision, 'employee' | 'type' | 'date'>) => `${d.employee.id}_${d.type}_${d.date}`;
+
+/**
+ * حالة سجل حضور يدوي من وقت الدخول وجدول الموظف: "late" إذا دخل بعد بداية الدوام + السماحية.
+ * قبل: الحضور اليدوي ينحفظ "حاضر" دائماً، فالتأخير يطلع بالرواتب وما يطلع بقرارات الحضور.
+ */
+export function manualAttendanceStatus(schedule: Pick<WorkSchedule, 'check_in_time' | 'grace_period_minutes'> | undefined, checkIn: string): 'late' | 'present' {
+  if (!schedule?.check_in_time || !checkIn) return 'present';
+  const toMin = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + (m || 0); };
+  return toMin(checkIn) > toMin(schedule.check_in_time) + (schedule.grace_period_minutes ?? 0) ? 'late' : 'present';
+}

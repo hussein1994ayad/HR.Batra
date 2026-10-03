@@ -64,3 +64,15 @@ export function payrollMonthOptions(current: string, cutoffDay = 26, before = 12
   }
   return out;
 }
+
+/** تاريخ اليوم بتوقيت بغداد (YYYY-MM-DD) — مو UTC، حتى ما يرجع يوم بعد منتصف الليل. */
+export function baghdadToday(now = new Date()): string {
+  const { y, m, day } = baghdadParts(now);
+  return `${y}-${pad2(m)}-${pad2(day)}`;
+}
+
+/** "2026-10" → "شهر 10 سنة 2026" (نفس صيغة الكشوف بالتطبيق) */
+export function monthLabel(month: string): string {
+  const [y, m] = month.split('-').map(Number);
+  return `شهر ${m} سنة ${y}`;
+}

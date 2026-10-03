@@ -160,6 +160,11 @@ test.describe('workflows', () => {
     await expect(row).toContainText('830,000 د.ع');
     await expect(page.getByText('المسير مفتوح')).toBeVisible();
     await row.getByRole('button', { name: 'اعتماد' }).click();
+    // تأكيد بالصافي قبل الاعتماد، وما ينرسل شي قبله
+    const confirmDialog = page.getByRole('dialog').filter({ hasText: 'اعتماد راتب زينب علي؟' });
+    await expect(confirmDialog).toContainText('830,000');
+    expect(api.writes('rpc:approve_payroll_slip', 'POST')).toHaveLength(0);
+    await confirmDialog.getByRole('button', { name: 'اعتماد الراتب' }).click();
     // السيرفر يحسب الكشف ويعتمده؛ الموقع يرسل الموظف والشهر والتعديلات اليدوية فقط
     await expect.poll(() => api.writes('rpc:approve_payroll_slip', 'POST').length).toBe(1);
     expect(api.writes('rpc:approve_payroll_slip', 'POST')[0].body).toEqual({ p_employee_id: 'e1', p_month: month, p_adjustments: [] });
@@ -217,6 +222,11 @@ test.describe('workflows', () => {
     await page.getByRole('tab', { name: /قرارات الغياب والتأخير/ }).click();
     const row = page.locator('tr', { hasText: 'مصطفى حسن' });
     await row.getByRole('button', { name: 'تطبيق' }).click();
+    // تأكيد قبل الخصم
+    const confirmDialog = page.getByRole('dialog').filter({ hasText: 'تطبيق خصم الغياب؟' });
+    await expect(confirmDialog).toBeVisible();
+    expect(api.writes('attendance', 'POST')).toHaveLength(0);
+    await confirmDialog.getByRole('button', { name: 'تطبيق الخصم' }).click();
     await expect.poll(() => api.writes('attendance', 'POST').length).toBe(1);
     expect(api.writes('attendance', 'POST')[0].body).toMatchObject({ employee_id: 'e2', status: 'absent', deduction_status: 'applied' });
     // المبلغ يحسبه محرّك الرواتب من سجل الحضور: لا قيد خصم منفصل (كان يُخصم مرتين)
