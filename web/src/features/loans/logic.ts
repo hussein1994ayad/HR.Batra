@@ -43,12 +43,23 @@ export function sameDayNextMonth(now: Date = new Date()): string {
 }
 
 /** رسالة خطأ إن كانت شروط الاعتماد غير متحققة، أو null. */
-export function validateApproval(amount: number, months: number, monthlySalary: number): string | null {
+export function validateApproval(amount: number, months: number): string | null {
   if (!(amount > 0) || !(months > 0)) return 'يرجى إدخال مبلغ وعدد أشهر سداد أكبر من الصفر.';
-  if (monthlySalary > 0 && Math.floor(amount / months) > monthlySalary * 0.5) {
-    return 'مبلغ القسط يتجاوز 50% من راتب الموظف. يرجى زيادة مدة السداد أو تقليل المبلغ.';
-  }
   return null;
+}
+
+/**
+ * تنبيه (مو منع) إذا القسط أكثر من نص الراتب: مسموح للأدمن لأن بعض الموظفين
+ * يسددون جزء نقداً. null = ضمن الحد أو الراتب غير معروف.
+ */
+export function overHalfSalaryWarning(amount: number, months: number, monthlySalary: number): string | null {
+  if (!(monthlySalary > 0) || !(months > 0)) return null;
+  const installment = Math.floor(amount / months);
+  if (installment <= monthlySalary * 0.5) return null;
+  const fmt = (n: number) => Math.round(n).toLocaleString('en-US');
+  return `القسط الشهري ${fmt(installment)} د.ع أكثر من نص الراتب (${fmt(monthlySalary * 0.5)} د.ع)`
+    + (installment > monthlySalary ? ` وأكثر من الراتب كله (${fmt(monthlySalary)} د.ع)، فكشف راتبه راح يطلع بالسالب إذا ما سدد نقداً.` : '.')
+    + '\nالباقي يسدده الموظف نقداً من زر "تسجيل دفعة" بتفاصيل السلفة.';
 }
 
 /** الأقساط مرتبة حسب تاريخ الاستحقاق (نسخة جديدة؛ لا تعدّل مصفوفة الحالة). */
