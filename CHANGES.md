@@ -243,3 +243,13 @@
   `TrackingStatusCounter`, `LiveTrackingMap`, `TrackingFocusCard`, `TrackingFact` (كانت خاصة بالملف).
 - ترتيب الاستيرادات أبجدياً في `app_router.dart` و`test/support/screens.dart` بعد تغيّر المسار.
 - فحص: `dart analyze` ✓، `flutter test` 559 ✓.
+
+## Step 22 — إدارة الأفرع وأوقات دوامها (النقاط 3 و 4 و 8)
+- **نُقلت** `branch_management_screen.dart` و`branch_schedule_screen.dart` → `presentation/admin/branches/`
+  (+ `app_router.dart`، `test/support/screens.dart`، `test/screens/sheets_test.dart` مسارات فقط).
+- **أُنشئ** `mobile/lib/data/repositories/branch_repository.dart`: قائمة الأفرع، إضافة/تعديل/حذف فرع، الأفرع مع جداول دوامها
+  (بالتوازي)، وحفظ جدول فرع (إضافة أو تعديل) — نفس الاستعلامات. محاولة الحفظ الثانية بدون عمود التذكير (قاعدة قديمة) باقية كما هي.
+- فحص صلاحية شاشة أوقات الدوام عبر `RoleRepository.isAdminOrManager()` (نفس الشرط).
+- **أُنشئ** `branches/branches_logic.dart`: `mergeBranchSchedules` (دمج الفرع مع جدوله — كان داخل `_loadBranches`).
+- **أُضيف فحص** `mobile/test/unit/branches_logic_test.dart`.
+- فحص: `dart analyze` ✓، `flutter test` 561 ✓.

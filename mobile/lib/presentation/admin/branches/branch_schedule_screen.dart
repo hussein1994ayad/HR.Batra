@@ -8,9 +8,12 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 
-import '../../core/routes/app_router.dart';
-import '../../core/services/supabase_service.dart';
-import '../shared/ui/ui.dart';
+import '../../../core/routes/app_router.dart';
+import '../../../core/services/supabase_service.dart';
+import '../../../data/repositories/branch_repository.dart';
+import '../../../data/repositories/role_repository.dart';
+import '../../shared/ui/ui.dart';
+import 'branches_logic.dart';
 
 class BranchScheduleScreen extends StatefulWidget {
   const BranchScheduleScreen({super.key});
@@ -23,7 +26,7 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
   bool _isLoading = true;
   bool _hasError = false;
   List<Map<String, dynamic>> _branches = [];
-
+  final BranchRepository _repo = BranchRepository();
 
   @override
   void initState() {
@@ -42,48 +45,16 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
     }
 
     try {
-      final employeeRes = await SupabaseService.client
-          .from('employees')
-          .select('role')
-          .eq('id', user.id)
-          .maybeSingle();
-
-      if (employeeRes == null || (employeeRes['role'] != 'admin' && employeeRes['role'] != 'manager')) {
+      if (!await RoleRepository().isAdminOrManager()) {
         if (mounted) Navigator.pop(context);
         return;
       }
 
       // جلب بيانات الأفرع وجداول العمل بالتوازي
-      final results = await Future.wait([
-        SupabaseService.client
-            .from('branches')
-            .select('id, name')
-            .order('name'),
-        SupabaseService.client
-            .from('work_schedules')
-            .select()
-            .isFilter('employee_id', null)
-            .isFilter('department_id', null)
-            .not('branch_id', 'is', null)
-      ]);
-
-      final zones = [for (final z in results[0] as List<dynamic>) Map<String, dynamic>.from(z as Map)];
-      final schedules = [for (final s in results[1] as List<dynamic>) Map<String, dynamic>.from(s as Map)];
+      final results = await _repo.fetchBranchesWithSchedules();
 
       // دمج البيانات
-      final List<Map<String, dynamic>> merged = [];
-      for (final zone in zones) {
-        final schedule = schedules.firstWhere(
-          (s) => s['branch_id'] == zone['id'],
-          orElse: () => <String, dynamic>{},
-        );
-        merged.add({
-          'zone_id': zone['id'],
-          'zone_name': zone['name'],
-          'has_schedule': schedule.isNotEmpty,
-          'schedule': schedule,
-        });
-      }
+      final merged = mergeBranchSchedules(results[0] as List<dynamic>, results[1] as List<dynamic>);
 
       setState(() {
         _branches = merged;
@@ -304,9 +275,8 @@ class _ScheduleEditorState extends State<_ScheduleEditor> {
         'grace_period_minutes': _grace,
         'reminder_minutes_after': _reminder,
       };
-      Future<void> write(Map<String, dynamic> row) => _hasSchedule
-          ? SupabaseService.client.from('work_schedules').update(row).eq('id', _schedule['id'] as Object)
-          : SupabaseService.client.from('work_schedules').insert(row);
+      Future<void> write(Map<String, dynamic> row) =>
+          BranchRepository().saveBranchSchedule(row, scheduleId: _hasSchedule ? _schedule['id'] as Object : null);
       try {
         await write(data);
       } on PostgrestException catch (e) {

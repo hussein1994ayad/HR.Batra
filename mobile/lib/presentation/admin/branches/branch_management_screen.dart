@@ -12,9 +12,9 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 
-import '../../core/services/supabase_service.dart';
-import '../../core/utils/error_text.dart';
-import '../shared/ui/ui.dart';
+import '../../../core/utils/error_text.dart';
+import '../../../data/repositories/branch_repository.dart';
+import '../../shared/ui/ui.dart';
 
 class BranchManagementScreen extends StatefulWidget {
   const BranchManagementScreen({super.key});
@@ -24,6 +24,7 @@ class BranchManagementScreen extends StatefulWidget {
 }
 
 class _BranchManagementScreenState extends State<BranchManagementScreen> {
+  final BranchRepository _repo = BranchRepository();
   bool _isLoading = true;
   bool _hasError = false;
   List<Map<String, dynamic>> _branches = [];
@@ -40,10 +41,10 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
   Future<void> _loadBranches() async {
     setState(() => _isLoading = true);
     try {
-      final data = await SupabaseService.client.from('branches').select().order('name');
+      final data = await _repo.fetchAll();
       if (!mounted) return;
       setState(() {
-        _branches = List<Map<String, dynamic>>.from(data);
+        _branches = data;
         _hasError = false;
       });
     } catch (e) {
@@ -87,7 +88,7 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
 
     try {
       setState(() => _isLoading = true);
-      await SupabaseService.client.from('branches').delete().eq('id', branch['id'] as String);
+      await _repo.delete(branch['id'] as String);
       if (mounted) AppSnack.success(context, 'حُذف الفرع');
       unawaited(_loadBranches());
     } catch (e) {
@@ -210,6 +211,7 @@ class _BranchEditor extends StatefulWidget {
 }
 
 class _BranchEditorState extends State<_BranchEditor> {
+  final BranchRepository _repo = BranchRepository();
   final _formKey = GlobalKey<FormState>();
   final _mapController = MapController();
   late final _name = TextEditingController(text: (widget.branch?['name'] ?? '').toString());
@@ -254,9 +256,9 @@ class _BranchEditorState extends State<_BranchEditor> {
         'radius_meters': _radius.roundToDouble(),
       };
       if (widget.branch == null) {
-        await SupabaseService.client.from('branches').insert(data);
+        await _repo.create(data);
       } else {
-        await SupabaseService.client.from('branches').update(data).eq('id', widget.branch!['id'] as Object);
+        await _repo.update(widget.branch!['id'] as Object, data);
       }
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
