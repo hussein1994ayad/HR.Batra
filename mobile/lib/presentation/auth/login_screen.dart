@@ -103,6 +103,26 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _errorMessage = msg);
   }
 
+  /// الحسابات تنشئها الإدارة (والإيميل مو دائماً حقيقي)، فإعادة التعيين تكون من لوحة الإدارة.
+  void _showForgotPassword() {
+    showAppSheet<void>(
+      context,
+      title: 'نسيت كلمة المرور؟',
+      builder: (ctx) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'حسابك تنشئه إدارة الموارد البشرية، فهي تگدر تعيّن لك كلمة مرور جديدة خلال دقيقة.\n\n'
+            'تواصل ويا مديرك أو قسم الموارد البشرية وگلهم إيميل حسابك، وبعدها سجّل دخول بكلمة المرور الجديدة.',
+            style: AppText.body,
+          ),
+          const SizedBox(height: AppSpace.xl),
+          AppButton(label: 'تمام', expand: true, onPressed: () => Navigator.of(ctx).pop()),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return AuthShell(
@@ -176,6 +196,15 @@ class _LoginScreenState extends State<LoginScreen> {
                 expand: true,
                 loading: _isLoading,
                 onPressed: _handleLogin,
+              ),
+              const SizedBox(height: AppSpace.sm),
+              Center(
+                child: AppButton.ghost(
+                  label: 'نسيت كلمة المرور؟',
+                  icon: Icons.help_outline_rounded,
+                  size: AppButtonSize.small,
+                  onPressed: _showForgotPassword,
+                ),
               ),
             ],
           ),

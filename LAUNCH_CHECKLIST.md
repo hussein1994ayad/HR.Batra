@@ -66,3 +66,15 @@
 - [ ] التتبع الحي يعرض الموظف على الخريطة
 - [ ] كشف الراتب وتصدير PDF
 - [ ] الإشعارات تصل والتطبيق مغلق
+
+---
+
+## إذا انرفع التطبيق على Google Play لاحقاً (حالياً التوزيع مباشر بملف APK)
+
+- [ ] **الموقع بالخلفية (`ACCESS_BACKGROUND_LOCATION`):** Play Console ← App content ← Sensitive permissions ← Location permissions:
+  اختيار "Employee/fleet tracking"، وشرح إن التتبع يكون بين بصمة الحضور والانصراف فقط وبعلم الموظف،
+  ورفع فيديو قصير يبيّن نافذة الإفصاح داخل التطبيق قبل طلب الصلاحية.
+- [ ] **الخدمة الأمامية (Foreground service — location):** نفس الصفحة ← Foreground service permissions ← وصف الاستخدام.
+- [ ] **targetSdk:** Google تطلب سنوياً أحدث مستوى (حالياً 36). يُرفع بـ `mobile/android/app/build.gradle.kts`.
+- [ ] رابط سياسة الخصوصية: `https://batra-hr-pro.surge.sh/privacy`.
+- [ ] Play يحتاج **AAB** وليس APK: `flutter build appbundle --release`.
