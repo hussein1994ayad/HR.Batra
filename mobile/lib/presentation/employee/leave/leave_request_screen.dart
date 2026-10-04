@@ -70,12 +70,15 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
   }
 
   // رصيد الموظف: السنوية والمرضية لهذه السنة، والزمنيات لهذا الشهر (get_leave_balance)
-  Map<String, dynamic>? _balance;
+  LeaveBalance? _balance;
 
   Future<void> _loadBalance() async {
     try {
       final data = await _repo.fetchBalance();
-      if (mounted && data is Map) setState(() => _balance = Map<String, dynamic>.from(data));
+      if (mounted && data is Map) {
+        final balance = LeaveBalance.fromMap(Map<String, dynamic>.from(data));
+        setState(() => _balance = balance);
+      }
     } catch (e) {
       appLog('Error loading leave balance: $e');
     }

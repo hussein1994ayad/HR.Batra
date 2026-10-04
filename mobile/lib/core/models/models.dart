@@ -13,6 +13,7 @@ export 'deleted_file_model.dart';
 export 'directory_entry.dart';
 export 'employee_model.dart';
 export 'employee_ref.dart';
+export 'leave_balance_model.dart';
 export 'leave_request_model.dart';
 export 'loan_model.dart';
 export 'managed_employee.dart';

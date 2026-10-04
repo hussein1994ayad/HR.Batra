@@ -5,6 +5,7 @@
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/models/models.dart';
 import '../../core/services/supabase_service.dart';
 import '../../core/utils/arabic_format.dart';
 
@@ -26,7 +27,7 @@ class AttendanceRepository {
   }
 
   /// سجل الأيام السابقة (بدون اليوم) من الأحدث للأقدم.
-  Future<List<Map<String, dynamic>>> fetchRecentHistory(String userId, {required DateTime today, required int days}) async {
+  Future<List<AttendanceModel>> fetchRecentHistory(String userId, {required DateTime today, required int days}) async {
     final data = await _db
         .from('attendance')
         .select('work_date, check_in_time, check_out_time, status')
@@ -34,6 +35,6 @@ class AttendanceRepository {
         .gte('work_date', isoDate(today.subtract(Duration(days: days))))
         .lt('work_date', isoDate(today))
         .order('work_date', ascending: false);
-    return List<Map<String, dynamic>>.from(data);
+    return List<Map<String, dynamic>>.from(data).map(AttendanceModel.fromMap).toList();
   }
 }

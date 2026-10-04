@@ -19,8 +19,8 @@ class AttendanceModel {
   final double? checkOutLat;
   final double? checkOutLng;
 
-  /// 'present' | 'late' | 'absent' | 'half_day'
-  final String status;
+  /// 'present' | 'late' | 'absent' | 'half_day' — null إذا ما تحدد (السجل يعرض «—»)
+  final String? status;
   final bool isMockDetected;
   final bool checkOutOffline;
 
@@ -34,7 +34,7 @@ class AttendanceModel {
     required this.id,
     required this.employeeId,
     required this.workDate,
-    required this.status,
+    this.status,
     this.employeeName,
     this.branchId,
     this.checkInTime,
@@ -65,7 +65,7 @@ class AttendanceModel {
       checkInLng: map.dbl('check_in_lng'),
       checkOutLat: map.dbl('check_out_lat'),
       checkOutLng: map.dbl('check_out_lng'),
-      status: map.str('status') ?? 'present',
+      status: map.str('status'),
       isMockDetected: map.boolean('is_mock_detected') ?? false,
       checkOutOffline: map.boolean('check_out_offline') ?? false,
       deductionStatus: map.str('deduction_status'),

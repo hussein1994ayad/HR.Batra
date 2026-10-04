@@ -12,7 +12,7 @@ import '../../../shared/ui/ui.dart';
 class LeaveBalanceCard extends StatelessWidget {
   const LeaveBalanceCard({super.key, required this.balance, required this.isHourly, required this.leaveType});
 
-  final Map<String, dynamic>? balance;
+  final LeaveBalance? balance;
   final bool isHourly;
   final String leaveType;
 
@@ -25,9 +25,6 @@ class LeaveBalanceCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final b = balance;
     if (b == null) return const SizedBox.shrink();
-    final annual = Map<String, dynamic>.from(b['annual'] as Map);
-    final sick = Map<String, dynamic>.from(b['sick'] as Map);
-    final hourly = Map<String, dynamic>.from(b['hourly'] as Map);
 
     Widget item(String label, Object? left, Object? total, String unit, bool active) => Expanded(
       child: Container(
@@ -60,11 +57,11 @@ class LeaveBalanceCard extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                item('السنوية (${b['year']})', annual['left'], annual['entitlement'], 'يوم', !isHourly && leaveType == 'annual'),
+                item('السنوية (${b.year})', b.annualLeft, b.annualEntitlement, 'يوم', !isHourly && leaveType == 'annual'),
                 const SizedBox(width: AppSpace.sm),
-                item('المرضية', sick['left'], sick['entitlement'], 'يوم', !isHourly && leaveType == 'sick'),
+                item('المرضية', b.sickLeft, b.sickEntitlement, 'يوم', !isHourly && leaveType == 'sick'),
                 const SizedBox(width: AppSpace.sm),
-                item('زمنيات الشهر', hourly['left_hours'], hourly['allowance_hours'], 'ساعة', isHourly),
+                item('زمنيات الشهر', b.hourlyLeftHours, b.hourlyAllowanceHours, 'ساعة', isHourly),
               ],
             ),
           ),

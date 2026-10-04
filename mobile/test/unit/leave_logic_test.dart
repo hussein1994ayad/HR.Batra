@@ -86,14 +86,14 @@ void main() {
   testWidgets('LeaveBalanceCard shows remaining and totals', (tester) async {
     await tester.pumpWidget(MaterialApp(
       theme: AppTheme.darkTheme,
-      home: const Scaffold(
+      home: Scaffold(
         body: LeaveBalanceCard(
-          balance: {
+          balance: LeaveBalance.fromMap(const {
             'year': 2026,
             'annual': {'left': 12.5, 'entitlement': 20},
             'sick': {'left': 5, 'entitlement': 5},
             'hourly': {'left_hours': 3, 'allowance_hours': 4},
-          },
+          }),
           isHourly: false,
           leaveType: 'annual',
         ),

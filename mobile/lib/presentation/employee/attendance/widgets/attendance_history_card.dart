@@ -3,6 +3,7 @@
 
 import 'package:flutter/material.dart';
 
+import '../../../../core/models/models.dart';
 import '../../../../core/services/supabase_service.dart';
 import '../../../../core/utils/app_log.dart';
 import '../../../../data/repositories/attendance_repository.dart';
@@ -17,7 +18,7 @@ class AttendanceHistoryCard extends StatefulWidget {
 }
 
 class _AttendanceHistoryCardState extends State<AttendanceHistoryCard> {
-  List<Map<String, dynamic>>? _rows;
+  List<AttendanceModel>? _rows;
   bool _failed = false;
   bool _expanded = false;
 
@@ -42,8 +43,6 @@ class _AttendanceHistoryCardState extends State<AttendanceHistoryCard> {
     }
   }
 
-  static DateTime? _parse(Object? v) => v == null ? null : DateTime.tryParse(v.toString())?.toLocal();
-
   static (String, AppTone) _status(Object? s) => switch (s) {
         'late' => ('متأخر', AppTone.warning),
         'absent' => ('غياب', AppTone.danger),
@@ -54,7 +53,7 @@ class _AttendanceHistoryCardState extends State<AttendanceHistoryCard> {
   @override
   Widget build(BuildContext context) {
     final rows = _rows;
-    final visible = rows == null ? const <Map<String, dynamic>>[] : (_expanded ? rows : rows.take(_collapsedCount).toList());
+    final visible = rows == null ? const <AttendanceModel>[] : (_expanded ? rows : rows.take(_collapsedCount).toList());
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -73,14 +72,14 @@ class _AttendanceHistoryCardState extends State<AttendanceHistoryCard> {
                 padding: const EdgeInsets.symmetric(vertical: AppSpace.xs),
                 child: Row(
                   children: [
-                    Expanded(child: Text(Fmt.dateWithDay(DateTime.tryParse(r['work_date']?.toString() ?? '')), style: AppText.bodySm)),
+                    Expanded(child: Text(Fmt.dateWithDay(DateTime.tryParse(r.workDate)), style: AppText.bodySm)),
                     Text(
-                      '${r['check_in_time'] == null ? '--:--' : Fmt.time(_parse(r['check_in_time']))} ← ${r['check_out_time'] == null ? '--:--' : Fmt.time(_parse(r['check_out_time']))}',
+                      '${r.checkInTime == null ? '--:--' : Fmt.time(r.checkInTime)} ← ${r.checkOutTime == null ? '--:--' : Fmt.time(r.checkOutTime)}',
                       style: AppText.caption,
                     ),
                     const SizedBox(width: AppSpace.sm),
                     () {
-                      final (label, tone) = _status(r['status']);
+                      final (label, tone) = _status(r.status);
                       return StatusBadge(label, tone: tone);
                     }(),
                   ],
