@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../core/models/models.dart';
 import '../../../core/utils/arabic_format.dart';
 import '../../../core/utils/input_formatters.dart';
 import '../../../data/repositories/employee_admin_repository.dart';
@@ -13,7 +14,7 @@ import '../../shared/ui/ui.dart';
 import 'employee_documents.dart';
 
 /// نافذة إضافة موظف جديد (حساب دخول عبر create_employee_secure). ترجع true بعد الإنشاء.
-Future<bool?> showEmployeeFormSheet(BuildContext context, {required List<Map<String, dynamic>> branches}) {
+Future<bool?> showEmployeeFormSheet(BuildContext context, {required List<BranchModel> branches}) {
   return showModalBottomSheet<bool>(
     context: context,
     isScrollControlled: true,
@@ -25,7 +26,7 @@ Future<bool?> showEmployeeFormSheet(BuildContext context, {required List<Map<Str
 
 class _EmployeeForm extends StatefulWidget {
   const _EmployeeForm({required this.branches});
-  final List<Map<String, dynamic>> branches;
+  final List<BranchModel> branches;
 
   @override
   State<_EmployeeForm> createState() => _EmployeeFormState();
@@ -100,7 +101,7 @@ class _EmployeeFormState extends State<_EmployeeForm> {
 
   @override
   Widget build(BuildContext context) {
-    final branchName = widget.branches.where((b) => b['id'] == _branchId).firstOrNull?['name']?.toString();
+    final branchName = widget.branches.where((b) => b.id == _branchId).firstOrNull?.rawName;
     return Padding(
       padding: EdgeInsets.fromLTRB(AppSpace.xl, 0, AppSpace.xl, AppSpace.xl + MediaQuery.viewInsetsOf(context).bottom),
       child: SingleChildScrollView(
@@ -188,7 +189,7 @@ class _EmployeeFormState extends State<_EmployeeForm> {
                 value: branchName,
                 placeholder: 'اختر الفرع (مطلوب للبصمة)',
                 onTap: () async {
-                  final id = await showAppOptions(context, title: 'الفرع', current: _branchId, options: [for (final b in widget.branches) (b['id'] as String, b['name'].toString())]);
+                  final id = await showAppOptions(context, title: 'الفرع', current: _branchId, options: [for (final b in widget.branches) (b.id, '${b.rawName}')]);
                   if (id != null) setState(() => _branchId = id);
                 },
               ),

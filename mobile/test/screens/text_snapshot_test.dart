@@ -7,9 +7,10 @@
 
 import 'dart:io';
 
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:hr_pro/presentation/admin/employee_management/employee_management_screen.dart';
 import 'package:hr_pro/presentation/employee/directory/directory_screen.dart';
 import 'package:hr_pro/presentation/employee/main_layout.dart';
 import 'package:hr_pro/presentation/employee/payslips/payslips_screen.dart';
@@ -36,10 +37,11 @@ List<String> _visibleTexts(WidgetTester tester) => [
 
 /// حالات فيها تفاعل (تبويب أو نافذة) حتى تنفحص الكروت اللي ما تظهر بأول شاشة.
 class _Interaction {
-  const _Interaction(this.name, this.build, this.act);
+  const _Interaction(this.name, this.build, this.act, {this.role = 'employee'});
   final String name;
   final Widget Function() build;
   final Finder Function() act;
+  final String role;
 }
 
 final _interactions = <_Interaction>[
@@ -47,6 +49,8 @@ final _interactions = <_Interaction>[
   _Interaction('06b_loan_history', () => const MainLayout(initialTab: 3), () => find.text('سلفي وأقساطي')),
   _Interaction('10b_payslip_sheet', () => const PayslipsScreen(), () => find.byType(AppListTile).first),
   _Interaction('11c_directory_profile', () => const EmployeeDirectoryScreen(), () => find.byType(AppListTile).first),
+  _Interaction('15b_employee_profile', () => const EmployeeManagementScreen(), () => find.text('علي كريم'), role: 'admin'),
+  _Interaction('15c_add_employee', () => const EmployeeManagementScreen(), () => find.byType(FloatingActionButton), role: 'admin'),
 ];
 
 Future<void> _check(String name, String actual) async {
@@ -71,7 +75,7 @@ void main() {
 
   for (final c in _interactions) {
     testWidgets('text snapshot ${c.name}', (tester) async {
-      await pumpScreen(tester, c.build(), role: 'employee', device: _tall);
+      await pumpScreen(tester, c.build(), role: c.role, device: _tall);
       await tester.tap(c.act());
       for (var i = 0; i < 6; i++) {
         await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 30)));

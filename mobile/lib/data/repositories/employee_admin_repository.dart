@@ -7,6 +7,7 @@ import 'dart:io';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/models/models.dart';
 import '../../core/services/image_compression_service.dart';
 import '../../core/services/supabase_service.dart';
 import '../../core/utils/app_log.dart';
@@ -15,12 +16,16 @@ class EmployeeAdminRepository {
   EmployeeAdminRepository({SupabaseClient? client}) : _db = client ?? SupabaseService.client;
   final SupabaseClient _db;
 
-  /// [الموظفون مع أجهزتهم وفروعهم وأقسامهم، الأفرع (id, name)] بالتوازي.
-  Future<List<dynamic>> fetchEmployeesAndBranches() {
-    return Future.wait<dynamic>([
+  /// الموظفون مع أجهزتهم وفروعهم وأقسامهم، والأفرع (id, name) — بالتوازي.
+  Future<({List<ManagedEmployee> employees, List<BranchModel> branches})> fetchEmployeesAndBranches() async {
+    final results = await Future.wait<dynamic>([
       _db.from('employees').select('*, employee_devices(id, model), branches(name), departments(name)').order('full_name'),
       _db.from('branches').select('id, name').order('name'),
     ]);
+    return (
+      employees: List<Map<String, dynamic>>.from(results[0] as Iterable<dynamic>).map(ManagedEmployee.fromMap).toList(),
+      branches: List<Map<String, dynamic>>.from(results[1] as Iterable<dynamic>).map(BranchModel.fromMap).toList(),
+    );
   }
 
   /// تفعيل/تعطيل الحساب. عند التعطيل يُحفظ آخر يوم عمل فعلي (termination_date).

@@ -393,3 +393,11 @@
   ونافذة اختيار الموظفين تستعمل الحقول (النص `'${...}'` نفس `.toString()` القديم حتى للقيمة الفارغة).
 - تقرير الحضور: قوائم الأفرع والموظفين صارت `BranchModel`/`EmployeeRef` (فلتر "نشط" نفسه: `!= false`).
 - النتيجة: لقطات `18_announcements` و`19_attendance_report` **مطابقة**؛ `flutter test` 615 ✓.
+
+## Step 38 — النقطة 5 (9): إدارة الموظفين بالنموذج
+- **لقطات جديدة سُجّلت من الكود القديم أولاً:** نافذة ملف الموظف (`15b_employee_profile`) ونافذة إضافة موظف (`15c_add_employee`).
+- **أُنشئ** `mobile/lib/core/models/managed_employee.dart`: `ManagedEmployee` (الهاتف = phone_number وإلا phone، الفرع والقسم من
+  الـ join فقط إذا كائن، "نشط" = كل شي غير false، عدد الأجهزة وطراز أولها، الراتب `num?`).
+- `EmployeeAdminRepository.fetchEmployeesAndBranches` ترجع `(employees, branches)` مُنمّطة؛ الشاشة، البحث، نافذة الملف، نافذة
+  الوثائق، ونموذج الإضافة (قائمة الأفرع `BranchModel`) تستعمل الحقول بنفس البدائل.
+- النتيجة: لقطات `15_employee_management` و`15b` و`15c` **مطابقة حرفياً**؛ `flutter test` 617 ✓.

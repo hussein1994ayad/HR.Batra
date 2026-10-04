@@ -11,6 +11,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../core/models/models.dart';
 import '../../../core/services/supabase_service.dart';
 import '../../../core/utils/app_log.dart';
 import '../../../core/utils/arabic_format.dart';
@@ -35,8 +36,8 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
 
   /// تعطيل/تفعيل الحساب للأدمن فقط (القاعدة ترفضه لمدير الفرع)
   bool _isAdmin = false;
-  List<Map<String, dynamic>> _employees = [];
-  List<Map<String, dynamic>> _branches = [];
+  List<ManagedEmployee> _employees = [];
+  List<BranchModel> _branches = [];
   String _searchQuery = '';
   String _statusFilter = 'all'; // all | active | inactive
   final _search = TextEditingController();
@@ -76,8 +77,8 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
       if (mounted) {
         setState(() {
           _isAdmin = role == 'admin';
-          _employees = List<Map<String, dynamic>>.from(results[0] as Iterable<dynamic>);
-          _branches = List<Map<String, dynamic>>.from(results[1] as Iterable<dynamic>);
+          _employees = results.employees;
+          _branches = results.branches;
           _hasError = false;
         });
       }
@@ -89,11 +90,11 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
     }
   }
 
-  Future<void> _toggleEmployeeStatus(Map<String, dynamic> emp) async {
-    final isActive = emp['is_active'] != false;
+  Future<void> _toggleEmployeeStatus(ManagedEmployee emp) async {
+    final isActive = emp.isActive;
     final ok = await showAppConfirm(
       context,
-      title: isActive ? 'تعطيل حساب ${emp['full_name']}؟' : 'تفعيل حساب ${emp['full_name']}؟',
+      title: isActive ? 'تعطيل حساب ${emp.fullName}؟' : 'تفعيل حساب ${emp.fullName}؟',
       message: isActive ? 'ما يقدر يسجل دخول أو يبصم حتى تفعّله مرة ثانية.' : 'يرجع يقدر يدخل ويبصم عادي.',
       confirmLabel: isActive ? 'تعطيل' : 'تفعيل',
       destructive: isActive,
@@ -113,7 +114,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
     }
     try {
       setState(() => _isLoading = true);
-      await _repo.setActive(emp['id'] as String, active: !isActive, lastDay: lastDay);
+      await _repo.setActive(emp.id, active: !isActive, lastDay: lastDay);
       if (mounted) AppSnack.show(context, isActive ? 'عُطّل الحساب' : 'فُعّل الحساب', tone: isActive ? AppTone.warning : AppTone.success);
       unawaited(_loadEmployees());
     } catch (e) {
@@ -125,15 +126,15 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
     }
   }
 
-  Future<void> _unbindDevice(Map<String, dynamic> emp) async {
+  Future<void> _unbindDevice(ManagedEmployee emp) async {
     final ok = await showAppConfirm(
       context,
-      title: 'فك ربط جهاز ${emp['full_name']}؟',
+      title: 'فك ربط جهاز ${emp.fullName}؟',
       message: 'راح يقدر يسجل دخول من أول جهاز جديد يستعمله، ويُقفل عليه.',
       confirmLabel: 'فك الربط',
     );
     if (!ok) return;
-    final employeeId = emp['id'] as String;
+    final employeeId = emp.id;
     try {
       setState(() => _isLoading = true);
       // مسح تسجيلات الجهاز القديمة ثم قفل الحساب على الجهاز القادم
@@ -157,7 +158,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
     }
   }
 
-  Future<void> _editDocuments(Map<String, dynamic> emp) async {
+  Future<void> _editDocuments(ManagedEmployee emp) async {
     final saved = await showEditDocumentsSheet(context, emp);
     if (saved == true && mounted) {
       AppSnack.success(context, 'حُدّثت المستمسكات');
@@ -165,25 +166,23 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
     }
   }
 
-  void _openProfile(Map<String, dynamic> emp) => showEmployeeProfileSheet(context, emp, onEditDocuments: () => _editDocuments(emp));
+  void _openProfile(ManagedEmployee emp) => showEmployeeProfileSheet(context, emp, onEditDocuments: () => _editDocuments(emp));
 
 
-  static String? _nested(Object? v) => v is Map ? v['name']?.toString() : null;
-
-  List<Map<String, dynamic>> get _filtered {
+  List<ManagedEmployee> get _filtered {
     final q = normalizeArabicForSearch(_searchQuery);
     return _employees.where((e) {
-      final active = e['is_active'] != false;
+      final active = e.isActive;
       if (_statusFilter == 'active' && !active) return false;
       if (_statusFilter == 'inactive' && active) return false;
       if (q.isEmpty) return true;
       final fields = [
-        normalizeArabicForSearch(e['full_name']?.toString() ?? ''),
-        (e['email']?.toString() ?? '').toLowerCase(),
-        (e['employee_code']?.toString() ?? '').toLowerCase(),
-        (e['phone_number']?.toString() ?? e['phone']?.toString() ?? '').toLowerCase(),
-        normalizeArabicForSearch(_nested(e['departments']) ?? ''),
-        normalizeArabicForSearch(_nested(e['branches']) ?? ''),
+        normalizeArabicForSearch(e.fullName ?? ''),
+        (e.email ?? '').toLowerCase(),
+        (e.employeeCode ?? '').toLowerCase(),
+        (e.phone ?? '').toLowerCase(),
+        normalizeArabicForSearch(e.departmentName ?? ''),
+        normalizeArabicForSearch(e.branchName ?? ''),
       ];
       return fields.any((f) => f.contains(q));
     }).toList();
@@ -192,7 +191,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
   @override
   Widget build(BuildContext context) {
     final filtered = _filtered;
-    final activeCount = _employees.where((e) => e['is_active'] != false).length;
+    final activeCount = _employees.where((e) => e.isActive).length;
 
     final List<Widget> list;
     if (_isLoading && _employees.isEmpty) {
@@ -262,18 +261,18 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
     );
   }
 
-  Widget _employeeTile(Map<String, dynamic> emp) {
-    final isActive = emp['is_active'] != false;
-    final hasDevice = (emp['employee_devices'] as List<dynamic>? ?? const []).isNotEmpty;
-    final branch = _nested(emp['branches']);
-    final name = (emp['full_name'] ?? 'بدون اسم').toString();
+  Widget _employeeTile(ManagedEmployee emp) {
+    final isActive = emp.isActive;
+    final hasDevice = emp.hasDevice;
+    final branch = emp.branchName;
+    final name = emp.fullName ?? 'بدون اسم';
 
     return AppCard(
       padding: const EdgeInsetsDirectional.fromSTEB(AppSpace.md, AppSpace.md, 0, AppSpace.md),
       onTap: () => _openProfile(emp),
       child: Row(
         children: [
-          AppAvatar(name: name, url: emp['avatar_url']?.toString(), tone: isActive ? AppTone.brand : AppTone.neutral),
+          AppAvatar(name: name, url: emp.avatarUrl, tone: isActive ? AppTone.brand : AppTone.neutral),
           const SizedBox(width: AppSpace.md),
           Expanded(
             child: Column(
@@ -281,7 +280,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
               children: [
                 Text(name, style: AppText.subtitle.copyWith(color: isActive ? null : AppColors.textMuted), maxLines: 1, overflow: TextOverflow.ellipsis),
                 Text(
-                  '${emp['employee_code'] ?? ''}${branch == null ? '' : ' · $branch'}',
+                  '${emp.employeeCode ?? ''}${branch == null ? '' : ' · $branch'}',
                   style: AppText.caption,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -291,7 +290,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                   spacing: AppSpace.xs,
                   runSpacing: AppSpace.xs,
                   children: [
-                    StatusBadge(employeeRoleLabel(emp['role']), tone: AppTone.accent),
+                    StatusBadge(employeeRoleLabel(emp.role), tone: AppTone.accent),
                     if (!isActive) const StatusBadge('معطل', tone: AppTone.danger, dot: true),
                     if (hasDevice) const StatusBadge('جهاز مربوط', tone: AppTone.info, icon: Icons.smartphone_rounded),
                     if (branch == null) const StatusBadge('بدون فرع', tone: AppTone.warning),

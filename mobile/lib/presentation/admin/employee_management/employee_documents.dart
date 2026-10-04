@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../../../core/models/models.dart';
 import '../../../core/services/share_helper.dart';
 import '../../../core/services/storage_links.dart';
 import '../../../core/utils/app_log.dart';
@@ -152,7 +153,7 @@ class DocumentsGrid extends StatelessWidget {
 }
 
 /// نافذة تعديل مستمسكات موظف: حذف القديمة ورفع الجديدة (تُضغط تلقائياً).
-Future<bool?> showEditDocumentsSheet(BuildContext context, Map<String, dynamic> emp) {
+Future<bool?> showEditDocumentsSheet(BuildContext context, ManagedEmployee emp) {
   return showModalBottomSheet<bool>(
     context: context,
     isScrollControlled: true,
@@ -164,14 +165,14 @@ Future<bool?> showEditDocumentsSheet(BuildContext context, Map<String, dynamic> 
 
 class _DocumentsEditor extends StatefulWidget {
   const _DocumentsEditor({required this.emp});
-  final Map<String, dynamic> emp;
+  final ManagedEmployee emp;
 
   @override
   State<_DocumentsEditor> createState() => _DocumentsEditorState();
 }
 
 class _DocumentsEditorState extends State<_DocumentsEditor> {
-  late final List<String> _original = [for (final u in (widget.emp['document_urls'] as List<dynamic>? ?? const [])) u.toString()];
+  late final List<String> _original = List.of(widget.emp.documentUrls);
   late final List<String> _existing = List.of(_original);
   final List<File> _new = [];
   bool _saving = false;
@@ -195,8 +196,8 @@ class _DocumentsEditorState extends State<_DocumentsEditor> {
           appLog('تعذر حذف المستند القديم من التخزين: $e');
         }
       }
-      final newUrls = _new.isEmpty ? <String>[] : await uploadEmployeeDocuments(_new, widget.emp['id'] as String);
-      await EmployeeAdminRepository().updateDocumentUrls(widget.emp['id'] as Object, [..._existing, ...newUrls]);
+      final newUrls = _new.isEmpty ? <String>[] : await uploadEmployeeDocuments(_new, widget.emp.id);
+      await EmployeeAdminRepository().updateDocumentUrls(widget.emp.id, [..._existing, ...newUrls]);
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
       if (mounted) {
@@ -215,7 +216,7 @@ class _DocumentsEditorState extends State<_DocumentsEditor> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('مستمسكات ${widget.emp['full_name'] ?? ''}', style: AppText.title),
+            Text('مستمسكات ${widget.emp.fullName ?? ''}', style: AppText.title),
             const Text('أزل الصور القديمة أو أضف جديدة — تُضغط الصور تلقائياً.', style: AppText.caption),
             const SizedBox(height: AppSpace.lg),
             DocumentsGrid(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/models/models.dart';
 import '../../../core/services/share_helper.dart';
 import '../../shared/ui/ui.dart';
 import 'employee_documents.dart';
@@ -15,21 +16,17 @@ String employeeRoleLabel(Object? role) => switch (role) {
 /// ملف الموظف: تواصل سريع، المعلومات الوظيفية، الجهاز، والوثائق.
 Future<void> showEmployeeProfileSheet(
   BuildContext context,
-  Map<String, dynamic> emp, {
+  ManagedEmployee emp, {
   required VoidCallback onEditDocuments,
 }) {
-  final name = (emp['full_name'] ?? 'بدون اسم').toString();
-  final phone = (emp['phone_number'] ?? emp['phone'] ?? '').toString();
+  final name = emp.fullName ?? 'بدون اسم';
+  final phone = emp.phone ?? '';
   final hasPhone = phone.trim().isNotEmpty;
-  final branches = emp['branches'];
-  final departments = emp['departments'];
-  final branch = branches is Map ? branches['name']?.toString() : null;
-  final department = departments is Map ? departments['name']?.toString() : null;
-  final isActive = emp['is_active'] != false;
-  final salary = emp['monthly_salary_iqd'] as num?;
-  final docUrls = [for (final u in (emp['document_urls'] as List<dynamic>? ?? const [])) u.toString()];
-  final devices = emp['employee_devices'] as List<dynamic>? ?? const [];
-  final device = devices.isEmpty ? null : devices.first;
+  final branch = emp.branchName;
+  final department = emp.departmentName;
+  final isActive = emp.isActive;
+  final salary = emp.monthlySalary;
+  final docUrls = emp.documentUrls;
 
   return showModalBottomSheet<void>(
     context: context,
@@ -45,7 +42,7 @@ Future<void> showEmployeeProfileSheet(
         children: [
           Row(
             children: [
-              AppAvatar(name: name, url: emp['avatar_url']?.toString(), size: 60),
+              AppAvatar(name: name, url: emp.avatarUrl, size: 60),
               const SizedBox(width: AppSpace.md),
               Expanded(
                 child: Column(
@@ -57,9 +54,9 @@ Future<void> showEmployeeProfileSheet(
                       spacing: AppSpace.xs,
                       runSpacing: AppSpace.xs,
                       children: [
-                        StatusBadge(employeeRoleLabel(emp['role']), tone: AppTone.accent),
+                        StatusBadge(employeeRoleLabel(emp.role), tone: AppTone.accent),
                         StatusBadge(isActive ? 'نشط' : 'معطل', tone: isActive ? AppTone.success : AppTone.danger, dot: true),
-                        StatusBadge((emp['employee_code'] ?? '—').toString(), tone: AppTone.brand),
+                        StatusBadge(emp.employeeCode ?? '—', tone: AppTone.brand),
                       ],
                     ),
                   ],
@@ -113,14 +110,14 @@ Future<void> showEmployeeProfileSheet(
             padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg, vertical: AppSpace.sm),
             child: Column(
               children: [
-                KeyValueRow('البريد', (emp['email'] ?? '—').toString(), icon: Icons.alternate_email_rounded),
+                KeyValueRow('البريد', emp.email ?? '—', icon: Icons.alternate_email_rounded),
                 KeyValueRow('الهاتف', hasPhone ? phone : 'غير مسجل', icon: Icons.phone_iphone_rounded),
                 KeyValueRow('الفرع', branch ?? 'غير محدد', icon: Icons.store_rounded, valueColor: branch == null ? AppColors.warning : null),
                 KeyValueRow('القسم', department ?? 'غير محدد', icon: Icons.apartment_rounded),
                 KeyValueRow('الراتب', salary == null || salary == 0 ? 'غير محدد' : Fmt.iqd(salary), icon: Icons.payments_outlined),
                 KeyValueRow(
                   'الجهاز',
-                  device == null ? 'غير مربوط' : 'مربوط (${(device as Map)['model'] ?? 'هاتف'})',
+                  !emp.hasDevice ? 'غير مربوط' : 'مربوط (${emp.firstDeviceModel ?? 'هاتف'})',
                   icon: Icons.smartphone_rounded,
                 ),
               ],
