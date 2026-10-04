@@ -104,10 +104,20 @@ jobs:
             if [ $first = 1 ] || [ "$label" = "iphone_se" ]; then targets="app_launch_test $targets"; fi
             for t in $targets; do
               log=$OUT/$label/$t.log; mkdir -p $OUT/$label
-              SCREENS_DIR=$OUT/$label flutter drive --driver=test_driver/integration_test.dart \
-                --target=integration_test/$t.dart -d "$udid" $DEFINES > "$log" 2>&1 < /dev/null
-              code=$?
-              if [ $code = 0 ]; then r="✅ PASS"; else r="❌ FAIL ($code)"; fi
+              # حد 15 دقيقة لكل اختبار (macOS ما بيه أمر timeout)؛ إذا علّق نلتقط شاشة المحاكي لنعرف السبب
+              ( SCREENS_DIR=$OUT/$label flutter drive --driver=test_driver/integration_test.dart \
+                  --target=integration_test/$t.dart -d "$udid" $DEFINES > "$log" 2>&1 < /dev/null ) &
+              pid=$!; waited=0
+              while kill -0 $pid 2>/dev/null && [ $waited -lt 900 ]; do sleep 10; waited=$((waited+10)); done
+              if kill -0 $pid 2>/dev/null; then
+                xcrun simctl io "$udid" screenshot "$OUT/$label/${t}_STUCK.png" 2>/dev/null
+                pkill -P $pid 2>/dev/null; kill $pid 2>/dev/null; pkill -f "flutter_tools.*drive" 2>/dev/null
+                code=124
+              else
+                wait $pid; code=$?
+              fi
+              xcrun simctl io "$udid" screenshot "$OUT/$label/${t}_end.png" 2>/dev/null
+              if [ $code = 0 ]; then r="✅ PASS"; elif [ $code = 124 ]; then r="❌ STUCK (15 min)"; else r="❌ FAIL ($code)"; fi
               grep -q "LOCATION_TEST_SKIPPED" "$log" && r="$r (⚠️ location test skipped: permission not granted)"
               echo "| $name | $runtime | $t | $r |" >> $RES
               if [ $code != 0 ]; then
@@ -140,4 +150,4 @@ jobs:
           git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" ios-sim-results
 
       - name: Fail if any test failed
-        run: "! grep -q 'FAIL' mobile/build/ios_screens/RESULTS.md"
+        run: "! grep -qE 'FAIL|STUCK' mobile/build/ios_screens/RESULTS.md"

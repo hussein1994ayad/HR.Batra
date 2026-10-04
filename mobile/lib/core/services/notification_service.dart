@@ -58,8 +58,12 @@ class NotificationService {
       await _localNotifications.initialize(
         const InitializationSettings(
           android: AndroidInitializationSettings('@mipmap/launcher_icon'),
+          // لا نطلب الإذن عند التشغيل: الافتراضي يعرض نافذة النظام قبل أول شاشة ويوقف
+          // التطبيق لحد ما يجاوب المستخدم. الإذن ينطلب بعد تسجيل الدخول (requestPermissionAndSaveToken).
           iOS: DarwinInitializationSettings(
-            
+            requestAlertPermission: false,
+            requestBadgePermission: false,
+            requestSoundPermission: false,
           ),
         ),
       );
@@ -189,11 +193,28 @@ class NotificationService {
     }
   }
 
+  /// إذن الإشعارات المحلية مباشرة من النظام (iOS / أندرويد 13+).
+  static Future<bool> _requestLocalPermission() async {
+    try {
+      final ios = _localNotifications.resolvePlatformSpecificImplementation<IOSFlutterLocalNotificationsPlugin>();
+      if (ios != null) {
+        return await ios.requestPermissions(alert: true, badge: true, sound: true) ?? false;
+      }
+      final android = _localNotifications.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+      if (android != null) return await android.requestNotificationsPermission() ?? false;
+    } catch (e) {
+      debugPrint('local notification permission: $e');
+    }
+    return false;
+  }
+
   /// طلب الصلاحيات وحفظ التوكن. يُستدعى بعد تسجيل الدخول.
   static Future<bool> requestPermissionAndSaveToken() async {
     if (!_firebaseReady) {
+      // بدون Firebase (آيفون قبل إعداد Push): إذن الإشعارات المحلية حتى توصل تذكيرات البصمة
+      final granted = await _requestLocalPermission();
       await refreshLocalAttendanceReminders();
-      return false;
+      return granted;
     }
     try {
       final settings = await _firebaseMessaging.requestPermission(

@@ -32,10 +32,19 @@ void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets('real app launches (login, or home if a session exists) without crashing', (tester) async {
+    // main يركّب معالج أخطاء خاص؛ نرجّع معالج الاختبار حتى الفشل ينطبع بدل ما يعلّق
+    final testOnError = FlutterError.onError;
     app.main();
     // جهاز جديد: شاشة الدخول. جهاز عليه جلسة سابقة: الرئيسية.
     final shown = await _pumpUntil(tester, find.byWidgetPredicate(
         (w) => w is Text && (w.data == 'تسجيل الدخول' || w.data == 'الرئيسية')));
+    FlutterError.onError = testOnError;
+    if (!shown) {
+      // تشخيص: شنو الظاهر على الشاشة
+      final texts = find.byType(Text).evaluate().map((e) => (e.widget as Text).data).whereType<String>().take(30).toList();
+      debugPrint('LAUNCH_SCREEN_TEXTS: $texts');
+      await _shot(binding, '00_launch_timeout');
+    }
     expect(shown, isTrue, reason: 'لا شاشة الدخول ولا الرئيسية ظهرت خلال 40 ثانية');
     // ثواني إضافية: أي crash متأخر (تسجيل مهام الخلفية بعد ربط الـ scene) يطلع هنا
     for (var i = 0; i < 20; i++) {
