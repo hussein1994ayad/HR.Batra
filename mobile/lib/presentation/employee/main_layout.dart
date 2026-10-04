@@ -15,7 +15,7 @@ import 'attendance/attendance_screen.dart';
 import 'home/home_screen.dart';
 import 'leave/leave_request_screen.dart';
 import 'loan/loan_request_screen.dart';
-import 'settings_screen.dart';
+import 'settings/settings_screen.dart';
 
 class MainLayout extends StatefulWidget {
   final int initialTab;

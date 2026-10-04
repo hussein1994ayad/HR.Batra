@@ -13,17 +13,19 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../core/constants/constants.dart';
-import '../../core/routes/app_router.dart';
-import '../../core/services/auth_service.dart';
-import '../../core/services/device_service.dart';
-import '../../core/services/file_upload_service.dart';
-import '../../core/services/notification_service.dart';
-import '../../core/services/share_helper.dart';
-import '../../core/services/storage_links.dart';
-import '../../core/services/supabase_service.dart';
-import '../../core/utils/error_text.dart';
-import '../shared/ui/ui.dart';
+import '../../../core/constants/constants.dart';
+import '../../../core/routes/app_router.dart';
+import '../../../core/services/auth_service.dart';
+import '../../../core/services/device_service.dart';
+import '../../../core/services/notification_service.dart';
+import '../../../core/services/share_helper.dart';
+import '../../../core/services/storage_links.dart';
+import '../../../core/services/supabase_service.dart';
+import '../../../core/utils/error_text.dart';
+import '../../../data/repositories/profile_repository.dart';
+import '../../shared/ui/ui.dart';
+import 'settings_logic.dart';
+import 'widgets/settings_widgets.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -33,6 +35,7 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  final ProfileRepository _repo = ProfileRepository();
   String _employeeName = 'جاري التحميل...';
   String _email = '...';
   String _phone = '...';
@@ -78,7 +81,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     try {
       // 1. جلب معلومات الموظف من الـ view الآمن
-      final data = await SupabaseService.client.from('v_employee_directory').select().eq('id', user.id).maybeSingle();
+      final data = await _repo.fetchProfile(user.id);
 
       if (data != null && mounted) {
         setState(() {
@@ -128,31 +131,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final fileExtension = file.path.split('.').last;
 
       // استخراج المسار القديم للأفاتار لحذفه تلقائياً
-      String? oldPath;
-      if (_avatarUrl.isNotEmpty) {
-        try {
-          final uri = Uri.parse(_avatarUrl);
-          final segments = uri.pathSegments;
-          // التنسيق: /storage/v1/object/public/avatars/YOUR_OLD_PATH
-          final int avatarsIndex = segments.indexOf('avatars');
-          if (avatarsIndex != -1 && avatarsIndex + 1 < segments.length) {
-            oldPath = segments.sublist(avatarsIndex + 1).join('/');
-          }
-        } catch (_) {}
-      }
+      final String? oldPath = avatarStoragePath(_avatarUrl);
 
       final remotePath = '${user.id}/${DateTime.now().millisecondsSinceEpoch}.$fileExtension';
 
       // 1. رفع الصورة الشخصية الجديدة المضغوطة إلى التخزين أولاً دون مسح الصورة القديمة
-      final newAvatarUrl = await FileUploadService.uploadFile(file: file, bucketName: 'avatars', remotePath: remotePath);
+      final newAvatarUrl = await _repo.uploadAvatar(file, remotePath);
 
       // 2. تحديث رابط الصورة في جدول الموظفين في قاعدة البيانات
-      await SupabaseService.client.from('employees').update({'avatar_url': newAvatarUrl}).eq('id', user.id);
+      await _repo.updateAvatarUrl(user.id, newAvatarUrl);
 
       // 3. التحقق والتأكد من نجاح التحديث في قاعدة البيانات، ثم حذف الصورة القديمة بأمان من التخزين
       if (oldPath != null && oldPath.isNotEmpty && oldPath != remotePath) {
         try {
-          await SupabaseService.client.storage.from('avatars').remove([oldPath]);
+          await _repo.removeAvatarObject(oldPath);
         } catch (storageErr) {
           debugPrint('تحذير: تعذر حذف الصورة القديمة من التخزين بعد التحديث: $storageErr');
         }
@@ -191,15 +183,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     setState(() => _isUploadingDoc = true);
     try {
-      final file = File(picked.path);
-      final ext = file.path.split('.').last;
-      final url = await FileUploadService.uploadFile(
-        file: file,
-        bucketName: 'employee-documents',
-        remotePath: '${user.id}/${DateTime.now().millisecondsSinceEpoch}.$ext',
-      );
+      final url = await _repo.uploadDocument(user.id, File(picked.path));
       final updated = [..._documentUrls, url];
-      await SupabaseService.client.from('employees').update({'document_urls': updated}).eq('id', user.id);
+      await _repo.updateDocumentUrls(user.id, updated);
       if (mounted) {
         setState(() => _documentUrls = updated);
         AppSnack.success(context, 'انضاف المستمسك');
@@ -271,12 +257,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() => _deletionBusy = true);
 
     try {
-      final loans = await SupabaseService.client.from('loans').select('remaining_amount').eq('employee_id', user.id).eq('status', 'approved');
-
-      double totalRemaining = 0.0;
-      for (final loan in loans) {
-        totalRemaining += (loan['remaining_amount'] as num?)?.toDouble() ?? 0.0;
-      }
+      final totalRemaining = await _repo.fetchApprovedLoansRemaining(user.id);
       if (!mounted) return;
 
       if (totalRemaining > 0) {
@@ -301,7 +282,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (!ok) return;
 
       // الدالة ترسل الطلب لكل الأدمنية (الموظف لا يرى حساباتهم بسبب RLS)
-      await SupabaseService.client.rpc<dynamic>('request_account_deletion');
+      await _repo.requestAccountDeletion();
       if (mounted) AppSnack.success(context, 'وصل طلب حذف الحساب للإدارة');
     } catch (e) {
       debugPrint('Failed to submit deletion request: $e');
@@ -344,11 +325,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
       slivers: [
         SliverList.list(
           children: [
-            _buildProfileCard(),
+            SettingsProfileCard(
+              name: _employeeName,
+              avatarUrl: _avatarUrl,
+              code: _employeeCode,
+              email: _email,
+              phone: _phone,
+              uploading: _isUploadingAvatar,
+              onChangeAvatar: _updateAvatar,
+            ),
             const SectionHeader('الإشعارات'),
-            _buildNotificationsCard(),
+            SettingsNotificationsCard(granted: _notificationPermissionGranted, onEnable: _enableNotifications),
             const SectionHeader('وثائقي'),
-            _buildDocuments(),
+            SettingsDocumentsCard(urls: _documentUrls, uploading: _isUploadingDoc, onOpen: _previewDocument, onAdd: _addDocument),
             const SectionHeader('الخدمات'),
             AppCard(
               padding: const EdgeInsets.symmetric(vertical: AppSpace.xs),
@@ -447,146 +436,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ],
         ),
       ],
-    );
-  }
-
-  Widget _buildProfileCard() {
-    return AppCard(
-      padding: const EdgeInsets.all(AppSpace.xl),
-      child: Column(
-        children: [
-          Semantics(
-            button: true,
-            label: 'تغيير الصورة الشخصية',
-            child: InkWell(
-              customBorder: const CircleBorder(),
-              onTap: _isUploadingAvatar ? null : _updateAvatar,
-              child: Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  AppAvatar(name: _employeeName, url: _avatarUrl, size: 88),
-                  PositionedDirectional(
-                    bottom: -2,
-                    end: -2,
-                    child: Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: AppColors.brand,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: AppColors.surface1, width: 3),
-                      ),
-                      child: _isUploadingAvatar
-                          ? const Padding(
-                              padding: EdgeInsets.all(6),
-                              child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.onBrand),
-                            )
-                          : const Icon(Icons.photo_camera_rounded, size: 16, color: AppColors.onBrand),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: AppSpace.md),
-          Text(_employeeName, style: AppText.title, textAlign: TextAlign.center),
-          const SizedBox(height: AppSpace.xs),
-          StatusBadge(_employeeCode, tone: AppTone.brand, icon: Icons.badge_outlined),
-          const SizedBox(height: AppSpace.lg),
-          const Divider(),
-          KeyValueRow('البريد', _email, icon: Icons.alternate_email_rounded),
-          KeyValueRow('الهاتف', _phone, icon: Icons.phone_outlined),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildNotificationsCard() {
-    final granted = _notificationPermissionGranted;
-    return AppCard(
-      tone: granted ? null : AppTone.warning,
-      child: Row(
-        children: [
-          ToneIcon(granted ? Icons.notifications_active_rounded : Icons.notifications_off_rounded, tone: granted ? AppTone.success : AppTone.warning),
-          const SizedBox(width: AppSpace.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(granted ? 'الإشعارات مفعّلة' : 'الإشعارات متوقفة', style: AppText.subtitle),
-                Text(granted ? 'توصلك القرارات وتذكيرات البصمة.' : 'فعّلها حتى توصلك القرارات والتذكيرات.', style: AppText.caption),
-              ],
-            ),
-          ),
-          if (!granted) AppButton(label: 'تفعيل', size: AppButtonSize.small, onPressed: _enableNotifications),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDocuments() {
-    return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Wrap(
-            spacing: AppSpace.md,
-            runSpacing: AppSpace.md,
-            children: [
-              for (final url in _documentUrls)
-                Semantics(
-                  button: true,
-                  label: 'فتح وثيقة',
-                  child: InkWell(
-                    onTap: () => _previewDocument(url),
-                    borderRadius: AppRadius.control,
-                    child: ClipRRect(
-                      borderRadius: AppRadius.control,
-                      child: Container(
-                        width: 72,
-                        height: 72,
-                        color: AppColors.surface2,
-                        child: SignedNetworkImage(
-                          url,
-                          fit: BoxFit.cover,
-                          cacheWidth: 216,
-                          errorBuilder: (_, __, ___) => const Icon(Icons.picture_as_pdf_rounded, color: AppColors.accent),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              Semantics(
-                button: true,
-                label: 'إضافة مستمسك',
-                child: InkWell(
-                  onTap: _isUploadingDoc ? null : _addDocument,
-                  borderRadius: AppRadius.control,
-                  child: Container(
-                    width: 72,
-                    height: 72,
-                    decoration: BoxDecoration(
-                      borderRadius: AppRadius.control,
-                      border: Border.all(color: AppColors.borderStrong),
-                    ),
-                    child: _isUploadingDoc
-                        ? const Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)))
-                        : const Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.add_rounded, color: AppColors.brand),
-                              Text('إضافة', style: AppText.caption),
-                            ],
-                          ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpace.md),
-          const Text('تقدر تضيف مستمسكات جديدة؛ تعديلها أو حذفها من قسم الموارد البشرية.', style: AppText.caption),
-        ],
-      ),
     );
   }
 }

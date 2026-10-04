@@ -202,3 +202,15 @@
 - حُدّثت استيرادات: `app_router.dart`, `test/support/screens.dart`, `payroll_engine_client_test.dart`, `user_flow_ui_test.dart`.
 - **أُضيف فحص** `mobile/test/unit/payslips_logic_test.dart` (الدورة المالية عبر السنة وفبراير، فلترة البنود).
 - فحص: `dart analyze` ✓، `flutter test` 552 ✓.
+
+## Step 18 — شاشة الإعدادات (النقاط 3 و 4 و 8)
+- **نُقلت** `presentation/employee/settings_screen.dart` → `presentation/employee/settings/settings_screen.dart` (592 → 441 سطر).
+- **أُنشئ** `mobile/lib/data/repositories/profile_repository.dart`: الملف الشخصي (`v_employee_directory`)، رفع/تحديث/حذف الصورة
+  الشخصية (نفس الـ bucket ونفس المسار)، رفع المستمسك وتحديث `document_urls`، مجموع السلف المعتمدة المتبقية، و`request_account_deletion`.
+  ترتيب الخطوات نفسه (رفع ← تحديث الرابط ← حذف القديمة).
+- **أُنشئ** `settings/settings_logic.dart`: `avatarStoragePath` (استخراج مسار الصورة القديمة — كان داخل `_updateAvatar`).
+- **أُنشئ** `settings/widgets/settings_widgets.dart`: `SettingsProfileCard`, `SettingsNotificationsCard`, `SettingsDocumentsCard`
+  (من `_buildProfileCard` / `_buildNotificationsCard` / `_buildDocuments`). قائمة الخدمات وكارت الجهاز بقيت بالشاشة.
+- `main_layout.dart`: مسار الاستيراد فقط.
+- **أُضيف فحص** `mobile/test/unit/settings_logic_test.dart`.
+- فحص: `dart analyze` ✓، `flutter test` 555 ✓.
