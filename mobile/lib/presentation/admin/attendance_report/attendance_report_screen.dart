@@ -39,8 +39,8 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
   String? _selectedEmployeeId = 'all';
   ReportStatus? _statusFilter;
 
-  List<Map<String, dynamic>> _branches = [];
-  List<Map<String, dynamic>> _employeesList = [];
+  List<BranchModel> _branches = [];
+  List<EmployeeRef> _employeesList = [];
   List<WorkScheduleModel> _schedules = [];
   Map<String, String> _leaveTypeNames = {};
   List<ReportRow> _rows = [];
@@ -69,8 +69,8 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
 
       final results = await _repo.fetchLookups();
       if (mounted) {
-        _branches = List<Map<String, dynamic>>.from(results[0] as Iterable<dynamic>);
-        _employeesList = List<Map<String, dynamic>>.from(results[1] as Iterable<dynamic>);
+        _branches = List<Map<String, dynamic>>.from(results[0] as Iterable<dynamic>).map(BranchModel.fromMap).toList();
+        _employeesList = List<Map<String, dynamic>>.from(results[1] as Iterable<dynamic>).map(EmployeeRef.fromMap).toList();
         _schedules = rowsOf(results[2]).map(WorkScheduleModel.fromMap).toList();
         final types = rowOf(results[3])?['value'] is Map ? (rowOf(results[3])!['value'] as Map)['active_types'] : null;
         _leaveTypeNames = {
@@ -85,7 +85,7 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
     unawaited(_loadRecords());
   }
 
-  String _branchName(String? id) => _branches.where((b) => b['id'] == id).firstOrNull?['name']?.toString() ?? '';
+  String _branchName(String? id) => _branches.where((b) => b.id == id).firstOrNull?.rawName ?? '';
 
   static DateTime _day(DateTime d) => DateTime(d.year, d.month, d.day);
   static String _iso(DateTime d) => d.toIso8601String().split('T')[0];
@@ -98,17 +98,17 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
 
       final employees = [
         for (final e in _employeesList)
-          if (e['is_active'] != false &&
-              (_selectedEmployeeId == 'all' || e['id'] == _selectedEmployeeId) &&
-              (_selectedBranchId == 'all' || e['branch_id'] == _selectedBranchId))
+          if (e.isActive != false &&
+              (_selectedEmployeeId == 'all' || e.id == _selectedEmployeeId) &&
+              (_selectedBranchId == 'all' || e.branchId == _selectedBranchId))
             ReportEmployee(
-              id: e['id'].toString(),
-              name: (e['full_name'] ?? 'موظف').toString(),
-              code: (e['employee_code'] ?? '').toString(),
-              branchId: e['branch_id']?.toString(),
-              departmentId: e['department_id']?.toString(),
-              branchName: _branchName(e['branch_id']?.toString()),
-              joinDate: DateTime.tryParse((e['join_date'] ?? '').toString()),
+              id: e.id,
+              name: e.fullName ?? 'موظف',
+              code: e.employeeCode ?? '',
+              branchId: e.branchId,
+              departmentId: e.departmentId,
+              branchName: _branchName(e.branchId),
+              joinDate: e.joinDate,
             ),
       ];
       final ids = employees.isEmpty ? ['00000000-0000-0000-0000-000000000000'] : [for (final e in employees) e.id];
@@ -184,7 +184,7 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
     setState(() => _exporting = true);
     try {
       final branch = _selectedBranchId == 'all' ? 'كل الفروع' : _branchName(_selectedBranchId);
-      final employee = _employeesList.where((e) => e['id'] == _selectedEmployeeId).firstOrNull?['full_name']?.toString();
+      final employee = _employeesList.where((e) => e.id == _selectedEmployeeId).firstOrNull?.fullName;
       final path = await ExcelExportService.generateAttendanceReportExcel(
         rows: _rows,
         from: _selectedDateRange.start,
@@ -251,27 +251,27 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
       context,
       title: 'الفرع',
       current: _selectedBranchId,
-      options: [('all', 'كل الفروع'), for (final b in _branches) (b['id'] as String, b['name'].toString())],
+      options: [('all', 'كل الفروع'), for (final b in _branches) (b.id, '${b.rawName}')],
     );
     if (id == null) return;
     setState(() {
       _selectedBranchId = id;
       // الموظف المختار من فرع آخر يُلغى اختياره
       if (_selectedEmployeeId != 'all') {
-        final emp = _employeesList.where((e) => e['id'] == _selectedEmployeeId).firstOrNull;
-        if (emp != null && id != 'all' && emp['branch_id'] != id) _selectedEmployeeId = 'all';
+        final emp = _employeesList.where((e) => e.id == _selectedEmployeeId).firstOrNull;
+        if (emp != null && id != 'all' && emp.branchId != id) _selectedEmployeeId = 'all';
       }
     });
     unawaited(_loadRecords());
   }
 
   Future<void> _pickEmployee() async {
-    final list = _employeesList.where((e) => _selectedBranchId == 'all' || e['branch_id'] == _selectedBranchId);
+    final list = _employeesList.where((e) => _selectedBranchId == 'all' || e.branchId == _selectedBranchId);
     final id = await showAppOptions(
       context,
       title: 'الموظف',
       current: _selectedEmployeeId,
-      options: [('all', 'كل الموظفين'), for (final e in list) (e['id'] as String, e['full_name'].toString())],
+      options: [('all', 'كل الموظفين'), for (final e in list) (e.id, '${e.fullName}')],
     );
     if (id == null) return;
     setState(() => _selectedEmployeeId = id);
@@ -413,8 +413,8 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
         return s != 0 ? s : a.employee.name.compareTo(b.employee.name);
       });
     final multiDay = !DateUtils.isSameDay(_selectedDateRange.start, _selectedDateRange.end);
-    final branchName = _branches.where((b) => b['id'] == _selectedBranchId).firstOrNull?['name']?.toString();
-    final employeeName = _employeesList.where((e) => e['id'] == _selectedEmployeeId).firstOrNull?['full_name']?.toString();
+    final branchName = _branches.where((b) => b.id == _selectedBranchId).firstOrNull?.rawName;
+    final employeeName = _employeesList.where((e) => e.id == _selectedEmployeeId).firstOrNull?.fullName;
 
     final List<Widget> list;
     if (_isLoading && _rows.isEmpty) {

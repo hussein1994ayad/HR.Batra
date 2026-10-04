@@ -8,6 +8,7 @@
 
 import 'package:flutter/material.dart';
 
+import '../../../core/models/models.dart';
 import '../../../core/utils/app_log.dart';
 import '../../../core/utils/error_text.dart';
 import '../../../data/repositories/announcement_repository.dart';
@@ -30,8 +31,8 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
 
   String _selectedTarget = 'all'; // 'all', 'branch', 'employees'
   String? _selectedBranchId;
-  List<Map<String, dynamic>> _branches = [];
-  List<Map<String, dynamic>> _employees = [];
+  List<BranchModel> _branches = [];
+  List<EmployeeRef> _employees = [];
   final List<String> _selectedEmployeeIds = [];
 
   // مدة الظهور: 'day' | '3' | '7' | '30' | 'none' | 'custom'
@@ -97,8 +98,8 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
       final futures = await _repo.fetchTargets();
       if (!mounted) return;
       setState(() {
-        _branches = List<Map<String, dynamic>>.from(futures[0]);
-        _employees = List<Map<String, dynamic>>.from(futures[1]);
+        _branches = futures.branches;
+        _employees = futures.employees;
       });
     } catch (e) {
       appLog('Error loading data: $e');
@@ -108,7 +109,7 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
   }
 
   String get _targetLabel => switch (_selectedTarget) {
-        'branch' => 'موظفو ${_branches.where((b) => b['id'] == _selectedBranchId).firstOrNull?['name'] ?? 'الفرع'}',
+        'branch' => 'موظفو ${_branches.where((b) => b.id == _selectedBranchId).firstOrNull?.rawName ?? 'الفرع'}',
         'employees' => '${_selectedEmployeeIds.length} موظف',
         _ => 'كل الموظفين (${_employees.length})',
       };
@@ -177,9 +178,9 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
             AppListTile(
               dense: true,
               leading: const ToneIcon(Icons.store_rounded, tone: AppTone.accent, size: 36),
-              title: b['name'].toString(),
-              trailing: b['id'] == _selectedBranchId ? const Icon(Icons.check_rounded, color: AppColors.brand) : null,
-              onTap: () => Navigator.pop(ctx, b['id'] as String),
+              title: '${b.rawName}',
+              trailing: b.id == _selectedBranchId ? const Icon(Icons.check_rounded, color: AppColors.brand) : null,
+              onTap: () => Navigator.pop(ctx, b.id),
             ),
         ],
       ),
@@ -232,7 +233,7 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
               AppPickerField(
                 label: 'الفرع',
                 icon: Icons.store_rounded,
-                value: _branches.where((b) => b['id'] == _selectedBranchId).firstOrNull?['name']?.toString(),
+                value: _branches.where((b) => b.id == _selectedBranchId).firstOrNull?.rawName,
                 placeholder: 'اختر الفرع',
                 onTap: _loadingData ? null : _pickBranch,
               ),
@@ -326,7 +327,7 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
 /// قائمة اختيار متعدد للموظفين مع بحث وتحديد الكل.
 class _EmployeePicker extends StatefulWidget {
   const _EmployeePicker({required this.employees, required this.selected, required this.onChanged});
-  final List<Map<String, dynamic>> employees;
+  final List<EmployeeRef> employees;
   final List<String> selected;
   final VoidCallback onChanged;
 
@@ -344,7 +345,7 @@ class _EmployeePickerState extends State<_EmployeePicker> {
 
   @override
   Widget build(BuildContext context) {
-    final items = widget.employees.where((e) => _q.isEmpty || e['full_name'].toString().contains(_q)).toList();
+    final items = widget.employees.where((e) => _q.isEmpty || '${e.fullName}'.contains(_q)).toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -360,7 +361,7 @@ class _EmployeePickerState extends State<_EmployeePicker> {
                 setState(() {
                   widget.selected
                     ..clear()
-                    ..addAll(items.map((e) => e['id'] as String));
+                    ..addAll(items.map((e) => e.id));
                 });
                 widget.onChanged();
               },
@@ -377,11 +378,11 @@ class _EmployeePickerState extends State<_EmployeePicker> {
         ),
         for (final e in items)
           CheckboxListTile.adaptive(
-            value: widget.selected.contains(e['id']),
-            title: Text(e['full_name'].toString(), style: AppText.body),
-            secondary: AppAvatar(name: e['full_name'].toString(), size: 36),
+            value: widget.selected.contains(e.id),
+            title: Text('${e.fullName}', style: AppText.body),
+            secondary: AppAvatar(name: '${e.fullName}', size: 36),
             contentPadding: EdgeInsets.zero,
-            onChanged: (v) => _toggle(e['id'] as String, v ?? false),
+            onChanged: (v) => _toggle(e.id, v ?? false),
           ),
         const SizedBox(height: AppSpace.md),
         AppButton(label: 'تم', expand: true, onPressed: () => Navigator.pop(context)),

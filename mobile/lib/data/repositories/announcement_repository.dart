@@ -5,6 +5,7 @@
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/models/models.dart';
 import '../../core/services/supabase_service.dart';
 
 class AnnouncementRepository {
@@ -32,12 +33,16 @@ class AnnouncementRepository {
 
   // ── نشر تعميم (للإدارة) ──
 
-  /// [الأفرع (id, name)، الموظفون النشطون (id, full_name)] لاختيار الجمهور المستهدف.
-  Future<List<List<Map<String, dynamic>>>> fetchTargets() {
-    return Future.wait([
+  /// الأفرع والموظفون النشطون لاختيار الجمهور المستهدف (بالتوازي).
+  Future<({List<BranchModel> branches, List<EmployeeRef> employees})> fetchTargets() async {
+    final futures = await Future.wait([
       _db.from('branches').select('id, name').order('name'),
       _db.from('employees').select('id, full_name').eq('is_active', true).order('full_name'),
     ]);
+    return (
+      branches: List<Map<String, dynamic>>.from(futures[0]).map(BranchModel.fromMap).toList(),
+      employees: List<Map<String, dynamic>>.from(futures[1]).map(EmployeeRef.fromMap).toList(),
+    );
   }
 
   /// ينشر التعميم ويرسل الإشعارات للجمهور المستهدف؛ يرجع ما تُرجعه الدالة (عدد المستلمين).

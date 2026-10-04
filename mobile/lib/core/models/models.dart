@@ -12,6 +12,7 @@ export 'branch_schedule_model.dart';
 export 'deleted_file_model.dart';
 export 'directory_entry.dart';
 export 'employee_model.dart';
+export 'employee_ref.dart';
 export 'leave_request_model.dart';
 export 'loan_model.dart';
 export 'notification_model.dart';
