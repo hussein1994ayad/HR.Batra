@@ -12,6 +12,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../../../core/models/models.dart';
 import '../../../core/utils/app_log.dart';
 import '../../../core/utils/error_text.dart';
 import '../../../data/repositories/branch_repository.dart';
@@ -28,7 +29,7 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
   final BranchRepository _repo = BranchRepository();
   bool _isLoading = true;
   bool _hasError = false;
-  List<Map<String, dynamic>> _branches = [];
+  List<BranchModel> _branches = [];
 
   // مركز افتراضي للخريطة (بغداد)
   static const LatLng _defaultCenter = LatLng(33.3152, 44.3661);
@@ -56,14 +57,14 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
     }
   }
 
-  static LatLng? _pointOf(Map<String, dynamic> b) {
-    final lat = b['latitude'];
-    final lng = b['longitude'];
-    if (lat is! num || lng is! num) return null;
-    return LatLng(lat.toDouble(), lng.toDouble());
+  static LatLng? _pointOf(BranchModel b) {
+    final lat = b.latitude;
+    final lng = b.longitude;
+    if (lat == null || lng == null) return null;
+    return LatLng(lat, lng);
   }
 
-  Future<void> _openEditor([Map<String, dynamic>? branch]) async {
+  Future<void> _openEditor([BranchModel? branch]) async {
     final saved = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
@@ -77,10 +78,10 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
     }
   }
 
-  Future<void> _deleteBranch(Map<String, dynamic> branch) async {
+  Future<void> _deleteBranch(BranchModel branch) async {
     final confirm = await showAppConfirm(
       context,
-      title: 'حذف ${branch['name'] ?? 'الفرع'}؟',
+      title: 'حذف ${branch.rawName ?? 'الفرع'}؟',
       message: 'الموظفون المرتبطون بهذا الفرع راح يحتاجون فرعاً جديداً حتى يبصمون.',
       confirmLabel: 'حذف',
       destructive: true,
@@ -89,7 +90,7 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
 
     try {
       setState(() => _isLoading = true);
-      await _repo.delete(branch['id'] as String);
+      await _repo.delete(branch.id);
       if (mounted) AppSnack.success(context, 'حُذف الفرع');
       unawaited(_loadBranches());
     } catch (e) {
@@ -130,9 +131,9 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
     );
   }
 
-  Widget _branchCard(Map<String, dynamic> branch) {
+  Widget _branchCard(BranchModel branch) {
     final point = _pointOf(branch);
-    final radius = (branch['radius_meters'] as num? ?? 50).toDouble();
+    final radius = branch.radiusMeters ?? 50;
     return AppCard(
       padding: EdgeInsets.zero,
       onTap: () => _openEditor(branch),
@@ -157,7 +158,7 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text((branch['name'] ?? 'بدون اسم').toString(), style: AppText.subtitle, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  Text(branch.rawName ?? 'بدون اسم', style: AppText.subtitle, maxLines: 1, overflow: TextOverflow.ellipsis),
                   const SizedBox(height: AppSpace.xs),
                   StatusBadge('النطاق ${radius.round()} م', tone: AppTone.brand, icon: Icons.radar_rounded),
                   if (point == null) ...[
@@ -204,7 +205,7 @@ class _MiniMap extends StatelessWidget {
 /// نافذة إضافة/تعديل فرع: الاسم، النطاق، والموقع على الخريطة.
 class _BranchEditor extends StatefulWidget {
   const _BranchEditor({this.branch, this.initial});
-  final Map<String, dynamic>? branch;
+  final BranchModel? branch;
   final LatLng? initial;
 
   @override
@@ -215,9 +216,9 @@ class _BranchEditorState extends State<_BranchEditor> {
   final BranchRepository _repo = BranchRepository();
   final _formKey = GlobalKey<FormState>();
   final _mapController = MapController();
-  late final _name = TextEditingController(text: (widget.branch?['name'] ?? '').toString());
+  late final _name = TextEditingController(text: widget.branch?.rawName ?? '');
   late LatLng _location = widget.initial ?? _BranchManagementScreenState._defaultCenter;
-  late double _radius = ((widget.branch?['radius_meters'] as num?) ?? 100).toDouble().clamp(20, 1000);
+  late double _radius = (widget.branch?.radiusMeters ?? 100).clamp(20, 1000);
   bool _saving = false;
   bool _locating = false;
 
@@ -259,7 +260,7 @@ class _BranchEditorState extends State<_BranchEditor> {
       if (widget.branch == null) {
         await _repo.create(data);
       } else {
-        await _repo.update(widget.branch!['id'] as Object, data);
+        await _repo.update(widget.branch!.id, data);
       }
       if (mounted) Navigator.pop(context, true);
     } catch (e) {

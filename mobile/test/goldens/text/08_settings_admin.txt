@@ -3,13 +3,13 @@
 󰂍
 حسين أياد
 
-E-###
+E-#
 
 البريد
-E-###@batra.test
+E-#@batra.test
 
 الهاتف
-###########
+#
 الإشعارات
 󰀦
 الإشعارات مفعّلة
@@ -42,7 +42,7 @@ E-###@batra.test
 windows
 
 النظام
-"Windows ## Home" ##.# (Build #####)
+"Windows # Home" #.# (Build #)
 
 معرّف الجهاز
 device_<id>

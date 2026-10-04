@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 
+import '../../../core/models/models.dart';
 import '../../../core/routes/app_router.dart';
 import '../../../core/services/supabase_service.dart';
 import '../../../core/utils/app_log.dart';
@@ -26,7 +27,7 @@ class BranchScheduleScreen extends StatefulWidget {
 class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
   bool _isLoading = true;
   bool _hasError = false;
-  List<Map<String, dynamic>> _branches = [];
+  List<BranchWithSchedule> _branches = [];
   final BranchRepository _repo = BranchRepository();
 
   @override
@@ -69,7 +70,7 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
     }
   }
 
-  Future<void> _editSchedule(Map<String, dynamic> branch) async {
+  Future<void> _editSchedule(BranchWithSchedule branch) async {
     final saved = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
@@ -101,7 +102,7 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
         ),
       ];
     } else {
-      final missing = _branches.where((b) => b['has_schedule'] != true).length;
+      final missing = _branches.where((b) => !b.hasSchedule).length;
       content = [
         if (missing > 0)
           Padding(
@@ -139,10 +140,10 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
     );
   }
 
-  Widget _branchCard(Map<String, dynamic> branch) {
-    final hasSchedule = branch['has_schedule'] == true;
-    final schedule = branch['schedule'] as Map<String, dynamic>;
-    final days = [for (final d in (schedule['work_days'] as List<dynamic>? ?? const [])) (d as num).toInt()];
+  Widget _branchCard(BranchWithSchedule branch) {
+    final hasSchedule = branch.hasSchedule;
+    final schedule = branch.schedule;
+    final days = schedule.workDays ?? const <int>[];
     return AppCard(
       onTap: () => _editSchedule(branch),
       child: Column(
@@ -152,7 +153,7 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
             children: [
               ToneIcon(hasSchedule ? Icons.store_rounded : Icons.schedule_rounded, tone: hasSchedule ? AppTone.success : AppTone.warning),
               const SizedBox(width: AppSpace.md),
-              Expanded(child: Text((branch['zone_name'] ?? 'فرع').toString(), style: AppText.subtitle, maxLines: 1, overflow: TextOverflow.ellipsis)),
+              Expanded(child: Text(branch.zoneName ?? 'فرع', style: AppText.subtitle, maxLines: 1, overflow: TextOverflow.ellipsis)),
               if (hasSchedule)
                 const StatusBadge('مُعدّ', tone: AppTone.success, dot: true)
               else
@@ -165,10 +166,10 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
               spacing: AppSpace.lg,
               runSpacing: AppSpace.xs,
               children: [
-                _Info(Icons.login_rounded, 'الدخول', Fmt.timeOfDay(schedule['check_in_time']?.toString())),
-                _Info(Icons.logout_rounded, 'الخروج', Fmt.timeOfDay(schedule['check_out_time']?.toString())),
-                _Info(Icons.timer_outlined, 'السماحية', '${schedule['grace_period_minutes'] ?? 15} د'),
-                _Info(Icons.notifications_active_outlined, 'التذكير بعد', '${schedule['reminder_minutes_after'] ?? 5} د'),
+                _Info(Icons.login_rounded, 'الدخول', Fmt.timeOfDay(schedule.checkInTime)),
+                _Info(Icons.logout_rounded, 'الخروج', Fmt.timeOfDay(schedule.checkOutTime)),
+                _Info(Icons.timer_outlined, 'السماحية', '${schedule.gracePeriodMinutes ?? 15} د'),
+                _Info(Icons.notifications_active_outlined, 'التذكير بعد', '${schedule.reminderMinutesAfter ?? 5} د'),
               ],
             ),
             const SizedBox(height: AppSpace.md),
@@ -220,7 +221,7 @@ class _DaysRow extends StatelessWidget {
 /// نافذة تعديل جدول دوام فرع.
 class _ScheduleEditor extends StatefulWidget {
   const _ScheduleEditor({required this.branch});
-  final Map<String, dynamic> branch;
+  final BranchWithSchedule branch;
 
   @override
   State<_ScheduleEditor> createState() => _ScheduleEditorState();
@@ -229,15 +230,15 @@ class _ScheduleEditor extends StatefulWidget {
 class _ScheduleEditorState extends State<_ScheduleEditor> {
   static const _dayNames = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
 
-  late final Map<String, dynamic> _schedule = widget.branch['schedule'] as Map<String, dynamic>;
-  late final bool _hasSchedule = widget.branch['has_schedule'] == true;
+  late final BranchSchedule _schedule = widget.branch.schedule;
+  late final bool _hasSchedule = widget.branch.hasSchedule;
   late final List<int> _workDays = _hasSchedule
-      ? [for (final d in (_schedule['work_days'] as List<dynamic>? ?? const [0, 1, 2, 3, 4, 6])) (d as num).toInt()]
+      ? [...(_schedule.workDays ?? const [0, 1, 2, 3, 4, 6])]
       : [0, 1, 2, 3, 4, 6]; // كل الأيام ما عدا الجمعة (5)
-  late TimeOfDay _start = _parse(_schedule['check_in_time']?.toString(), const TimeOfDay(hour: 8, minute: 0));
-  late TimeOfDay _end = _parse(_schedule['check_out_time']?.toString(), const TimeOfDay(hour: 16, minute: 0));
-  late int _grace = (_schedule['grace_period_minutes'] as num? ?? 15).toInt();
-  late int _reminder = (_schedule['reminder_minutes_after'] as num? ?? 5).toInt();
+  late TimeOfDay _start = _parse(_schedule.checkInTime, const TimeOfDay(hour: 8, minute: 0));
+  late TimeOfDay _end = _parse(_schedule.checkOutTime, const TimeOfDay(hour: 16, minute: 0));
+  late int _grace = _schedule.gracePeriodMinutes ?? 15;
+  late int _reminder = _schedule.reminderMinutesAfter ?? 5;
   bool _saving = false;
 
   static TimeOfDay _parse(String? s, TimeOfDay fallback) {
@@ -268,8 +269,8 @@ class _ScheduleEditorState extends State<_ScheduleEditor> {
     setState(() => _saving = true);
     try {
       final data = {
-        'branch_id': widget.branch['zone_id'],
-        'name': 'دوام فرع ${widget.branch['zone_name']}',
+        'branch_id': widget.branch.zoneId,
+        'name': 'دوام فرع ${widget.branch.zoneName}',
         'work_days': _workDays..sort(),
         'check_in_time': _db(_start),
         'check_out_time': _db(_end),
@@ -277,7 +278,7 @@ class _ScheduleEditorState extends State<_ScheduleEditor> {
         'reminder_minutes_after': _reminder,
       };
       Future<void> write(Map<String, dynamic> row) =>
-          BranchRepository().saveBranchSchedule(row, scheduleId: _hasSchedule ? _schedule['id'] as Object : null);
+          BranchRepository().saveBranchSchedule(row, scheduleId: _hasSchedule ? _schedule.id! : null);
       try {
         await write(data);
       } on PostgrestException catch (e) {
@@ -304,7 +305,7 @@ class _ScheduleEditorState extends State<_ScheduleEditor> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('دوام ${widget.branch['zone_name']}', style: AppText.title),
+            Text('دوام ${widget.branch.zoneName}', style: AppText.title),
             Text(_hasSchedule ? 'تعديل الجدول الحالي' : 'جدول جديد', style: AppText.caption),
             const SizedBox(height: AppSpace.lg),
             Text('أيام العمل', style: AppText.bodySm.copyWith(fontWeight: FontWeight.w700)),

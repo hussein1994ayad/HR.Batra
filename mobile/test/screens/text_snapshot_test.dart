@@ -23,11 +23,11 @@ const bool _update = bool.fromEnvironment('UPDATE_TEXT');
 /// شاشة طويلة حتى تنبني أغلب عناصر القوائم الكسولة.
 const _tall = DeviceSize('tall', 430, 5000);
 
-/// الأوقات النسبية والتواريخ تتغير مع الساعة؛ نثبّت الأرقام حتى تبقى اللقطة ثابتة بين يوم ويوم.
+/// الأوقات النسبية والتواريخ تتغير مع الساعة؛ كل رقم (مهما طال) يصير # حتى تبقى اللقطة ثابتة بين ساعة وساعة ويوم ويوم.
 /// ومعرّفات الأجهزة العشوائية بالاختبار (device_xxxxxxxx-...) نستبدلها بثابت.
 String _normalize(String s) => s
     .replaceAll(RegExp(r'device_[0-9a-fA-F-]+'), 'device_<id>')
-    .replaceAll(RegExp(r'[0-9٠-٩]'), '#');
+    .replaceAll(RegExp(r'[0-9٠-٩]+'), '#');
 
 List<String> _visibleTexts(WidgetTester tester) => [
       for (final e in find.byType(RichText).evaluate())

@@ -8,6 +8,7 @@ export 'admin_models.dart';
 export 'announcement_model.dart';
 export 'attendance_model.dart';
 export 'branch_model.dart';
+export 'branch_schedule_model.dart';
 export 'deleted_file_model.dart';
 export 'directory_entry.dart';
 export 'employee_model.dart';

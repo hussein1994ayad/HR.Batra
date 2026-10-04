@@ -5,6 +5,7 @@
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/models/models.dart';
 import '../../core/services/supabase_service.dart';
 
 class BranchRepository {
@@ -12,8 +13,8 @@ class BranchRepository {
   final SupabaseClient _db;
 
   /// كل الأفرع بكل أعمدتها مرتبة بالاسم.
-  Future<List<Map<String, dynamic>>> fetchAll() async {
-    return List<Map<String, dynamic>>.from(await _db.from('branches').select().order('name'));
+  Future<List<BranchModel>> fetchAll() async {
+    return List<Map<String, dynamic>>.from(await _db.from('branches').select().order('name')).map(BranchModel.fromMap).toList();
   }
 
   Future<void> create(Map<String, dynamic> data) async {
