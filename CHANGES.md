@@ -361,3 +361,10 @@
 - النتيجة: لقطات `03_home` و`11b_announcements_board` **مطابقة حرفياً**.
 - **أُضيف فحص** `mobile/test/unit/announcement_models_test.dart` (7 حالات).
 - فحص: `dart analyze` ✓، `flutter test` ✓.
+
+## Step 34 — النقطة 5 (5): دليل الموظفين بالنموذج
+- **أُنشئ** `mobile/lib/core/models/directory_entry.dart`: `DirectoryEntry` بحقول nullable كما تصل من `get_employee_directory`،
+  حتى تبقى بدائل العرض المختلفة بكل مكان كما هي ('—'، 'القسم العام'، 'الفرع العام'، 'غير مسجل'، 'موظف').
+- `DirectoryRepository.fetchDirectory`، `filterDirectory`، `directoryBranchOptions`، والشاشة (القائمة وبطاقة الموظف) تستعمل الحقول.
+- ترتيب `models.dart` أبجدياً.
+- النتيجة: لقطات `11_directory` و`11c_directory_profile` **مطابقة حرفياً**؛ اختبارات البحث العربي تمر.

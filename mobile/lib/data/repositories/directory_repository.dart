@@ -4,14 +4,15 @@
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/models/models.dart';
 import '../../core/services/supabase_service.dart';
 
 class DirectoryRepository {
   DirectoryRepository({SupabaseClient? client}) : _db = client ?? SupabaseService.client;
   final SupabaseClient _db;
 
-  Future<List<Map<String, dynamic>>> fetchDirectory() async {
+  Future<List<DirectoryEntry>> fetchDirectory() async {
     final dynamic data = await _db.rpc<dynamic>('get_employee_directory');
-    return (data as List<dynamic>).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    return (data as List<dynamic>).map((e) => DirectoryEntry.fromMap(Map<String, dynamic>.from(e as Map))).toList();
   }
 }

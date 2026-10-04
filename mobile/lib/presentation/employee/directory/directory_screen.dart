@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/models/models.dart';
 import '../../../core/services/auth_service.dart';
 import '../../../core/services/share_helper.dart';
 import '../../../core/services/storage_links.dart';
@@ -23,8 +24,8 @@ class EmployeeDirectoryScreen extends StatefulWidget {
 
 class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
   final DirectoryRepository _repo = DirectoryRepository();
-  List<Map<String, dynamic>> _allEmployees = [];
-  List<Map<String, dynamic>> _filteredEmployees = [];
+  List<DirectoryEntry> _allEmployees = [];
+  List<DirectoryEntry> _filteredEmployees = [];
   bool _isLoading = true;
   bool _hasError = false;
   final _searchController = TextEditingController();
@@ -78,18 +79,18 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
   }
 
   // بطاقة الموظف: تواصل سريع، معلومات العمل، والوثائق
-  void _showEmployeeProfileModal(Map<String, dynamic> emp) {
-    final name = (emp['full_name'] ?? 'موظف').toString();
-    final phone = (emp['phone'] ?? '').toString();
+  void _showEmployeeProfileModal(DirectoryEntry emp) {
+    final name = emp.fullName ?? 'موظف';
+    final phone = emp.phone ?? '';
     final hasPhone = phone.trim().isNotEmpty;
-    final role = switch (emp['role']) {
+    final role = switch (emp.role) {
       'admin' => 'مدير نظام',
       'manager' => 'مدير فرع',
       _ => 'موظف',
     };
     // وثائق الزملاء (هويات، عقود) للأدمن فقط — الموظف يرى الاسم والقسم والتواصل
     final canSeeDocs = AuthService.currentUserRole == 'admin';
-    final docUrls = canSeeDocs ? [for (final u in (emp['document_urls'] as List<dynamic>? ?? const [])) u.toString()] : const <String>[];
+    final docUrls = canSeeDocs ? emp.documentUrls : const <String>[];
 
     showAppSheet<void>(
       context,
@@ -98,7 +99,7 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
         children: [
           Row(
             children: [
-              AppAvatar(name: name, url: emp['avatar_url']?.toString(), size: 60),
+              AppAvatar(name: name, url: emp.avatarUrl, size: 60),
               const SizedBox(width: AppSpace.md),
               Expanded(
                 child: Column(
@@ -110,7 +111,7 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
                       spacing: AppSpace.xs,
                       runSpacing: AppSpace.xs,
                       children: [
-                        StatusBadge((emp['employee_code'] ?? '—').toString(), tone: AppTone.brand),
+                        StatusBadge(emp.employeeCode ?? '—', tone: AppTone.brand),
                         StatusBadge(role),
                       ],
                     ),
@@ -166,10 +167,10 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
             padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg, vertical: AppSpace.sm),
             child: Column(
               children: [
-                KeyValueRow('الفرع', (emp['branch_name'] ?? '—').toString(), icon: Icons.store_rounded),
-                KeyValueRow('القسم', (emp['department_name'] ?? '—').toString(), icon: Icons.apartment_rounded),
+                KeyValueRow('الفرع', emp.branchName ?? '—', icon: Icons.store_rounded),
+                KeyValueRow('القسم', emp.departmentName ?? '—', icon: Icons.apartment_rounded),
                 KeyValueRow('الهاتف', hasPhone ? phone : 'غير مسجل', icon: Icons.phone_iphone_rounded),
-                KeyValueRow('البريد', (emp['email'] ?? 'غير مسجل').toString(), icon: Icons.alternate_email_rounded),
+                KeyValueRow('البريد', emp.email ?? 'غير مسجل', icon: Icons.alternate_email_rounded),
               ],
             ),
           ),
@@ -261,7 +262,7 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
         itemCount: _filteredEmployees.length,
         itemBuilder: (context, index) {
           final emp = _filteredEmployees[index];
-          final docs = AuthService.currentUserRole == 'admin' ? (emp['document_urls'] as List<dynamic>? ?? const []).length : 0;
+          final docs = AuthService.currentUserRole == 'admin' ? emp.documentUrls.length : 0;
           return Padding(
             padding: const EdgeInsets.only(bottom: AppSpace.sm),
             child: ContentWidth(
@@ -269,9 +270,9 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
                 padding: EdgeInsets.zero,
                 onTap: () => _showEmployeeProfileModal(emp),
                 child: AppListTile(
-                  leading: AppAvatar(name: (emp['full_name'] ?? '').toString(), url: emp['avatar_url']?.toString()),
-                  title: (emp['full_name'] ?? 'موظف').toString(),
-                  subtitle: '${emp['department_name'] ?? 'القسم العام'} · ${emp['branch_name'] ?? 'الفرع العام'}',
+                  leading: AppAvatar(name: emp.fullName ?? '', url: emp.avatarUrl),
+                  title: emp.fullName ?? 'موظف',
+                  subtitle: '${emp.departmentName ?? 'القسم العام'} · ${emp.branchName ?? 'الفرع العام'}',
                   trailing: docs > 0 ? StatusBadge('$docs وثائق', tone: AppTone.success, icon: Icons.folder_rounded) : null,
                   onTap: () => _showEmployeeProfileModal(emp),
                 ),
