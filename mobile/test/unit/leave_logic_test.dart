@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hr_pro/core/models/models.dart';
 import 'package:hr_pro/core/theme/app_theme.dart';
 import 'package:hr_pro/presentation/employee/leave/leave_logic.dart';
 import 'package:hr_pro/presentation/employee/leave/widgets/leave_widgets.dart';
@@ -59,7 +60,7 @@ void main() {
   group('validateLeaveDates', () {
     final now = DateTime(2026, 10, 4, 10);
     String? check(DateTime start, DateTime end, {bool hourly = false, int minutes = 60, List<Map<String, dynamic>> history = const []}) =>
-        validateLeaveDates(startDay: start, endDay: end, isHourly: hourly, hourlyMinutes: minutes, history: history, now: now);
+        validateLeaveDates(startDay: start, endDay: end, isHourly: hourly, hourlyMinutes: minutes, history: history.map(LeaveRequestModel.fromMap).toList(), now: now);
 
     test('more than 30 days in the past is refused', () {
       expect(check(DateTime(2026, 9, 3), DateTime(2026, 9, 3)), contains('30'));

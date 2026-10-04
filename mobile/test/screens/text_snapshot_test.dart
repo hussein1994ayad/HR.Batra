@@ -10,6 +10,11 @@ import 'dart:io';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:hr_pro/presentation/employee/directory/directory_screen.dart';
+import 'package:hr_pro/presentation/employee/main_layout.dart';
+import 'package:hr_pro/presentation/employee/payslips/payslips_screen.dart';
+import 'package:hr_pro/presentation/shared/ui/ui.dart';
+
 import '../support/harness.dart';
 import '../support/screens.dart';
 
@@ -29,6 +34,30 @@ List<String> _visibleTexts(WidgetTester tester) => [
         if ((e.widget as RichText).text.toPlainText().trim().isNotEmpty) _normalize((e.widget as RichText).text.toPlainText()),
     ];
 
+/// حالات فيها تفاعل (تبويب أو نافذة) حتى تنفحص الكروت اللي ما تظهر بأول شاشة.
+class _Interaction {
+  const _Interaction(this.name, this.build, this.act);
+  final String name;
+  final Widget Function() build;
+  final Finder Function() act;
+}
+
+final _interactions = <_Interaction>[
+  _Interaction('05b_leave_history', () => const MainLayout(initialTab: 2), () => find.text('طلباتي')),
+  _Interaction('06b_loan_history', () => const MainLayout(initialTab: 3), () => find.text('سلفي وأقساطي')),
+  _Interaction('10b_payslip_sheet', () => const PayslipsScreen(), () => find.byType(AppListTile).first),
+  _Interaction('11c_directory_profile', () => const EmployeeDirectoryScreen(), () => find.byType(AppListTile).first),
+];
+
+Future<void> _check(String name, String actual) async {
+  final file = File('test/goldens/text/$name.txt');
+  if (_update || !file.existsSync()) {
+    file.writeAsStringSync(actual);
+    return;
+  }
+  expect(actual, file.readAsStringSync(), reason: 'نصوص الشاشة $name تغيّرت');
+}
+
 void main() {
   for (final s in kScreens) {
     testWidgets('text snapshot ${s.name}', (tester) async {
@@ -36,12 +65,21 @@ void main() {
       final actual = '${_visibleTexts(tester).join('\n')}\n';
       await disposeScreen(tester);
 
-      final file = File('test/goldens/text/${s.name}.txt');
-      if (_update || !file.existsSync()) {
-        file.writeAsStringSync(actual);
-        return;
+      await _check(s.name, actual);
+    });
+  }
+
+  for (final c in _interactions) {
+    testWidgets('text snapshot ${c.name}', (tester) async {
+      await pumpScreen(tester, c.build(), role: 'employee', device: _tall);
+      await tester.tap(c.act());
+      for (var i = 0; i < 6; i++) {
+        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 30)));
+        await tester.pump(const Duration(milliseconds: 300));
       }
-      expect(actual, file.readAsStringSync(), reason: 'نصوص الشاشة ${s.name} تغيّرت');
+      final actual = '${_visibleTexts(tester).join('\n')}\n';
+      await disposeScreen(tester);
+      await _check(c.name, actual);
     });
   }
 }

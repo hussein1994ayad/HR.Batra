@@ -1,5 +1,7 @@
 // منطق شاشة الإجازات بدون واجهة: أسماء الأنواع، تنسيق المدة، قراءة السياسة، والتحقق من التواريخ.
 
+import '../../../core/models/models.dart';
+
 /// اسم النوع بدون كلمة "إجازة" (أسماء السياسة تبدأ بها أحياناً، والنص يضيفها) — كان يظهر "إجازة إجازة سنوية"
 String bareLeaveTypeName(String name) => name.replaceFirst(RegExp(r'^إجازة\s*'), '');
 
@@ -50,7 +52,7 @@ String? validateLeaveDates({
   required DateTime endDay,
   required bool isHourly,
   required int hourlyMinutes,
-  required List<Map<String, dynamic>> history,
+  required List<LeaveRequestModel> history,
   required DateTime now,
 }) {
   final today = DateTime(now.year, now.month, now.day);
@@ -58,11 +60,11 @@ String? validateLeaveDates({
   if (!isHourly && endDay.isBefore(startDay)) return 'تاريخ النهاية يجب أن يكون بعد تاريخ البداية أو مساوياً له';
   if (isHourly && hourlyMinutes <= 0) return 'وقت النهاية يجب أن يكون بعد وقت البداية';
 
+  // start_date و end_date إلزاميان بالقاعدة (NOT NULL)، والنموذج يحوّلهما للتوقيت المحلي
   for (final req in history) {
-    if (req['status'] == 'rejected' || req['status'] == 'cancelled') continue;
-    if (req['start_date'] == null || req['end_date'] == null) continue;
-    final reqStart = DateTime.parse(req['start_date'] as String).toLocal();
-    final reqEnd = DateTime.parse(req['end_date'] as String).toLocal();
+    if (req.status == 'rejected' || req.status == 'cancelled') continue;
+    final reqStart = req.startDate;
+    final reqEnd = req.endDate;
     final rStartDay = DateTime(reqStart.year, reqStart.month, reqStart.day);
     final rEndDay = DateTime(reqEnd.year, reqEnd.month, reqEnd.day);
     if (!(endDay.isBefore(rStartDay) || startDay.isAfter(rEndDay))) {

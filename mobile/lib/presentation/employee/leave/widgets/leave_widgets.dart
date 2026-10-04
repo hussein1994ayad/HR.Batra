@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../../core/models/models.dart';
 import '../../../../core/services/storage_links.dart';
 import '../../../shared/ui/ui.dart';
 
@@ -76,21 +77,21 @@ class LeaveBalanceCard extends StatelessWidget {
 class LeaveCard extends StatelessWidget {
   const LeaveCard({super.key, required this.req, required this.typeName, this.onCancel});
 
-  final Map<String, dynamic> req;
+  final LeaveRequestModel req;
   final String typeName;
-  final void Function(Map<String, dynamic> req)? onCancel;
+  final void Function(LeaveRequestModel req)? onCancel;
 
   @override
   Widget build(BuildContext context) {
-    final isHourly = req['is_hourly'] == true;
-    final start = DateTime.tryParse(req['start_date']?.toString() ?? '');
-    final end = DateTime.tryParse(req['end_date']?.toString() ?? '');
-    final reason = req['reason']?.toString();
-    final rejection = req['rejection_reason']?.toString();
-    final url = req['attachment_url']?.toString();
+    final isHourly = req.isHourly;
+    final start = req.startDate;
+    final end = req.endDate;
+    final reason = req.reason;
+    final rejection = req.rejectionReason;
+    final url = req.attachmentUrl;
     final period = isHourly
-        ? '${Fmt.date(start)} · ${Fmt.timeOfDay(req['start_hour']?.toString())} - ${Fmt.timeOfDay(req['end_hour']?.toString())}'
-        : (start != null && end != null && Fmt.date(start) == Fmt.date(end))
+        ? '${Fmt.date(start)} · ${Fmt.timeOfDay(req.startHour)} - ${Fmt.timeOfDay(req.endHour)}'
+        : Fmt.date(start) == Fmt.date(end)
         ? Fmt.dateWithDay(start)
         : '${Fmt.date(start)} إلى ${Fmt.date(end)}';
 
@@ -111,7 +112,7 @@ class LeaveCard extends StatelessWidget {
                   ],
                 ),
               ),
-              StatusBadge.request(req['status']?.toString()),
+              StatusBadge.request(req.status),
             ],
           ),
           if (reason != null && reason.isNotEmpty) ...[
@@ -139,8 +140,8 @@ class LeaveCard extends StatelessWidget {
           const SizedBox(height: AppSpace.xs),
           Row(
             children: [
-              Expanded(child: Text('قُدّم ${Fmt.relative(DateTime.tryParse(req['created_at']?.toString() ?? ''))}', style: AppText.overline)),
-              if (req['status'] == 'pending' && onCancel != null)
+              Expanded(child: Text('قُدّم ${Fmt.relative(req.createdAt)}', style: AppText.overline)),
+              if (req.status == 'pending' && onCancel != null)
                 AppButton.ghost(
                   label: 'إلغاء الطلب',
                   icon: Icons.close_rounded,

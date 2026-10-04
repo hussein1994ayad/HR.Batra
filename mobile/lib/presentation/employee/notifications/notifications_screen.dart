@@ -5,6 +5,7 @@
 
 import 'package:flutter/material.dart';
 
+import '../../../core/models/models.dart';
 import '../../../core/services/supabase_service.dart';
 import '../../../core/utils/app_log.dart';
 import '../../../data/repositories/notification_repository.dart';
@@ -19,7 +20,7 @@ class NotificationsScreen extends StatefulWidget {
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
   final NotificationRepository _repo = NotificationRepository();
-  List<Map<String, dynamic>> _notifications = [];
+  List<NotificationModel> _notifications = [];
   bool _isLoading = true;
   bool _hasError = false;
 
@@ -44,10 +45,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         _hasError = false;
       });
 
-      final unreadIds = _notifications
-          .where((n) => !((n['is_read'] ?? false) as bool))
-          .map((n) => n['id'] as String)
-          .toList();
+      final unreadIds = _notifications.where((n) => !n.isRead).map((n) => n.id).toList();
 
       if (unreadIds.isNotEmpty) {
         await _repo.markRead(unreadIds);
@@ -89,7 +87,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       String? group;
       var i = 0;
       for (final n in _notifications) {
-        final created = DateTime.tryParse(n['created_at']?.toString() ?? '')?.toLocal();
+        final created = n.createdAt;
         final g = _groupOf(created);
         if (g != group) {
           content.add(SectionHeader(g, padding: EdgeInsets.only(top: group == null ? 0 : AppSpace.lg, bottom: AppSpace.sm)));
@@ -100,17 +98,17 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           child: FadeSlideIn(
             index: i++,
             child: _NotificationCard(
-              type: n['type']?.toString() ?? 'system',
-              title: n['title']?.toString() ?? 'تنبيه',
-              body: n['body']?.toString() ?? '',
-              isRead: n['is_read'] as bool? ?? false,
+              type: n.type,
+              title: n.title,
+              body: n.body,
+              isRead: n.isRead,
               createdAt: created,
             ),
           ),
         ));
       }
     }
-    final unread = _notifications.where((n) => n['is_read'] != true).length;
+    final unread = _notifications.where((n) => !n.isRead).length;
     return AppPage(
       title: 'الإشعارات',
       subtitle: unread > 0 ? '$unread جديدة' : null,

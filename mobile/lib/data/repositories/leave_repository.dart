@@ -8,6 +8,7 @@ import 'dart:io';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../core/models/models.dart';
 import '../../core/services/file_upload_service.dart';
 import '../../core/services/supabase_service.dart';
 
@@ -18,9 +19,9 @@ class LeaveRepository {
   /// السنوية والمرضية لهذه السنة، والزمنيات لهذا الشهر.
   Future<dynamic> fetchBalance() => _db.rpc<dynamic>('get_leave_balance');
 
-  Future<List<Map<String, dynamic>>> fetchMyRequests(String userId) async {
+  Future<List<LeaveRequestModel>> fetchMyRequests(String userId) async {
     final data = await _db.from('leave_requests').select().eq('employee_id', userId).order('created_at', ascending: false);
-    return List<Map<String, dynamic>>.from(data);
+    return rowsOf(data).map(LeaveRequestModel.fromMap).toList();
   }
 
   /// صف إعداد leave_policy (قيمته فيها active_types).

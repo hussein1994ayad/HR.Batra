@@ -28,7 +28,8 @@ class NotificationModel {
   factory NotificationModel.fromMap(JsonRow map) => NotificationModel(
         id: map.str('id') ?? '',
         employeeId: map.str('employee_id') ?? '',
-        title: map.str('title') ?? '',
+        // العنوان الافتراضي هو اللي تعرضه شاشة الإشعارات
+        title: map.str('title') ?? 'تنبيه',
         body: map.str('body') ?? '',
         type: map.str('type') ?? 'system',
         isRead: map.boolean('is_read') ?? false,

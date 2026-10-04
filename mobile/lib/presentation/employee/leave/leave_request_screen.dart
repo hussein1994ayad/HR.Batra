@@ -13,6 +13,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../../core/models/models.dart';
 import '../../../core/services/supabase_service.dart';
 import '../../../core/utils/app_log.dart';
 import '../../../core/utils/error_text.dart';
@@ -49,7 +50,7 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
   bool _historyError = false;
   String _historyFilter = 'all';
 
-  List<Map<String, dynamic>> _leaveHistory = [];
+  List<LeaveRequestModel> _leaveHistory = [];
 
   List<Map<String, String>> _leaveTypes = [
     {'id': 'annual', 'name': 'اعتيادية'},
@@ -254,7 +255,7 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
 
   @override
   Widget build(BuildContext context) {
-    final pending = _leaveHistory.where((r) => r['status'] == 'pending').length;
+    final pending = _leaveHistory.where((r) => r.status == 'pending').length;
     return Scaffold(
       backgroundColor: AppColors.bg,
       appBar: AppBar(
@@ -444,7 +445,7 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
         },
       );
     }
-    final items = _historyFilter == 'all' ? _leaveHistory : _leaveHistory.where((r) => r['status'] == _historyFilter).toList();
+    final items = _historyFilter == 'all' ? _leaveHistory : _leaveHistory.where((r) => r.status == _historyFilter).toList();
 
     return RefreshIndicator.adaptive(
       onRefresh: _loadHistory,
@@ -474,7 +475,7 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
                 child: FadeSlideIn(
                   index: i,
                   child: ContentWidth(
-                    child: LeaveCard(req: items[i], typeName: leaveTypeLabel(items[i]['leave_type'], _leaveTypes), onCancel: _cancelLeave),
+                    child: LeaveCard(req: items[i], typeName: leaveTypeLabel(items[i].leaveType, _leaveTypes), onCancel: _cancelLeave),
                   ),
                 ),
               ),
@@ -484,7 +485,7 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
   }
 
   /// إلغاء طلب إجازة ما زال قيد المراجعة (بعد القرار يُطلب من الإدارة).
-  Future<void> _cancelLeave(Map<String, dynamic> req) async {
+  Future<void> _cancelLeave(LeaveRequestModel req) async {
     final ok = await showAppConfirm(
       context,
       title: 'إلغاء طلب الإجازة؟',
@@ -494,7 +495,7 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
     );
     if (!ok || !mounted) return;
     try {
-      await _repo.cancelPending(req['id'] as String);
+      await _repo.cancelPending(req.id);
       if (!mounted) return;
       AppSnack.success(context, 'أُلغي طلب الإجازة');
       unawaited(_loadHistory());
