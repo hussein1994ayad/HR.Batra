@@ -4,6 +4,7 @@
 
 import type { Loan, LoanInstallment } from '@/lib/db-types';
 import { getLocalDateStr } from '@/lib/dates';
+import { baghdadToday } from '@/features/payroll/period';
 import type { EditLoanDraft, ScheduledInstallment } from './types';
 
 /**
@@ -153,4 +154,11 @@ export function previewPayment(loan: Loan, installmentId: string, amount: number
 
   rows.sort((a, b) => a.due_date.localeCompare(b.due_date));
   return { rows, remaining, error: null };
+}
+
+/** تاريخ أول قسط افتراضياً للسلفة المباشرة: يوم القطع (26) القادم بتوقيت بغداد. */
+export function nextCutoffDate(): string {
+  const [y, m, d] = baghdadToday().split('-').map(Number);
+  const [yy, mm] = d <= 26 ? [y, m] : m === 12 ? [y + 1, 1] : [y, m + 1];
+  return `${yy}-${String(mm).padStart(2, '0')}-26`;
 }

@@ -93,3 +93,16 @@
 - `types.ts`: `CompanySettings`, `SettingsData`. `logic.ts`: `DEFAULT_LEAVE_TYPES`, `PROTECTED_LEAVE_TYPES`, `WEEK_ORDER` (مع سبب كل ثابت).
 - متبقٍ خارج هذه النقطة: `HolidaysCard.tsx` (كان أصلاً بمجلد الميزة) فيه 5 استعلامات مباشرة.
 - فحص: `tsc` ✓، `lint` ✓، `vitest` 92 ✓، `build` ✓، `e2e` 27 ✓ (منها "saves settings").
+
+## Step 9 — صفحة السلف `loans/page.tsx` (النقطة 13)
+- `web/src/app/dashboard/loans/page.tsx`: من 698 إلى 80 سطر.
+- **أُنشئ** `web/src/features/loans/useLoans.ts`: كل حالة الصفحة وإجراءاتها (منقولة حرفياً) — الاعتماد، الرفض، التعديل،
+  الدفعة، التراجع، الحذف، التأجيل.
+- **أُنشئت** في `features/loans/components/`: `PendingLoanRequests`, `ApprovedLoansTable`, `ApprovalModal`,
+  `InstallmentScheduleModal`, `EditLoanModal`, `PaymentModal` (الـ JSX منقول بسكربت حسب الأسطر).
+- **إزالة تكرار:**
+  - أنواع `ApprovalDraft`/`EditDraft` المحلية كانت مطابقة لـ `features/loans/types.ts` → تُستعمل الموجودة؛ أُضيف `PayDraft` هناك.
+  - `byDueDate` المحلي = `sortInstallments` الموجود؛ وتقسيم الجارية/المكتملة = `splitLoansByCompletion` الموجود.
+  - `nextCutoffDay` صار `nextCutoffDate` في `features/loans/logic.ts`.
+  - حُذفت تحويلات `as unknown as DbLoan` (بعد الخطوة 4 صار النوعان نفس النوع).
+- فحص: `tsc` ✓، `lint` ✓، `vitest` 92 ✓، `build` ✓، `e2e` 27 ✓ (منها اختبارات السلف: الاعتماد، الدفعة، التعديل).
