@@ -40,95 +40,91 @@
 
 ```
 HR.Batra/
-├── mobile/                        ← مجلد Flutter الرئيسي
+├── mobile/                          ← تطبيق Flutter (Android + iOS)
 │   ├── lib/
-│   │   ├── main.dart              ← نقطة دخول التطبيق
-│   │   ├── firebase_options.dart  ← إعدادات Firebase (توليد تلقائي)
+│   │   ├── main.dart                ← نقطة دخول التطبيق
+│   │   ├── firebase_options.dart    ← إعدادات Firebase (توليد تلقائي)
 │   │   │
-│   │   ├── core/                  ← المنطق المشترك (لا شاشات هنا)
-│   │   │   ├── constants/
-│   │   │   │   └── constants.dart         ← ثوابت: URL، مفاتيح API، قيم افتراضية
-│   │   │   │
-│   │   │   ├── models/            ← نماذج البيانات (Data Models)
-│   │   │   │   ├── models.dart            ← استيراد مركزي (استخدم هذا فقط)
-│   │   │   │   ├── employee_model.dart    ← بيانات الموظف
-│   │   │   │   ├── attendance_model.dart  ← سجلات الدوام
-│   │   │   │   ├── branch_model.dart      ← بيانات الفرع
-│   │   │   │   ├── leave_request_model.dart ← طلبات الإجازة
-│   │   │   │   ├── loan_model.dart        ← طلبات السلفة
-│   │   │   │   └── notification_model.dart ← الإشعارات
-│   │   │   │
-│   │   │   ├── utils/             ← أدوات مساعدة
-│   │   │   │   ├── utils.dart             ← استيراد مركزي
-│   │   │   │   ├── date_utils.dart        ← تنسيق التواريخ والأوقات
-│   │   │   │   └── app_utils.dart         ← SnackBars، dialogs، formatters
-│   │   │   │
-│   │   │   ├── providers/         ← إدارة الحالة (Riverpod)
-│   │   │   │   ├── app_container.dart     ← يربط Riverpod بالخدمات
-│   │   │   │   └── auth_provider.dart     ← حالة تسجيل الدخول
-│   │   │   │
-│   │   │   ├── routes/
-│   │   │   │   └── app_router.dart        ← كل مسارات التنقل (GoRouter)
-│   │   │   │
-│   │   │   ├── services/          ← الخدمات الخلفية
-│   │   │   │   ├── supabase_service.dart      ← الاتصال بقاعدة البيانات
-│   │   │   │   ├── auth_service.dart          ← تسجيل الدخول والخروج
-│   │   │   │   ├── location_service.dart      ← GPS والسياج الجغرافي
-│   │   │   │   ├── notification_service.dart  ← الإشعارات (Firebase + Local)
-│   │   │   │   ├── attendance_sync_service.dart ← مزامنة الدوام أوفلاين
-│   │   │   │   ├── device_service.dart        ← معرف الجهاز (قفل الجهاز الواحد)
-│   │   │   │   ├── ota_service.dart           ← تحديثات تلقائية للتطبيق
-│   │   │   │   ├── pdf_export_service.dart    ← تصدير تقارير PDF
-│   │   │   │   ├── excel_export_service.dart  ← تصدير بيانات Excel
-│   │   │   │   ├── file_upload_service.dart   ← رفع الصور والملفات
-│   │   │   │   ├── image_compression_service.dart ← ضغط الصور قبل الرفع
-│   │   │   │   └── ios_region_monitor.dart    ← السياج الجغرافي لـ iOS
-│   │   │   │
-│   │   │   └── theme/
-│   │   │       └── app_theme.dart             ← الألوان والخطوط والستايل
+│   │   ├── core/                    ← المنطق المشترك (لا شاشات هنا)
+│   │   │   ├── constants/constants.dart   ← ثوابت وروابط وقيم افتراضية
+│   │   │   ├── design/              ← الألوان والمسافات والخطوط + Fmt (تنسيق التاريخ والمبالغ)
+│   │   │   ├── theme/app_theme.dart ← ثيم التطبيق (داكن فقط)
+│   │   │   ├── logic/               ← قواعد عمل بدون واجهة وقابلة للاختبار
+│   │   │   │   ├── attendance_rules.dart, attendance_report.dart, loan_rules.dart
+│   │   │   │   └── tracking_rules.dart, reminder_plan.dart
+│   │   │   ├── models/              ← نماذج البيانات + models.dart (استيراد مركزي)
+│   │   │   ├── providers/           ← Riverpod: app_container.dart، auth_provider.dart
+│   │   │   ├── routes/app_router.dart     ← كل مسارات التنقل (GoRouter)
+│   │   │   ├── services/            ← الخدمات (بنية تحتية، مو شاشات)
+│   │   │   │   ├── supabase_service.dart, auth_service.dart, device_service.dart
+│   │   │   │   ├── attendance_sync_service.dart ← البصمة + طابورها بدون إنترنت
+│   │   │   │   ├── location_service.dart        ← تشغيل/إيقاف التتبع والخدمة الخلفية
+│   │   │   │   ├── location/                    ← أجزاء التتبع:
+│   │   │   │   │   ├── offline_json_queue.dart  ← طابور محلي واحد لكل الأنواع
+│   │   │   │   │   ├── geofence_monitor.dart, branch_presence_monitor.dart
+│   │   │   │   │   └── tracking_schedule.dart, location_uploader.dart
+│   │   │   │   ├── notification_service.dart, schedule_service.dart, ios_region_monitor.dart
+│   │   │   │   ├── file_upload_service.dart, image_compression_service.dart, storage_links.dart
+│   │   │   │   └── pdf_export_service.dart, excel_export_service.dart, ota_service.dart, share_helper.dart
+│   │   │   └── utils/               ← app_log.dart (السجلات)، arabic_format.dart (البحث العربي)،
+│   │   │                              error_text.dart، input_formatters.dart، json_map.dart
 │   │   │
-│   │   └── presentation/          ← الشاشات وعناصر الواجهة
-│   │       ├── auth/              ← شاشات المصادقة
-│   │       │   ├── login_screen.dart
-│   │       │   └── change_password_screen.dart
-│   │       │
-│   │       ├── employee/          ← شاشات الموظف والأدمن
-│   │       │   ├── main_layout.dart           ← الهيكل العام (شريط التبويب السفلي)
-│   │       │   ├── home_screen.dart           ← الشاشة الرئيسية
-│   │       │   ├── attendance_screen.dart     ← تسجيل الدوام بالـ GPS
-│   │       │   ├── leave_request_screen.dart  ← طلبات الإجازة
-│   │       │   ├── loan_request_screen.dart   ← طلبات السلفة
-│   │       │   ├── payslips_screen.dart       ← كشوف الرواتب
-│   │       │   ├── notifications_screen.dart  ← الإشعارات
-│   │       │   ├── settings_screen.dart       ← الإعدادات والملف الشخصي
-│   │       │   ├── directory_screen.dart      ← دليل الموظفين
-│   │       │   ├── admin_dashboard_screen.dart     ← لوحة الأدمن
-│   │       │   ├── admin_live_tracking_screen.dart ← التتبع المباشر للموظفين
-│   │       │   ├── admin_loans/admin_loans_screen.dart ← إدارة السلف
-│   │       │   ├── employee_management_screen.dart ← إدارة الموظفين
-│   │       │   ├── branch_management_screen.dart   ← إدارة الفروع
-│   │       │   ├── branch_schedule_screen.dart     ← جداول الدوام
-│   │       │   ├── attendance_report_screen.dart   ← تقارير الدوام
-│   │       │   ├── announcement_screen.dart        ← الإعلانات
-│   │       │   ├── trash_screen.dart               ← سلة المهملات
-│   │       │   └── storage_stats_screen.dart       ← إحصاءات التخزين
-│   │       │
-│   │       └── shared/            ← عناصر مشتركة بين الشاشات
-│   │           └── widgets/
-│   │               ├── glass_container.dart   ← حاوية بتأثير الزجاج
-│   │               ├── glass_background.dart  ← خلفية بتأثير الزجاج
-│   │               ├── bottom_nav_bar.dart    ← شريط التبويب السفلي
-│   │               ├── offline_banner.dart    ← شريط "أنت أوفلاين"
-│   │               └── skeleton_loader.dart   ← تحميل هيكلي (Shimmer)
+│   │   ├── data/
+│   │   │   └── repositories/        ← كل استعلامات Supabase للشاشات (الشاشات ما تكلم القاعدة مباشرة)
+│   │   │       ├── home_ / attendance_ / leave_ / loan_ / payslips_ / profile_repository.dart
+│   │   │       ├── notification_ / directory_ / announcement_repository.dart
+│   │   │       ├── admin_dashboard_ / admin_actions_ / employee_admin_ / branch_repository.dart
+│   │   │       ├── attendance_report_ / live_tracking_ / storage_repository.dart
+│   │   │       └── role_repository.dart ← دور المستخدم (حماية شاشات الإدارة)
+│   │   │
+│   │   └── presentation/            ← الواجهة: مجلد لكل شاشة = <screen>_screen.dart + widgets/ + <x>_logic.dart
+│   │       ├── auth/                ← تسجيل الدخول وتغيير كلمة السر
+│   │       ├── employee/            ← شاشات الموظف
+│   │       │   ├── main_layout.dart ← الهيكل العام (شريط التبويب السفلي)
+│   │       │   ├── home/            ← الرئيسية
+│   │       │   ├── attendance/      ← البصمة + سجل الدوام
+│   │       │   ├── leave/           ← الإجازات
+│   │       │   ├── loan/            ← طلب السلفة
+│   │       │   ├── payslips/        ← كشوف الرواتب
+│   │       │   ├── notifications/   ← الإشعارات
+│   │       │   ├── directory/       ← دليل الموظفين
+│   │       │   ├── announcements/   ← لوحة التعاميم
+│   │       │   └── settings/        ← الإعدادات والملف الشخصي
+│   │       ├── admin/               ← شاشات الإدارة
+│   │       │   ├── admin_dashboard/ ← لوحة الإدارة (قرارات، إجازات، سلف، أجهزة، أمان)
+│   │       │   ├── admin_loans/     ← سلف الموظفين
+│   │       │   ├── employee_management/ ← الموظفون + الوثائق + نموذج الإضافة
+│   │       │   ├── branches/        ← الأفرع ومواقعها وأوقات دوامها
+│   │       │   ├── attendance_report/ ← تقرير الحضور اليومي
+│   │       │   ├── live_tracking/   ← التتبع الحي
+│   │       │   ├── announcements/   ← نشر تعميم
+│   │       │   └── storage/         ← سلة المحذوفات وإحصائيات التخزين
+│   │       └── shared/
+│   │           ├── ui/              ← مكتبة المكوّنات الموحّدة (ui.dart) — التفاصيل بـ mobile/DESIGN.md
+│   │           └── widgets/         ← bottom_nav_bar، offline_banner، info_row
 │   │
-│   ├── assets/
-│   │   ├── sounds/    ← أصوات (نغمة البصمة، إلخ)
-│   │   └── fonts/     ← خط Cairo
-│   │
-│   ├── pubspec.yaml   ← المكتبات المستخدمة وإعدادات المشروع
-│   └── BUILD_APK.bat  ← سكريبت بناء الـ APK (شغّله على Windows)
+│   ├── test/                        ← اختبارات الوحدة والشاشات (flutter test)
+│   ├── integration_test/            ← اختبارات على المحاكي (iOS CI)
+│   ├── assets/                      ← google_fonts (Cairo)، fonts، images، sounds
+│   └── pubspec.yaml
 │
-└── DEVELOPER_GUIDE.md ← هذا الملف 😊
+├── web/                             ← لوحة الإدارة (Next.js، تصدير ثابت)
+│   └── src/
+│       ├── app/dashboard/<page>/page.tsx ← الصفحات: تركيب فقط
+│       ├── features/<x>/            ← api.ts (Supabase) + logic.ts (منطق نقي) + types.ts + useX.ts + components/
+│       │                              (overview, shell, employees, payroll, loans, tracking, settings, storage, geofences)
+│       ├── components/ui/           ← مكوّنات الواجهة المشتركة
+│       └── lib/                     ← db-types.ts، dates.ts، schedules.ts، supabase.ts …
+│
+├── supabase/
+│   ├── migrations/                  ← لا تعدّل ملف مطبّق أبداً؛ أضف ملف جديد
+│   ├── functions/                   ← Edge Functions: push-notification، daily-cleanup
+│   └── tests/                       ← اختبارات قاعدة البيانات (PGlite: npm test)
+│
+├── BUSINESS_RULES.md                ← قواعد العمل ومصادرها
+├── CHANGES.md                       ← سجل خطوات إعادة التنظيم
+├── BUILD_APK.bat                    ← بناء الـ APK على Windows
+└── DEVELOPER_GUIDE.md               ← هذا الملف 😊
 ```
 
 ---
@@ -397,8 +393,10 @@ class EquipmentRequestModel {
 export 'equipment_request_model.dart';
 ```
 
-**الخطوة 4:** أنشئ الشاشة
-في `lib/presentation/employee/equipment_request_screen.dart`
+**الخطوة 4:** أنشئ المستودع والشاشة
+- الاستعلامات في `lib/data/repositories/equipment_repository.dart` (نفس نمط `LeaveRepository`).
+- الشاشة في `lib/presentation/employee/equipment/equipment_request_screen.dart`، والأجزاء في `widgets/`،
+  وأي حساب بدون واجهة في `equipment_logic.dart` مع اختبار بـ `test/unit/`.
 
 **الخطوة 5:** أضف المسار في `lib/core/routes/app_router.dart`
 ```dart

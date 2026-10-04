@@ -124,7 +124,7 @@
 
 ## Step 11 — خدمة الموقع `location_service.dart` (النقطتان 1 و 2)
 - `mobile/lib/core/services/location_service.dart`: من 1,123 إلى 503 سطر — نقطة الدخول (البدء/الإيقاف، خدمة الخلفية،
-  تدفق الموقع، كشف الموقع الوهمي، البطارية). نفس الدوال العامة ونفس `@pragma(\'vm:entry-point\')`.
+  تدفق الموقع، كشف الموقع الوهمي، البطارية). نفس الدوال العامة ونفس `@pragma('vm:entry-point')`.
 - **أُنشئ** `mobile/lib/core/services/location/`:
   - `offline_json_queue.dart` — **طابور أوفلاين واحد** بدل 3 نسخ مكررة (النقاط، أحداث الفروع، أحداث السياج) — النقطة 2.
     نفس أسماء الملفات على الجهاز (`offline_locations.json`, `branch_events_offline.json`, `geofence_events_offline.json`)
@@ -282,3 +282,12 @@
 - الفائدة: مكان واحد لو احتجنا لاحقاً أداة سجلات أو إرسال الأخطاء لخدمة خارجية. السلوك الحالي نفسه بالضبط.
 - لم يُوحَّد شكل الرسائل (إيموجي/عربي/إنگليزي) حتى لا يتغير أي إخراج — قرار مقصود.
 - فحص: `dart analyze` ✓، `flutter test` 565 ✓.
+
+## Step 26 — التوثيق النهائي
+- `DEVELOPER_GUIDE.md`: **أُعيدت كتابة شجرة الملفات** حسب الواقع (core/logic، core/services/location، data/repositories،
+  مجلد لكل شاشة تحت presentation/employee و presentation/admin، الويب features/، supabase/) — كانت تذكر ملفات محذوفة من زمان
+  (glass_container، date_utils…). وخطوة "إضافة ميزة جديدة" صارت تبدأ بالمستودع ثم الشاشة ثم المنطق مع اختبار.
+- `BUSINESS_RULES.md`: قرار أن الشاشات لا تكلّم Supabase مباشرة، وقرار **تأجيل النقطة 5** (تحويل `Map` إلى النماذج) مع السبب:
+  القيم الافتراضية بالنماذج تختلف عن المعروض، فالتحويل يغيّر العرض ويخالف قاعدة "نفس السلوك".
+- `CHANGES.md`: تصحيح كتابة `@pragma('vm:entry-point')` بالخطوة 11.
+- لا تغيير بالكود.
