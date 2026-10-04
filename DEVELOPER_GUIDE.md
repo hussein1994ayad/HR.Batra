@@ -104,7 +104,7 @@ HR.Batra/
 │   │       │   ├── directory_screen.dart      ← دليل الموظفين
 │   │       │   ├── admin_dashboard_screen.dart     ← لوحة الأدمن
 │   │       │   ├── admin_live_tracking_screen.dart ← التتبع المباشر للموظفين
-│   │       │   ├── admin_loans_management_screen.dart ← إدارة السلف
+│   │       │   ├── admin_loans/admin_loans_screen.dart ← إدارة السلف
 │   │       │   ├── employee_management_screen.dart ← إدارة الموظفين
 │   │       │   ├── branch_management_screen.dart   ← إدارة الفروع
 │   │       │   ├── branch_schedule_screen.dart     ← جداول الدوام
@@ -356,7 +356,7 @@ bool isActive = LocationService.isTracking;
 | إدارة الموظفين | `employee_management_screen.dart` | إضافة/تعديل/تعطيل الموظفين |
 | إدارة الفروع | `branch_management_screen.dart` | إضافة/تعديل الفروع والسياج الجغرافي |
 | تقارير الدوام | `attendance_report_screen.dart` | تصدير تقارير الدوام Excel/PDF |
-| إدارة السلف | `admin_loans_management_screen.dart` | قبول/رفض طلبات السلفة وإدارة الأقساط |
+| إدارة السلف | `admin_loans/admin_loans_screen.dart` | قبول/رفض طلبات السلفة وإدارة الأقساط |
 | جداول الدوام | `branch_schedule_screen.dart` | ضبط أوقات الدوام لكل فرع |
 | الإعلانات | `announcement_screen.dart` | نشر إعلانات للموظفين |
 

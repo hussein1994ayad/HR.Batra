@@ -15,7 +15,9 @@
 
 class AppConstants {
   // ------------------------------------------------------------------------
-  // Supabase — يفضّل تمريرها عبر --dart-define في CI
+  // Supabase — يفضّل تمريرها عبر --dart-define في CI. القيم الافتراضية هي نفس قيم
+  // web/src/lib/supabase.ts (المشروع الحي)؛ المفتاح publishable عام بطبيعته والحماية من RLS،
+  // ويُستعمل عند البناء بدون --dart-define (مثل أمر بناء الـ APK المحلي) فلا يُحذف.
   // ------------------------------------------------------------------------
   static const String supabaseUrl = String.fromEnvironment(
     'SUPABASE_URL',

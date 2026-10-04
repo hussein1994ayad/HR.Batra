@@ -49,6 +49,7 @@ class LocationService {
           initialNotificationTitle: 'HR Pro',
           initialNotificationContent: 'مزامنة بيانات الدوام',
         ),
+        // iOS: إعداد شكلي فقط — النظام يرفض مهمة خلفية المكتبة، والتتبع من LocationMonitorIOS.swift
         iosConfiguration: IosConfiguration(
           autoStart: false,
           onForeground: onForeground,
@@ -188,7 +189,8 @@ class LocationService {
       // 2. التقاط ورفع موقع أولي فوري للتسجيل اللحظي
       unawaited(_captureInstantLocation(userId));
 
-      // 3. تشغيل خدمة الخلفية للأندرويد والآيفون
+      // 3. خدمة الخلفية: فعلياً لأندرويد (Foreground Service). على الآيفون iOS يرفض تسجيل مهمتها
+      // ("Registration rejected") فالتتبع هناك من LocationMonitorIOS.swift — الخطوة التالية.
       try {
         final service = FlutterBackgroundService();
         final isRunning = await service.isRunning();
