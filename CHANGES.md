@@ -368,3 +368,9 @@
 - `DirectoryRepository.fetchDirectory`، `filterDirectory`، `directoryBranchOptions`، والشاشة (القائمة وبطاقة الموظف) تستعمل الحقول.
 - ترتيب `models.dart` أبجدياً.
 - النتيجة: لقطات `11_directory` و`11c_directory_profile` **مطابقة حرفياً**؛ اختبارات البحث العربي تمر.
+
+## Step 35 — النقطة 5 (6): سلة المحذوفات بالنموذج
+- **أُنشئ** `mobile/lib/core/models/deleted_file_model.dart`: `DeletedFileModel` (اسم من حذف أو «غير معروف»، موعد الحذف النهائي
+  بالتوقيت المحلي، الحجم `num?` حتى يبقى «غير محدد» إذا ماكو حجم) + `fileName`.
+- `StorageRepository.fetchTrash` ترجعه، وشاشة السلة (الكارت والاستعادة والحذف النهائي) تستعمل الحقول.
+- النتيجة: لقطة `20_trash` **مطابقة حرفياً**.

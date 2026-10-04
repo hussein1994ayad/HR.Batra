@@ -5,6 +5,7 @@
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/models/models.dart';
 import '../../core/services/supabase_service.dart';
 
 class StorageRepository {
@@ -12,10 +13,10 @@ class StorageRepository {
   final SupabaseClient _db;
 
   /// الملفات بالسلة (غير المستعادة) مع اسم الموظف، الأحدث أولاً.
-  Future<List<Map<String, dynamic>>> fetchTrash() async {
+  Future<List<DeletedFileModel>> fetchTrash() async {
     final List<dynamic> data =
         await _db.from('deleted_files').select('*, employees(full_name)').isFilter('restored_at', null).order('deleted_at', ascending: false);
-    return List<Map<String, dynamic>>.from(data);
+    return List<Map<String, dynamic>>.from(data).map(DeletedFileModel.fromMap).toList();
   }
 
   Future<void> restore(String fileId) async {

@@ -6,6 +6,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../core/models/models.dart';
 import '../../../core/utils/app_log.dart';
 import '../../../data/repositories/storage_repository.dart';
 import '../../shared/ui/ui.dart';
@@ -22,7 +23,7 @@ class _TrashScreenState extends State<TrashScreen> {
   final StorageRepository _repo = StorageRepository();
   bool _isLoading = true;
   bool _hasError = false;
-  List<Map<String, dynamic>> _deletedFiles = [];
+  List<DeletedFileModel> _deletedFiles = [];
 
   @override
   void initState() {
@@ -65,8 +66,8 @@ class _TrashScreenState extends State<TrashScreen> {
   }
 
   // استعادة ملف محذوف (وسمه كمسترجع)
-  Future<void> _restoreFile(Map<String, dynamic> fileRow) async {
-    final String fileId = fileRow['id'] as String;
+  Future<void> _restoreFile(DeletedFileModel fileRow) async {
+    final String fileId = fileRow.id;
 
     setState(() => _isLoading = true);
     try {
@@ -83,10 +84,10 @@ class _TrashScreenState extends State<TrashScreen> {
   }
 
   // حذف ملف نهائياً من التخزين ومن السجل
-  Future<void> _permanentDeleteFile(Map<String, dynamic> fileRow) async {
-    final String fileId = fileRow['id'] as String;
-    final String filePath = fileRow['file_path'] as String;
-    final String fileType = fileRow['file_type'] as String;
+  Future<void> _permanentDeleteFile(DeletedFileModel fileRow) async {
+    final String fileId = fileRow.id;
+    final String filePath = fileRow.filePath!;
+    final String fileType = fileRow.fileType!;
     final String bucket = bucketForFileType(fileType);
 
     setState(() => _isLoading = true);
@@ -111,7 +112,7 @@ class _TrashScreenState extends State<TrashScreen> {
     return '${(b / (1024 * 1024)).toStringAsFixed(1)} MB';
   }
 
-  Future<void> _confirmDelete(Map<String, dynamic> file) async {
+  Future<void> _confirmDelete(DeletedFileModel file) async {
     final ok = await showAppConfirm(
       context,
       title: 'حذف نهائي؟',
@@ -159,13 +160,12 @@ class _TrashScreenState extends State<TrashScreen> {
     );
   }
 
-  Widget _fileCard(Map<String, dynamic> file) {
-    final type = (file['file_type'] ?? '').toString();
-    final filename = (file['file_path'] ?? '').toString().split('/').last;
-    final employees = file['employees'];
-    final deletedBy = employees is Map ? (employees['full_name'] ?? 'غير معروف').toString() : 'غير معروف';
-    final deletedAt = DateTime.tryParse(file['deleted_at']?.toString() ?? '');
-    final expiry = DateTime.tryParse(file['scheduled_deletion_date']?.toString() ?? '')?.toLocal();
+  Widget _fileCard(DeletedFileModel file) {
+    final type = file.fileType ?? '';
+    final filename = file.fileName;
+    final deletedBy = file.deletedByName;
+    final deletedAt = file.deletedAt;
+    final expiry = file.scheduledDeletion;
     final daysLeft = expiry?.difference(DateTime.now()).inDays;
     final icon = switch (type) {
       'avatar' => Icons.person_rounded,
@@ -199,7 +199,7 @@ class _TrashScreenState extends State<TrashScreen> {
           const SizedBox(height: AppSpace.sm),
           KeyValueRow('حذفه', deletedBy),
           KeyValueRow('وقت الحذف', deletedAt == null ? '—' : Fmt.relative(deletedAt)),
-          KeyValueRow('الحجم', _formatBytes(file['file_size_bytes'])),
+          KeyValueRow('الحجم', _formatBytes(file.fileSizeBytes)),
           const SizedBox(height: AppSpace.sm),
           Row(
             children: [
