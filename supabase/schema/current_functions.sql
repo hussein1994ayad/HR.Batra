@@ -47,7 +47,7 @@
 --   get_pending_payroll_decisions()  ←  20260929000400_audit_fixes.sql
 --   get_storage_stats()  ←  20260924000000_lock_down_rpc_views_and_notifications.sql
 --   hard_delete_employee(p_employee_id uuid)  ←  20260701000000_fix_rpcs_and_functions.sql
---   invoke_push_notification()  ←  (خارج migrations)
+--   invoke_push_notification()  ←  20261005000000_capture_dashboard_objects.sql
 --   is_admin()  ←  20260520000001_indexes_rls.sql
 --   is_manager()  ←  20260520000001_indexes_rls.sql
 --   keep_payroll_policy_keys()  ←  20260929000000_payroll_engine.sql
@@ -107,8 +107,8 @@
 --   set_payroll_policy(p_cutoff_day integer, p_payment_day integer, p_overtime_enabled boolean, p_overtime_multiplier numeric, p_overtime_min_minutes integer)  ←  20260929000000_payroll_engine.sql
 --   set_termination_date()  ←  20260929000000_payroll_engine.sql
 --   strip_plain_password()  ←  20260928000000_security_hardening_round2.sql
---   sync_geofence_coordinates()  ←  (خارج migrations)
---   sync_geofences_to_branches()  ←  (خارج migrations)
+--   sync_geofence_coordinates()  ←  20261005000000_capture_dashboard_objects.sql
+--   sync_geofences_to_branches()  ←  20261005000000_capture_dashboard_objects.sql
 --   sync_payroll_day(p_employee_id uuid, p_date date)  ←  20261002000000_full_qa_fixes.sql
 --   sync_payroll_manual(p_bd_id uuid)  ←  20260929000000_payroll_engine.sql
 --   sync_payroll_period(p_month text, p_employee_id uuid)  ←  20260929000000_payroll_engine.sql
@@ -1669,7 +1669,7 @@ END;
 $function$;
 
 -- ---------------------------------------------------------------------
--- invoke_push_notification()  — آخر تعريف: (خارج migrations)
+-- invoke_push_notification()  — آخر تعريف: 20261005000000_capture_dashboard_objects.sql
 -- ---------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.invoke_push_notification()
  RETURNS trigger
@@ -3788,7 +3788,7 @@ END;
 $function$;
 
 -- ---------------------------------------------------------------------
--- sync_geofence_coordinates()  — آخر تعريف: (خارج migrations)
+-- sync_geofence_coordinates()  — آخر تعريف: 20261005000000_capture_dashboard_objects.sql
 -- ---------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.sync_geofence_coordinates()
  RETURNS trigger
@@ -3824,7 +3824,7 @@ END;
 $function$;
 
 -- ---------------------------------------------------------------------
--- sync_geofences_to_branches()  — آخر تعريف: (خارج migrations)
+-- sync_geofences_to_branches()  — آخر تعريف: 20261005000000_capture_dashboard_objects.sql
 -- ---------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.sync_geofences_to_branches()
  RETURNS trigger
