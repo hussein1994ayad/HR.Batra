@@ -52,7 +52,8 @@ HR.Batra/
 │   │   │   ├── logic/               ← قواعد عمل بدون واجهة وقابلة للاختبار
 │   │   │   │   ├── attendance_rules.dart, attendance_report.dart, loan_rules.dart
 │   │   │   │   └── tracking_rules.dart, reminder_plan.dart
-│   │   │   ├── models/              ← نماذج البيانات + models.dart (استيراد مركزي)
+│   │   │   ├── models/              ← نماذج البيانات + models.dart (استيراد مركزي): الإجازة، السلفة، الكشف، الإشعار،
+│   │   │   │                          التعميم والمجازون، الدليل، الفرع وجدوله، الموظف، السلة... (fromMap يطابق ما تعرضه الشاشة)
 │   │   │   ├── providers/           ← Riverpod: app_container.dart، auth_provider.dart
 │   │   │   ├── routes/app_router.dart     ← كل مسارات التنقل (GoRouter)
 │   │   │   ├── services/            ← الخدمات (بنية تحتية، مو شاشات)
@@ -65,7 +66,8 @@ HR.Batra/
 │   │   │   │   │   └── tracking_schedule.dart, location_uploader.dart
 │   │   │   │   ├── notification_service.dart, schedule_service.dart, ios_region_monitor.dart
 │   │   │   │   ├── file_upload_service.dart, image_compression_service.dart, storage_links.dart
-│   │   │   │   └── pdf_export_service.dart, excel_export_service.dart, ota_service.dart, share_helper.dart
+│   │   │   │   ├── excel_export_service.dart + excel/ ← كشف السلفة وتقرير الحضور
+│   │   │   │   └── pdf_export_service.dart, ota_service.dart, share_helper.dart
 │   │   │   └── utils/               ← app_log.dart (السجلات)، arabic_format.dart (البحث العربي)،
 │   │   │                              error_text.dart، input_formatters.dart، json_map.dart
 │   │   │
@@ -104,6 +106,7 @@ HR.Batra/
 │   │           └── widgets/         ← bottom_nav_bar، offline_banner، info_row
 │   │
 │   ├── test/                        ← اختبارات الوحدة والشاشات (flutter test)
+│   │   └── goldens/text/            ← لقطات نصية لكل شاشة: أي تغيير بالعرض يُفشل الاختبار
 │   ├── integration_test/            ← اختبارات على المحاكي (iOS CI)
 │   ├── assets/                      ← google_fonts (Cairo)، fonts، images، sounds
 │   └── pubspec.yaml
@@ -112,7 +115,7 @@ HR.Batra/
 │   └── src/
 │       ├── app/dashboard/<page>/page.tsx ← الصفحات: تركيب فقط
 │       ├── features/<x>/            ← api.ts (Supabase) + logic.ts (منطق نقي) + types.ts + useX.ts + components/
-│       │                              (overview, shell, employees, payroll, loans, tracking, settings, storage, geofences)
+│       │                              (overview, shell, auth, employees, payroll, loans, leaves, tracking, settings, storage, geofences)
 │       ├── components/ui/           ← مكوّنات الواجهة المشتركة
 │       └── lib/                     ← db-types.ts، dates.ts، schedules.ts، supabase.ts …
 │
@@ -510,3 +513,14 @@ AppCard(child: ...), AppButton(label: ..., onPressed: ...), AppSnack.success(con
 ---
 
 *آخر تحديث: أيلول 2026 — HR Pro 2.0.0 (التصميم الجديد)*
+
+---
+
+## حماية العرض عند إعادة التنظيم (لقطات نصية)
+
+`mobile/test/screens/text_snapshot_test.dart` يشغّل كل الشاشات (وبعض التبويبات والنوافذ) على الخادم الوهمي ويقارن **كل نص ظاهر**
+بملفات `mobile/test/goldens/text/`. أي تغيير بالعرض — حتى حرف — يُفشل الاختبار. الأرقام تُكتب `#` حتى ما تتأثر بالساعة.
+
+- تغيير غير مقصود؟ صلّح الكود.
+- تغيير مقصود بالواجهة؟ حدّث اللقطات:
+  `flutter test test/screens/text_snapshot_test.dart --dart-define=UPDATE_TEXT=true`
