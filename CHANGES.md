@@ -138,3 +138,13 @@
 - **أُضيف فحص** `mobile/test/unit/location_split_test.dart` (الطابور، المضلع، نافذة الوقت)، واختبار على المحاكي
   يشغّل التتبع ويوقفه (`integration_test/app_launch_test.dart`).
 - فحص: `dart analyze` ✓، `flutter test` 523 ✓.
+
+## Step 12 — مجلد شاشات الإدارة (النقطة 7)
+- **نُقلت** (بـ `git mv` حتى يبقى تاريخ كل ملف) من `mobile/lib/presentation/employee/` إلى `mobile/lib/presentation/admin/`:
+  `admin_dashboard/`, `admin_loans/`, `admin_live_tracking_screen.dart`, `employee_management/`, `employee_management_screen.dart`,
+  `branch_management_screen.dart`, `branch_schedule_screen.dart`, `announcement_screen.dart`, `attendance_report_screen.dart`,
+  `trash_screen.dart`, `storage_stats_screen.dart` — كلها مسارات `/admin/...` بالراوتر.
+- **حُدّثت الاستيرادات فقط حيث تغيّر المسار:** `app_router.dart`, `test/support/screens.dart`, `test/screens/sheets_test.dart`,
+  `test/unit/payroll_engine_client_test.dart` (+ ترتيب الاستيرادات أبجدياً).
+- `presentation/employee/` صار فيه شاشات الموظف فقط. لا تغيير بالكود نفسه.
+- فحص: `dart analyze` ✓، `flutter test` 523 ✓.

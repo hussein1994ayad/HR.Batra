@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hr_pro/core/models/models.dart';
 import 'package:hr_pro/core/theme/app_theme.dart';
 import 'package:hr_pro/data/repositories/admin_dashboard_repository.dart';
-import 'package:hr_pro/presentation/employee/admin_dashboard/widgets/decision_card.dart';
+import 'package:hr_pro/presentation/admin/admin_dashboard/widgets/decision_card.dart';
 import 'package:hr_pro/presentation/employee/payslips_screen.dart';
 
 void main() {
