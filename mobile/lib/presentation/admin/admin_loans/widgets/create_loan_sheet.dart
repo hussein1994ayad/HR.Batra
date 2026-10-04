@@ -105,7 +105,7 @@ class _CreateLoanSheetState extends State<_CreateLoanSheet> {
     final employee = widget.employees.where((e) => e.id == _employeeId).firstOrNull;
     final amount = parseThousands(_amount.text);
     final months = int.tryParse(_months.text.trim()) ?? 0;
-    final installment = amount > 0 && months > 0 ? (amount / months).ceilToDouble() : 0.0;
+    final (:installment, last: lastInstallment) = installmentPlan(amount, months);
     final salary = employee?.monthlySalary ?? 0;
     final overHalf = salary > 0 && installment > salary * kLoanSalaryWarningRatio;
 
@@ -167,8 +167,9 @@ class _CreateLoanSheetState extends State<_CreateLoanSheet> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   KeyValueRow('القسط الشهري', installment > 0 ? Fmt.iqd(installment) : '—', bold: true, valueColor: AppColors.brand),
+                  if (installment > 0 && lastInstallment != installment) KeyValueRow('آخر قسط', Fmt.iqd(lastInstallment)),
                   if (overHalf)
-                    Text('القسط أكثر من نصف الراتب — النظام سيرفض السلفة. زِد عدد الأشهر.', style: AppText.caption.copyWith(color: AppColors.warning)),
+                    Text('القسط أكثر من نص الراتب — مسموح، والباقي يتسدد نقداً.', style: AppText.caption.copyWith(color: AppColors.warning)),
                 ],
               ),
             ),

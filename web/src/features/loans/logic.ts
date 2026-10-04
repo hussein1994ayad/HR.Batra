@@ -18,6 +18,16 @@ export function addMonths(dateStr: string, months: number): string {
   return target.toISOString().slice(0, 10);
 }
 
+/**
+ * القسط الشهري وآخر قسط بنفس قاعدة السيرفر (_insert_loan_installments): القسط = floor(المبلغ ÷ الأشهر)،
+ * والقسط الأخير ياخذ فرق التقريب حتى يطلع المجموع = المبلغ بالضبط.
+ */
+export function installmentPlan(amount: number, months: number): { installment: number; last: number } {
+  if (!(amount > 0) || !(months > 0)) return { installment: 0, last: 0 };
+  const installment = Math.floor(amount / months);
+  return { installment, last: amount - installment * (months - 1) };
+}
+
 /** نفس اليوم من الشهر القادم (تاريخ أول قسط المقترح عند الاعتماد). */
 export function sameDayNextMonth(now: Date = new Date()): string {
   return addMonths(getLocalDateStr(now), 1);

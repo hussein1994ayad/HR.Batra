@@ -8,6 +8,14 @@ import '../models/loan_model.dart';
 /// يسددون جزءاً نقداً، والسيرفر (`_validate_loan_terms`) ما يمنعها. نفس القيمة بالويب: LOAN_SALARY_WARNING_RATIO.
 const double kLoanSalaryWarningRatio = 0.5;
 
+/// القسط الشهري وآخر قسط بنفس قاعدة السيرفر (`_insert_loan_installments`): القسط = floor(المبلغ ÷ الأشهر)،
+/// والقسط الأخير ياخذ فرق التقريب حتى يطلع المجموع = المبلغ بالضبط.
+({double installment, double last}) installmentPlan(double amount, int months) {
+  if (amount <= 0 || months <= 0) return (installment: 0, last: 0);
+  final installment = (amount / months).floorToDouble();
+  return (installment: installment, last: amount - installment * (months - 1));
+}
+
 enum LoanStatusFilter { all, active, completed, pending }
 
 /// تصفية حسب الاسم والفرع والحالة (نشطة = معتمدة وعليها متبقي).

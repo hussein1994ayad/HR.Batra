@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Loan, LoanInstallment } from '@/lib/db-types';
 import {
-  addMonths, sameDayNextMonth, sortInstallments,
+  addMonths, installmentPlan, sameDayNextMonth, sortInstallments,
   overHalfSalaryWarning, previewPayment, splitLoansByCompletion, validateApproval,
 } from './logic';
 
@@ -20,6 +20,14 @@ describe('addMonths', () => {
   });
   it('crosses year boundaries', () => {
     expect(addMonths('2026-11-15', 3)).toBe('2027-02-15');
+  });
+});
+
+describe('installmentPlan', () => {
+  it('rounds the installment down and puts the remainder on the last one (like the server)', () => {
+    expect(installmentPlan(1000, 3)).toEqual({ installment: 333, last: 334 });
+    expect(installmentPlan(900, 3)).toEqual({ installment: 300, last: 300 });
+    expect(installmentPlan(500, 0)).toEqual({ installment: 0, last: 0 });
   });
 });
 

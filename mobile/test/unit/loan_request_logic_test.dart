@@ -1,11 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hr_pro/core/logic/loan_rules.dart';
 import 'package:hr_pro/core/models/models.dart';
 import 'package:hr_pro/core/theme/app_theme.dart';
 import 'package:hr_pro/presentation/employee/loan/loan_request_logic.dart';
 import 'package:hr_pro/presentation/employee/loan/widgets/loan_widgets.dart';
 
 void main() {
+  test('installmentPlan rounds down and puts the remainder on the last installment (like the server)', () {
+    expect(installmentPlan(1000, 3), (installment: 333.0, last: 334.0));
+    expect(installmentPlan(900, 3), (installment: 300.0, last: 300.0));
+    expect(installmentPlan(500, 0), (installment: 0.0, last: 0.0));
+  });
+
   group('loan calculator', () {
     test('months round up and the last installment is the remainder', () {
       expect(loanMonths(1000000, 300000), 4);
