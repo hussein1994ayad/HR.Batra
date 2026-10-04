@@ -1,0 +1,166 @@
+// أجزاء عرض شاشة السلف: كارت التعهد الموقّع وكارت السلفة بالسجل (مع جدول الأقساط).
+
+import 'dart:io';
+
+import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+import '../../../../core/services/storage_links.dart';
+import '../../../shared/ui/ui.dart';
+
+/// صورة التعهد الخطي الموقّع (إلزامية قبل الإرسال).
+class LoanPledgeCard extends StatelessWidget {
+  const LoanPledgeCard({super.key, required this.file, required this.onPick});
+
+  final File? file;
+  final VoidCallback onPick;
+
+  @override
+  Widget build(BuildContext context) {
+    final done = file != null;
+    return AppCard(
+      tone: done ? AppTone.success : null,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              ToneIcon(done ? Icons.task_alt_rounded : Icons.draw_rounded, tone: done ? AppTone.success : AppTone.warning),
+              const SizedBox(width: AppSpace.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('التعهد الخطي الموقّع', style: AppText.subtitle),
+                    Text(done ? 'تم إرفاق الصورة' : 'مطلوب — وقّع التعهد وصوّره بوضوح', style: AppText.caption),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpace.md),
+          if (done)
+            Row(
+              children: [
+                ClipRRect(
+                  borderRadius: AppRadius.control,
+                  child: Image.file(file!, width: 64, height: 64, fit: BoxFit.cover, cacheWidth: 192),
+                ),
+                const SizedBox(width: AppSpace.md),
+                Expanded(child: AppButton.secondary(label: 'إعادة التصوير', icon: Icons.camera_alt_rounded, size: AppButtonSize.small, onPressed: onPick)),
+              ],
+            )
+          else
+            AppButton.secondary(label: 'تصوير التعهد', icon: Icons.camera_alt_rounded, expand: true, onPressed: onPick),
+        ],
+      ),
+    );
+  }
+}
+
+class MyLoanCard extends StatelessWidget {
+  const MyLoanCard({super.key, required this.loan, required this.onCancel});
+  final Map<String, dynamic> loan;
+  final ValueChanged<Map<String, dynamic>> onCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    final amount = (loan['amount'] as num? ?? 0).toDouble();
+    final remaining = (loan['remaining_amount'] as num? ?? 0).toDouble();
+    final installmentAmount = (loan['installment_amount'] as num? ?? 0).toDouble();
+    final status = (loan['status'] ?? 'pending').toString();
+    final installments = [
+      for (final i in (loan['loan_installments'] as List? ?? const [])) Map<String, dynamic>.from(i as Map),
+    ]..sort((a, b) => (a['due_date'] ?? '').toString().compareTo((b['due_date'] ?? '').toString()));
+    final paid = amount - remaining;
+    final pledge = loan['pledge_url']?.toString();
+    final rejection = loan['rejection_reason']?.toString();
+
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const ToneIcon(Icons.account_balance_wallet_rounded, tone: AppTone.warning),
+              const SizedBox(width: AppSpace.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(Fmt.iqd(amount), style: AppText.titleSm),
+                    Text('طُلبت ${Fmt.relative(DateTime.tryParse(loan['created_at']?.toString() ?? ''))}', style: AppText.caption),
+                  ],
+                ),
+              ),
+              StatusBadge.request(status),
+            ],
+          ),
+          const SizedBox(height: AppSpace.md),
+          KeyValueRow('القسط الشهري', Fmt.iqd(installmentAmount)),
+          KeyValueRow('عدد الأقساط', '${loan['installment_count'] ?? '—'}'),
+          if (status == 'approved') ...[
+            KeyValueRow('المتبقي', Fmt.iqd(remaining), valueColor: AppColors.brand, bold: true),
+            const SizedBox(height: AppSpace.xs),
+            AppProgressBar(value: amount > 0 ? paid / amount : 0, tone: AppTone.success),
+            const SizedBox(height: AppSpace.xs),
+            Text('سُدّد ${Fmt.iqd(paid)} من ${Fmt.iqd(amount)}', style: AppText.caption),
+          ],
+          if (rejection != null && rejection.isNotEmpty) ...[
+            const SizedBox(height: AppSpace.sm),
+            Text('سبب الرفض: $rejection', style: AppText.bodySm.copyWith(color: AppColors.danger)),
+          ],
+          if (status == 'approved' && installments.isNotEmpty)
+            Theme(
+              data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+              child: ExpansionTile(
+                tilePadding: EdgeInsets.zero,
+                childrenPadding: EdgeInsets.zero,
+                title: Text('جدول الأقساط (${installments.where((i) => i['is_paid'] == true).length}/${installments.length} مدفوع)', style: AppText.label),
+                children: [
+                  for (var i = 0; i < installments.length; i++)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: AppSpace.xs),
+                      child: Row(
+                        children: [
+                          SizedBox(width: 28, child: Text('${i + 1}', style: AppText.caption)),
+                          Expanded(child: Text('قسط ${Fmt.monthOf(DateTime.tryParse(installments[i]['due_date']?.toString() ?? ''))}', style: AppText.bodySm)),
+                          Text(Fmt.iqd(installments[i]['amount'] as num?), style: AppText.bodySm.copyWith(color: AppColors.textPrimary)),
+                          const SizedBox(width: AppSpace.sm),
+                          installments[i]['is_paid'] == true
+                              ? const StatusBadge('مدفوع', tone: AppTone.success)
+                              : const StatusBadge('قادم'),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            children: [
+              if (pledge != null && pledge.isNotEmpty)
+                AppButton.ghost(
+                  label: 'عرض التعهد',
+                  icon: Icons.attach_file_rounded,
+                  size: AppButtonSize.small,
+                  onPressed: () async {
+                    final url = Uri.tryParse(await StorageLinks.resolve(pledge));
+                    final opened = url != null && await launchUrl(url, mode: LaunchMode.externalApplication).catchError((_) => false);
+                    if (!opened && context.mounted) AppSnack.error(context, 'تعذّر فتح التعهد');
+                  },
+                ),
+              if (status == 'pending')
+                AppButton.ghost(
+                  label: 'إلغاء الطلب',
+                  icon: Icons.close_rounded,
+                  size: AppButtonSize.small,
+                  onPressed: () => onCancel(loan),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}

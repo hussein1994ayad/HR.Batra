@@ -12,16 +12,15 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:url_launcher/url_launcher.dart';
-import 'package:uuid/uuid.dart';
 
-import '../../core/services/file_upload_service.dart';
-import '../../core/services/storage_links.dart';
-import '../../core/services/supabase_service.dart';
-import '../../core/utils/arabic_format.dart';
-import '../../core/utils/error_text.dart';
-import '../../core/utils/input_formatters.dart';
-import '../shared/ui/ui.dart';
+import '../../../core/services/supabase_service.dart';
+import '../../../core/utils/arabic_format.dart';
+import '../../../core/utils/error_text.dart';
+import '../../../core/utils/input_formatters.dart';
+import '../../../data/repositories/loan_repository.dart';
+import '../../shared/ui/ui.dart';
+import 'loan_request_logic.dart';
+import 'widgets/loan_widgets.dart';
 
 class LoanRequestScreen extends StatefulWidget {
   const LoanRequestScreen({super.key});
@@ -32,6 +31,7 @@ class LoanRequestScreen extends StatefulWidget {
 
 class _LoanRequestScreenState extends State<LoanRequestScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  final LoanRepository _repo = LoanRepository();
 
   double _requestedAmount = 500000;
   double _monthlyInstallment = 250000;
@@ -75,18 +75,14 @@ class _LoanRequestScreenState extends State<LoanRequestScreen> with SingleTicker
     if (user == null) return;
 
     try {
-      final data = await SupabaseService.client
-          .from('loans')
-          .select('*, loan_installments(*)')
-          .eq('employee_id', user.id)
-          .order('created_at', ascending: false);
+      final data = await _repo.fetchMyLoans(user.id);
 
-      final me = await SupabaseService.client.from('employees').select('monthly_salary_iqd').eq('id', user.id).maybeSingle();
+      final salary = await _repo.fetchMySalary(user.id);
 
       if (!mounted) return;
       setState(() {
-        _loansHistory = List<Map<String, dynamic>>.from(data);
-        _salary = (me?['monthly_salary_iqd'] as num?)?.toDouble();
+        _loansHistory = data;
+        _salary = salary;
         _historyError = false;
       });
     } catch (e) {
@@ -106,14 +102,10 @@ class _LoanRequestScreenState extends State<LoanRequestScreen> with SingleTicker
     }
   }
 
-  int get _months => _monthlyInstallment > 0 ? (_requestedAmount / _monthlyInstallment).ceil() : 0;
+  int get _months => loanMonths(_requestedAmount, _monthlyInstallment);
 
   /// آخر قسط قد يكون أقل من القسط الشهري.
-  double get _lastInstallment {
-    if (_months <= 0) return 0;
-    final rest = _requestedAmount - _monthlyInstallment * (_months - 1);
-    return rest <= 0 ? _monthlyInstallment : rest;
-  }
+  double get _lastInstallment => loanLastInstallment(_requestedAmount, _monthlyInstallment);
 
   void _setAmount(double v) {
     setState(() => _requestedAmount = v);
@@ -126,26 +118,10 @@ class _LoanRequestScreenState extends State<LoanRequestScreen> with SingleTicker
     _installmentController.text = formatThousands(inst);
   }
 
-  String? get _validationError {
-    if (_requestedAmount <= 0) return 'اكتب مبلغ السلفة';
-    if (_monthlyInstallment <= 0) return 'اكتب القسط الشهري';
-    if (_monthlyInstallment > _requestedAmount) return 'القسط أكبر من مبلغ السلفة';
-    // نفس شروط الاعتماد: نخبر الموظف قبل ما يرسل طلب ما ينعتمد
-    final hasActive = _loansHistory.any((l) => l['status'] == 'approved' && ((l['remaining_amount'] as num?) ?? 0) > 0);
-    if (hasActive) return 'عندك سلفة جارية لم تُسدَّد بعد. تگدر تطلب سلفة جديدة بعد إكمال سدادها.';
-    if (_requestedAmount > 100000000) return 'المبلغ كبير جداً (أكثر من 100,000,000 د.ع). تأكد من الرقم.';
-    return null;
-  }
+  String? get _validationError => loanRequestError(amount: _requestedAmount, installment: _monthlyInstallment, history: _loansHistory);
 
   /// تنبيه فقط (الطلب مسموح): القسط أكثر من نص الراتب، أو أكثر من الراتب كله فيطلع الراتب بالسالب.
-  String? get _salaryWarning {
-    final salary = _salary ?? 0;
-    if (salary <= 0 || _monthlyInstallment <= salary * 0.5) return null;
-    if (_monthlyInstallment > salary) {
-      return '⚠️ القسط الشهري (${Fmt.iqd(_monthlyInstallment)}) أكثر من راتبك كله (${Fmt.iqd(salary)}). راتبك راح يطلع بالسالب، والفرق تدفعه نقداً للإدارة.';
-    }
-    return '⚠️ القسط الشهري أكثر من نص راتبك (${Fmt.iqd(salary * 0.5)}). راح يبقى لك من الراتب ${Fmt.iqd(salary - _monthlyInstallment)} بس.';
-  }
+  String? get _salaryWarning => loanSalaryWarning(salary: _salary, installment: _monthlyInstallment);
 
   Future<void> _submitLoanRequest() async {
     FocusManager.instance.primaryFocus?.unfocus();
@@ -177,20 +153,12 @@ class _LoanRequestScreenState extends State<LoanRequestScreen> with SingleTicker
 
     try {
       // 1. رفع صورة التعهد إلى bucket 'loan-pledges' (مع الضغط التلقائي)
-      final uniqueId = const Uuid().v4();
-      final fileExtension = _pledgeFile!.path.split('.').last;
-      final remotePath = 'pledges/${user.id}/$uniqueId.$fileExtension';
-
-      final pledgeUrl = await FileUploadService.uploadFile(
-        file: _pledgeFile!,
-        bucketName: 'loan-pledges',
-        remotePath: remotePath,
-      );
+      final pledgeUrl = await _repo.uploadPledge(user.id, _pledgeFile!);
 
       final int installmentCount = (_requestedAmount / _monthlyInstallment).ceil();
 
       // 2. إدراج طلب السلفة
-      await SupabaseService.client.from('loans').insert({
+      await _repo.submitLoanRequest({
         'employee_id': user.id,
         'amount': _requestedAmount,
         'installment_amount': _monthlyInstallment,
@@ -254,7 +222,7 @@ class _LoanRequestScreenState extends State<LoanRequestScreen> with SingleTicker
                 children: [
                   _buildCalculator(),
                   const SizedBox(height: AppSpace.lg),
-                  _buildPledgeCard(),
+                  LoanPledgeCard(file: _pledgeFile, onPick: _pickPledge),
                   const SizedBox(height: AppSpace.xxl),
                   AppButton(
                     label: 'مراجعة وإرسال',
@@ -348,47 +316,6 @@ class _LoanRequestScreenState extends State<LoanRequestScreen> with SingleTicker
     );
   }
 
-  Widget _buildPledgeCard() {
-    final done = _pledgeFile != null;
-    return AppCard(
-      tone: done ? AppTone.success : null,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              ToneIcon(done ? Icons.task_alt_rounded : Icons.draw_rounded, tone: done ? AppTone.success : AppTone.warning),
-              const SizedBox(width: AppSpace.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('التعهد الخطي الموقّع', style: AppText.subtitle),
-                    Text(done ? 'تم إرفاق الصورة' : 'مطلوب — وقّع التعهد وصوّره بوضوح', style: AppText.caption),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpace.md),
-          if (done)
-            Row(
-              children: [
-                ClipRRect(
-                  borderRadius: AppRadius.control,
-                  child: Image.file(_pledgeFile!, width: 64, height: 64, fit: BoxFit.cover, cacheWidth: 192),
-                ),
-                const SizedBox(width: AppSpace.md),
-                Expanded(child: AppButton.secondary(label: 'إعادة التصوير', icon: Icons.camera_alt_rounded, size: AppButtonSize.small, onPressed: _pickPledge)),
-              ],
-            )
-          else
-            AppButton.secondary(label: 'تصوير التعهد', icon: Icons.camera_alt_rounded, expand: true, onPressed: _pickPledge),
-        ],
-      ),
-    );
-  }
-
   Widget _buildLoansHistoryTab() {
     if (_isLoadingHistory) {
       return const Padding(padding: EdgeInsets.all(AppSpace.page), child: SkeletonList(count: 3, itemHeight: 120));
@@ -415,7 +342,7 @@ class _LoanRequestScreenState extends State<LoanRequestScreen> with SingleTicker
         padding: const EdgeInsets.fromLTRB(AppSpace.page, AppSpace.lg, AppSpace.page, AppSpace.x4),
         itemCount: _loansHistory.length,
         separatorBuilder: (_, __) => const SizedBox(height: AppSpace.md),
-        itemBuilder: (context, index) => FadeSlideIn(index: index, child: ContentWidth(child: _LoanCard(loan: _loansHistory[index], onCancel: _cancelLoan))),
+        itemBuilder: (context, index) => FadeSlideIn(index: index, child: ContentWidth(child: MyLoanCard(loan: _loansHistory[index], onCancel: _cancelLoan))),
       ),
     );
   }
@@ -431,119 +358,12 @@ class _LoanRequestScreenState extends State<LoanRequestScreen> with SingleTicker
     );
     if (!ok || !mounted) return;
     try {
-      await SupabaseService.client.rpc<void>('cancel_my_loan_request', params: {'p_loan_id': loan['id']});
+      await _repo.cancelMyLoanRequest(loan['id']);
       if (!mounted) return;
       AppSnack.success(context, 'أُلغي طلب السلفة');
       unawaited(_loadLoansHistory());
     } catch (e) {
       if (mounted) AppSnack.error(context, 'تعذّر إلغاء الطلب: ${errorText(e)}');
     }
-  }
-}
-
-class _LoanCard extends StatelessWidget {
-  const _LoanCard({required this.loan, required this.onCancel});
-  final Map<String, dynamic> loan;
-  final ValueChanged<Map<String, dynamic>> onCancel;
-
-  @override
-  Widget build(BuildContext context) {
-    final amount = (loan['amount'] as num? ?? 0).toDouble();
-    final remaining = (loan['remaining_amount'] as num? ?? 0).toDouble();
-    final installmentAmount = (loan['installment_amount'] as num? ?? 0).toDouble();
-    final status = (loan['status'] ?? 'pending').toString();
-    final installments = [
-      for (final i in (loan['loan_installments'] as List? ?? const [])) Map<String, dynamic>.from(i as Map),
-    ]..sort((a, b) => (a['due_date'] ?? '').toString().compareTo((b['due_date'] ?? '').toString()));
-    final paid = amount - remaining;
-    final pledge = loan['pledge_url']?.toString();
-    final rejection = loan['rejection_reason']?.toString();
-
-    return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              const ToneIcon(Icons.account_balance_wallet_rounded, tone: AppTone.warning),
-              const SizedBox(width: AppSpace.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(Fmt.iqd(amount), style: AppText.titleSm),
-                    Text('طُلبت ${Fmt.relative(DateTime.tryParse(loan['created_at']?.toString() ?? ''))}', style: AppText.caption),
-                  ],
-                ),
-              ),
-              StatusBadge.request(status),
-            ],
-          ),
-          const SizedBox(height: AppSpace.md),
-          KeyValueRow('القسط الشهري', Fmt.iqd(installmentAmount)),
-          KeyValueRow('عدد الأقساط', '${loan['installment_count'] ?? '—'}'),
-          if (status == 'approved') ...[
-            KeyValueRow('المتبقي', Fmt.iqd(remaining), valueColor: AppColors.brand, bold: true),
-            const SizedBox(height: AppSpace.xs),
-            AppProgressBar(value: amount > 0 ? paid / amount : 0, tone: AppTone.success),
-            const SizedBox(height: AppSpace.xs),
-            Text('سُدّد ${Fmt.iqd(paid)} من ${Fmt.iqd(amount)}', style: AppText.caption),
-          ],
-          if (rejection != null && rejection.isNotEmpty) ...[
-            const SizedBox(height: AppSpace.sm),
-            Text('سبب الرفض: $rejection', style: AppText.bodySm.copyWith(color: AppColors.danger)),
-          ],
-          if (status == 'approved' && installments.isNotEmpty)
-            Theme(
-              data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-              child: ExpansionTile(
-                tilePadding: EdgeInsets.zero,
-                childrenPadding: EdgeInsets.zero,
-                title: Text('جدول الأقساط (${installments.where((i) => i['is_paid'] == true).length}/${installments.length} مدفوع)', style: AppText.label),
-                children: [
-                  for (var i = 0; i < installments.length; i++)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: AppSpace.xs),
-                      child: Row(
-                        children: [
-                          SizedBox(width: 28, child: Text('${i + 1}', style: AppText.caption)),
-                          Expanded(child: Text('قسط ${Fmt.monthOf(DateTime.tryParse(installments[i]['due_date']?.toString() ?? ''))}', style: AppText.bodySm)),
-                          Text(Fmt.iqd(installments[i]['amount'] as num?), style: AppText.bodySm.copyWith(color: AppColors.textPrimary)),
-                          const SizedBox(width: AppSpace.sm),
-                          installments[i]['is_paid'] == true
-                              ? const StatusBadge('مدفوع', tone: AppTone.success)
-                              : const StatusBadge('قادم'),
-                        ],
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          Wrap(
-            alignment: WrapAlignment.spaceBetween,
-            children: [
-              if (pledge != null && pledge.isNotEmpty)
-                AppButton.ghost(
-                  label: 'عرض التعهد',
-                  icon: Icons.attach_file_rounded,
-                  size: AppButtonSize.small,
-                  onPressed: () async {
-                    final url = Uri.tryParse(await StorageLinks.resolve(pledge));
-                    final opened = url != null && await launchUrl(url, mode: LaunchMode.externalApplication).catchError((_) => false);
-                    if (!opened && context.mounted) AppSnack.error(context, 'تعذّر فتح التعهد');
-                  },
-                ),
-              if (status == 'pending')
-                AppButton.ghost(
-                  label: 'إلغاء الطلب',
-                  icon: Icons.close_rounded,
-                  size: AppButtonSize.small,
-                  onPressed: () => onCancel(loan),
-                ),
-            ],
-          ),
-        ],
-      ),
-    );
   }
 }

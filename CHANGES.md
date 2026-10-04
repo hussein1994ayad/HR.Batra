@@ -180,3 +180,14 @@
 - `main_layout.dart`: مسار الاستيراد فقط.
 - **أُضيف فحص** `mobile/test/unit/leave_logic_test.dart` (التحقق من التواريخ والتداخل، قراءة السياسة، الأسماء، كارت الرصيد).
 - فحص: `dart analyze` ✓، `flutter test` 538 ✓.
+
+## Step 16 — شاشة طلب السلفة (النقاط 3 و 4 و 8)
+- **نُقلت** `presentation/employee/loan_request_screen.dart` → `presentation/employee/loan/loan_request_screen.dart` (549 → 369 سطر).
+- **وُسّع** `LoanRepository` (بدل ملف جديد): `fetchMyLoans`, `fetchMySalary`, `submitLoanRequest`, `cancelMyLoanRequest` —
+  ورفع التعهد يستعمل `uploadPledge` الموجود (نفس الـ bucket `loan-pledges` ونفس المسار `pledges/<id>/<uuid>.<ext>`).
+- **أُنشئ** `loan/loan_request_logic.dart`: `loanMonths`, `loanLastInstallment`, `loanRequestError`, `loanSalaryWarning`
+  — نفس الشروط ونفس الرسائل (تنبيه نص الراتب/الراتب بالسالب يبقى تنبيه فقط).
+- **أُنشئ** `loan/widgets/loan_widgets.dart`: `LoanPledgeCard` (من `_buildPledgeCard`) و`MyLoanCard` (كان `_LoanCard`).
+- `main_layout.dart`: مسار الاستيراد فقط.
+- **أُضيف فحص** `mobile/test/unit/loan_request_logic_test.dart`.
+- فحص: `dart analyze` ✓، `flutter test` 545 ✓.
