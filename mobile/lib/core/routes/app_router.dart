@@ -7,13 +7,13 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/design/design.dart';
 import '../../presentation/admin/admin_dashboard/admin_dashboard_screen.dart';
-import '../../presentation/admin/admin_live_tracking_screen.dart';
 import '../../presentation/admin/admin_loans/admin_loans_screen.dart';
 import '../../presentation/admin/announcement_screen.dart';
 import '../../presentation/admin/attendance_report/attendance_report_screen.dart';
 import '../../presentation/admin/branch_management_screen.dart';
 import '../../presentation/admin/branch_schedule_screen.dart';
 import '../../presentation/admin/employee_management_screen.dart';
+import '../../presentation/admin/live_tracking/admin_live_tracking_screen.dart';
 import '../../presentation/admin/storage_stats_screen.dart';
 import '../../presentation/admin/trash_screen.dart';
 import '../../presentation/auth/change_password_screen.dart';

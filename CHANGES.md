@@ -233,3 +233,13 @@
 - فحص صلاحية الشاشة صار عبر `RoleRepository.isAdminOrManager()` الموجود (نفس الاستعلام ونفس الشرط: أدمن أو مدير وإلا ترجع).
 - **أُنشئ** `attendance_report/widgets/report_record_card.dart`: `ReportRecordCard` (من `_recordCard`) و`ReportTimeButton` (كان `_TimeButton`).
 - فحص: `dart analyze` ✓، `flutter test` 559 ✓ (لقطات الشاشة تغطي التقرير).
+
+## Step 21 — التتبع الحي للإدارة (النقاط 3 و 4 و 8)
+- **نُقلت** `presentation/admin/admin_live_tracking_screen.dart` → `presentation/admin/live_tracking/admin_live_tracking_screen.dart` (686 → 417 سطر).
+- **أُنشئ** `mobile/lib/data/repositories/live_tracking_repository.dart`: الفروع، الموظفون النشطون، بصمات ونقاط اليوم (صفحات 1000)،
+  والاشتراك الفوري (`live-admin-tracking` على `location_tracking` و`attendance`) + `removeChannel` — نفس اسم القناة ونفس الجداول.
+- فحص الصلاحية عبر `RoleRepository.isAdminOrManager()` (نفس الشرط، ونفس الرسالة والتحويل للرئيسية).
+- **أُنشئ** `live_tracking/widgets/live_tracking_widgets.dart`: `trackStatusStyle` (كان `statusStyle` داخل الـ State)،
+  `TrackingStatusCounter`, `LiveTrackingMap`, `TrackingFocusCard`, `TrackingFact` (كانت خاصة بالملف).
+- ترتيب الاستيرادات أبجدياً في `app_router.dart` و`test/support/screens.dart` بعد تغيّر المسار.
+- فحص: `dart analyze` ✓، `flutter test` 559 ✓.

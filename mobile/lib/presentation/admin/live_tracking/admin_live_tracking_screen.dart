@@ -16,10 +16,13 @@ import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../core/logic/tracking_rules.dart';
-import '../../core/routes/app_router.dart';
-import '../../core/services/supabase_service.dart';
-import '../shared/ui/ui.dart';
+import '../../../core/logic/tracking_rules.dart';
+import '../../../core/routes/app_router.dart';
+import '../../../core/services/supabase_service.dart';
+import '../../../data/repositories/live_tracking_repository.dart';
+import '../../../data/repositories/role_repository.dart';
+import '../../shared/ui/ui.dart';
+import 'widgets/live_tracking_widgets.dart';
 
 class AdminLiveTrackingScreen extends StatefulWidget {
   const AdminLiveTrackingScreen({super.key});
@@ -29,6 +32,7 @@ class AdminLiveTrackingScreen extends StatefulWidget {
 }
 
 class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
+  final LiveTrackingRepository _repo = LiveTrackingRepository();
   final MapController _mapController = MapController();
   bool _isLoading = true;
   bool _isRefreshing = false;
@@ -63,24 +67,9 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
 
     // تحديث لحظي عند أي حركة أو بصمة
     try {
-      _trackingChannel = SupabaseService.client.channel('live-admin-tracking')
-        ..onPostgresChanges(
-          event: PostgresChangeEvent.all,
-          schema: 'public',
-          table: 'location_tracking',
-          callback: (_) {
-            if (mounted && !_isRefreshing && _autoRefreshEnabled) _refreshLocationsSilently();
-          },
-        )
-        ..onPostgresChanges(
-          event: PostgresChangeEvent.all,
-          schema: 'public',
-          table: 'attendance',
-          callback: (_) {
-            if (mounted && !_isRefreshing && _autoRefreshEnabled) _refreshLocationsSilently();
-          },
-        )
-        ..subscribe();
+      _trackingChannel = _repo.subscribe(() {
+        if (mounted && !_isRefreshing && _autoRefreshEnabled) _refreshLocationsSilently();
+      });
     } catch (e) {
       debugPrint('تعذر بدء اشتراك Realtime للتتبع: $e');
     }
@@ -90,7 +79,7 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
   void dispose() {
     _autoRefreshTimer?.cancel();
     try {
-      if (_trackingChannel != null) SupabaseService.client.removeChannel(_trackingChannel!);
+      if (_trackingChannel != null) _repo.removeChannel(_trackingChannel!);
     } catch (_) {}
     super.dispose();
   }
@@ -106,29 +95,7 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
 
   Future<List<dynamic>> _fetchDay() {
     final (dateStr, start, end) = _dayRange;
-    return Future.wait<dynamic>([
-      SupabaseService.client.from('attendance').select().eq('work_date', dateStr),
-      _fetchDayLocations(start, end),
-    ]);
-  }
-
-  /// نقاط اليوم لكل الموظفين تتجاوز حد الـ 1000 صف للطلب الواحد، فتُجلب على صفحات
-  /// حتى لا ينقطع مسار الحركة على الخريطة بصمت.
-  Future<List<Map<String, dynamic>>> _fetchDayLocations(String start, String end) async {
-    const pageSize = 1000;
-    final rows = <Map<String, dynamic>>[];
-    for (var from = 0;; from += pageSize) {
-      final page = await SupabaseService.client
-          .from('location_tracking')
-          .select()
-          .gte('timestamp', start)
-          .lte('timestamp', end)
-          .order('timestamp', ascending: true)
-          .order('id', ascending: true)
-          .range(from, from + pageSize - 1);
-      rows.addAll(page);
-      if (page.length < pageSize) return rows;
-    }
+    return _repo.fetchDay(date: dateStr, start: start, end: end);
   }
 
   Future<void> _loadAllTrackingData() async {
@@ -142,8 +109,7 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
     }
 
     try {
-      final empRole = await SupabaseService.client.from('employees').select('role').eq('id', user.id).maybeSingle();
-      if (empRole == null || (empRole['role'] != 'admin' && empRole['role'] != 'manager')) {
+      if (!await RoleRepository().isAdminOrManager()) {
         if (mounted) {
           AppSnack.error(context, 'هذه الشاشة للإدارة فقط');
           context.go(AppRoutes.employeeHome);
@@ -152,12 +118,8 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
       }
 
       final results = await Future.wait<dynamic>([
-        SupabaseService.client.from('branches').select().order('name'),
-        SupabaseService.client
-            .from('employees')
-            .select('id, full_name, avatar_url, role, branch_id, branches(id, name, latitude, longitude, radius_meters)')
-            .eq('is_active', true)
-            .order('full_name'),
+        _repo.fetchBranches(),
+        _repo.fetchActiveEmployees(),
         _fetchDay(),
       ]);
 
@@ -263,13 +225,6 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
     _centerMapOnSelectedBranch();
   }
 
-  static (AppTone, String) statusStyle(TrackStatus s) => switch (s) {
-        TrackStatus.inside => (AppTone.success, 'داخل الفرع'),
-        TrackStatus.outside => (AppTone.danger, 'خارج النطاق'),
-        TrackStatus.checkedOut => (AppTone.warning, 'انصراف'),
-        TrackStatus.absent => (AppTone.neutral, 'لم يبصم'),
-      };
-
   @override
   Widget build(BuildContext context) {
     final isToday = DateUtils.isSameDay(_selectedDate, DateTime.now());
@@ -277,7 +232,7 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
     final size = MediaQuery.sizeOf(context);
     final sidePanel = size.width >= AppBreakpoints.expanded || (size.width >= AppBreakpoints.medium && size.width > size.height);
 
-    final map = _TrackingMap(
+    final map = LiveTrackingMap(
       controller: _mapController,
       center: _mapCenter,
       branches: _branchesList.where((b) => _selectedBranchId == 'all' || b['id'] == _selectedBranchId).toList(),
@@ -289,7 +244,7 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
 
     final focusCard = _focused == null
         ? null
-        : _FocusCard(
+        : TrackingFocusCard(
             item: _focused!,
             showTrail: _showTrail,
             onToggleTrail: () => setState(() => _showTrail = !_showTrail),
@@ -409,7 +364,7 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
                 child: Row(
                   children: [
                     for (final s in [TrackStatus.inside, TrackStatus.outside, TrackStatus.checkedOut, TrackStatus.absent])
-                      Expanded(child: _StatusCounter(status: s, count: counts[s]!, selected: _statusFilter == s, onTap: () => setState(() => _statusFilter = _statusFilter == s ? null : s))),
+                      Expanded(child: TrackingStatusCounter(status: s, count: counts[s]!, selected: _statusFilter == s, onTap: () => setState(() => _statusFilter = _statusFilter == s ? null : s))),
                   ],
                 ),
               ),
@@ -433,7 +388,7 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
               itemCount: filtered.length,
               itemBuilder: (context, i) {
                 final t = filtered[i];
-                final (tone, label) = statusStyle(t.status);
+                final (tone, label) = trackStatusStyle(t.status);
                 final parts = [
                   t.branchName,
                   if (t.checkIn != null) 'حضور ${Fmt.time(t.checkIn)}',
@@ -459,228 +414,4 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
       ],
     );
   }
-}
-
-class _StatusCounter extends StatelessWidget {
-  const _StatusCounter({required this.status, required this.count, required this.selected, required this.onTap});
-  final TrackStatus status;
-  final int count;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final (tone, label) = _AdminLiveTrackingScreenState.statusStyle(status);
-    return Semantics(
-      button: true,
-      selected: selected,
-      label: '$label: $count',
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: AppRadius.control,
-        child: AnimatedContainer(
-          duration: AppMotion.of(context, AppMotion.fast),
-          margin: const EdgeInsets.symmetric(horizontal: 2),
-          padding: const EdgeInsets.symmetric(vertical: AppSpace.sm),
-          decoration: BoxDecoration(
-            color: selected ? tone.container : Colors.transparent,
-            borderRadius: AppRadius.control,
-            border: Border.all(color: selected ? tone.color.withValues(alpha: 0.5) : AppColors.border),
-          ),
-          child: ExcludeSemantics(
-            child: Column(
-              children: [
-                Text('$count', style: AppText.titleSm.copyWith(color: tone == AppTone.neutral ? AppColors.textPrimary : tone.color)),
-                Text(label, style: AppText.overline, maxLines: 1, overflow: TextOverflow.ellipsis),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _TrackingMap extends StatelessWidget {
-  const _TrackingMap({
-    required this.controller,
-    required this.center,
-    required this.branches,
-    required this.employees,
-    required this.focused,
-    required this.showTrail,
-    required this.onTapEmployee,
-  });
-
-  final MapController controller;
-  final LatLng center;
-  final List<Map<String, dynamic>> branches;
-  final List<TrackedEmployee> employees;
-  final TrackedEmployee? focused;
-  final bool showTrail;
-  final ValueChanged<TrackedEmployee> onTapEmployee;
-
-  @override
-  Widget build(BuildContext context) {
-    return RepaintBoundary(
-      child: FlutterMap(
-        mapController: controller,
-        options: MapOptions(initialCenter: center, initialZoom: 13.5, minZoom: 4, maxZoom: 18, backgroundColor: AppColors.surface2),
-        children: [
-          appMapTiles(),
-          CircleLayer(
-            circles: [
-              for (final b in branches)
-                if (b['latitude'] is num && b['longitude'] is num)
-                  CircleMarker(
-                    point: LatLng((b['latitude'] as num).toDouble(), (b['longitude'] as num).toDouble()),
-                    radius: (b['radius_meters'] as num?)?.toDouble() ?? 100,
-                    useRadiusInMeter: true,
-                    color: AppColors.brand.withValues(alpha: 0.12),
-                    borderColor: AppColors.brand,
-                    borderStrokeWidth: 2,
-                  ),
-            ],
-          ),
-          if (showTrail && focused != null && focused!.trail.length >= 2)
-            PolylineLayer(polylines: [Polyline(points: focused!.trail, strokeWidth: 4, color: AppColors.brand, borderStrokeWidth: 1.5, borderColor: AppColors.bg)]),
-          MarkerLayer(
-            markers: [
-              for (final t in employees)
-                if (t.position != null) _marker(t),
-              if (focused?.checkInPoint != null)
-                Marker(
-                  point: focused!.checkInPoint!,
-                  child: Container(
-                    decoration: BoxDecoration(color: AppColors.surface3, shape: BoxShape.circle, border: Border.all(color: AppColors.success, width: 2)),
-                    child: const Icon(Icons.flag_rounded, size: 16, color: AppColors.success),
-                  ),
-                ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Marker _marker(TrackedEmployee t) {
-    final isFocused = focused?.id == t.id;
-    final (tone, label) = _AdminLiveTrackingScreenState.statusStyle(t.status);
-    final size = isFocused ? 44.0 : 34.0;
-    return Marker(
-      point: t.position!,
-      width: size + 8,
-      height: size + 8,
-      child: Semantics(
-        button: true,
-        label: '${t.name}، $label',
-        child: GestureDetector(
-          onTap: () => onTapEmployee(t),
-          child: Center(
-            child: Container(
-              width: size,
-              height: size,
-              decoration: BoxDecoration(
-                color: tone == AppTone.neutral ? AppColors.surface3 : tone.color,
-                shape: BoxShape.circle,
-                border: Border.all(color: AppColors.bg, width: isFocused ? 3 : 2),
-                boxShadow: AppElevation.low,
-              ),
-              alignment: Alignment.center,
-              child: Text(
-                t.name.characters.first,
-                style: AppText.label.copyWith(color: tone == AppTone.neutral ? AppColors.textPrimary : AppColors.onStatus, fontSize: isFocused ? 16 : 13, height: 1),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _FocusCard extends StatelessWidget {
-  const _FocusCard({required this.item, required this.showTrail, required this.onToggleTrail, required this.onClose});
-  final TrackedEmployee item;
-  final bool showTrail;
-  final VoidCallback onToggleTrail;
-  final VoidCallback onClose;
-
-  @override
-  Widget build(BuildContext context) {
-    final (tone, label) = _AdminLiveTrackingScreenState.statusStyle(item.status);
-    return ContentWidth(
-      maxWidth: 520,
-      child: Material(
-        color: AppColors.surface1,
-        shape: RoundedRectangleBorder(borderRadius: AppRadius.card, side: BorderSide(color: tone.color.withValues(alpha: 0.5))),
-        child: Padding(
-          padding: const EdgeInsetsDirectional.fromSTEB(AppSpace.md, AppSpace.sm, AppSpace.xs, AppSpace.md),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                children: [
-                  AppAvatar(name: item.name, url: item.employee['avatar_url']?.toString(), size: 40, tone: tone),
-                  const SizedBox(width: AppSpace.md),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(item.name, style: AppText.subtitle, maxLines: 1, overflow: TextOverflow.ellipsis),
-                        Text(item.branchName, style: AppText.caption),
-                      ],
-                    ),
-                  ),
-                  StatusBadge(label, tone: tone, dot: true),
-                  IconButton(tooltip: 'إغلاق', icon: const Icon(Icons.close_rounded, size: 20), onPressed: onClose),
-                ],
-              ),
-              const SizedBox(height: AppSpace.sm),
-              Wrap(
-                spacing: AppSpace.lg,
-                runSpacing: AppSpace.xs,
-                children: [
-                  if (item.checkIn != null) _Fact(Icons.login_rounded, Fmt.time(item.checkIn)),
-                  if (item.checkOut != null) _Fact(Icons.logout_rounded, Fmt.time(item.checkOut)),
-                  if (item.distanceToBranch != null) _Fact(Icons.near_me_rounded, 'عن الفرع ${formatDistance(item.distanceToBranch!)}'),
-                  if (item.lastSeen != null) _Fact(Icons.update_rounded, Fmt.relative(item.lastSeen)),
-                  if (item.batteryLevel != null) _Fact(Icons.battery_std_rounded, '${item.batteryLevel}%'),
-                  if (item.isMoving) const _Fact(Icons.directions_walk_rounded, 'يتحرك'),
-                ],
-              ),
-              if (item.trail.length >= 2) ...[
-                const SizedBox(height: AppSpace.sm),
-                Row(
-                  children: [
-                    const Icon(Icons.route_rounded, size: 18, color: AppColors.brand),
-                    const SizedBox(width: AppSpace.xs),
-                    Expanded(child: Text('المسار ${item.totalDistanceKm.toStringAsFixed(2)} كم · ${item.trail.length} نقطة', style: AppText.bodySm)),
-                    TextButton(onPressed: onToggleTrail, child: Text(showTrail ? 'إخفاء' : 'إظهار')),
-                  ],
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _Fact extends StatelessWidget {
-  const _Fact(this.icon, this.text);
-  final IconData icon;
-  final String text;
-
-  @override
-  Widget build(BuildContext context) => Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, color: AppColors.textMuted),
-          const SizedBox(width: AppSpace.xs),
-          Text(text, style: AppText.bodySm.copyWith(color: AppColors.textPrimary)),
-        ],
-      );
 }
