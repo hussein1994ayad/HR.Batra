@@ -71,3 +71,14 @@
 - **أُضيف فحص** `web/src/features/shell/nav.test.ts` (`findActiveItem`, `initialsOf`).
 - ترتيب تسجيل الخروج نفسه: إغلاق النافذة ← مسح الكاش ← signOut ← /login.
 - فحص: `tsc` ✓، `lint` ✓، `vitest` 89 ✓، `build` ✓، `e2e` 27 ✓ (تشمل القائمة، الموبايل، صلاحيات مدير الفرع).
+
+## Step 7 — الصفحة الرئيسية `dashboard/page.tsx` (النقطة 11)
+- `web/src/app/dashboard/page.tsx`: من 801 إلى 225 سطر (ملخص اليوم، المؤشرات، الإجراءات السريعة — تركيب).
+- **أُنشئ** `web/src/features/overview/`:
+  - `api.ts` — `fetchDashboard` (نفس الاستعلامات الـ 15 المتوازية والكاش `batra_cache_dashboard`)، `isDashboardData`،
+    و`publishAnnouncement` (استدعاء `publish_announcement` كان داخل نافذة التعميم).
+  - `logic.ts` — `computeTodayAttendance` (قاعدة الحاضر/الغائب موثقة) و`buildSecurityLogs` و`formatLogTime` — منقولة حرفياً.
+  - `components/AnnouncementModal.tsx`, `OverviewWidgets.tsx` (`StatCard`, `AttendanceRing`, `LegendRow`, `DashboardSkeleton`),
+    `SecurityCenter.tsx`, `AbsentTodayCard.tsx` (مع بحث الغياب).
+- **أُضيف فحص** `web/src/features/overview/logic.test.ts` (الحضور/الغياب، أيام العطل، المجازين، ترتيب الحوادث).
+- فحص: `tsc` ✓، `lint` ✓، `vitest` 92 ✓، `build` ✓، `e2e` 27 ✓.
