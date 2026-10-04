@@ -82,3 +82,14 @@
     `SecurityCenter.tsx`, `AbsentTodayCard.tsx` (مع بحث الغياب).
 - **أُضيف فحص** `web/src/features/overview/logic.test.ts` (الحضور/الغياب، أيام العطل، المجازين، ترتيب الحوادث).
 - فحص: `tsc` ✓، `lint` ✓، `vitest` 92 ✓، `build` ✓، `e2e` 27 ✓.
+
+## Step 8 — صفحة الإعدادات `settings/page.tsx` (النقطة 12)
+- `web/src/app/dashboard/settings/page.tsx`: من 733 إلى 59 سطر (التبويبات فقط).
+- **أُنشئت** في `web/src/features/settings/components/`: `GeneralSettings.tsx`, `SchedulesSection.tsx`, `AnnouncementsSection.tsx`
+  (الـ JSX منقول حرفياً بسكربت حسب أرقام الأسطر).
+- **الاستعلامات الـ 18 خرجت من الواجهة** إلى `features/settings/api.ts`: `fetchSettings` (نفس القيم الافتراضية)،
+  `saveGeneralSettings` (نفس الترتيب: الشركة ← الأرشفة/الإجازات ← `set_payroll_policy`)، `addWorkSchedule`, `deleteWorkSchedule`,
+  `deleteAnnouncement`, `deleteAllAnnouncements` (هاتان ترجعان الخطأ بدل رميه حتى يبقى ترتيب إطفاء مؤشر التحميل نفسه).
+- `types.ts`: `CompanySettings`, `SettingsData`. `logic.ts`: `DEFAULT_LEAVE_TYPES`, `PROTECTED_LEAVE_TYPES`, `WEEK_ORDER` (مع سبب كل ثابت).
+- متبقٍ خارج هذه النقطة: `HolidaysCard.tsx` (كان أصلاً بمجلد الميزة) فيه 5 استعلامات مباشرة.
+- فحص: `tsc` ✓، `lint` ✓، `vitest` 92 ✓، `build` ✓، `e2e` 27 ✓ (منها "saves settings").
