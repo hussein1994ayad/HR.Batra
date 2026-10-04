@@ -2,6 +2,7 @@
 
 import { supabase } from '@/lib/supabase';
 import { bucketFor } from '@/lib/storage';
+import type { DeletedFile } from '@/lib/db-types';
 import type { TableSizeRow } from './logic';
 
 export interface StorageStats {
@@ -76,4 +77,32 @@ export async function emptyTrash(): Promise<void> {
     .is('restored_at', null);
 
   if (error) throw error;
+}
+
+// ── سلة المحذوفات (صفحة trash) ──
+
+/** الملفات بالسلة (غير المستعادة) مع اسم الموظف، الأحدث أولاً. */
+export async function fetchDeletedFiles(): Promise<DeletedFile[]> {
+  const { data, error } = await supabase
+    .from('deleted_files')
+    .select('*, employees(full_name)')
+    .is('restored_at', null)
+    .order('deleted_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as DeletedFile[];
+}
+
+/** استعادة ملف (وسمه كمسترجع). ترمي عند الفشل. */
+export async function restoreDeletedFile(id: string): Promise<void> {
+  const { error } = await supabase.from('deleted_files').update({ restored_at: new Date().toISOString() }).eq('id', id);
+  if (error) throw error;
+}
+
+/** إتلاف ملف نهائياً: من التخزين أولاً ثم من السجل. ترمي عند أول فشل. */
+export async function destroyDeletedFile(file: Pick<DeletedFile, 'id' | 'file_type' | 'file_path'>): Promise<void> {
+  const bucket = bucketFor(file.file_type);
+  const { error: storeErr } = await supabase.storage.from(bucket).remove([file.file_path]);
+  if (storeErr) throw storeErr;
+  const { error: dbErr } = await supabase.from('deleted_files').delete().eq('id', file.id);
+  if (dbErr) throw dbErr;
 }

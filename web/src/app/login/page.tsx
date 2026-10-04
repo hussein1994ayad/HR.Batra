@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
+import { hasDashboardSession, signInToDashboard } from '@/features/auth/api';
 import { errorMessage } from '@/lib/format';
 import { Lock, Mail, AlertTriangle, ShieldCheck, Eye, EyeOff, Loader2, Sparkles, MapPin, CalendarRange, Banknote, ArrowLeft } from 'lucide-react';
 
@@ -17,18 +17,9 @@ export default function LoginPage() {
   // Check if already authenticated
   useEffect(() => {
     const checkUser = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        // Double check admin role
-        const { data: emp } = await supabase
-          .from('employees')
-          .select('role')
-          .eq('id', session.user.id)
-          .single();
-
-        if (emp && (emp.role === 'admin' || emp.role === 'manager')) {
-          router.replace('/dashboard');
-        }
+      // Double check admin role
+      if (await hasDashboardSession()) {
+        router.replace('/dashboard');
       }
     };
     checkUser();
@@ -40,37 +31,8 @@ export default function LoginPage() {
     setError(null);
 
     try {
-      // 1. Sign in with Supabase auth
-      const { data: authData, error: authErr } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (authErr) {
-        throw new Error('بيانات الدخول غير صحيحة، يرجى التحقق وإعادة المحاولة.');
-      }
-
-      if (!authData.user) {
-        throw new Error('فشل تسجيل الدخول.');
-      }
-
-      // 2. verify role in employees table (must be admin or manager)
-      const { data: emp, error: empErr } = await supabase
-        .from('employees')
-        .select('role, full_name')
-        .eq('id', authData.user.id)
-        .single();
-
-      if (empErr || !emp) {
-        // Sign out if not an admin
-        await supabase.auth.signOut();
-        throw new Error('عذراً! لا تمتلك صلاحيات كافية للوصول إلى لوحة الإدارة.');
-      }
-
-      if (emp.role !== 'admin' && emp.role !== 'manager') {
-        await supabase.auth.signOut();
-        throw new Error('عذراً! هذا الحساب مخصص للموظفين فقط. لوحة الويب للمسؤولين فقط.');
-      }
+      // دخول + التأكد إن الحساب أدمن أو مدير (وإلا تسجيل خروج ورسالة)
+      await signInToDashboard(email, password);
 
       // Redirect on success
       router.replace('/dashboard');

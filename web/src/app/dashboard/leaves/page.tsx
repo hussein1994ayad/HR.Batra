@@ -18,51 +18,15 @@ import {
   AlertTriangle,
   Ban,
 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
 import { confetti } from '@/lib/lazy';
 import { useQuery } from '@/lib/useQuery';
 import { toDateKey } from '@/lib/attendance';
 import { errorMessage, formatDateTime } from '@/lib/format';
 import type { LeaveRequest, RequestStatus } from '@/lib/db-types';
+import { decideLeave, fetchLeaveCounts, fetchLeaves } from '@/features/leaves/api';
+import { filterLeavesByName, LEAVE_TYPES, leaveDays } from '@/features/leaves/logic';
 import { Avatar, Badge, Button, Card, EmptyState, PageHeader, SearchInput, SegmentedTabs, Toggle, cn } from '@/components/ui';
 import { openStorageUrl } from '@/lib/signed-urls';
-
-const LEAVE_TYPES: Record<string, string> = {
-  annual: 'إجازة سنوية',
-  sick: 'إجازة مرضية',
-  emergency: 'إجازة طارئة',
-  maternity: 'إجازة أمومة',
-};
-
-async function fetchLeaves(status: RequestStatus): Promise<LeaveRequest[]> {
-  const { data, error } = await supabase
-    .from('leave_requests')
-    .select(
-      `*,
-      employees!leave_requests_employee_id_fkey(full_name),
-      approver:employees!leave_requests_approved_by_fkey(full_name)`,
-    )
-    .eq('status', status)
-    .order('created_at', { ascending: false });
-  if (error) throw error;
-  return (data ?? []) as LeaveRequest[];
-}
-
-/** عدد الطلبات بكل حالة (للأرقام على التبويبات) */
-async function fetchLeaveCounts(): Promise<Record<RequestStatus, number>> {
-  const statuses: RequestStatus[] = ['pending', 'approved', 'rejected', 'cancelled'];
-  const results = await Promise.all(statuses.map((st) =>
-    supabase.from('leave_requests').select('id', { count: 'exact', head: true }).eq('status', st)));
-  const firstError = results.find((r) => r.error)?.error;
-  if (firstError) throw firstError;
-  return Object.fromEntries(statuses.map((st, i) => [st, results[i].count ?? 0])) as Record<RequestStatus, number>;
-}
-
-function leaveDays(req: LeaveRequest): number {
-  const start = new Date(toDateKey(req.start_date));
-  const end = new Date(toDateKey(req.end_date));
-  return Math.round(Math.abs(end.getTime() - start.getTime()) / 86_400_000) + 1;
-}
 
 export default function LeavesPage() {
   const [activeTab, setActiveTab] = useState<RequestStatus>('pending');
@@ -75,8 +39,7 @@ export default function LeavesPage() {
   const counts = useQuery('leaves:counts', fetchLeaveCounts);
   const requests = useMemo(() => {
     const list = query.refreshing ? [] : query.data ?? [];
-    const q = search.trim().toLowerCase();
-    return q ? list.filter((r) => (r.employees?.full_name || '').toLowerCase().includes(q)) : list;
+    return filterLeavesByName(list, search);
   }, [query.data, query.refreshing, search]);
   const isLoading = query.loading || query.refreshing;
 
@@ -86,24 +49,7 @@ export default function LeavesPage() {
     setRejecting(null);
     setActionLoading(req.id);
     try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (!session) return;
-
-      const { error } = await supabase
-        .from('leave_requests')
-        .update({
-          status: approve ? 'approved' : 'rejected',
-          is_paid: approve ? isPaid : undefined,
-          rejection_reason: !approve && rejectionReason ? rejectionReason : undefined,
-          approved_by: session.user.id,
-          approved_at: new Date().toISOString(),
-        })
-        .eq('id', req.id);
-      if (error) throw error;
-
-      // إشعار الموظف بالقرار (مع سبب الرفض) يُرسل من قاعدة البيانات: trg_notify_employee_leave_decision
+      if (!(await decideLeave(req.id, { approve, isPaid, rejectionReason }))) return;
 
       query.mutate((list) => list.filter((r) => r.id !== req.id));
       void counts.reload();

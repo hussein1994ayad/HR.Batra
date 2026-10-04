@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
+import { hasDashboardSession } from '@/features/auth/api';
 import { Loader2 } from 'lucide-react';
 
 export default function Home() {
@@ -11,19 +11,9 @@ export default function Home() {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-          // Verify role in employee table
-          const { data: emp } = await supabase
-            .from('employees')
-            .select('role')
-            .eq('id', session.user.id)
-            .single();
-
-          if (emp && (emp.role === 'admin' || emp.role === 'manager')) {
-            router.replace('/dashboard');
-            return;
-          }
+        if (await hasDashboardSession()) {
+          router.replace('/dashboard');
+          return;
         }
         router.replace('/login');
       } catch (err) {

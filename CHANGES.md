@@ -291,3 +291,15 @@
   القيم الافتراضية بالنماذج تختلف عن المعروض، فالتحويل يغيّر العرض ويخالف قاعدة "نفس السلوك".
 - `CHANGES.md`: تصحيح كتابة `@pragma('vm:entry-point')` بالخطوة 11.
 - لا تغيير بالكود.
+
+## Step 27 — الويب: آخر الاستدعاءات المباشرة (إكمال النقاط 3 و 4)
+- **أُنشئ** `web/src/features/leaves/{api.ts, logic.ts}`: `fetchLeaves`, `fetchLeaveCounts`, `decideLeave` (نفس التحديث ونفس
+  شرط الجلسة)، و`LEAVE_TYPES`, `leaveDays`, `filterLeavesByName`. صفحة الإجازات صارت تركيب فقط.
+- **وُسّع** `features/storage/api.ts`: `fetchDeletedFiles`, `restoreDeletedFile`, `destroyDeletedFile` (التخزين أولاً ثم السجل) لصفحة السلة.
+- **وُسّع** `features/settings/api.ts`: `fetchRecentHolidays`, `addHoliday`, `deleteHoliday` — ترجع الخطأ بدل رميه حتى
+  تبقى رسائل `HolidaysCard` نفسها (ومنها رسالة 23505 "مسجّل مسبقاً").
+- **أُنشئ** `features/auth/api.ts`: `hasDashboardSession` (فحص الجلسة + الدور) و`signInToDashboard` (نفس الخطوات ونفس الرسائل
+  ونفس تسجيل الخروج للحساب غير المخوّل) — تستعملهم صفحة الدخول والصفحة الرئيسية.
+- بهذا **ما بقى أي استيراد لـ `@/lib/supabase` داخل `web/src/app` أو `web/src/components`.**
+- **أُضيف فحص** `features/leaves/logic.test.ts` و`features/auth/api.test.ts`.
+- فحص: `tsc` ✓، `lint` ✓، `vitest` 100 ✓، `build` ✓، Playwright 27 ✓.

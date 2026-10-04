@@ -125,3 +125,29 @@ export async function deleteAllAnnouncements() {
   const { error } = await supabase.from('announcements').delete().gt('created_at', '1970-01-01');
   return error;
 }
+
+// ── العطل الرسمية (HolidaysCard) — ترجع الخطأ بدل رميه: الواجهة تعرض رسالة حسب نوعه ──
+
+export type Holiday = { holiday_date: string; name: string };
+
+/** العطل من قبل 60 يوماً فما بعد، مرتبة بالتاريخ. */
+export async function fetchRecentHolidays() {
+  const { data, error } = await supabase
+    .from('official_holidays')
+    .select('holiday_date, name')
+    .gte('holiday_date', new Date(Date.now() - 60 * 86400000).toISOString().slice(0, 10))
+    .order('holiday_date');
+  return { data: (data ?? null) as Holiday[] | null, error };
+}
+
+/** إضافة عطلة باسم المستخدم الحالي. الخطأ 23505 = اليوم مسجّل مسبقاً. */
+export async function addHoliday(date: string, name: string) {
+  const { data: { user } } = await supabase.auth.getUser();
+  const { error } = await supabase.from('official_holidays').insert({ holiday_date: date, name, created_by: user?.id });
+  return error;
+}
+
+export async function deleteHoliday(date: string) {
+  const { error } = await supabase.from('official_holidays').delete().eq('holiday_date', date);
+  return error;
+}
