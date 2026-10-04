@@ -1,6 +1,7 @@
 // منطق الصفحة الرئيسية (نظرة عامة) — بدون React/Supabase حتى يُفحص لوحده.
 
-import { findSchedule, isDateInRange, weekdayOf, workDaysFor } from '@/lib/attendance';
+import { isDateInRange, weekdayOf, workDaysFor } from '@/lib/attendance';
+import { resolveWorkSchedule } from '@/lib/schedules';
 import type { Attendance, Employee, GeofenceViolation, LeaveRequest, MockGpsAttempt, WorkSchedule } from '@/lib/db-types';
 
 export type DirectoryEmployee = Pick<Employee, 'id' | 'full_name' | 'branch_id' | 'department_id'>;
@@ -28,7 +29,7 @@ export function computeTodayAttendance(
   leaves: LeaveRequest[],
 ): { present: number; absentList: DirectoryEmployee[] } {
   const weekday = weekdayOf(todayStr);
-  const isWorkingDay = (emp: DirectoryEmployee) => workDaysFor(findSchedule(emp, scheduleList)).includes(weekday);
+  const isWorkingDay = (emp: DirectoryEmployee) => workDaysFor(resolveWorkSchedule(emp, scheduleList)).includes(weekday);
 
   let present = 0;
   const accounted = new Set<string>();

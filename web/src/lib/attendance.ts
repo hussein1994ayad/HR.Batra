@@ -10,23 +10,7 @@ export const DEFAULT_WORK_DAYS = [6, 0, 1, 2, 3, 4];
  */
 export const DEFAULT_GRACE_MINUTES = 15;
 
-interface ScheduleTarget {
-  id: string;
-  department_id?: string | null;
-  branch_id?: string | null;
-}
-
-/**
- * Resolves the schedule that applies to an employee: an employee-specific
- * schedule wins over a department schedule, which wins over a branch one.
- */
-export function findSchedule(emp: ScheduleTarget, schedules: WorkSchedule[]): WorkSchedule | undefined {
-  return (
-    schedules.find((s) => s.employee_id === emp.id) ||
-    schedules.find((s) => !!emp.department_id && s.department_id === emp.department_id && !s.employee_id) ||
-    schedules.find((s) => !!emp.branch_id && s.branch_id === emp.branch_id && !s.employee_id && !s.department_id)
-  );
-}
+// أي جدول ينطبق على الموظف: resolveWorkSchedule في lib/schedules.ts (نفس أولوية السيرفر).
 
 export function workDaysFor(schedule: WorkSchedule | undefined): number[] {
   return schedule?.work_days ?? DEFAULT_WORK_DAYS;

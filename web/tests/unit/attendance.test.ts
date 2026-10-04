@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_WORK_DAYS,
-  findSchedule,
   isDateInRange,
   toDateKey,
   weekdayOf,
@@ -9,6 +8,7 @@ import {
 } from '@/lib/attendance';
 import { formatLateDurationArabic } from '@/lib/dates';
 import type { WorkSchedule } from '@/lib/db-types';
+import { resolveWorkSchedule } from '@/lib/schedules';
 
 const sched = (over: Partial<WorkSchedule>): WorkSchedule => ({
   id: over.id ?? 'x',
@@ -20,21 +20,27 @@ const sched = (over: Partial<WorkSchedule>): WorkSchedule => ({
   ...over,
 });
 
-describe('findSchedule', () => {
+describe('resolveWorkSchedule', () => {
   const branch = sched({ id: 'branch', branch_id: 'b1', department_id: null, employee_id: null });
   const dept = sched({ id: 'dept', department_id: 'd1', employee_id: null });
   const personal = sched({ id: 'personal', employee_id: 'e1' });
 
   it('prefers employee, then department, then branch schedules', () => {
     const emp = { id: 'e1', department_id: 'd1', branch_id: 'b1' };
-    expect(findSchedule(emp, [branch, dept, personal])?.id).toBe('personal');
-    expect(findSchedule({ ...emp, id: 'e2' }, [branch, dept, personal])?.id).toBe('dept');
-    expect(findSchedule({ id: 'e3', department_id: 'd9', branch_id: 'b1' }, [branch, dept])?.id).toBe('branch');
+    expect(resolveWorkSchedule(emp, [branch, dept, personal])?.id).toBe('personal');
+    expect(resolveWorkSchedule({ ...emp, id: 'e2' }, [branch, dept, personal])?.id).toBe('dept');
+    expect(resolveWorkSchedule({ id: 'e3', department_id: 'd9', branch_id: 'b1' }, [branch, dept])?.id).toBe('branch');
+  });
+
+  it('picks the newest schedule when two apply at the same level (like the server)', () => {
+    const older = sched({ id: 'old', branch_id: 'b1', department_id: null, employee_id: null, created_at: '2026-01-01T00:00:00Z' });
+    const newer = sched({ id: 'new', branch_id: 'b1', department_id: null, employee_id: null, created_at: '2026-06-01T00:00:00Z' });
+    expect(resolveWorkSchedule({ id: 'e5', department_id: null, branch_id: 'b1' }, [older, newer])?.id).toBe('new');
   });
 
   it('does not match a branch schedule of another branch for employees without a department', () => {
     const otherBranch = sched({ id: 'other', branch_id: 'b2', department_id: null, employee_id: null });
-    expect(findSchedule({ id: 'e4', department_id: null, branch_id: 'b1' }, [otherBranch])).toBeUndefined();
+    expect(resolveWorkSchedule({ id: 'e4', department_id: null, branch_id: 'b1' }, [otherBranch])).toBeUndefined();
   });
 
   it('falls back to the default Iraqi working week', () => {
