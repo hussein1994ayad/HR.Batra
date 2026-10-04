@@ -207,6 +207,9 @@ export async function saveDecision(decision: {
     throw new Error('الموظف غير مرتبط بفرع، يرجى ربطه بفرع أولاً.');
   }
 
+  // القرار ينكتب بسجل الحضور (deduction_status)، والـ trigger trg_payroll_attendance بالسيرفر ينقله لحركة
+  // الرواتب (payroll_events). الباب الثاني لنفس القرار هو decide_payroll_event (صفحة الرواتب) — أي تغيير
+  // بمسار القرار لازم يراعي البابين. التفاصيل: BUSINESS_RULES.md «دورة حياة المسير» البند 3.
   if (type === 'virtual_absent') {
     const { data: existing, error: findErr } = await supabase
       .from('attendance')

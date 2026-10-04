@@ -146,6 +146,9 @@ class ReportRow {
 DateTime _d(DateTime t) => DateTime(t.year, t.month, t.day);
 
 /// سطر لكل موظف ولكل يوم من [from] إلى [to] (لا يتجاوز [today]).
+///
+/// للعرض فقط: التصنيف (متأخر/خروج مبكر/غياب) هنا تقريبي ولا يطرح وقت الإجازة الزمنية مثل محرّك الرواتب،
+/// فممكن يطلع "متأخر" بيوم ما انخصم بيه. مصدر الحقيقة للخصم هو payroll_events (sync_payroll_day بالسيرفر).
 List<ReportRow> buildDailyReport({
   required DateTime from,
   required DateTime to,
