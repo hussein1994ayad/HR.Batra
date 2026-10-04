@@ -121,3 +121,20 @@
   و`components/BranchFormModal.tsx`.
 - **أُضيف فحص** `features/geofences/logic.test.ts`.
 - فحص: `tsc` ✓، `lint` ✓، `vitest` 94 ✓، `build` ✓، `e2e` 27 ✓.
+
+## Step 11 — خدمة الموقع `location_service.dart` (النقطتان 1 و 2)
+- `mobile/lib/core/services/location_service.dart`: من 1,123 إلى 503 سطر — نقطة الدخول (البدء/الإيقاف، خدمة الخلفية،
+  تدفق الموقع، كشف الموقع الوهمي، البطارية). نفس الدوال العامة ونفس `@pragma(\'vm:entry-point\')`.
+- **أُنشئ** `mobile/lib/core/services/location/`:
+  - `offline_json_queue.dart` — **طابور أوفلاين واحد** بدل 3 نسخ مكررة (النقاط، أحداث الفروع، أحداث السياج) — النقطة 2.
+    نفس أسماء الملفات على الجهاز (`offline_locations.json`, `branch_events_offline.json`, `geofence_events_offline.json`)
+    فما يضيع شي مخزّن من النسخة السابقة.
+  - `geofence_monitor.dart` — السياج الجغرافي + `isPointInPolygon` + طابور أحداثه.
+  - `branch_presence_monitor.dart` — دخول/خروج الفروع وإشعاراتها + طابورها.
+  - `tracking_schedule.dart` — قرار "نتتبع الآن؟" وحالته المحلية (`tracking_state.json`)، و`isCurrentTimeBetween`
+    (أُضيف معامل اختياري `now` للفحص فقط؛ الافتراضي نفس السلوك).
+  - `location_uploader.dart` — رفع النقاط والطابور والمزامنة بحزم.
+- **ملاحظة سلوك قائم (لم يُغيَّر):** أحداث الفروع/السياج المخزّنة تُرفع فقط إذا كان طابور النقاط غير فارغ؛ صُحّح التعليق المضلل.
+- **أُضيف فحص** `mobile/test/unit/location_split_test.dart` (الطابور، المضلع، نافذة الوقت)، واختبار على المحاكي
+  يشغّل التتبع ويوقفه (`integration_test/app_launch_test.dart`).
+- فحص: `dart analyze` ✓، `flutter test` 523 ✓.
