@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hr_pro/core/theme/app_theme.dart';
+import 'package:hr_pro/core/utils/company_time.dart';
 import 'package:hr_pro/presentation/employee/attendance/attendance_logic.dart';
 import 'package:hr_pro/presentation/employee/attendance/widgets/attendance_widgets.dart';
 
@@ -31,7 +32,7 @@ void main() {
   });
 
   group('mergeTodayOfflinePunches', () {
-    final todayStr = DateTime.now().toIso8601String().split('T')[0];
+    final todayStr = companyDateStr();
     final nowUtc = DateTime.now().toUtc().toIso8601String();
 
     test('offline punches of this user today override the server row', () {

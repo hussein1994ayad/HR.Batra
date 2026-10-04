@@ -16,6 +16,7 @@ import '../../../core/services/precise_location.dart';
 import '../../../core/services/schedule_service.dart';
 import '../../../core/services/supabase_service.dart';
 import '../../../core/utils/app_log.dart';
+import '../../../core/utils/company_time.dart';
 import '../../../data/repositories/attendance_repository.dart';
 import '../../shared/ui/ui.dart';
 import 'attendance_logic.dart';
@@ -207,7 +208,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       _startPositionStream();
 
       // 5. محاولة جلب أحدث بيانات الفرع والجدول والبصمات من Supabase بشكل متوازي
-      final todayStr = DateTime.now().toIso8601String().split('T')[0];
+      final todayStr = companyDateStr();
       String? syncWarning;
       try {
         // رفع البصمات المحفوظة أوفلاين أولاً حتى تظهر حالة اليوم الصحيحة

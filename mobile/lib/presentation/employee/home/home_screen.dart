@@ -21,6 +21,7 @@ import '../../../core/services/ota_service.dart';
 import '../../../core/services/schedule_service.dart';
 import '../../../core/services/supabase_service.dart';
 import '../../../core/utils/app_log.dart';
+import '../../../core/utils/company_time.dart';
 import '../../../data/repositories/home_repository.dart';
 import '../../shared/ui/ui.dart';
 import '../announcements/announcement_widgets.dart';
@@ -115,7 +116,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final user = SupabaseService.currentUser;
     if (user == null) return;
     try {
-      final todayStr = DateTime.now().toIso8601String().split('T')[0];
+      final todayStr = companyDateStr();
       final rec = await _repo.fetchTodayAttendance(user.id, todayStr);
       if (mounted) {
         setState(() {
@@ -131,7 +132,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void _subscribeToAttendance() {
     final user = SupabaseService.currentUser;
     if (user == null) return;
-    final todayStr = DateTime.now().toIso8601String().split('T')[0];
+    final todayStr = companyDateStr();
 
     _attendanceSubscription = _repo.subscribeToAttendance(user.id, (payload) {
       if (!mounted) return;
@@ -183,7 +184,7 @@ class _HomeScreenState extends State<HomeScreen> {
         });
       }
 
-      final todayStr = DateTime.now().toIso8601String().split('T')[0];
+      final todayStr = companyDateStr();
 
       final scheduleQuery = ScheduleService.fetchEffectiveSchedule();
 

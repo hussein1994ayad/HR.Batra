@@ -4,6 +4,7 @@
 import '../../../core/design/formatters.dart';
 import '../../../core/models/work_schedule_model.dart';
 import '../../../core/services/precise_location.dart';
+import '../../../core/utils/company_time.dart';
 
 const attendanceOutOfRangeMessage = 'أنت خارج نطاق الفرع الجغرافي المسموح به للتبصيم.';
 
@@ -40,8 +41,8 @@ Map<String, dynamic> mergeTodayOfflinePunches({
 }) {
   final todayOfflinePunches = offlineQueue.where((p) {
     if (p['user_id'] != userId) return false;
-    final time = DateTime.tryParse(p['time'] as String? ?? '')?.toLocal();
-    return time != null && time.toIso8601String().startsWith(todayStr);
+    final time = DateTime.tryParse(p['time'] as String? ?? '');
+    return time != null && companyDateStr(time) == todayStr;
   }).toList();
 
   final Map<String, dynamic> combinedAttendance = serverToday != null ? Map<String, dynamic>.from(serverToday) : {};
