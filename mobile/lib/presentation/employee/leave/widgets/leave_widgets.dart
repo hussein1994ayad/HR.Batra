@@ -1,5 +1,7 @@
 // أجزاء عرض شاشة الإجازات: كارت الرصيد المتبقي وكارت طلب الإجازة بالسجل.
 
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -147,6 +149,124 @@ class LeaveCard extends StatelessWidget {
                 ),
             ],
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// تبويب "طلباتي": فلتر الحالة، وكروت الطلبات مع الإلغاء، وسحب للتحديث.
+class LeaveHistoryList extends StatelessWidget {
+  const LeaveHistoryList({
+    super.key,
+    required this.loading,
+    required this.failed,
+    required this.history,
+    required this.filter,
+    required this.onFilterChanged,
+    required this.onRetry,
+    required this.onRefresh,
+    required this.onNewRequest,
+    required this.typeLabel,
+    required this.onCancel,
+  });
+
+  final bool loading;
+  final bool failed;
+  final List<LeaveRequestModel> history;
+
+  /// 'all' أو حالة طلب.
+  final String filter;
+  final ValueChanged<String> onFilterChanged;
+  final VoidCallback onRetry;
+  final Future<void> Function() onRefresh;
+  final VoidCallback onNewRequest;
+  final String Function(String type) typeLabel;
+  final void Function(LeaveRequestModel req) onCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    if (loading) {
+      return const Padding(padding: EdgeInsets.all(AppSpace.page), child: SkeletonList(count: 4));
+    }
+    if (failed && history.isEmpty) {
+      return ErrorView(onRetry: onRetry);
+    }
+    final items = filter == 'all' ? history : history.where((r) => r.status == filter).toList();
+
+    return RefreshIndicator.adaptive(
+      onRefresh: onRefresh,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(AppSpace.page, AppSpace.md, AppSpace.page, AppSpace.x4),
+        children: [
+          AppChoiceChips<String>(
+            scrollable: true,
+            value: filter,
+            onChanged: onFilterChanged,
+            options: const [('all', 'الكل', null), ('pending', 'قيد المراجعة', null), ('approved', 'مقبولة', null), ('rejected', 'مرفوضة', null), ('cancelled', 'ملغاة', null)],
+          ),
+          const SizedBox(height: AppSpace.md),
+          if (items.isEmpty)
+            EmptyView(
+              title: history.isEmpty ? 'ما عندك طلبات إجازة بعد' : 'لا توجد طلبات بهذه الحالة',
+              message: history.isEmpty ? 'طلباتك وقرارات الإدارة تظهر هنا.' : null,
+              icon: Icons.event_note_rounded,
+              actionLabel: history.isEmpty ? 'قدّم طلب' : null,
+              onAction: onNewRequest,
+            )
+          else
+            for (var i = 0; i < items.length; i++)
+              Padding(
+                padding: const EdgeInsets.only(bottom: AppSpace.md),
+                child: FadeSlideIn(
+                  index: i,
+                  child: ContentWidth(
+                    child: LeaveCard(req: items[i], typeName: typeLabel(items[i].leaveType), onCancel: onCancel),
+                  ),
+                ),
+              ),
+        ],
+      ),
+    );
+  }
+}
+
+/// مرفق الطلب (صورة تقرير طبي أو مستند) مع زر الإزالة.
+class LeaveAttachmentCard extends StatelessWidget {
+  const LeaveAttachmentCard({super.key, required this.file, required this.onPick, required this.onRemove});
+
+  final File? file;
+  final VoidCallback onPick;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      onTap: onPick,
+      tone: file != null ? AppTone.success : null,
+      padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg, vertical: AppSpace.md),
+      child: Row(
+        children: [
+          Icon(
+            file != null ? Icons.task_alt_rounded : Icons.add_photo_alternate_outlined,
+            color: file != null ? AppColors.success : AppColors.brand,
+          ),
+          const SizedBox(width: AppSpace.md),
+          Expanded(
+            child: Text(
+              file != null ? 'أُرفقت صورة ${file!.path.split(Platform.pathSeparator).last}' : 'أضف صورة تقرير طبي أو مستند',
+              style: AppText.bodySm.copyWith(color: AppColors.textPrimary),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          if (file != null)
+            IconButton(
+              tooltip: 'إزالة المرفق',
+              onPressed: onRemove,
+              icon: const Icon(Icons.close_rounded, color: AppColors.textMuted),
+            ),
         ],
       ),
     );

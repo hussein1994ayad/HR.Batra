@@ -417,3 +417,14 @@
 - **تبقى `Map` عن قصد:** سجل اليوم وجدول الدوام بشاشة البصمة والرئيسية — هم نفس JSON الكاش بالجهاز (`AttendanceSyncService`)
   ودمج البصمات المحفوظة بدون إنترنت؛ تحويلهم يمس مسار البصمة نفسه، والوعد كان ما نغيّر البصمة.
 - النتيجة: لقطات `04_attendance` و`05_leave` **مطابقة**؛ `flutter test` 617 ✓.
+
+## Step 41 — تصغير آخر الملفات الكبيرة (النقطة 4)
+- **Excel:** `core/services/excel_export_service.dart` (581 → 79 سطر) صار واجهة رفيعة بنفس الدوال العامة؛ كشف السلفة انتقل حرفياً إلى
+  `core/services/excel/loan_statement_excel.dart`، وتقرير الحضور إلى `core/services/excel/attendance_report_excel.dart`
+  (اختبار ملف تقرير الحضور يمر).
+- **الإجازات:** تبويب "طلباتي" صار `LeaveHistoryList` ومرفق الطلب `LeaveAttachmentCard` (الشاشة 552 → 488).
+- **تقرير الحضور:** تحويل الصفوف (البصمات، الإجازات المعتمدة، العطل، القوائم وأسماء أنواع الإجازات) صار داخل
+  `AttendanceReportRepository` ويرجع أنواعاً جاهزة (`ReportAttendance`, `ReportLeave`, `ReportLookups`)؛ ونافذة تعديل الأوقات صارت
+  `widgets/edit_times_sheet.dart` تأخذ `ReportTimeEdit` (record مُنمّط بدل Map). الشاشة 517 → 429.
+- **أُضيف فحص** `mobile/test/unit/edit_times_sheet_test.dart`.
+- النتيجة: كل اللقطات **مطابقة**؛ `flutter test` 618 ✓.

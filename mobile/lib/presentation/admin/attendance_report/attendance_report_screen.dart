@@ -19,6 +19,7 @@ import '../../../core/utils/app_log.dart';
 import '../../../data/repositories/attendance_report_repository.dart';
 import '../../../data/repositories/role_repository.dart';
 import '../../shared/ui/ui.dart';
+import 'widgets/edit_times_sheet.dart';
 import 'widgets/report_record_card.dart';
 
 class AttendanceReportScreen extends StatefulWidget {
@@ -67,17 +68,12 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
         return;
       }
 
-      final results = await _repo.fetchLookups();
+      final lookups = await _repo.fetchLookups();
       if (mounted) {
-        _branches = List<Map<String, dynamic>>.from(results[0] as Iterable<dynamic>).map(BranchModel.fromMap).toList();
-        _employeesList = List<Map<String, dynamic>>.from(results[1] as Iterable<dynamic>).map(EmployeeRef.fromMap).toList();
-        _schedules = rowsOf(results[2]).map(WorkScheduleModel.fromMap).toList();
-        final types = rowOf(results[3])?['value'] is Map ? (rowOf(results[3])!['value'] as Map)['active_types'] : null;
-        _leaveTypeNames = {
-          if (types is List)
-            for (final t in types)
-              if (t is Map && t['id'] != null) t['id'].toString(): 'إجازة ${t['name'].toString().replaceFirst(RegExp(r'^إجازة\s*'), '')}',
-        };
+        _branches = lookups.branches;
+        _employeesList = lookups.employees;
+        _schedules = lookups.schedules;
+        _leaveTypeNames = lookups.leaveTypeNames;
       }
     } catch (e) {
       appLog('Error loading report lookups: $e');
@@ -113,13 +109,11 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
       ];
       final ids = employees.isEmpty ? ['00000000-0000-0000-0000-000000000000'] : [for (final e in employees) e.id];
 
-      final attendanceRows = await _repo.fetchAttendance(ids, from: _iso(from), to: _iso(to));
+      final attendance = await _repo.fetchAttendance(ids, from: _iso(from), to: _iso(to));
 
-      final leaveRows = await _repo.fetchApprovedLeaves(ids, from: from, to: to);
+      final leaves = await _repo.fetchApprovedLeaves(ids, from: from, to: to, typeNames: _leaveTypeNames);
 
-      final holidayRows = await _repo.fetchHolidays(from: _iso(from), to: _iso(to));
-
-      String hhmm(Object? t) => t == null ? '' : t.toString().substring(0, t.toString().length >= 5 ? 5 : t.toString().length);
+      final holidays = await _repo.fetchHolidays(from: _iso(from), to: _iso(to));
 
       final rows = buildDailyReport(
         from: from,
@@ -127,39 +121,9 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
         today: DateTime.now(),
         employees: employees,
         schedules: _schedules,
-        holidays: {
-          for (final h in holidayRows)
-            if (DateTime.tryParse(h.str('holiday_date') ?? '') != null) DateTime.parse(h.str('holiday_date')!): h.str('name') ?? 'عطلة',
-        },
-        attendance: [
-          for (final a in attendanceRows)
-            ReportAttendance(
-              id: a.str('id') ?? '',
-              employeeId: a.str('employee_id') ?? '',
-              date: DateTime.parse(a.str('work_date')!),
-              status: a.str('status') ?? 'present',
-              checkIn: a.date('check_in_time'),
-              checkOut: a.date('check_out_time'),
-              checkInLat: a.dbl('check_in_lat'),
-              checkInLng: a.dbl('check_in_lng'),
-              checkOutLat: a.dbl('check_out_lat'),
-              checkOutLng: a.dbl('check_out_lng'),
-            ),
-        ],
-        leaves: [
-          for (final l in leaveRows)
-            if (l.date('start_date') != null && l.date('end_date') != null)
-              ReportLeave(
-                employeeId: l.str('employee_id') ?? '',
-                from: l.date('start_date')!,
-                to: l.date('end_date')!,
-                typeName: _leaveTypeNames[l.str('leave_type')] ?? leaveTypeArabic(l.str('leave_type')),
-                isHourly: l.boolean('is_hourly') ?? false,
-                isPaid: l.boolean('is_paid') ?? true,
-                startHour: hhmm(l['start_hour']),
-                endHour: hhmm(l['end_hour']),
-              ),
-        ],
+        holidays: holidays,
+        attendance: attendance,
+        leaves: leaves,
       );
 
       if (mounted) {
@@ -291,66 +255,14 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
     }
   }
 
-  static TimeOfDay? _timeOf(Object? v) {
-    if (v == null) return null;
-    final dt = DateTime.tryParse(v.toString())?.toLocal();
-    if (dt != null) return TimeOfDay(hour: dt.hour, minute: dt.minute);
-    final p = v.toString().split(':');
-    if (p.length < 2) return null;
-    final h = int.tryParse(p[0]);
-    final m = int.tryParse(p[1]);
-    return h == null || m == null ? null : TimeOfDay(hour: h, minute: m);
-  }
 
-  Future<void> _editTimeDialog(Map<String, dynamic> record) async {
-    TimeOfDay? newCheckIn = _timeOf(record['check_in']);
-    TimeOfDay? newCheckOut = _timeOf(record['check_out']);
-    String label(TimeOfDay? t) => t == null ? 'لم يُحدد' : Fmt.time(DateTime(2000, 1, 1, t.hour, t.minute));
 
-    final save = await showAppSheet<bool>(
-      context,
-      title: 'تعديل أوقات ${record['employee_name']}',
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSheet) => Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text('يوم ${Fmt.dateWithDay(DateTime.tryParse(record['work_date'].toString()))}', style: AppText.bodySm),
-            const SizedBox(height: AppSpace.md),
-            Row(
-              children: [
-                Expanded(
-                  child: AppPickerField(
-                    label: 'الحضور',
-                    icon: Icons.login_rounded,
-                    value: label(newCheckIn),
-                    onTap: () async {
-                      final t = await showTimePicker(context: ctx, initialTime: newCheckIn ?? const TimeOfDay(hour: 8, minute: 0));
-                      if (t != null) setSheet(() => newCheckIn = t);
-                    },
-                  ),
-                ),
-                const SizedBox(width: AppSpace.md),
-                Expanded(
-                  child: AppPickerField(
-                    label: 'الانصراف',
-                    icon: Icons.logout_rounded,
-                    value: label(newCheckOut),
-                    onTap: () async {
-                      final t = await showTimePicker(context: ctx, initialTime: newCheckOut ?? const TimeOfDay(hour: 16, minute: 0));
-                      if (t != null) setSheet(() => newCheckOut = t);
-                    },
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: AppSpace.xl),
-            AppButton(label: 'حفظ', icon: Icons.check_rounded, expand: true, onPressed: () => Navigator.pop(ctx, true)),
-          ],
-        ),
-      ),
-    );
-    if (save == true) {
-      unawaited(_saveEditedTime(record['id'] as String, record['work_date'] as String, newCheckIn, newCheckOut));
+
+
+  Future<void> _editTimeDialog(ReportTimeEdit record) async {
+    final times = await showEditTimesSheet(context, record);
+    if (times != null) {
+      unawaited(_saveEditedTime(record.id, record.workDate, times.checkIn, times.checkOut));
     }
   }
 

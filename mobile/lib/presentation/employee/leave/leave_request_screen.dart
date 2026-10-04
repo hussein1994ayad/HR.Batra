@@ -290,7 +290,21 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
             padding: const EdgeInsets.fromLTRB(AppSpace.page, AppSpace.lg, AppSpace.page, AppSpace.x4),
             child: ContentWidth(maxWidth: AppBreakpoints.maxForm, child: _buildLeaveForm()),
           ),
-          _buildLeaveHistoryTab(),
+          LeaveHistoryList(
+            loading: _isLoadingHistory,
+            failed: _historyError,
+            history: _leaveHistory,
+            filter: _historyFilter,
+            onFilterChanged: (v) => setState(() => _historyFilter = v),
+            onRetry: () {
+              setState(() => _isLoadingHistory = true);
+              _loadHistory();
+            },
+            onRefresh: _loadHistory,
+            onNewRequest: () => _tabController.animateTo(0),
+            typeLabel: (type) => leaveTypeLabel(type, _leaveTypes),
+            onCancel: _cancelLeave,
+          ),
         ],
       ),
     );
@@ -394,34 +408,7 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
           const SizedBox(height: AppSpace.lg),
           Text('مرفق (اختياري)', style: AppText.bodySm.copyWith(fontWeight: FontWeight.w700)),
           const SizedBox(height: AppSpace.sm),
-          AppCard(
-            onTap: _pickAttachment,
-            tone: _attachmentFile != null ? AppTone.success : null,
-            padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg, vertical: AppSpace.md),
-            child: Row(
-              children: [
-                Icon(
-                  _attachmentFile != null ? Icons.task_alt_rounded : Icons.add_photo_alternate_outlined,
-                  color: _attachmentFile != null ? AppColors.success : AppColors.brand,
-                ),
-                const SizedBox(width: AppSpace.md),
-                Expanded(
-                  child: Text(
-                    _attachmentFile != null ? 'أُرفقت صورة ${_attachmentFile!.path.split(Platform.pathSeparator).last}' : 'أضف صورة تقرير طبي أو مستند',
-                    style: AppText.bodySm.copyWith(color: AppColors.textPrimary),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                if (_attachmentFile != null)
-                  IconButton(
-                    tooltip: 'إزالة المرفق',
-                    onPressed: () => setState(() => _attachmentFile = null),
-                    icon: const Icon(Icons.close_rounded, color: AppColors.textMuted),
-                  ),
-              ],
-            ),
-          ),
+          LeaveAttachmentCard(file: _attachmentFile, onPick: _pickAttachment, onRemove: () => setState(() => _attachmentFile = null)),
           const SizedBox(height: AppSpace.xxl),
           AppButton(
             label: 'مراجعة وإرسال',
@@ -431,57 +418,6 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
             loading: _isUploading,
             onPressed: _submitLeaveRequest,
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLeaveHistoryTab() {
-    if (_isLoadingHistory) {
-      return const Padding(padding: EdgeInsets.all(AppSpace.page), child: SkeletonList(count: 4));
-    }
-    if (_historyError && _leaveHistory.isEmpty) {
-      return ErrorView(
-        onRetry: () {
-          setState(() => _isLoadingHistory = true);
-          _loadHistory();
-        },
-      );
-    }
-    final items = _historyFilter == 'all' ? _leaveHistory : _leaveHistory.where((r) => r.status == _historyFilter).toList();
-
-    return RefreshIndicator.adaptive(
-      onRefresh: _loadHistory,
-      child: ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(AppSpace.page, AppSpace.md, AppSpace.page, AppSpace.x4),
-        children: [
-          AppChoiceChips<String>(
-            scrollable: true,
-            value: _historyFilter,
-            onChanged: (v) => setState(() => _historyFilter = v),
-            options: const [('all', 'الكل', null), ('pending', 'قيد المراجعة', null), ('approved', 'مقبولة', null), ('rejected', 'مرفوضة', null), ('cancelled', 'ملغاة', null)],
-          ),
-          const SizedBox(height: AppSpace.md),
-          if (items.isEmpty)
-            EmptyView(
-              title: _leaveHistory.isEmpty ? 'ما عندك طلبات إجازة بعد' : 'لا توجد طلبات بهذه الحالة',
-              message: _leaveHistory.isEmpty ? 'طلباتك وقرارات الإدارة تظهر هنا.' : null,
-              icon: Icons.event_note_rounded,
-              actionLabel: _leaveHistory.isEmpty ? 'قدّم طلب' : null,
-              onAction: () => _tabController.animateTo(0),
-            )
-          else
-            for (var i = 0; i < items.length; i++)
-              Padding(
-                padding: const EdgeInsets.only(bottom: AppSpace.md),
-                child: FadeSlideIn(
-                  index: i,
-                  child: ContentWidth(
-                    child: LeaveCard(req: items[i], typeName: leaveTypeLabel(items[i].leaveType, _leaveTypes), onCancel: _cancelLeave),
-                  ),
-                ),
-              ),
         ],
       ),
     );

@@ -5,12 +5,15 @@ import 'package:flutter/material.dart';
 import '../../../../core/logic/attendance_report.dart';
 import '../../../shared/ui/ui.dart';
 
+/// سجل يوم يُعدَّل وقته: المعرّف، اسم الموظف، اليوم (YYYY-MM-DD)، والأوقات الحالية (ISO أو null).
+typedef ReportTimeEdit = ({String id, String employeeName, String workDate, String? checkIn, String? checkOut});
+
 class ReportRecordCard extends StatelessWidget {
   const ReportRecordCard({super.key, required this.row, required this.onOpenMap, required this.onEditTimes});
 
   final ReportRow row;
   final void Function(Object? lat, Object? lng) onOpenMap;
-  final void Function(Map<String, dynamic> record) onEditTimes;
+  final void Function(ReportTimeEdit record) onEditTimes;
 
   @override
   Widget build(BuildContext context) {
@@ -72,13 +75,13 @@ class ReportRecordCard extends StatelessWidget {
                 IconButton(
                   tooltip: 'تعديل الأوقات',
                   icon: const Icon(Icons.edit_calendar_rounded, color: AppColors.brand),
-                  onPressed: () => onEditTimes({
-                    'id': att.id,
-                    'employee_name': name,
-                    'work_date': r.date.toIso8601String().split('T')[0],
-                    'check_in': att.checkIn?.toIso8601String(),
-                    'check_out': att.checkOut?.toIso8601String(),
-                  }),
+                  onPressed: () => onEditTimes((
+                    id: att.id,
+                    employeeName: name,
+                    workDate: r.date.toIso8601String().split('T')[0],
+                    checkIn: att.checkIn?.toIso8601String(),
+                    checkOut: att.checkOut?.toIso8601String(),
+                  )),
                 ),
               ],
             ),
