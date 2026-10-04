@@ -183,10 +183,11 @@ class AttendanceTodayCard extends StatelessWidget {
 
 /// رسالة الخطأ تحت كارت الموقع، مع "إعادة المحاولة" و"فتح الإعدادات" إذا الموقع الدقيق مرفوض.
 class AttendanceErrorCard extends StatelessWidget {
-  const AttendanceErrorCard({super.key, required this.message, required this.preciseDenied, required this.onRetry});
+  const AttendanceErrorCard({super.key, required this.message, required this.showSettings, required this.onRetry});
 
   final String message;
-  final bool preciseDenied;
+  /// زر "فتح الإعدادات": الصلاحية مرفوضة نهائياً أو الموقع الدقيق مطفي.
+  final bool showSettings;
   final VoidCallback onRetry;
 
   @override
@@ -210,7 +211,7 @@ class AttendanceErrorCard extends StatelessWidget {
             spacing: AppSpace.sm,
             runSpacing: AppSpace.sm,
             children: [
-              if (preciseDenied)
+              if (showSettings)
                 const AppButton.secondary(label: 'فتح الإعدادات', icon: Icons.settings_rounded, size: AppButtonSize.small, onPressed: PreciseLocation.openSettings),
               AppButton.secondary(label: 'إعادة المحاولة', icon: Icons.refresh_rounded, size: AppButtonSize.small, onPressed: onRetry),
             ],

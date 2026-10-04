@@ -6,6 +6,11 @@
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<!-- التطبيق عربي: نوافذ النظام داخل التطبيق (اختيار الصور، المشاركة، معاينة الملفات) تطلع بالعربي -->
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>ar</string>
+	</array>
 	<!-- التطبيق داكن دائماً -->
 	<key>UIUserInterfaceStyle</key>
 	<string>Dark</string>
@@ -40,10 +45,12 @@
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 
+	<!-- canLaunchUrl يرجّع false على الآيفون لأي مخطط غير مذكور هنا — tel لزر الاتصال بالدليل وملف الموظف -->
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
 		<string>https</string>
 		<string>http</string>
+		<string>tel</string>
 		<string>comgooglemaps</string>
 		<string>iosamap</string>
 		<string>waze</string>

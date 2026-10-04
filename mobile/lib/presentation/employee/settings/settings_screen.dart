@@ -119,8 +119,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   // تحديث الصورة الشخصية (الأفاتار) مع ضغطها تلقائياً واستبدال القديمة فورياً لتنظيف الـ Storage
   Future<void> _updateAvatar() async {
-    final picker = ImagePicker();
-    final pickedFile = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
+    final pickedFile = await AppImagePicker.pickOne(context, source: ImageSource.gallery, imageQuality: 80);
 
     if (pickedFile == null) return;
 
@@ -172,7 +171,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _addDocument() async {
     final user = SupabaseService.currentUser;
     if (user == null) return;
-    final picked = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 80);
+    final picked = await AppImagePicker.pickOne(context, source: ImageSource.gallery, imageQuality: 80);
     if (picked == null) return;
     if (!mounted) return;
     final ok = await showAppConfirm(

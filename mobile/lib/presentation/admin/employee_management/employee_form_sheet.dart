@@ -3,7 +3,6 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../core/models/models.dart';
@@ -65,7 +64,7 @@ class _EmployeeFormState extends State<_EmployeeForm> {
   }
 
   Future<void> _pickDocuments() async {
-    final picked = await ImagePicker().pickMultiImage();
+    final picked = await AppImagePicker.pickMany(context);
     if (picked.isNotEmpty) setState(() => _documents.addAll(picked.map((x) => File(x.path))));
   }
 
@@ -103,7 +102,7 @@ class _EmployeeFormState extends State<_EmployeeForm> {
   Widget build(BuildContext context) {
     final branchName = widget.branches.where((b) => b.id == _branchId).firstOrNull?.rawName;
     return Padding(
-      padding: EdgeInsets.fromLTRB(AppSpace.xl, 0, AppSpace.xl, AppSpace.xl + MediaQuery.viewInsetsOf(context).bottom),
+      padding: EdgeInsets.fromLTRB(AppSpace.xl, 0, AppSpace.xl, sheetBottomPadding(context)),
       child: SingleChildScrollView(
         child: Form(
           key: _formKey,

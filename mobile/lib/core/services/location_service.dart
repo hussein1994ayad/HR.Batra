@@ -191,16 +191,18 @@ class LocationService {
       // 2. التقاط ورفع موقع أولي فوري للتسجيل اللحظي
       unawaited(_captureInstantLocation(userId));
 
-      // 3. خدمة الخلفية: فعلياً لأندرويد (Foreground Service). على الآيفون iOS يرفض تسجيل مهمتها
-      // ("Registration rejected") فالتتبع هناك من LocationMonitorIOS.swift — الخطوة التالية.
-      try {
-        final service = FlutterBackgroundService();
-        final isRunning = await service.isRunning();
-        if (!isRunning) {
-          await service.startService();
+      // 3. خدمة الخلفية: لأندرويد فقط (Foreground Service). على الآيفون التتبع من LocationMonitorIOS.swift
+      // (الخطوة التالية)، وتشغيل المكتبة هناك كان يفتح محرك Flutter ثاني بالذاكرة ما يسوي شي (onForeground فارغة).
+      if (Platform.isAndroid) {
+        try {
+          final service = FlutterBackgroundService();
+          final isRunning = await service.isRunning();
+          if (!isRunning) {
+            await service.startService();
+          }
+        } catch (e) {
+          appLog('⚠️ تعذر تشغيل BackgroundService: $e');
         }
-      } catch (e) {
-        appLog('⚠️ تعذر تشغيل BackgroundService: $e');
       }
 
       // على iOS: فعّل Region Monitoring لتحمّل حالة التطبيق المقفل

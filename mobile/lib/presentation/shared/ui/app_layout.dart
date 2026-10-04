@@ -44,7 +44,9 @@ class AppPage extends StatelessWidget {
     final canPop = showBack ?? Navigator.of(context).canPop();
     final width = MediaQuery.sizeOf(context).width;
     final side = width > maxWidth + padding.horizontal ? (width - maxWidth) / 2 : padding.left;
-    final effPadding = EdgeInsets.fromLTRB(side, padding.top, side, padding.bottom);
+    // + المساحة الآمنة السفلية (شريط الهوم بالآيفون / شريط التنقل بأندرويد): المحتوى يتمرر خلفه لكن آخر عنصر يوقف فوقه.
+    // مع شريط سفلي (لهاي الصفحة أو للشاشة الأب) الشريط ياخذها، فما تنضاف مرتين.
+    final effPadding = EdgeInsets.fromLTRB(side, padding.top, side, padding.bottom + (bottomBar == null ? MediaQuery.paddingOf(context).bottom : 0));
 
     Widget scroll = CustomScrollView(
       controller: controller,

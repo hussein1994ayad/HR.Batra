@@ -300,7 +300,7 @@ class _ScheduleEditorState extends State<_ScheduleEditor> {
   Widget build(BuildContext context) {
     final hours = _minutes > 0 ? '${_minutes ~/ 60} س${_minutes % 60 > 0 ? ' ${_minutes % 60} د' : ''}' : '—';
     return Padding(
-      padding: EdgeInsets.fromLTRB(AppSpace.xl, 0, AppSpace.xl, AppSpace.xl + MediaQuery.viewInsetsOf(context).bottom),
+      padding: EdgeInsets.fromLTRB(AppSpace.xl, 0, AppSpace.xl, sheetBottomPadding(context)),
       child: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,

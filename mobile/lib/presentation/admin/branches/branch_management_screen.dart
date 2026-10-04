@@ -275,7 +275,7 @@ class _BranchEditorState extends State<_BranchEditor> {
   Widget build(BuildContext context) {
     final mapHeight = (MediaQuery.sizeOf(context).height * 0.34).clamp(200.0, 360.0);
     return Padding(
-      padding: EdgeInsets.fromLTRB(AppSpace.xl, 0, AppSpace.xl, AppSpace.xl + MediaQuery.viewInsetsOf(context).bottom),
+      padding: EdgeInsets.fromLTRB(AppSpace.xl, 0, AppSpace.xl, sheetBottomPadding(context)),
       child: SingleChildScrollView(
         child: Form(
           key: _formKey,

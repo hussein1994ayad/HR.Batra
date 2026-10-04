@@ -44,7 +44,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   bool _isLocating = true;
   bool _isSubmitting = false;
   bool _mockDetected = false;
-  bool _preciseDenied = false;
+  /// الحل الوحيد من إعدادات الهاتف: صلاحية الموقع مرفوضة نهائياً (بالآيفون من أول رفض) أو الموقع الدقيق مطفي.
+  bool _needsAppSettings = false;
   String? _errorMessage;
   Map<String, dynamic>? _todayAttendance;
   Map<String, dynamic>? _workSchedule;
@@ -52,17 +53,35 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   final MapController _mapController = MapController();
   final AttendanceRepository _repo = AttendanceRepository();
   StreamSubscription<Position>? _positionStreamSubscription;
+  late final AppLifecycleListener _lifecycle;
 
   @override
   void initState() {
     super.initState();
+    _lifecycle = AppLifecycleListener(onShow: _recheckAfterSettings);
     _initLocationAndBranch();
   }
 
   @override
   void dispose() {
+    _lifecycle.dispose();
     _positionStreamSubscription?.cancel();
     super.dispose();
+  }
+
+  /// رجع الموظف للتطبيق (مثلاً من الإعدادات): إذا صارت صلاحية الموقع والدقة تمام نعيد التهيئة تلقائياً.
+  /// نفحص بس بدون طلب — حتى ما تطلع نافذة طلب كلما رجع للتطبيق.
+  Future<void> _recheckAfterSettings() async {
+    if (!_needsAppSettings || _isLocating) return;
+    try {
+      final permission = await Geolocator.checkPermission();
+      if (permission != LocationPermission.whileInUse && permission != LocationPermission.always) return;
+      if (await Geolocator.getLocationAccuracy() != LocationAccuracyStatus.precise) return;
+    } catch (e) {
+      appLog('location recheck after settings: $e');
+      return;
+    }
+    if (mounted) unawaited(_initLocationAndBranch());
   }
 
   // بدء الاستماع المباشر والمستمر للموقع الجغرافي لتحديث الإحداثيات فورياً دون تأخير
@@ -192,6 +211,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
   /// 2. الـ GPS مفعّل، صلاحية الموقع ممنوحة، والموقع **دقيق** — وإلا يرمي برسالة للموظف.
   Future<void> _ensureLocationAccess() async {
+    _needsAppSettings = false;
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
       throw Exception('خدمة تحديد الموقع الجغرافي (GPS) معطلة في هاتفك. يرجى تفعيلها.');
@@ -206,12 +226,15 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     }
 
     if (permission == LocationPermission.deniedForever) {
+      _needsAppSettings = true;
       throw Exception('تم رفض صلاحية الموقع الجغرافي نهائياً، يرجى تفعيلها من إعدادات الهاتف.');
     }
 
     // الموقع الدقيق مطلوب: أندرويد 12+ وiOS 14+ يسمحون بموقع تقريبي يبعد كيلومترات
-    _preciseDenied = !await PreciseLocation.ensure();
-    if (_preciseDenied) throw Exception(PreciseLocation.reducedMessage);
+    if (!await PreciseLocation.ensure()) {
+      _needsAppSettings = true;
+      throw Exception(PreciseLocation.reducedMessage);
+    }
   }
 
   /// 3. المرحلة الفورية (Fast-Path): آخر موقع معروف (أقل من 20ms) حتى تجهز الشاشة قبل أول قراءة GPS.
@@ -483,7 +506,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         ),
         if (_errorMessage != null) ...[
           const SizedBox(height: AppSpace.md),
-          AttendanceErrorCard(message: _errorMessage!, preciseDenied: _preciseDenied, onRetry: _initLocationAndBranch),
+          AttendanceErrorCard(message: _errorMessage!, showSettings: _needsAppSettings, onRetry: _initLocationAndBranch),
         ],
         const SizedBox(height: AppSpace.lg),
         if (_hasCheckOut)

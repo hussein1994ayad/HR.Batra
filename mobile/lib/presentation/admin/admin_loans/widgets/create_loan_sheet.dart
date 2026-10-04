@@ -52,7 +52,7 @@ class _CreateLoanSheetState extends State<_CreateLoanSheet> {
   void _error(String message) => AppSnack.error(context, message);
 
   Future<void> _pickPledge() async {
-    final picked = await ImagePicker().pickImage(source: ImageSource.camera, imageQuality: 80);
+    final picked = await AppImagePicker.pickOne(context, source: ImageSource.camera, imageQuality: 80);
     if (picked != null && mounted) setState(() => _pledge = File(picked.path));
   }
 
@@ -110,7 +110,7 @@ class _CreateLoanSheetState extends State<_CreateLoanSheet> {
     final overHalf = salary > 0 && installment > salary * kLoanSalaryWarningRatio;
 
     return Padding(
-      padding: EdgeInsets.fromLTRB(AppSpace.xl, 0, AppSpace.xl, AppSpace.xl + MediaQuery.viewInsetsOf(context).bottom),
+      padding: EdgeInsets.fromLTRB(AppSpace.xl, 0, AppSpace.xl, sheetBottomPadding(context)),
       child: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,

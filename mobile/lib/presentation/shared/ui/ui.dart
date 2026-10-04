@@ -7,6 +7,7 @@ export 'app_button.dart';
 export 'app_card.dart';
 export 'app_data.dart';
 export 'app_filters.dart';
+export 'app_image_picker.dart';
 export 'app_inputs.dart';
 export 'app_layout.dart';
 export 'app_map.dart';

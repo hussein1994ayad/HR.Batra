@@ -131,8 +131,7 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
 
   // اختيار مرفق (صورة تقرير طبي أو مبرر)
   Future<void> _pickAttachment() async {
-    final picker = ImagePicker();
-    final pickedFile = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
+    final pickedFile = await AppImagePicker.pickOne(context, source: ImageSource.gallery, imageQuality: 85);
     if (pickedFile != null) {
       setState(() => _attachmentFile = File(pickedFile.path));
     }

@@ -97,8 +97,7 @@ class _LoanRequestScreenState extends State<LoanRequestScreen> with SingleTicker
 
   // تصوير التعهد الخطي الموقّع (بالكاميرا مباشرة لزيادة الموثوقية)
   Future<void> _pickPledge() async {
-    final picker = ImagePicker();
-    final pickedFile = await picker.pickImage(source: ImageSource.camera, imageQuality: 80);
+    final pickedFile = await AppImagePicker.pickOne(context, source: ImageSource.camera, imageQuality: 80);
     if (pickedFile != null) {
       setState(() => _pledgeFile = File(pickedFile.path));
     }

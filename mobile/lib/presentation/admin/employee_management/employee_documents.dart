@@ -2,7 +2,6 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:image_picker/image_picker.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -178,7 +177,7 @@ class _DocumentsEditorState extends State<_DocumentsEditor> {
   bool _saving = false;
 
   Future<void> _pick() async {
-    final picked = await ImagePicker().pickMultiImage();
+    final picked = await AppImagePicker.pickMany(context);
     if (picked.isNotEmpty) setState(() => _new.addAll(picked.map((x) => File(x.path))));
   }
 
@@ -211,7 +210,7 @@ class _DocumentsEditorState extends State<_DocumentsEditor> {
   Widget build(BuildContext context) {
     final removed = _original.length - _existing.length;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(AppSpace.xl, 0, AppSpace.xl, AppSpace.xl),
+      padding: EdgeInsets.fromLTRB(AppSpace.xl, 0, AppSpace.xl, sheetBottomPadding(context)),
       child: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,

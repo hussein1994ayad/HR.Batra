@@ -127,10 +127,11 @@ class NotificationService {
         );
       }
 
-      // Foreground: استقبال + إظهار محلي مع صوت
+      // Foreground: استقبال + إظهار محلي مع صوت (أندرويد ما يعرض إشعار FCM والتطبيق مفتوح).
+      // الآيفون يعرضه بنفسه (AppDelegate willPresent: banner + sound)، فإظهاره هنا يطلّعه مرتين.
       if (_firebaseReady) {
         FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-        if (message.notification == null) return;
+        if (message.notification == null || Platform.isIOS) return;
         _localNotifications.show(
           message.hashCode,
           message.notification!.title,

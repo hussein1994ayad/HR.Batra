@@ -41,6 +41,7 @@ void main() async {
     systemNavigationBarColor: Colors.transparent,
     systemNavigationBarContrastEnforced: false,
     statusBarIconBrightness: Brightness.light,
+    statusBarBrightness: Brightness.dark, // iOS: أيقونات شريط الحالة فاتحة (iOS يتجاهل statusBarIconBrightness)
     systemNavigationBarIconBrightness: Brightness.light,
   ));
 

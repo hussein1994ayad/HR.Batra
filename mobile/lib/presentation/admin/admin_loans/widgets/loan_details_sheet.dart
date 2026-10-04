@@ -49,7 +49,7 @@ class _LoanDetails extends StatelessWidget {
 
     return ListView(
       controller: scrollController,
-      padding: const EdgeInsets.fromLTRB(AppSpace.xl, 0, AppSpace.xl, AppSpace.x3),
+      padding: EdgeInsets.fromLTRB(AppSpace.xl, 0, AppSpace.xl, AppSpace.x3 + MediaQuery.viewPaddingOf(context).bottom), // آخر عنصر فوق شريط الهوم
       children: [
         Row(
           children: [

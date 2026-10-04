@@ -38,7 +38,7 @@ Future<void> showEmployeeProfileSheet(
       initialChildSize: 0.85,
       builder: (_, scroll) => ListView(
         controller: scroll,
-        padding: const EdgeInsets.fromLTRB(AppSpace.xl, 0, AppSpace.xl, AppSpace.x3),
+        padding: EdgeInsets.fromLTRB(AppSpace.xl, 0, AppSpace.xl, AppSpace.x3 + MediaQuery.viewPaddingOf(ctx).bottom), // آخر عنصر فوق شريط الهوم
         children: [
           Row(
             children: [
