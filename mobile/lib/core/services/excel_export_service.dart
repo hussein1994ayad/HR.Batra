@@ -12,6 +12,7 @@ import 'package:syncfusion_flutter_xlsio/xlsio.dart' as xlsio;
 import '../constants/constants.dart';
 import '../logic/attendance_report.dart';
 import '../models/loan_model.dart';
+import '../utils/app_log.dart';
 import 'share_helper.dart';
 
 class ExcelExportService {
@@ -339,12 +340,12 @@ class ExcelExportService {
         if (downloadDir.existsSync()) {
           final publicFile = File('${downloadDir.path}/$fileName');
           await publicFile.writeAsBytes(bytes, flush: true);
-          debugPrint('✅ تم حفظ نسخة في مجلد التنزيلات: ${publicFile.path}');
+          appLog('✅ تم حفظ نسخة في مجلد التنزيلات: ${publicFile.path}');
         }
       }
     } catch (_) {}
 
-    debugPrint('✅ تم إنشاء ملف Excel بنجاح في المسار: $filePath');
+    appLog('✅ تم إنشاء ملف Excel بنجاح في المسار: $filePath');
     return filePath;
   }
 
@@ -561,7 +562,7 @@ class ExcelExportService {
         await shareExcelFile(filePath);
       }
     } catch (e) {
-      debugPrint('تعذر فتح ملف Excel عبر OpenFilex: $e');
+      appLog('تعذر فتح ملف Excel عبر OpenFilex: $e');
       await shareExcelFile(filePath);
     }
   }
@@ -574,7 +575,7 @@ class ExcelExportService {
         text: text ?? 'كشف حساب سلفة الموظف - HR Pro Batra',
       ));
     } catch (e) {
-      debugPrint('تعذر مشاركة ملف Excel: $e');
+      appLog('تعذر مشاركة ملف Excel: $e');
     }
   }
 }

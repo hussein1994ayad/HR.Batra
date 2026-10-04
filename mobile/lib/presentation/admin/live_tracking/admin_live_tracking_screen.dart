@@ -19,6 +19,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/logic/tracking_rules.dart';
 import '../../../core/routes/app_router.dart';
 import '../../../core/services/supabase_service.dart';
+import '../../../core/utils/app_log.dart';
 import '../../../data/repositories/live_tracking_repository.dart';
 import '../../../data/repositories/role_repository.dart';
 import '../../shared/ui/ui.dart';
@@ -71,7 +72,7 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
         if (mounted && !_isRefreshing && _autoRefreshEnabled) _refreshLocationsSilently();
       });
     } catch (e) {
-      debugPrint('تعذر بدء اشتراك Realtime للتتبع: $e');
+      appLog('تعذر بدء اشتراك Realtime للتتبع: $e');
     }
   }
 
@@ -131,7 +132,7 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
       _process();
       _centerMapOnSelectedBranch();
     } catch (e) {
-      debugPrint('خطأ في تحميل بيانات التتبع: $e');
+      appLog('خطأ في تحميل بيانات التتبع: $e');
       if (mounted) AppSnack.error(context, 'تعذّر تحميل بيانات التتبع');
     } finally {
       if (mounted) {

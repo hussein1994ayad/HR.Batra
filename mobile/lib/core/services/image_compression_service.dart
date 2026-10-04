@@ -10,6 +10,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import '../constants/constants.dart';
+import '../utils/app_log.dart';
 
 class ImageCompressionService {
   // هل الملف الممرر صورة؟
@@ -25,7 +26,7 @@ class ImageCompressionService {
     // إذا لم يكن الملف صورة (مثل PDF أو Excel)، يتم إرجاعه كما هو دون أي تغيير
     if (!isImage(filePath)) {
       if (kDebugMode) {
-        debugPrint('الملف ليس صورة، سيتم رفعه دون ضغط: ${p.basename(filePath)}');
+        appLog('الملف ليس صورة، سيتم رفعه دون ضغط: ${p.basename(filePath)}');
       }
       return file;
     }
@@ -33,7 +34,7 @@ class ImageCompressionService {
     try {
       final originalSize = await file.length();
       if (kDebugMode) {
-        debugPrint('حجم الصورة الأصلي: ${(originalSize / 1024).toStringAsFixed(2)} كيلوبايت');
+        appLog('حجم الصورة الأصلي: ${(originalSize / 1024).toStringAsFixed(2)} كيلوبايت');
       }
 
       // الحصول على مجلد التخزين المؤقت (Temporary Directory) لحفظ الصورة المضغوطة مؤقتاً
@@ -55,7 +56,7 @@ class ImageCompressionService {
 
       if (compressedXFile == null) {
         if (kDebugMode) {
-          debugPrint('فشل ضغط الصورة، سيتم استخدام الملف الأصلي كبديل.');
+          appLog('فشل ضغط الصورة، سيتم استخدام الملف الأصلي كبديل.');
         }
         return file;
       }
@@ -65,15 +66,15 @@ class ImageCompressionService {
       final spaceSaved = ((originalSize - compressedSize) / originalSize) * 100;
 
       if (kDebugMode) {
-        debugPrint('حجم الصورة بعد الضغط: ${(compressedSize / 1024).toStringAsFixed(2)} كيلوبايت');
-        debugPrint('المساحة الموفرة بالسيرفر: ${spaceSaved.toStringAsFixed(1)}%');
+        appLog('حجم الصورة بعد الضغط: ${(compressedSize / 1024).toStringAsFixed(2)} كيلوبايت');
+        appLog('المساحة الموفرة بالسيرفر: ${spaceSaved.toStringAsFixed(1)}%');
       }
 
       return compressedFile;
 
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('حدث خطأ غير متوقع أثناء محاولة ضغط الصورة: $e');
+        appLog('حدث خطأ غير متوقع أثناء محاولة ضغط الصورة: $e');
       }
       return file; // إرجاع الصورة الأصلية كخطة بديلة (Fallback) في حال حدوث خطأ مفاجئ
     }

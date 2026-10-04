@@ -13,6 +13,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/models/models.dart';
 import '../../../core/routes/app_router.dart';
 import '../../../core/services/supabase_service.dart';
+import '../../../core/utils/app_log.dart';
 import '../../../core/utils/error_text.dart';
 import '../../../data/repositories/admin_actions_repository.dart';
 import '../../../data/repositories/admin_dashboard_repository.dart';
@@ -85,7 +86,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Ticker
         oldController.dispose();
       }
     } catch (e) {
-      debugPrint('Error loading dashboard lookups: $e');
+      appLog('Error loading dashboard lookups: $e');
       if (mounted) context.go(AppRoutes.employeeHome);
       return;
     }
@@ -99,7 +100,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Ticker
       final snapshot = await _repo.loadSnapshot(_filter, _lookups.employees);
       if (mounted) setState(() => _snapshot = snapshot);
     } catch (e) {
-      debugPrint('Error loading dashboard: $e');
+      appLog('Error loading dashboard: $e');
       _toast('تعذر تحميل بيانات اللوحة: $e', AppColors.danger);
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -124,7 +125,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Ticker
       _toast(success, successColor);
       await _load();
     } catch (e) {
-      debugPrint('Admin action failed: $e');
+      appLog('Admin action failed: $e');
       _toast('فشل تنفيذ العملية: ${errorText(e)}', AppColors.danger);
     } finally {
       if (mounted) setState(() => _busyKey = null);

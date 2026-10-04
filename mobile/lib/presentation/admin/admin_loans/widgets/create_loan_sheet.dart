@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../../core/models/models.dart';
+import '../../../../core/utils/app_log.dart';
 import '../../../../core/utils/arabic_format.dart';
 import '../../../../core/utils/error_text.dart';
 import '../../../../core/utils/input_formatters.dart';
@@ -80,7 +81,7 @@ class _CreateLoanSheetState extends State<_CreateLoanSheet> {
       );
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
-      debugPrint('Error creating direct loan: $e');
+      appLog('Error creating direct loan: $e');
       if (mounted) {
         setState(() => _saving = false);
         _error('تعذّرت إضافة السلفة: ${errorText(e)}');

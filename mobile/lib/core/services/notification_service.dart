@@ -7,7 +7,6 @@ import 'dart:io' show Platform;
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -16,11 +15,12 @@ import 'package:timezone/timezone.dart' as tzz;
 
 import '../../core/design/design.dart';
 import '../logic/reminder_plan.dart';
+import '../utils/app_log.dart';
 import 'schedule_service.dart';
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  debugPrint('Background message: ${message.messageId}');
+  appLog('Background message: ${message.messageId}');
 }
 
 class NotificationService {
@@ -48,7 +48,7 @@ class NotificationService {
       try {
         tz.initializeTimeZones();
       } catch (e) {
-        debugPrint('Timezones init warning: $e');
+        appLog('Timezones init warning: $e');
       }
 
       if (_firebaseReady) {
@@ -183,13 +183,13 @@ class NotificationService {
             unawaited(refreshLocalAttendanceReminders());
           }
         } catch (e) {
-          debugPrint('Non-fatal background notification init error: $e');
+          appLog('Non-fatal background notification init error: $e');
         }
       }));
 
     } catch (e) {
       lastError = e.toString();
-      debugPrint('❌ NotificationService init error: $e');
+      appLog('❌ NotificationService init error: $e');
     }
   }
 
@@ -203,7 +203,7 @@ class NotificationService {
       final android = _localNotifications.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
       if (android != null) return await android.requestNotificationsPermission() ?? false;
     } catch (e) {
-      debugPrint('local notification permission: $e');
+      appLog('local notification permission: $e');
     }
     return false;
   }
@@ -233,7 +233,7 @@ class NotificationService {
 
       return true;
     } catch (e) {
-      debugPrint('Error requesting permission: $e');
+      appLog('Error requesting permission: $e');
       return false;
     }
   }
@@ -281,7 +281,7 @@ class NotificationService {
         ),
       );
     } catch (e) {
-      debugPrint('showLocalNotification error: $e');
+      appLog('showLocalNotification error: $e');
     }
   }
 
@@ -376,9 +376,9 @@ class NotificationService {
           uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
         );
       }
-      debugPrint('Local attendance reminders scheduled: ${plan.length}');
+      appLog('Local attendance reminders scheduled: ${plan.length}');
     } catch (e) {
-      debugPrint('Local attendance reminders failed: $e');
+      appLog('Local attendance reminders failed: $e');
     }
   }
 
@@ -400,12 +400,12 @@ class NotificationService {
         ]).timeout(const Duration(seconds: 8));
       }
     } catch (e) {
-      debugPrint('unregisterDevice: server cleanup failed: $e');
+      appLog('unregisterDevice: server cleanup failed: $e');
     }
     try {
       await _firebaseMessaging.deleteToken();
     } catch (e) {
-      debugPrint('unregisterDevice: deleteToken failed: $e');
+      appLog('unregisterDevice: deleteToken failed: $e');
     }
   }
 

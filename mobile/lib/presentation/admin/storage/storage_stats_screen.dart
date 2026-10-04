@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/routes/app_router.dart';
+import '../../../core/utils/app_log.dart';
 import '../../../data/repositories/storage_repository.dart';
 import '../../shared/ui/ui.dart';
 import 'storage_logic.dart';
@@ -58,7 +59,7 @@ class _StorageStatsScreenState extends State<StorageStatsScreen> {
         });
       }
     } catch (e) {
-      debugPrint('خطأ في تحميل إحصائيات التخزين: $e');
+      appLog('خطأ في تحميل إحصائيات التخزين: $e');
       if (mounted) setState(() => _hasError = true);
     } finally {
       if (mounted) setState(() => _isLoading = false);

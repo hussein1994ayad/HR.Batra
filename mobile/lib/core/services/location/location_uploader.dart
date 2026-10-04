@@ -1,8 +1,7 @@
 // رفع نقاط التتبع إلى location_tracking: مباشرة إذا الإنترنت متوفر، وإلا طابور محلي
 // (offline_locations.json) يُرفع بحزم 50 نقطة مع إزالة المكرر (نفس الموظف ونفس الوقت).
 
-import 'package:flutter/foundation.dart';
-
+import '../../utils/app_log.dart';
 import '../supabase_service.dart';
 import 'branch_presence_monitor.dart';
 import 'geofence_monitor.dart';
@@ -17,9 +16,9 @@ class LocationUploader {
   static Future<void> cacheOffline(Map<String, dynamic> locationData) async {
     try {
       final total = await _queue.append(locationData);
-      debugPrint('📍 تم تخزين نقطة الموقع محلياً (أوفلاين). الإجمالي المخزن: $total');
+      appLog('📍 تم تخزين نقطة الموقع محلياً (أوفلاين). الإجمالي المخزن: $total');
     } catch (e) {
-      debugPrint('❌ فشل في تخزين الموقع محلياً: $e');
+      appLog('❌ فشل في تخزين الموقع محلياً: $e');
     }
   }
 
@@ -53,14 +52,14 @@ class LocationUploader {
           await SupabaseService.client.from('location_tracking').insert(batch);
           uploaded += batch.length;
         } catch (e) {
-          debugPrint('⚠️ فشل رفع دفعة $i-$end: $e — سنعيد المحاولة لاحقاً.');
+          appLog('⚠️ فشل رفع دفعة $i-$end: $e — سنعيد المحاولة لاحقاً.');
           remaining.addAll(batch);
         }
       }
 
       // احتفظ بالحزم اللي فشلت للمحاولة القادمة
       await _queue.replace(remaining);
-      debugPrint('✅ رُفعت $uploaded نقطة، بقيت ${remaining.length} للمحاولة القادمة.');
+      appLog('✅ رُفعت $uploaded نقطة، بقيت ${remaining.length} للمحاولة القادمة.');
 
       // مزامنة أحداث الدخول/الخروج للفروع (إن وجدت)
       await BranchPresenceMonitor.syncOffline();
@@ -68,7 +67,7 @@ class LocationUploader {
       // مزامنة أحداث دخول/خروج السياج الجغرافي (إن وجدت)
       await GeofenceMonitor.syncOffline();
     } catch (e) {
-      debugPrint('⚠️ لم تكتمل مزامنة النقاط المحلية (الشبكة غير متاحة): $e');
+      appLog('⚠️ لم تكتمل مزامنة النقاط المحلية (الشبكة غير متاحة): $e');
     }
   }
 }

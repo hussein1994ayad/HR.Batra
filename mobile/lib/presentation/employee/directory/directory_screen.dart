@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/services/auth_service.dart';
 import '../../../core/services/share_helper.dart';
 import '../../../core/services/storage_links.dart';
+import '../../../core/utils/app_log.dart';
 import '../../../data/repositories/directory_repository.dart';
 import '../../shared/ui/ui.dart';
 import 'directory_logic.dart';
@@ -62,7 +63,7 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
         _applyFilters();
       });
     } catch (e) {
-      debugPrint('خطأ في تحميل دليل الموظفين: $e');
+      appLog('خطأ في تحميل دليل الموظفين: $e');
       if (mounted) setState(() => _hasError = true);
     } finally {
       if (mounted) setState(() => _isLoading = false);

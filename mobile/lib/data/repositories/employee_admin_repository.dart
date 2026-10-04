@@ -5,11 +5,11 @@
 
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/services/image_compression_service.dart';
 import '../../core/services/supabase_service.dart';
+import '../../core/utils/app_log.dart';
 
 class EmployeeAdminRepository {
   EmployeeAdminRepository({SupabaseClient? client}) : _db = client ?? SupabaseService.client;
@@ -54,7 +54,7 @@ class EmployeeAdminRepository {
         await _db.storage.from('employee-documents').upload(fileName, processedFile);
         uploadedUrls.add(_db.storage.from('employee-documents').getPublicUrl(fileName));
       } catch (e) {
-        debugPrint('Error compressing/uploading file: $e');
+        appLog('Error compressing/uploading file: $e');
       }
     }
     return uploadedUrls;

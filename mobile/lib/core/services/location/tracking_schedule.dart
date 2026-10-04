@@ -5,9 +5,9 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../../utils/app_log.dart';
 import '../schedule_service.dart';
 import '../supabase_service.dart';
 
@@ -36,9 +36,9 @@ class TrackingSchedule {
         'updated_at': DateTime.now().toUtc().toIso8601String(),
       };
       await file.writeAsString(jsonEncode(data));
-      debugPrint('💾 تم حفظ حالة التتبع محلياً للعمل أوفلاين.');
+      appLog('💾 تم حفظ حالة التتبع محلياً للعمل أوفلاين.');
     } catch (e) {
-      debugPrint('❌ فشل في حفظ حالة التتبع محلياً: $e');
+      appLog('❌ فشل في حفظ حالة التتبع محلياً: $e');
     }
   }
 
@@ -53,7 +53,7 @@ class TrackingSchedule {
         }
       }
     } catch (e) {
-      debugPrint('❌ فشل في قراءة حالة التتبع المحلية: $e');
+      appLog('❌ فشل في قراءة حالة التتبع المحلية: $e');
     }
     return null;
   }
@@ -124,7 +124,7 @@ class TrackingSchedule {
 
       return evaluateSchedule(trackingSchedule);
     } catch (e) {
-      debugPrint('⚠️ وضع الأوفلاين نشط، الاعتماد على الحالة المحلية: $e');
+      appLog('⚠️ وضع الأوفلاين نشط، الاعتماد على الحالة المحلية: $e');
       if (cached != null && cached['checked_in_date'] == todayStr) {
         return evaluateStateFromCache(cached);
       }

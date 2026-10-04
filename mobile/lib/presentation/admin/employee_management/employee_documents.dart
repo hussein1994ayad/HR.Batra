@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../../../core/services/share_helper.dart';
 import '../../../core/services/storage_links.dart';
+import '../../../core/utils/app_log.dart';
 import '../../../data/repositories/employee_admin_repository.dart';
 import '../../shared/ui/ui.dart';
 
@@ -191,7 +192,7 @@ class _DocumentsEditorState extends State<_DocumentsEditor> {
             await EmployeeAdminRepository().removeDocumentObject(match.group(1)!);
           }
         } catch (e) {
-          debugPrint('تعذر حذف المستند القديم من التخزين: $e');
+          appLog('تعذر حذف المستند القديم من التخزين: $e');
         }
       }
       final newUrls = _new.isEmpty ? <String>[] : await uploadEmployeeDocuments(_new, widget.emp['id'] as String);

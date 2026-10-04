@@ -8,6 +8,7 @@
 
 import 'package:flutter/material.dart';
 
+import '../../../core/utils/app_log.dart';
 import '../../../core/utils/error_text.dart';
 import '../../../data/repositories/announcement_repository.dart';
 import '../../shared/ui/ui.dart';
@@ -100,7 +101,7 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
         _employees = List<Map<String, dynamic>>.from(futures[1]);
       });
     } catch (e) {
-      debugPrint('Error loading data: $e');
+      appLog('Error loading data: $e');
     } finally {
       if (mounted) setState(() => _loadingData = false);
     }
@@ -151,7 +152,7 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
         AppSnack.success(context, 'نُشر التعميم ووصل إشعاره إلى ${sent ?? 0} موظف');
       }
     } catch (e) {
-      debugPrint('Error sending announcement: $e');
+      appLog('Error sending announcement: $e');
       if (mounted) AppSnack.error(context, 'تعذّر الإرسال: ${errorText(e)}');
     } finally {
       if (mounted) setState(() => _isLoading = false);

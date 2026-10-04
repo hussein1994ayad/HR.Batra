@@ -15,6 +15,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../constants/constants.dart';
+import '../utils/app_log.dart';
 import 'ios_region_monitor.dart';
 import 'location/branch_presence_monitor.dart';
 import 'location/geofence_monitor.dart';
@@ -56,18 +57,18 @@ class LocationService {
         ),
       );
     } catch (e) {
-      debugPrint('⚠️ تعذر تكوين خدمة الخلفية: $e');
+      appLog('⚠️ تعذر تكوين خدمة الخلفية: $e');
     }
   }
 
   @pragma('vm:entry-point')
   static void onForeground(ServiceInstance service) {
-    debugPrint('Background Service: iOS Foreground state.');
+    appLog('Background Service: iOS Foreground state.');
   }
 
   @pragma('vm:entry-point')
   static bool onIosBackground(ServiceInstance service) {
-    debugPrint('Background Service: iOS Background state.');
+    appLog('Background Service: iOS Background state.');
     return true;
   }
 
@@ -80,7 +81,7 @@ class LocationService {
         await SupabaseService.init();
       }
     } catch (e) {
-      debugPrint('Background Service Isolate: Supabase init check: $e');
+      appLog('Background Service Isolate: Supabase init check: $e');
     }
 
     try {
@@ -99,13 +100,13 @@ class LocationService {
         try {
           await _evaluateTrackingStateInService(service);
         } catch (e) {
-          debugPrint('⚠️ خطأ في دورة فحص التتبع بالخلفية: $e');
+          appLog('⚠️ خطأ في دورة فحص التتبع بالخلفية: $e');
         }
       });
 
       await _evaluateTrackingStateInService(service);
     } catch (e) {
-      debugPrint('⚠️ خطأ في تهيئة onStart لخدمة الخلفية: $e');
+      appLog('⚠️ خطأ في تهيئة onStart لخدمة الخلفية: $e');
     }
   }
 
@@ -115,7 +116,7 @@ class LocationService {
       // 1. التحقق من تفعيل خدمة GPS في الجهاز
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
-        debugPrint('⚠️ خدمة GPS معطلة في الجهاز');
+        appLog('⚠️ خدمة GPS معطلة في الجهاز');
       }
 
       // 2. طلب الصلاحية العادية أولاً (In Use)
@@ -123,7 +124,7 @@ class LocationService {
       if (!status.isGranted) {
         status = await Permission.location.request();
         if (!status.isGranted) {
-          debugPrint('⚠️ صلاحية الموقع العادية مرفوضة.');
+          appLog('⚠️ صلاحية الموقع العادية مرفوضة.');
           return false;
         }
       }
@@ -133,14 +134,14 @@ class LocationService {
         try {
           var alwaysStatus = await Permission.locationAlways.status;
           if (!alwaysStatus.isGranted) {
-            debugPrint('📍 طلب صلاحية الموقع بالخلفية (Always Allow)...');
+            appLog('📍 طلب صلاحية الموقع بالخلفية (Always Allow)...');
             await Permission.locationAlways.request();
           }
         } catch (_) {}
       }
       return true;
     } catch (e) {
-      debugPrint('⚠️ خطأ في طلب صلاحيات الموقع: $e');
+      appLog('⚠️ خطأ في طلب صلاحيات الموقع: $e');
       return false;
     }
   }
@@ -150,7 +151,7 @@ class LocationService {
     try {
       final userId = employeeId ?? SupabaseService.currentUser?.id ?? _activeEmployeeId;
       if (userId == null) {
-        debugPrint('⚠️ لم يتم العثور على معرف الموظف لبدء التتبع');
+        appLog('⚠️ لم يتم العثور على معرف الموظف لبدء التتبع');
         return;
       }
 
@@ -158,7 +159,7 @@ class LocationService {
 
       final hasPermission = await requestLocationPermissions();
       if (!hasPermission) {
-        debugPrint('⚠️ تم إلغاء بدء خدمة التتبع لعدم توفر الصلاحيات المطلوبة.');
+        appLog('⚠️ تم إلغاء بدء خدمة التتبع لعدم توفر الصلاحيات المطلوبة.');
         return;
       }
 
@@ -197,7 +198,7 @@ class LocationService {
           await service.startService();
         }
       } catch (e) {
-        debugPrint('⚠️ تعذر تشغيل BackgroundService: $e');
+        appLog('⚠️ تعذر تشغيل BackgroundService: $e');
       }
 
       // على iOS: فعّل Region Monitoring لتحمّل حالة التطبيق المقفل
@@ -213,13 +214,13 @@ class LocationService {
           // فعّل مسار مستمر (المسار الكامل) — Swift يوقفه تلقائياً داخل الفروع
           await IosRegionMonitor.setCheckedIn(true);
         } catch (e) {
-          debugPrint('⚠️ فشل تهيئة iOS Region Monitor: $e');
+          appLog('⚠️ فشل تهيئة iOS Region Monitor: $e');
         }
       }
 
-      debugPrint('✅ تم تفعيل وتشغيل نظام التتبع الجغرافي بنجاح للموظف: $userId');
+      appLog('✅ تم تفعيل وتشغيل نظام التتبع الجغرافي بنجاح للموظف: $userId');
     } catch (e) {
-      debugPrint('⚠️ خطأ أثناء بدء التتبع الجغرافي: $e');
+      appLog('⚠️ خطأ أثناء بدء التتبع الجغرافي: $e');
     }
   }
 
@@ -249,7 +250,7 @@ class LocationService {
       checkedInDate: todayStr,
     );
 
-    debugPrint('🛑 تم إيقاف خدمة التتبع الجغرافي بالكامل.');
+    appLog('🛑 تم إيقاف خدمة التتبع الجغرافي بالكامل.');
   }
 
   /// تسجيل موقع لحظي فوري (يُستدعى عند البصمة)
@@ -270,10 +271,10 @@ class LocationService {
 
     try {
       await SupabaseService.client.from('location_tracking').insert(locationData);
-      debugPrint('📍 تم تسجيل نقطة موقع فورية: ($latitude, $longitude)');
+      appLog('📍 تم تسجيل نقطة موقع فورية: ($latitude, $longitude)');
       unawaited(LocationUploader.syncOffline());
     } catch (e) {
-      debugPrint('⚠️ تعذر رفع الموقع الفوري، سيتم حفظه محلياً أوفلاين: $e');
+      appLog('⚠️ تعذر رفع الموقع الفوري، سيتم حفظه محلياً أوفلاين: $e');
       await LocationUploader.cacheOffline(locationData);
     }
   }
@@ -298,7 +299,7 @@ class LocationService {
         isMoving: position.speed > 0.5,
       );
         } catch (e) {
-      debugPrint('⚠️ خطأ في التقاط الموقع الأولي: $e');
+      appLog('⚠️ خطأ في التقاط الموقع الأولي: $e');
     }
   }
 
@@ -349,7 +350,7 @@ class LocationService {
 
   /// بدء الاستماع لتدفق إحداثيات الموقع الفعلي في الخلفية والواجهة
   static void _startLocationUpdates(String userId) {
-    debugPrint('🚀 بدء تشغيل تدفق التتبع الجغرافي الحي للموظف: $userId');
+    appLog('🚀 بدء تشغيل تدفق التتبع الجغرافي الحي للموظف: $userId');
 
     // إعدادات الموقع للأندرويد والآيفون مع الامتثال الصارم لسياسات آبل
     LocationSettings locationSettings;
@@ -389,7 +390,7 @@ class LocationService {
 
         // 2. تصفية النقاط غير الدقيقة (دقة ضعيفة تتجاوز 100 متر)
         if (position.accuracy > 100.0) {
-          debugPrint('⚠️ تم تجاهل نقطة موقع ذات دقة منخفضة: ${position.accuracy}m');
+          appLog('⚠️ تم تجاهل نقطة موقع ذات دقة منخفضة: ${position.accuracy}m');
           return;
         }
 
@@ -432,10 +433,10 @@ class LocationService {
                 .from('location_tracking')
                 .insert(locationData)
                 .timeout(const Duration(seconds: 8));
-            debugPrint('📍 تم رفع نقطة تتبع حية للسيرفر: (${position.latitude}, ${position.longitude})');
+            appLog('📍 تم رفع نقطة تتبع حية للسيرفر: (${position.latitude}, ${position.longitude})');
             unawaited(LocationUploader.syncOffline());
           } catch (e) {
-            debugPrint('💾 وضع أوفلاين: تعذر الاتصال، تم تخزين النقطة محلياً: $e');
+            appLog('💾 وضع أوفلاين: تعذر الاتصال، تم تخزين النقطة محلياً: $e');
             await LocationUploader.cacheOffline(locationData);
           }
         }
@@ -446,10 +447,10 @@ class LocationService {
         // 5. رصد دخول/خروج الفروع (يعمل أوفلاين ويزامن لاحقاً)
         await BranchPresenceMonitor.check(userId, position);
       } catch (e, stack) {
-        debugPrint('⚠️ خطأ داخل مستمع الموقع: $e\n$stack');
+        appLog('⚠️ خطأ داخل مستمع الموقع: $e\n$stack');
       }
     }, onError: (dynamic e) {
-      debugPrint('⚠️ خطأ في استقبال تدفق بيانات الموقع: $e');
+      appLog('⚠️ خطأ في استقبال تدفق بيانات الموقع: $e');
     });
   }
 
@@ -461,7 +462,7 @@ class LocationService {
     _positionStreamSubscription = null;
     _lastUploadedPosition = null;
     _lastUploadedTime = null;
-    debugPrint('تم إيقاف تدفق الموقع الجغرافي.');
+    appLog('تم إيقاف تدفق الموقع الجغرافي.');
   }
 
   /// تسجيل محاولات التزييف الفوري وإرسال إشعارات
@@ -481,9 +482,9 @@ class LocationService {
         'type': 'system',
       });
 
-      debugPrint('🚨 تم كشف وتوثيق محاولة تزييف موقع جغرافي للموظف: $employeeId');
+      appLog('🚨 تم كشف وتوثيق محاولة تزييف موقع جغرافي للموظف: $employeeId');
     } catch (e) {
-      debugPrint('خطأ في تسجيل خرق تزييف الموقع: $e');
+      appLog('خطأ في تسجيل خرق تزييف الموقع: $e');
     }
   }
 
@@ -492,11 +493,11 @@ class LocationService {
     try {
       final status = await Permission.ignoreBatteryOptimizations.status;
       if (!status.isGranted) {
-        debugPrint('🔋 طلب استثناء التطبيق من قيود البطارية...');
+        appLog('🔋 طلب استثناء التطبيق من قيود البطارية...');
         await Permission.ignoreBatteryOptimizations.request();
       }
     } catch (e) {
-      debugPrint('⚠️ فشل طلب استثناء البطارية: $e');
+      appLog('⚠️ فشل طلب استثناء البطارية: $e');
     }
   }
 }

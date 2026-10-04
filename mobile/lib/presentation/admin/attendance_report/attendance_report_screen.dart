@@ -15,6 +15,7 @@ import '../../../core/logic/attendance_report.dart';
 import '../../../core/models/models.dart';
 import '../../../core/services/excel_export_service.dart';
 import '../../../core/services/supabase_service.dart';
+import '../../../core/utils/app_log.dart';
 import '../../../data/repositories/attendance_report_repository.dart';
 import '../../../data/repositories/role_repository.dart';
 import '../../shared/ui/ui.dart';
@@ -79,7 +80,7 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
         };
       }
     } catch (e) {
-      debugPrint('Error loading report lookups: $e');
+      appLog('Error loading report lookups: $e');
     }
     unawaited(_loadRecords());
   }
@@ -168,7 +169,7 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
         });
       }
     } catch (e) {
-      debugPrint('Error loading attendance: $e');
+      appLog('Error loading attendance: $e');
       if (mounted) setState(() => _hasError = true);
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -224,7 +225,7 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
         ),
       ));
     } catch (e) {
-      debugPrint('Excel export failed: $e');
+      appLog('Excel export failed: $e');
       if (mounted) AppSnack.error(context, 'تعذّر إنشاء ملف Excel');
     } finally {
       if (mounted) setState(() => _exporting = false);
@@ -375,7 +376,7 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
         if (mounted) setState(() => _isLoading = false);
       }
     } catch (e) {
-      debugPrint('Error updating time: $e');
+      appLog('Error updating time: $e');
       if (mounted) {
         AppSnack.error(context, 'تعذّر التحديث');
         setState(() => _isLoading = false);

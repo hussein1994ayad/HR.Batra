@@ -8,6 +8,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/design/design.dart';
 import '../constants/constants.dart';
+import '../utils/app_log.dart';
 import 'supabase_service.dart';
 
 /// الحالات المختلفة لفحص تحديث التطبيق
@@ -66,7 +67,7 @@ class OtaService {
               : latestRelease['apk_url'])
           ?.toString() ?? '';
       if (!isTrustedDownloadUrl(downloadUrl, isIOS: Platform.isIOS)) {
-        debugPrint('OTA: تم تجاهل رابط تحديث غير موثوق: $downloadUrl');
+        appLog('OTA: تم تجاهل رابط تحديث غير موثوق: $downloadUrl');
         return {'status': OtaStatus.upToDate};
       }
       final String releaseNotes = (latestRelease['release_notes'] ?? 'تحديث أمان وإصلاحات عامة') as String;
@@ -85,7 +86,7 @@ class OtaService {
 
       return {'status': OtaStatus.upToDate};
     } catch (e) {
-      debugPrint('خطأ أثناء فحص إصدار التطبيق (OTA): $e');
+      appLog('خطأ أثناء فحص إصدار التطبيق (OTA): $e');
       return {'status': OtaStatus.failed};
     }
   }

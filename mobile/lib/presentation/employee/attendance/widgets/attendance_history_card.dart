@@ -4,6 +4,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/services/supabase_service.dart';
+import '../../../../core/utils/app_log.dart';
 import '../../../../data/repositories/attendance_repository.dart';
 import '../../../shared/ui/ui.dart';
 
@@ -36,7 +37,7 @@ class _AttendanceHistoryCardState extends State<AttendanceHistoryCard> {
       final rows = await AttendanceRepository().fetchRecentHistory(user.id, today: today, days: widget.days);
       if (mounted) setState(() => _rows = rows);
     } catch (e) {
-      debugPrint('تعذّر تحميل سجل الدوام: $e');
+      appLog('تعذّر تحميل سجل الدوام: $e');
       if (mounted) setState(() => _failed = true);
     }
   }

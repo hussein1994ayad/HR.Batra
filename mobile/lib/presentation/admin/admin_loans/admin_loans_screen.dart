@@ -14,6 +14,7 @@ import '../../../core/logic/loan_rules.dart';
 import '../../../core/models/models.dart';
 import '../../../core/routes/app_router.dart';
 import '../../../core/services/excel_export_service.dart';
+import '../../../core/utils/app_log.dart';
 import '../../../data/repositories/loan_repository.dart';
 import '../../../data/repositories/role_repository.dart';
 import '../../shared/ui/ui.dart';
@@ -75,7 +76,7 @@ class _AdminLoansManagementScreenState extends State<AdminLoansManagementScreen>
       final data = await _repo.loadOverview();
       if (mounted) setState(() => _data = data);
     } catch (e) {
-      debugPrint('خطأ في تحميل بيانات السلف: $e');
+      appLog('خطأ في تحميل بيانات السلف: $e');
       _toast('فشل تحميل السلف: $e', AppColors.danger);
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -90,7 +91,7 @@ class _AdminLoansManagementScreenState extends State<AdminLoansManagementScreen>
         await showExcelExportedDialog(context, employeeName: record.loan.employeeName ?? 'الموظف', filePath: path);
       }
     } catch (e) {
-      debugPrint('خطأ في تصدير ملف Excel: $e');
+      appLog('خطأ في تصدير ملف Excel: $e');
       _toast('فشل تصدير ملف Excel: $e', AppColors.danger);
     } finally {
       if (mounted) setState(() => _isExporting = false);

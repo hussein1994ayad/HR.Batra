@@ -19,9 +19,9 @@
 
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
+import '../utils/app_log.dart';
 import 'supabase_service.dart';
 
 class IosRegionMonitor {
@@ -46,7 +46,7 @@ class IosRegionMonitor {
         'accessToken': accessToken ?? '',
       });
     } catch (e) {
-      debugPrint('IosRegionMonitor.configure error: $e');
+      appLog('IosRegionMonitor.configure error: $e');
     }
   }
 
@@ -59,9 +59,9 @@ class IosRegionMonitor {
       await _channel.invokeMethod('startMonitoring', {
         'branches': limited,
       });
-      debugPrint('iOS: بدأت مراقبة ${limited.length} فرع');
+      appLog('iOS: بدأت مراقبة ${limited.length} فرع');
     } catch (e) {
-      debugPrint('IosRegionMonitor.startMonitoring error: $e');
+      appLog('IosRegionMonitor.startMonitoring error: $e');
     }
   }
 
@@ -70,9 +70,9 @@ class IosRegionMonitor {
     if (!isSupported) return;
     try {
       await _channel.invokeMethod('setCheckedIn', {'value': checkedIn});
-      debugPrint('iOS: setCheckedIn($checkedIn)');
+      appLog('iOS: setCheckedIn($checkedIn)');
     } catch (e) {
-      debugPrint('IosRegionMonitor.setCheckedIn error: $e');
+      appLog('IosRegionMonitor.setCheckedIn error: $e');
     }
   }
 
@@ -82,7 +82,7 @@ class IosRegionMonitor {
     try {
       await _channel.invokeMethod('updateAccessToken', {'accessToken': token});
     } catch (e) {
-      debugPrint('IosRegionMonitor.updateAccessToken error: $e');
+      appLog('IosRegionMonitor.updateAccessToken error: $e');
     }
   }
 
@@ -103,9 +103,9 @@ class IosRegionMonitor {
         final end = i + 200 > rows.length ? rows.length : i + 200;
         await SupabaseService.client.from('location_tracking').insert(rows.sublist(i, end));
       }
-      if (rows.isNotEmpty) debugPrint('iOS: رُفعت ${rows.length} نقطة موقع محفوظة');
+      if (rows.isNotEmpty) appLog('iOS: رُفعت ${rows.length} نقطة موقع محفوظة');
     } catch (e) {
-      debugPrint('IosRegionMonitor.uploadPendingPoints error: $e');
+      appLog('IosRegionMonitor.uploadPendingPoints error: $e');
     }
   }
 
@@ -113,9 +113,9 @@ class IosRegionMonitor {
     if (!isSupported) return;
     try {
       await _channel.invokeMethod('stopMonitoring');
-      debugPrint('iOS: توقفت المراقبة تماماً');
+      appLog('iOS: توقفت المراقبة تماماً');
     } catch (e) {
-      debugPrint('IosRegionMonitor.stopMonitoring error: $e');
+      appLog('IosRegionMonitor.stopMonitoring error: $e');
     }
   }
 
@@ -158,7 +158,7 @@ class IosRegionMonitor {
         await startMonitoring(branches);
       }
     } catch (e) {
-      debugPrint('IosRegionMonitor.configureAndStartFromSupabase error: $e');
+      appLog('IosRegionMonitor.configureAndStartFromSupabase error: $e');
     }
   }
 }

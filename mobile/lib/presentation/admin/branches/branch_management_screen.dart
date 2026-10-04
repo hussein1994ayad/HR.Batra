@@ -12,6 +12,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../../../core/utils/app_log.dart';
 import '../../../core/utils/error_text.dart';
 import '../../../data/repositories/branch_repository.dart';
 import '../../shared/ui/ui.dart';
@@ -48,7 +49,7 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
         _hasError = false;
       });
     } catch (e) {
-      debugPrint('Error loading branches: $e');
+      appLog('Error loading branches: $e');
       if (mounted) setState(() => _hasError = true);
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -92,7 +93,7 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
       if (mounted) AppSnack.success(context, 'حُذف الفرع');
       unawaited(_loadBranches());
     } catch (e) {
-      debugPrint('Error deleting branch: $e');
+      appLog('Error deleting branch: $e');
       if (mounted) {
         AppSnack.error(context, 'تعذّر الحذف — قد يكون الفرع مرتبطاً بموظفين أو سجلات');
         setState(() => _isLoading = false);

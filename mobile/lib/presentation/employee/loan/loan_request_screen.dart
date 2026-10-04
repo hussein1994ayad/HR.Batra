@@ -14,6 +14,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../core/services/supabase_service.dart';
+import '../../../core/utils/app_log.dart';
 import '../../../core/utils/arabic_format.dart';
 import '../../../core/utils/error_text.dart';
 import '../../../core/utils/input_formatters.dart';
@@ -86,7 +87,7 @@ class _LoanRequestScreenState extends State<LoanRequestScreen> with SingleTicker
         _historyError = false;
       });
     } catch (e) {
-      debugPrint('خطأ في تحميل تاريخ السلف: $e');
+      appLog('خطأ في تحميل تاريخ السلف: $e');
       if (mounted) setState(() => _historyError = true);
     } finally {
       if (mounted) setState(() => _isLoadingHistory = false);

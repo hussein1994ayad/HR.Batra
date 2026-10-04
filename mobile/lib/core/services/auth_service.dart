@@ -11,12 +11,12 @@
 
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../providers/app_container.dart';
 import '../providers/auth_provider.dart';
+import '../utils/app_log.dart';
 import 'device_service.dart';
 import 'ios_region_monitor.dart';
 import 'location_service.dart';
@@ -84,7 +84,7 @@ class AuthService {
     try {
       appContainer.read(currentUserRoleProvider.notifier).state = role;
     } catch (e) {
-      debugPrint('auth: role provider sync failed: $e');
+      appLog('auth: role provider sync failed: $e');
     }
   }
 
@@ -181,7 +181,7 @@ class AuthService {
           .maybeSingle()
           .timeout(const Duration(seconds: 8));
     } catch (e) {
-      debugPrint('auth: offline at startup, keeping session: $e');
+      appLog('auth: offline at startup, keeping session: $e');
       _setRole(await _cachedRole());
       return StartupDestination.home;
     }
@@ -197,7 +197,7 @@ class AuthService {
     } on DeviceLockedException {
       return StartupDestination.login;
     } catch (e) {
-      debugPrint('auth: device check skipped: $e');
+      appLog('auth: device check skipped: $e');
     }
 
     await _touchActivity();
@@ -215,7 +215,7 @@ class AuthService {
     try {
       await LocationService.stopTracking().timeout(const Duration(seconds: 5));
     } catch (e) {
-      debugPrint('signOut: stopTracking failed: $e');
+      appLog('signOut: stopTracking failed: $e');
     }
     try {
       await IosRegionMonitor.stopMonitoring();
@@ -225,7 +225,7 @@ class AuthService {
     try {
       await SupabaseService.client.auth.signOut();
     } catch (e) {
-      debugPrint('signOut warning: $e');
+      appLog('signOut warning: $e');
     }
     try {
       final prefs = await SharedPreferences.getInstance();

@@ -274,3 +274,11 @@
 - **أُضيف فحص** `mobile/test/unit/storage_logic_test.dart`.
 - بهذا **ما بقى أي استدعاء مباشر لـ Supabase داخل `presentation/`** — كلها بالـ repositories (الخدمات بـ `core/services` بقت كما هي).
 - فحص: `dart analyze` ✓، `flutter test` 565 ✓.
+
+## Step 25 — سجلات التطبيق الموحّدة (النقطة 21)
+- **أُنشئ** `mobile/lib/core/utils/app_log.dart`: `appLog(message)` = `debugPrint(message)` حرفياً (نفس الإخراج ونفس التقطيع).
+- **استُبدلت** كل استدعاءات `debugPrint(` بـ `appLog(` (166 استدعاء في 41 ملف) — **نفس نص كل رسالة بدون تغيير**؛
+  وحُذف استيراد `flutter/foundation` (أو `material`) من 12 ملف كان يستعمله فقط لـ `debugPrint`.
+- الفائدة: مكان واحد لو احتجنا لاحقاً أداة سجلات أو إرسال الأخطاء لخدمة خارجية. السلوك الحالي نفسه بالضبط.
+- لم يُوحَّد شكل الرسائل (إيموجي/عربي/إنگليزي) حتى لا يتغير أي إخراج — قرار مقصود.
+- فحص: `dart analyze` ✓، `flutter test` 565 ✓.

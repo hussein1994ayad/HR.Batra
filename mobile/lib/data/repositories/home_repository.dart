@@ -3,10 +3,10 @@
 // العطل الرسمية، المجازون والمتأخرون اليوم — والاشتراكات الفورية (Realtime).
 // =========================================================================
 
-import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/services/supabase_service.dart';
+import '../../core/utils/app_log.dart';
 import 'announcement_repository.dart';
 
 class HomeRepository {
@@ -52,8 +52,8 @@ class HomeRepository {
           callback: onInsert,
         )
         .subscribe((status, [error]) {
-          debugPrint('=== notifications channel: $status ===');
-          if (error != null) debugPrint('=== channel error: $error ===');
+          appLog('=== notifications channel: $status ===');
+          if (error != null) appLog('=== channel error: $error ===');
         });
   }
 
@@ -69,7 +69,7 @@ class HomeRepository {
           callback: onChange,
         )
         .subscribe((status, [error]) {
-          debugPrint('=== attendance channel: $status ===');
+          appLog('=== attendance channel: $status ===');
         });
   }
 

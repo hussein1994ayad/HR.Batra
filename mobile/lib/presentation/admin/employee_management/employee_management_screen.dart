@@ -12,6 +12,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../core/services/supabase_service.dart';
+import '../../../core/utils/app_log.dart';
 import '../../../core/utils/arabic_format.dart';
 import '../../../data/repositories/employee_admin_repository.dart';
 import '../../../data/repositories/role_repository.dart';
@@ -81,7 +82,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
         });
       }
     } catch (e) {
-      debugPrint('Error loading employees: $e');
+      appLog('Error loading employees: $e');
       if (mounted) setState(() => _hasError = true);
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -116,7 +117,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
       if (mounted) AppSnack.show(context, isActive ? 'عُطّل الحساب' : 'فُعّل الحساب', tone: isActive ? AppTone.warning : AppTone.success);
       unawaited(_loadEmployees());
     } catch (e) {
-      debugPrint('Error toggling status: $e');
+      appLog('Error toggling status: $e');
       if (mounted) {
         AppSnack.error(context, 'تعذّر تغيير الحالة');
         setState(() => _isLoading = false);
@@ -140,7 +141,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
       if (mounted) AppSnack.success(context, 'فُكّ ربط الجهاز');
       unawaited(_loadEmployees());
     } catch (e) {
-      debugPrint('Error unbinding device: $e');
+      appLog('Error unbinding device: $e');
       if (mounted) {
         AppSnack.error(context, 'تعذّر فك الربط');
         setState(() => _isLoading = false);

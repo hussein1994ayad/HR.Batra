@@ -21,6 +21,7 @@ import '../../../core/services/notification_service.dart';
 import '../../../core/services/share_helper.dart';
 import '../../../core/services/storage_links.dart';
 import '../../../core/services/supabase_service.dart';
+import '../../../core/utils/app_log.dart';
 import '../../../core/utils/error_text.dart';
 import '../../../data/repositories/profile_repository.dart';
 import '../../shared/ui/ui.dart';
@@ -109,7 +110,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         });
       }
     } catch (e) {
-      debugPrint('خطأ في تحميل ملف الموظف: $e');
+      appLog('خطأ في تحميل ملف الموظف: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -146,7 +147,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         try {
           await _repo.removeAvatarObject(oldPath);
         } catch (storageErr) {
-          debugPrint('تحذير: تعذر حذف الصورة القديمة من التخزين بعد التحديث: $storageErr');
+          appLog('تحذير: تعذر حذف الصورة القديمة من التخزين بعد التحديث: $storageErr');
         }
       }
 
@@ -285,7 +286,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       await _repo.requestAccountDeletion();
       if (mounted) AppSnack.success(context, 'وصل طلب حذف الحساب للإدارة');
     } catch (e) {
-      debugPrint('Failed to submit deletion request: $e');
+      appLog('Failed to submit deletion request: $e');
       if (mounted) AppSnack.error(context, 'تعذّر إرسال الطلب، حاول لاحقاً');
     } finally {
       if (mounted) setState(() => _deletionBusy = false);

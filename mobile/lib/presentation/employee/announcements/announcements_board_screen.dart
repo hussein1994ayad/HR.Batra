@@ -7,6 +7,7 @@
 
 import 'package:flutter/material.dart';
 
+import '../../../core/utils/app_log.dart';
 import '../../../data/repositories/announcement_repository.dart';
 import '../../shared/ui/ui.dart';
 import 'announcement_widgets.dart';
@@ -43,7 +44,7 @@ class _AnnouncementsBoardScreenState extends State<AnnouncementsBoardScreen> {
         _failed = false;
       });
     } catch (e) {
-      debugPrint('Error loading announcements board: $e');
+      appLog('Error loading announcements board: $e');
       if (mounted) setState(() => _failed = true);
     } finally {
       if (mounted) setState(() => _loading = false);

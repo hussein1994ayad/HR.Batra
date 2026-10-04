@@ -10,6 +10,7 @@ import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 
 import '../../../core/routes/app_router.dart';
 import '../../../core/services/supabase_service.dart';
+import '../../../core/utils/app_log.dart';
 import '../../../data/repositories/branch_repository.dart';
 import '../../../data/repositories/role_repository.dart';
 import '../../shared/ui/ui.dart';
@@ -61,7 +62,7 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
         _hasError = false;
       });
     } catch (e) {
-      debugPrint('خطأ في تحميل الأفرع: $e');
+      appLog('خطأ في تحميل الأفرع: $e');
       if (mounted) setState(() => _hasError = true);
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -286,7 +287,7 @@ class _ScheduleEditorState extends State<_ScheduleEditor> {
       }
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
-      debugPrint('خطأ في حفظ الجدول: $e');
+      appLog('خطأ في حفظ الجدول: $e');
       if (mounted) {
         AppSnack.error(context, 'تعذّر الحفظ: $e');
         setState(() => _saving = false);

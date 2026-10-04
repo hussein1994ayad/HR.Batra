@@ -6,6 +6,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/services/supabase_service.dart';
+import '../../../core/utils/app_log.dart';
 import '../../../data/repositories/notification_repository.dart';
 import '../../shared/ui/ui.dart';
 
@@ -52,7 +53,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         await _repo.markRead(unreadIds);
       }
     } catch (e) {
-      debugPrint('خطأ في تحميل الإشعارات: $e');
+      appLog('خطأ في تحميل الإشعارات: $e');
       if (mounted) setState(() => _hasError = true);
     } finally {
       if (mounted) setState(() => _isLoading = false);

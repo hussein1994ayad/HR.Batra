@@ -19,6 +19,7 @@ import '../../../core/services/notification_service.dart';
 import '../../../core/services/ota_service.dart';
 import '../../../core/services/schedule_service.dart';
 import '../../../core/services/supabase_service.dart';
+import '../../../core/utils/app_log.dart';
 import '../../../data/repositories/home_repository.dart';
 import '../../shared/ui/ui.dart';
 import '../announcements/announcement_widgets.dart';
@@ -71,7 +72,7 @@ class _HomeScreenState extends State<HomeScreen> {
           OtaService.showUpdatePrompt(context, updateInfo);
         }
       } catch (e) {
-        debugPrint('OTA check non-fatal error: $e');
+        appLog('OTA check non-fatal error: $e');
       }
     });
   }
@@ -88,7 +89,7 @@ class _HomeScreenState extends State<HomeScreen> {
         unawaited(SystemSound.play(SystemSoundType.alert));
         unawaited(HapticFeedback.mediumImpact());
       } catch (e) {
-        debugPrint('خطأ في تشغيل صوت الإشعار: $e');
+        appLog('خطأ في تشغيل صوت الإشعار: $e');
       }
 
       final data = payload.newRecord;
@@ -121,7 +122,7 @@ class _HomeScreenState extends State<HomeScreen> {
         });
       }
     } catch (e) {
-      debugPrint('تعذر تحديث سجل الدوام: $e');
+      appLog('تعذر تحديث سجل الدوام: $e');
     }
   }
 
@@ -221,7 +222,7 @@ class _HomeScreenState extends State<HomeScreen> {
         unawaited(LocationService.stopTracking());
       }
     } catch (e) {
-      debugPrint('خطأ في تحميل بيانات لوحة الموظف: $e');
+      appLog('خطأ في تحميل بيانات لوحة الموظف: $e');
       if (mounted) {
         AppSnack.error(context, 'تعذّر تحديث البيانات، تأكد من اتصال الإنترنت.');
       }
@@ -241,7 +242,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final isHoliday = await _repo.isOfficialHoliday(todayStr);
       if (mounted) setState(() => _isHolidayToday = isHoliday);
     } catch (e) {
-      debugPrint('تعذّر فحص العطلة الرسمية: $e');
+      appLog('تعذّر فحص العطلة الرسمية: $e');
     }
   }
 
@@ -256,7 +257,7 @@ class _HomeScreenState extends State<HomeScreen> {
         });
       }
     } catch (e) {
-      debugPrint('Error loading on-leave list: $e');
+      appLog('Error loading on-leave list: $e');
     }
   }
 

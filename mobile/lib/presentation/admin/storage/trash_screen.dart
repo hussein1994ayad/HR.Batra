@@ -6,6 +6,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../core/utils/app_log.dart';
 import '../../../data/repositories/storage_repository.dart';
 import '../../shared/ui/ui.dart';
 import 'storage_logic.dart';
@@ -41,7 +42,7 @@ class _TrashScreenState extends State<TrashScreen> {
         _hasError = false;
       });
     } catch (e) {
-      debugPrint('خطأ في جلب بيانات سلة المحذوفات: $e');
+      appLog('خطأ في جلب بيانات سلة المحذوفات: $e');
       if (mounted) setState(() => _hasError = true);
     } finally {
       if (mounted) setState(() => _isLoading = false);

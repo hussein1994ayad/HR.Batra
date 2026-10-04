@@ -4,10 +4,10 @@
 
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../../utils/app_log.dart';
 import '../supabase_service.dart';
 import 'offline_json_queue.dart';
 
@@ -44,7 +44,7 @@ class GeofenceMonitor {
           _cachedGeofenceZones = assignments;
           _lastGeofencesFetchTime = now;
         } catch (e) {
-          debugPrint('⚠️ فشل جلب السياج الجغرافي من السيرفر: $e');
+          appLog('⚠️ فشل جلب السياج الجغرافي من السيرفر: $e');
         }
       }
 
@@ -91,7 +91,7 @@ class GeofenceMonitor {
             }
           }
         } catch (e) {
-          debugPrint('خطأ في فك تشفير إحداثيات الجيوفينس للمنطقة $zoneName: $e');
+          appLog('خطأ في فك تشفير إحداثيات الجيوفينس للمنطقة $zoneName: $e');
           continue;
         }
 
@@ -123,7 +123,7 @@ class GeofenceMonitor {
         _lastGeofenceStates[zoneId] = isCurrentlyInside;
       }
     } catch (e) {
-      debugPrint('خطأ أثناء التحقق من مخالفات السياج الجغرافي: $e');
+      appLog('خطأ أثناء التحقق من مخالفات السياج الجغرافي: $e');
     }
   }
 
@@ -166,14 +166,14 @@ class GeofenceMonitor {
           })
           .timeout(const Duration(seconds: 8));
 
-      debugPrint('📍 حدث سياج جغرافي مرفوع: $violationName - $zoneName');
+      appLog('📍 حدث سياج جغرافي مرفوع: $violationName - $zoneName');
     } catch (_) {
       // فشل الرفع → نخزّنه محلياً للمزامنة لاحقاً بنفس طابعه الزمني
       try {
         final pending = await _queue.append(event);
-        debugPrint('💾 حدث سياج جغرافي مخزّن أوفلاين ($pending بالانتظار).');
+        appLog('💾 حدث سياج جغرافي مخزّن أوفلاين ($pending بالانتظار).');
       } catch (e) {
-        debugPrint('⚠️ فشل حفظ حدث السياج محلياً: $e');
+        appLog('⚠️ فشل حفظ حدث السياج محلياً: $e');
       }
     }
   }
@@ -204,9 +204,9 @@ class GeofenceMonitor {
         }
       }
       await _queue.replace(remaining);
-      debugPrint('✅ مزامنة أحداث السياج: ${list.length - remaining.length} رُفعت، ${remaining.length} بالانتظار.');
+      appLog('✅ مزامنة أحداث السياج: ${list.length - remaining.length} رُفعت، ${remaining.length} بالانتظار.');
     } catch (e) {
-      debugPrint('⚠️ فشل مزامنة أحداث السياج الجغرافي: $e');
+      appLog('⚠️ فشل مزامنة أحداث السياج الجغرافي: $e');
     }
   }
 }

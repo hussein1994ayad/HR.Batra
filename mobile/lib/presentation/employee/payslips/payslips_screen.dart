@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/services/pdf_export_service.dart';
 import '../../../core/services/supabase_service.dart';
+import '../../../core/utils/app_log.dart';
 import '../../../data/repositories/payslips_repository.dart';
 import '../../shared/ui/ui.dart';
 import 'payslips_logic.dart';
@@ -53,7 +54,7 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
         });
       }
     } catch (e) {
-      debugPrint('خطأ في تحميل إعدادات الدورة المالية: $e');
+      appLog('خطأ في تحميل إعدادات الدورة المالية: $e');
     }
   }
 
@@ -73,7 +74,7 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
         final p = await _repo.fetchPayrollPreview();
         if (p is Map) preview = Map<String, dynamic>.from(p);
       } catch (e) {
-        debugPrint('تعذّر تحميل مسير الشهر الحالي: $e');
+        appLog('تعذّر تحميل مسير الشهر الحالي: $e');
       }
 
       if (!mounted) return;
@@ -86,7 +87,7 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
         }
       });
     } catch (e) {
-      debugPrint('خطأ في تحميل كشوف الرواتب: $e');
+      appLog('خطأ في تحميل كشوف الرواتب: $e');
       if (mounted) setState(() => _hasError = true);
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -114,7 +115,7 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
         if (!mounted) return;
         setState(() => _slipsDetails[slipId] = slipLinesToDetails(lines));
       } catch (e) {
-        debugPrint('خطأ في تحميل تفاصيل الكشف: $e');
+        appLog('خطأ في تحميل تفاصيل الكشف: $e');
       }
       return;
     }
@@ -131,7 +132,7 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
         _slipsDetails[slipId] = rows;
       });
     } catch (e) {
-      debugPrint('خطأ في تحميل تفاصيل المكافآت والخصومات: $e');
+      appLog('خطأ في تحميل تفاصيل المكافآت والخصومات: $e');
     }
   }
 
@@ -202,7 +203,7 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
         ),
       ));
     } catch (e) {
-      debugPrint('خطأ في تصدير PDF للراتب: $e');
+      appLog('خطأ في تصدير PDF للراتب: $e');
       if (mounted) AppSnack.error(context, 'تعذّر إنشاء ملف PDF');
     } finally {
       if (mounted) setState(() => _exportingSlipId = null);

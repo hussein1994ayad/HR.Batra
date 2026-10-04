@@ -15,6 +15,7 @@ import '../../../core/services/location_service.dart';
 import '../../../core/services/precise_location.dart';
 import '../../../core/services/schedule_service.dart';
 import '../../../core/services/supabase_service.dart';
+import '../../../core/utils/app_log.dart';
 import '../../../data/repositories/attendance_repository.dart';
 import '../../shared/ui/ui.dart';
 import 'widgets/attendance_history_card.dart';
@@ -94,7 +95,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         });
       },
       onError: (dynamic e) {
-        debugPrint('GPS Stream Error: $e');
+        appLog('GPS Stream Error: $e');
       },
     );
   }
@@ -258,7 +259,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         _todayAttendance = attendanceData as Map<String, dynamic>?;
 
       } catch (networkError) {
-        debugPrint(' وضع الأوفلاين نشط: $networkError');
+        appLog(' وضع الأوفلاين نشط: $networkError');
       }
 
       // 6. دمج البصمات المحلية المعلقة في طابور التزامن

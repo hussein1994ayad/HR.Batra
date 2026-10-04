@@ -1,9 +1,9 @@
 // دخول وخروج الفروع (دائرة كل فرع: الموقع + نصف القطر): كل انتقال يصير إشعار حضور للموظف.
 // يعمل أوفلاين — الحدث ينحفظ ويُرفع لاحقاً بعنوان "(مؤرشف)".
 
-import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 
+import '../../utils/app_log.dart';
 import '../supabase_service.dart';
 import 'offline_json_queue.dart';
 
@@ -69,7 +69,7 @@ class BranchPresenceMonitor {
         _lastBranchInsideStates[id] = isInside;
       }
     } catch (e) {
-      debugPrint('⚠️ فشل فحص دخول/خروج الفروع: $e');
+      appLog('⚠️ فشل فحص دخول/خروج الفروع: $e');
     }
   }
 
@@ -86,14 +86,14 @@ class BranchPresenceMonitor {
             '${event['branch_name']} في ${event['timestamp']}',
         'type': 'attendance',
       }).timeout(const Duration(seconds: 8));
-      debugPrint('📍 branch event uploaded: ${event['event_type']} ${event['branch_name']}');
+      appLog('📍 branch event uploaded: ${event['event_type']} ${event['branch_name']}');
     } catch (_) {
       // فشل الرفع → نضيفه للـ cache للمزامنة لاحقاً
       try {
         final pending = await _queue.append(event);
-        debugPrint('💾 branch event cached offline ($pending pending).');
+        appLog('💾 branch event cached offline ($pending pending).');
       } catch (e) {
-        debugPrint('⚠️ فشل حفظ حدث الفرع محلياً: $e');
+        appLog('⚠️ فشل حفظ حدث الفرع محلياً: $e');
       }
     }
   }
@@ -123,9 +123,9 @@ class BranchPresenceMonitor {
         }
       }
       await _queue.replace(remaining);
-      debugPrint('✅ branch-events sync: ${list.length - remaining.length} uploaded, ${remaining.length} pending.');
+      appLog('✅ branch-events sync: ${list.length - remaining.length} uploaded, ${remaining.length} pending.');
     } catch (e) {
-      debugPrint('⚠️ branch-events sync failed: $e');
+      appLog('⚠️ branch-events sync failed: $e');
     }
   }
 }

@@ -14,6 +14,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../core/services/supabase_service.dart';
+import '../../../core/utils/app_log.dart';
 import '../../../core/utils/error_text.dart';
 import '../../../data/repositories/leave_repository.dart';
 import '../../shared/ui/ui.dart';
@@ -75,7 +76,7 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
       final data = await _repo.fetchBalance();
       if (mounted && data is Map) setState(() => _balance = Map<String, dynamic>.from(data));
     } catch (e) {
-      debugPrint('Error loading leave balance: $e');
+      appLog('Error loading leave balance: $e');
     }
   }
 
@@ -100,7 +101,7 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
         _historyError = false;
       });
     } catch (e) {
-      debugPrint('خطأ في تحميل تاريخ الإجازات: $e');
+      appLog('خطأ في تحميل تاريخ الإجازات: $e');
       if (mounted) setState(() => _historyError = true);
     } finally {
       if (mounted) setState(() => _isLoadingHistory = false);
@@ -120,7 +121,7 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
         });
       }
     } catch (e) {
-      debugPrint('خطأ في تحميل أنواع الإجازات من السيرفر: $e');
+      appLog('خطأ في تحميل أنواع الإجازات من السيرفر: $e');
     }
   }
 
