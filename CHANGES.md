@@ -148,3 +148,13 @@
   `test/unit/payroll_engine_client_test.dart` (+ ترتيب الاستيرادات أبجدياً).
 - `presentation/employee/` صار فيه شاشات الموظف فقط. لا تغيير بالكود نفسه.
 - فحص: `dart analyze` ✓، `flutter test` 523 ✓.
+
+## Step 13 — الشاشة الرئيسية للموظف (النقاط 3 و 4 و 8)
+- **نُقلت** `presentation/employee/home_screen.dart` → `presentation/employee/home/home_screen.dart` (730 → 361 سطر).
+- **أُنشئ** `mobile/lib/data/repositories/home_repository.dart`: كل استعلامات الشاشة الـ 16 (الملف الشخصي، دوام اليوم،
+  التعاميم، غير المقروء، العطلة، المجازون/المتأخرون) والاشتراكان الفوريان — نفس الاستعلامات ونفس أسماء القنوات.
+- **أُنشئ** `presentation/employee/home/widgets/home_widgets.dart`، و**أُعيدت تسمية** الأجزاء الخاصة لتصير عامة:
+  `_Header→HomeHeader`, `_TodayCard→HomeTodayCard`, `_DayState→HomeDayState`, `_TimeChip→HomeTimeChip`,
+  `_AdminEntry→HomeAdminEntry`, `_QuickAction(s)→HomeQuickAction(s)`, `_Announcements→HomeAnnouncements` (+ `super.key`).
+- `main_layout.dart`: مسار الاستيراد فقط.
+- فحص: `dart analyze` ✓، `flutter test` 523 ✓.
