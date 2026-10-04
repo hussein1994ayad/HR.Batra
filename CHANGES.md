@@ -225,3 +225,11 @@
   `HomeRepository` صار يستدعيه بدل نسخة مكررة من نفس الاستعلامات (نفس الدوال ونفس `catchError` لدالة المتأخرين).
 - **أُضيف فحص** `mobile/test/unit/directory_logic_test.dart`.
 - فحص: `dart analyze` ✓، `flutter test` 559 ✓.
+
+## Step 20 — تقرير الحضور للإدارة (النقاط 3 و 4 و 8)
+- **نُقلت** `presentation/admin/attendance_report_screen.dart` → `presentation/admin/attendance_report/attendance_report_screen.dart` (664 → 516 سطر).
+- **أُنشئ** `mobile/lib/data/repositories/attendance_report_repository.dart`: القوائم الأربع بالتوازي، الحضور بصفحات 1000،
+  الإجازات المعتمدة المتقاطعة مع الفترة، العطل الرسمية، وتعديل أوقات سجل — نفس الاستعلامات حرفياً.
+- فحص صلاحية الشاشة صار عبر `RoleRepository.isAdminOrManager()` الموجود (نفس الاستعلام ونفس الشرط: أدمن أو مدير وإلا ترجع).
+- **أُنشئ** `attendance_report/widgets/report_record_card.dart`: `ReportRecordCard` (من `_recordCard`) و`ReportTimeButton` (كان `_TimeButton`).
+- فحص: `dart analyze` ✓، `flutter test` 559 ✓ (لقطات الشاشة تغطي التقرير).

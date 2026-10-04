@@ -11,11 +11,14 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../core/logic/attendance_report.dart';
-import '../../core/models/models.dart';
-import '../../core/services/excel_export_service.dart';
-import '../../core/services/supabase_service.dart';
-import '../shared/ui/ui.dart';
+import '../../../core/logic/attendance_report.dart';
+import '../../../core/models/models.dart';
+import '../../../core/services/excel_export_service.dart';
+import '../../../core/services/supabase_service.dart';
+import '../../../data/repositories/attendance_report_repository.dart';
+import '../../../data/repositories/role_repository.dart';
+import '../../shared/ui/ui.dart';
+import 'widgets/report_record_card.dart';
 
 class AttendanceReportScreen extends StatefulWidget {
   const AttendanceReportScreen({super.key});
@@ -25,6 +28,7 @@ class AttendanceReportScreen extends StatefulWidget {
 }
 
 class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
+  final AttendanceReportRepository _repo = AttendanceReportRepository();
   bool _isLoading = true;
   bool _hasError = false;
   bool _exporting = false;
@@ -57,22 +61,12 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
     }
 
     try {
-      final employeeRes = await SupabaseService.client.from('employees').select('role').eq('id', user.id).maybeSingle();
-
-      if (employeeRes == null || (employeeRes['role'] != 'admin' && employeeRes['role'] != 'manager')) {
+      if (!await RoleRepository().isAdminOrManager()) {
         if (mounted) Navigator.pop(context);
         return;
       }
 
-      final results = await Future.wait<dynamic>([
-        SupabaseService.client.from('branches').select('id, name').order('name'),
-        SupabaseService.client
-            .from('employees')
-            .select('id, full_name, employee_code, branch_id, department_id, join_date, is_active')
-            .order('full_name'),
-        SupabaseService.client.from('work_schedules').select(),
-        SupabaseService.client.from('system_settings').select('value').eq('key', 'leave_policy').maybeSingle(),
-      ]);
+      final results = await _repo.fetchLookups();
       if (mounted) {
         _branches = List<Map<String, dynamic>>.from(results[0] as Iterable<dynamic>);
         _employeesList = List<Map<String, dynamic>>.from(results[1] as Iterable<dynamic>);
@@ -118,34 +112,11 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
       ];
       final ids = employees.isEmpty ? ['00000000-0000-0000-0000-000000000000'] : [for (final e in employees) e.id];
 
-      // الصفحات تضمن جلب كل السجلات حتى لو تجاوزت حدّ 1000 سطر لكل طلب
-      final attendanceRows = <Map<String, dynamic>>[];
-      for (var offset = 0;; offset += 1000) {
-        final page = await SupabaseService.client
-            .from('attendance')
-            .select('id, employee_id, check_in_time, check_out_time, check_in_lat, check_in_lng, check_out_lat, check_out_lng, status, work_date')
-            .inFilter('employee_id', ids)
-            .gte('work_date', _iso(from))
-            .lte('work_date', _iso(to))
-            .order('work_date')
-            .range(offset, offset + 999);
-        attendanceRows.addAll(rowsOf(page));
-        if (page.length < 1000) break;
-      }
+      final attendanceRows = await _repo.fetchAttendance(ids, from: _iso(from), to: _iso(to));
 
-      final leaveRows = rowsOf(await SupabaseService.client
-          .from('leave_requests')
-          .select('employee_id, start_date, end_date, leave_type, is_hourly, is_paid, start_hour, end_hour')
-          .eq('status', 'approved')
-          .inFilter('employee_id', ids)
-          .lte('start_date', DateTime(to.year, to.month, to.day, 23, 59, 59).toUtc().toIso8601String())
-          .gte('end_date', from.toUtc().toIso8601String()));
+      final leaveRows = await _repo.fetchApprovedLeaves(ids, from: from, to: to);
 
-      final holidayRows = rowsOf(await SupabaseService.client
-          .from('official_holidays')
-          .select('holiday_date, name')
-          .gte('holiday_date', _iso(from))
-          .lte('holiday_date', _iso(to)));
+      final holidayRows = await _repo.fetchHolidays(from: _iso(from), to: _iso(to));
 
       String hhmm(Object? t) => t == null ? '' : t.toString().substring(0, t.toString().length >= 5 ? 5 : t.toString().length);
 
@@ -395,7 +366,7 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
       }
 
       if (updates.isNotEmpty) {
-        await SupabaseService.client.from('attendance').update(updates).eq('id', recordId);
+        await _repo.updateAttendanceTimes(recordId, updates);
         if (mounted) {
           AppSnack.success(context, 'حُدّثت الأوقات');
           unawaited(_loadRecords());
@@ -471,7 +442,7 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
         lastDay = row.date;
         list.add(Padding(
           padding: const EdgeInsets.only(bottom: AppSpace.sm),
-          child: FadeSlideIn(index: i < 20 ? i : 20, child: _recordCard(row)),
+          child: FadeSlideIn(index: i < 20 ? i : 20, child: ReportRecordCard(row: row, onOpenMap: _openMap, onEditTimes: _editTimeDialog)),
         ));
       }
     }
@@ -538,125 +509,6 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
             const SizedBox(height: AppSpace.md),
             for (final w in list) ContentWidth(child: w),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _recordCard(ReportRow r) {
-    final att = r.attendance;
-    final tone = switch (r.status) {
-      ReportStatus.present => AppTone.success,
-      ReportStatus.late => AppTone.warning,
-      ReportStatus.earlyLeave => AppTone.warning,
-      ReportStatus.leave => AppTone.info,
-      _ => AppTone.danger,
-    };
-    final name = r.employee.name;
-    final showTimes = att != null && r.status.attended;
-
-    return AppCard(
-      padding: const EdgeInsets.all(AppSpace.md),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              AppAvatar(name: name, size: 40, tone: tone),
-              const SizedBox(width: AppSpace.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(name, style: AppText.subtitle, maxLines: 1, overflow: TextOverflow.ellipsis),
-                    Text(
-                      '${r.employee.code.isEmpty ? '' : '${r.employee.code} · '}${Fmt.dateWithDay(r.date)}',
-                      style: AppText.caption,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-              StatusBadge(r.status.arabic, tone: tone, dot: true),
-            ],
-          ),
-          if (r.note.isNotEmpty) ...[
-            const SizedBox(height: AppSpace.sm),
-            Row(
-              children: [
-                Icon(r.leave != null ? Icons.beach_access_rounded : Icons.info_outline_rounded, size: 16, color: AppColors.textMuted),
-                const SizedBox(width: AppSpace.xs),
-                Expanded(child: Text(r.note, style: AppText.bodySm)),
-              ],
-            ),
-          ],
-          if (showTimes) ...[
-            const SizedBox(height: AppSpace.sm),
-            Row(
-              children: [
-                Expanded(child: _TimeButton(icon: Icons.login_rounded, label: 'حضور', time: att.checkIn, onMap: () => _openMap(att.checkInLat, att.checkInLng))),
-                const SizedBox(width: AppSpace.sm),
-                Expanded(child: _TimeButton(icon: Icons.logout_rounded, label: 'انصراف', time: att.checkOut, onMap: () => _openMap(att.checkOutLat, att.checkOutLng))),
-                IconButton(
-                  tooltip: 'تعديل الأوقات',
-                  icon: const Icon(Icons.edit_calendar_rounded, color: AppColors.brand),
-                  onPressed: () => _editTimeDialog({
-                    'id': att.id,
-                    'employee_name': name,
-                    'work_date': _iso(r.date),
-                    'check_in': att.checkIn?.toIso8601String(),
-                    'check_out': att.checkOut?.toIso8601String(),
-                  }),
-                ),
-              ],
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-/// وقت البصمة مع زر لفتح موقعها على الخريطة.
-class _TimeButton extends StatelessWidget {
-  const _TimeButton({required this.icon, required this.label, required this.time, required this.onMap});
-  final IconData icon;
-  final String label;
-  final DateTime? time;
-  final VoidCallback onMap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      button: time != null,
-      label: '$label ${time == null ? 'غير مسجل' : Fmt.time(time)}',
-      child: InkWell(
-        onTap: time == null ? null : onMap,
-        borderRadius: AppRadius.control,
-        child: Container(
-          constraints: const BoxConstraints(minHeight: AppSpace.touch),
-          padding: const EdgeInsets.symmetric(horizontal: AppSpace.sm, vertical: AppSpace.xs),
-          decoration: const BoxDecoration(color: AppColors.surface2, borderRadius: AppRadius.control),
-          child: ExcludeSemantics(
-            child: Row(
-              children: [
-                Icon(icon, size: 16, color: AppColors.textMuted),
-                const SizedBox(width: AppSpace.xs),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(label, style: AppText.overline),
-                      Text(time == null ? '--:--' : Fmt.time(time), style: AppText.bodySm.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
-                    ],
-                  ),
-                ),
-                if (time != null) const Icon(Icons.place_outlined, size: 16, color: AppColors.brand),
-              ],
-            ),
-          ),
         ),
       ),
     );

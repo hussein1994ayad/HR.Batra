@@ -5,7 +5,7 @@ import 'package:hr_pro/presentation/admin/admin_dashboard/admin_dashboard_screen
 import 'package:hr_pro/presentation/admin/admin_live_tracking_screen.dart';
 import 'package:hr_pro/presentation/admin/admin_loans/admin_loans_screen.dart';
 import 'package:hr_pro/presentation/admin/announcement_screen.dart';
-import 'package:hr_pro/presentation/admin/attendance_report_screen.dart';
+import 'package:hr_pro/presentation/admin/attendance_report/attendance_report_screen.dart';
 import 'package:hr_pro/presentation/admin/branch_management_screen.dart';
 import 'package:hr_pro/presentation/admin/branch_schedule_screen.dart';
 import 'package:hr_pro/presentation/admin/employee_management_screen.dart';

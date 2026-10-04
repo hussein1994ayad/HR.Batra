@@ -10,7 +10,7 @@ import '../../presentation/admin/admin_dashboard/admin_dashboard_screen.dart';
 import '../../presentation/admin/admin_live_tracking_screen.dart';
 import '../../presentation/admin/admin_loans/admin_loans_screen.dart';
 import '../../presentation/admin/announcement_screen.dart';
-import '../../presentation/admin/attendance_report_screen.dart';
+import '../../presentation/admin/attendance_report/attendance_report_screen.dart';
 import '../../presentation/admin/branch_management_screen.dart';
 import '../../presentation/admin/branch_schedule_screen.dart';
 import '../../presentation/admin/employee_management_screen.dart';
