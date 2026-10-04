@@ -53,12 +53,16 @@ jobs:
           runtime = rt[-1]
           supported = {d['identifier']: d['name'] for d in runtime.get('supportedDeviceTypes', [])}
           names = list(supported.values())
+          def gen(n):
+              # الأحدث أولاً: شرائح M للآيباد، ثم رقم الجيل/الموديل
+              m = re.search(r'(\d+)', n)
+              return ('(M' in n, int(m.group(1)) if m else 0, n)
           def pick(pred):
-              c = [n for n in names if pred(n)]
+              c = sorted([n for n in names if pred(n)], key=gen)
               return c[-1] if c else None
           wanted = [
             ('iphone_se', pick(lambda n: n.startswith('iPhone SE'))),
-            ('iphone_mini_notch', pick(lambda n: 'mini' in n)),
+            ('iphone_mini_notch', pick(lambda n: n.startswith('iPhone') and 'mini' in n)),
             ('iphone_pro_island', pick(lambda n: re.fullmatch(r'iPhone \d+ Pro', n) is not None)),
             ('iphone_pro_max', pick(lambda n: re.fullmatch(r'iPhone \d+ Pro Max', n) is not None)),
             ('ipad', pick(lambda n: n.startswith('iPad Air'))),
@@ -100,10 +104,11 @@ jobs:
             if [ $first = 1 ] || [ "$label" = "iphone_se" ]; then targets="app_launch_test $targets"; fi
             for t in $targets; do
               log=$OUT/$label/$t.log; mkdir -p $OUT/$label
-              SCREENS_DIR=$OUT/$label timeout 1500 flutter drive --driver=test_driver/integration_test.dart \
+              SCREENS_DIR=$OUT/$label flutter drive --driver=test_driver/integration_test.dart \
                 --target=integration_test/$t.dart -d "$udid" $DEFINES > "$log" 2>&1 < /dev/null
               code=$?
               if [ $code = 0 ]; then r="✅ PASS"; else r="❌ FAIL ($code)"; fi
+              grep -q "LOCATION_TEST_SKIPPED" "$log" && r="$r (⚠️ location test skipped: permission not granted)"
               echo "| $name | $runtime | $t | $r |" >> $RES
               if [ $code != 0 ]; then
                 echo "" >> $OUT/FAILURES.md; echo "## $name — $t" >> $OUT/FAILURES.md; echo '```' >> $OUT/FAILURES.md

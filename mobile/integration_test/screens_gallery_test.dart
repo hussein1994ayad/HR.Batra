@@ -2,6 +2,8 @@
 // ومساحته الآمنة (النوتش، Dynamic Island، شريط الهوم) ورسم iOS الحقيقي. يلتقط صورة لكل شاشة،
 // ويفشل إذا صار overflow أو خطأ رسم، أو إذا عنصر قابل للضغط دخل تحت النوتش/شريط الهوم.
 
+import 'dart:io' show Platform;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -68,11 +70,17 @@ void main() {
           unsafe.add('${e.widget.runtimeType} @ ${rect.top.round()}..${rect.bottom.round()}');
         }
       }
-      await binding.takeScreenshot(s.name);
+      await _shot(binding, s.name);
       expect(unsafe, isEmpty, reason: 'عناصر داخل المنطقة غير الآمنة (insets ${mq.viewPadding})');
 
       await tester.pumpWidget(const SizedBox.shrink());
       await Supabase.instance.client.removeAllChannels().timeout(const Duration(seconds: 2), onTimeout: () => const []);
     });
   }
+}
+
+/// اللقطات للآيفون (محاكي CI). أندرويد يحتاج تحويل سطح الرسم وإطارات إضافية فنتخطاه.
+Future<void> _shot(IntegrationTestWidgetsFlutterBinding binding, String name) async {
+  if (!Platform.isIOS) return;
+  await binding.takeScreenshot(name);
 }
