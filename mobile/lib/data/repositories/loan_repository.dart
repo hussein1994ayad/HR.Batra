@@ -80,9 +80,9 @@ class LoanRepository {
   // ── طلبات الموظف نفسه (شاشة السلف) ──
 
   /// سلف الموظف مع أقساطها، الأحدث أولاً.
-  Future<List<Map<String, dynamic>>> fetchMyLoans(String userId) async {
+  Future<List<LoanModel>> fetchMyLoans(String userId) async {
     final data = await _db.from('loans').select('*, loan_installments(*)').eq('employee_id', userId).order('created_at', ascending: false);
-    return List<Map<String, dynamic>>.from(data);
+    return rowsOf(data).map(LoanModel.fromMap).toList();
   }
 
   /// راتب الموظف الشهري (لتنبيه القسط فوق نص الراتب أو فوق الراتب كله).

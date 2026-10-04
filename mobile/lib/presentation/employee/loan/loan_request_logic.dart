@@ -1,6 +1,7 @@
 // حاسبة طلب السلفة بدون واجهة: عدد الأشهر، آخر قسط، شروط الطلب، وتنبيه الراتب.
 
 import '../../../core/design/formatters.dart';
+import '../../../core/models/models.dart';
 
 /// عدد الأقساط (تقريب للأعلى).
 int loanMonths(double amount, double installment) => installment > 0 ? (amount / installment).ceil() : 0;
@@ -14,12 +15,12 @@ double loanLastInstallment(double amount, double installment) {
 }
 
 /// شروط إرسال الطلب — يرجع رسالة الخطأ أو null.
-String? loanRequestError({required double amount, required double installment, required List<Map<String, dynamic>> history}) {
+String? loanRequestError({required double amount, required double installment, required List<LoanModel> history}) {
   if (amount <= 0) return 'اكتب مبلغ السلفة';
   if (installment <= 0) return 'اكتب القسط الشهري';
   if (installment > amount) return 'القسط أكبر من مبلغ السلفة';
   // نفس شروط الاعتماد: نخبر الموظف قبل ما يرسل طلب ما ينعتمد
-  final hasActive = history.any((l) => l['status'] == 'approved' && ((l['remaining_amount'] as num?) ?? 0) > 0);
+  final hasActive = history.any((l) => l.isActive);
   if (hasActive) return 'عندك سلفة جارية لم تُسدَّد بعد. تگدر تطلب سلفة جديدة بعد إكمال سدادها.';
   if (amount > 100000000) return 'المبلغ كبير جداً (أكثر من 100,000,000 د.ع). تأكد من الرقم.';
   return null;

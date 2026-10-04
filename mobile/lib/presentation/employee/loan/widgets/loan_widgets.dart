@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../../core/models/models.dart';
 import '../../../../core/services/storage_links.dart';
 import '../../../shared/ui/ui.dart';
 
@@ -60,21 +61,20 @@ class LoanPledgeCard extends StatelessWidget {
 
 class MyLoanCard extends StatelessWidget {
   const MyLoanCard({super.key, required this.loan, required this.onCancel});
-  final Map<String, dynamic> loan;
-  final ValueChanged<Map<String, dynamic>> onCancel;
+  final LoanModel loan;
+  final ValueChanged<LoanModel> onCancel;
 
   @override
   Widget build(BuildContext context) {
-    final amount = (loan['amount'] as num? ?? 0).toDouble();
-    final remaining = (loan['remaining_amount'] as num? ?? 0).toDouble();
-    final installmentAmount = (loan['installment_amount'] as num? ?? 0).toDouble();
-    final status = (loan['status'] ?? 'pending').toString();
-    final installments = [
-      for (final i in (loan['loan_installments'] as List? ?? const [])) Map<String, dynamic>.from(i as Map),
-    ]..sort((a, b) => (a['due_date'] ?? '').toString().compareTo((b['due_date'] ?? '').toString()));
+    final amount = loan.amount;
+    final remaining = loan.remainingAmount;
+    final installmentAmount = loan.installmentAmount;
+    final status = loan.status;
+    // مرتبة حسب تاريخ الاستحقاق داخل LoanModel
+    final installments = loan.installments;
     final paid = amount - remaining;
-    final pledge = loan['pledge_url']?.toString();
-    final rejection = loan['rejection_reason']?.toString();
+    final pledge = loan.pledgeUrl;
+    final rejection = loan.rejectionReason;
 
     return AppCard(
       child: Column(
@@ -89,7 +89,7 @@ class MyLoanCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(Fmt.iqd(amount), style: AppText.titleSm),
-                    Text('طُلبت ${Fmt.relative(DateTime.tryParse(loan['created_at']?.toString() ?? ''))}', style: AppText.caption),
+                    Text('طُلبت ${Fmt.relative(loan.createdAt)}', style: AppText.caption),
                   ],
                 ),
               ),
@@ -98,7 +98,7 @@ class MyLoanCard extends StatelessWidget {
           ),
           const SizedBox(height: AppSpace.md),
           KeyValueRow('القسط الشهري', Fmt.iqd(installmentAmount)),
-          KeyValueRow('عدد الأقساط', '${loan['installment_count'] ?? '—'}'),
+          KeyValueRow('عدد الأقساط', '${loan.installmentCount}'),
           if (status == 'approved') ...[
             KeyValueRow('المتبقي', Fmt.iqd(remaining), valueColor: AppColors.brand, bold: true),
             const SizedBox(height: AppSpace.xs),
@@ -116,7 +116,7 @@ class MyLoanCard extends StatelessWidget {
               child: ExpansionTile(
                 tilePadding: EdgeInsets.zero,
                 childrenPadding: EdgeInsets.zero,
-                title: Text('جدول الأقساط (${installments.where((i) => i['is_paid'] == true).length}/${installments.length} مدفوع)', style: AppText.label),
+                title: Text('جدول الأقساط (${installments.where((i) => i.isPaid).length}/${installments.length} مدفوع)', style: AppText.label),
                 children: [
                   for (var i = 0; i < installments.length; i++)
                     Padding(
@@ -124,10 +124,10 @@ class MyLoanCard extends StatelessWidget {
                       child: Row(
                         children: [
                           SizedBox(width: 28, child: Text('${i + 1}', style: AppText.caption)),
-                          Expanded(child: Text('قسط ${Fmt.monthOf(DateTime.tryParse(installments[i]['due_date']?.toString() ?? ''))}', style: AppText.bodySm)),
-                          Text(Fmt.iqd(installments[i]['amount'] as num?), style: AppText.bodySm.copyWith(color: AppColors.textPrimary)),
+                          Expanded(child: Text('قسط ${Fmt.monthOf(installments[i].dueDate)}', style: AppText.bodySm)),
+                          Text(Fmt.iqd(installments[i].amount), style: AppText.bodySm.copyWith(color: AppColors.textPrimary)),
                           const SizedBox(width: AppSpace.sm),
-                          installments[i]['is_paid'] == true
+                          installments[i].isPaid
                               ? const StatusBadge('مدفوع', tone: AppTone.success)
                               : const StatusBadge('قادم'),
                         ],

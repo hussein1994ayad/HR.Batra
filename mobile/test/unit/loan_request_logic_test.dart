@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hr_pro/core/models/models.dart';
 import 'package:hr_pro/core/theme/app_theme.dart';
 import 'package:hr_pro/presentation/employee/loan/loan_request_logic.dart';
 import 'package:hr_pro/presentation/employee/loan/widgets/loan_widgets.dart';
@@ -30,15 +31,15 @@ void main() {
 
     test('an approved loan with a remaining balance blocks a new request', () {
       expect(
-        loanRequestError(amount: 500000, installment: 250000, history: const [
-          {'status': 'approved', 'remaining_amount': 100000},
+        loanRequestError(amount: 500000, installment: 250000, history: [
+          LoanModel.fromMap(const {'status': 'approved', 'remaining_amount': 100000}),
         ]),
         contains('سلفة جارية'),
       );
       expect(
-        loanRequestError(amount: 500000, installment: 250000, history: const [
-          {'status': 'approved', 'remaining_amount': 0},
-          {'status': 'pending', 'remaining_amount': 500000},
+        loanRequestError(amount: 500000, installment: 250000, history: [
+          LoanModel.fromMap(const {'status': 'approved', 'remaining_amount': 0}),
+          LoanModel.fromMap(const {'status': 'pending', 'remaining_amount': 500000}),
         ]),
         isNull,
       );
@@ -58,13 +59,13 @@ void main() {
   });
 
   testWidgets('MyLoanCard shows cancel only while pending', (tester) async {
-    Map<String, dynamic>? cancelled;
+    LoanModel? cancelled;
     final loan = <String, dynamic>{'id': 'l1', 'amount': 500000, 'remaining_amount': 500000, 'installment_amount': 250000, 'installment_count': 2, 'status': 'pending'};
     await tester.pumpWidget(MaterialApp(
       theme: AppTheme.darkTheme,
-      home: Scaffold(body: SingleChildScrollView(child: MyLoanCard(loan: loan, onCancel: (l) => cancelled = l))),
+      home: Scaffold(body: SingleChildScrollView(child: MyLoanCard(loan: LoanModel.fromMap(loan), onCancel: (l) => cancelled = l))),
     ));
     await tester.tap(find.text('إلغاء الطلب'));
-    expect(cancelled?['id'], 'l1');
+    expect(cancelled?.id, 'l1');
   });
 }

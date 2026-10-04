@@ -13,6 +13,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../../core/models/models.dart';
 import '../../../core/services/supabase_service.dart';
 import '../../../core/utils/app_log.dart';
 import '../../../core/utils/arabic_format.dart';
@@ -42,7 +43,7 @@ class _LoanRequestScreenState extends State<LoanRequestScreen> with SingleTicker
   bool _isLoadingHistory = true;
   bool _historyError = false;
 
-  List<Map<String, dynamic>> _loansHistory = [];
+  List<LoanModel> _loansHistory = [];
 
   /// راتب الموظف الشهري (لتنبيه القسط فوق نص الراتب أو فوق الراتب كله)
   double? _salary;
@@ -189,7 +190,7 @@ class _LoanRequestScreenState extends State<LoanRequestScreen> with SingleTicker
 
   @override
   Widget build(BuildContext context) {
-    final active = _loansHistory.where((l) => l['status'] == 'pending').length;
+    final active = _loansHistory.where((l) => l.isPending).length;
     return Scaffold(
       backgroundColor: AppColors.bg,
       appBar: AppBar(
@@ -349,7 +350,7 @@ class _LoanRequestScreenState extends State<LoanRequestScreen> with SingleTicker
   }
 
   /// إلغاء طلب سلفة ما زال قيد المراجعة
-  Future<void> _cancelLoan(Map<String, dynamic> loan) async {
+  Future<void> _cancelLoan(LoanModel loan) async {
     final ok = await showAppConfirm(
       context,
       title: 'إلغاء طلب السلفة؟',
@@ -359,7 +360,7 @@ class _LoanRequestScreenState extends State<LoanRequestScreen> with SingleTicker
     );
     if (!ok || !mounted) return;
     try {
-      await _repo.cancelMyLoanRequest(loan['id']);
+      await _repo.cancelMyLoanRequest(loan.id);
       if (!mounted) return;
       AppSnack.success(context, 'أُلغي طلب السلفة');
       unawaited(_loadLoansHistory());
