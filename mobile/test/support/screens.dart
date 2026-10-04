@@ -17,7 +17,7 @@ import 'package:hr_pro/presentation/employee/announcements/announcements_board_s
 import 'package:hr_pro/presentation/employee/directory_screen.dart';
 import 'package:hr_pro/presentation/employee/main_layout.dart';
 import 'package:hr_pro/presentation/employee/notifications_screen.dart';
-import 'package:hr_pro/presentation/employee/payslips_screen.dart';
+import 'package:hr_pro/presentation/employee/payslips/payslips_screen.dart';
 
 class ScreenCase {
   const ScreenCase(this.name, this.build, {this.role = 'admin'});

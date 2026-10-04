@@ -3,7 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hr_pro/core/theme/app_theme.dart';
-import 'package:hr_pro/presentation/employee/payslips_screen.dart';
+import 'package:hr_pro/presentation/employee/payslips/widgets/payslip_widgets.dart';
 import 'package:hr_pro/presentation/shared/ui/ui.dart';
 
 void main() {

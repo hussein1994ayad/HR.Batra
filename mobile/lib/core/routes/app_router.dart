@@ -22,7 +22,7 @@ import '../../presentation/employee/announcements/announcements_board_screen.dar
 import '../../presentation/employee/directory_screen.dart';
 import '../../presentation/employee/main_layout.dart';
 import '../../presentation/employee/notifications_screen.dart';
-import '../../presentation/employee/payslips_screen.dart';
+import '../../presentation/employee/payslips/payslips_screen.dart';
 import '../services/auth_service.dart';
 import '../services/supabase_service.dart';
 

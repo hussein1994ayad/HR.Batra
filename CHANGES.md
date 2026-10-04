@@ -191,3 +191,14 @@
 - `main_layout.dart`: مسار الاستيراد فقط.
 - **أُضيف فحص** `mobile/test/unit/loan_request_logic_test.dart`.
 - فحص: `dart analyze` ✓، `flutter test` 545 ✓.
+
+## Step 17 — شاشة كشوف الرواتب (النقاط 3 و 4 و 8)
+- **نُقلت** `presentation/employee/payslips_screen.dart` → `presentation/employee/payslips/payslips_screen.dart` (554 → 314 سطر).
+- **أُنشئ** `mobile/lib/data/repositories/payslips_repository.dart`: سياسة الدورة، الكشوف المعتمدة + الملف الشخصي (بالتوازي كما كان)،
+  مسير الشهر الحالي (`get_my_payroll_preview`)، أسطر كشف المحرّك، والمكافآت والخصومات للكشوف القديمة — نفس الاستعلامات.
+- **أُنشئ** `payslips/payslips_logic.dart`: `payslipCycleDates` (كان `_getCycleDates`)، `payslipMonthOf`، `itemsIncludedInSlip`
+  (فلترة البنود التي دخلت بالكشف)، و`slipLinesToDetails` (انتقلت كما هي).
+- **أُنشئ** `payslips/widgets/payslip_widgets.dart`: `CurrentPayrollCard` (انتقل كما هو) و`SlipDetailsView` (كان `_SlipDetails`).
+- حُدّثت استيرادات: `app_router.dart`, `test/support/screens.dart`, `payroll_engine_client_test.dart`, `user_flow_ui_test.dart`.
+- **أُضيف فحص** `mobile/test/unit/payslips_logic_test.dart` (الدورة المالية عبر السنة وفبراير، فلترة البنود).
+- فحص: `dart analyze` ✓، `flutter test` 552 ✓.
