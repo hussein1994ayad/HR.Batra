@@ -144,7 +144,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     _branchRadius = (branch['radius_meters'] as num).toDouble();
   }
 
-  // تهيئة وتحديد موقع الموظف والفرع المخصص له بسرعة فائقة (Dual-phase Fast Init)
+  // تهيئة شاشة البصمة بخطوات ثابتة الترتيب: الكاش ← صلاحيات الموقع ← آخر موقع معروف ← تتبع مباشر ← السيرفر ← دمج
+  // بصمات الجهاز. أي خطأ (مثل GPS مطفي أو صلاحية مرفوضة) يوقف التهيئة ويطلع كرسالة؛ فشل الإنترنت ما يوقفها (وضع أوفلاين).
   Future<void> _initLocationAndBranch() async {
     setState(() {
       _isLocating = true;
@@ -156,124 +157,14 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       final user = SupabaseService.currentUser;
       if (user == null) return;
 
-      // 1. قراءة البيانات من الكاش المحلي أولاً للرسم الفوري للواجهة بدون انتظار الإنترنت
-      final cached = await AttendanceSyncService.getCachedData();
-      if (cached != null && cached['branch'] != null) {
-        final branch = Map<String, dynamic>.from(cached['branch'] as Map);
-        _applyBranch(branch);
-        _workSchedule = cached['schedule'] as Map<String, dynamic>?;
-      }
+      await _restoreCachedBranch(); // 1
+      await _ensureLocationAccess(); // 2
+      await _showLastKnownPosition(); // 3
+      _startPositionStream(); // 4. بدء تتبع الإحداثيات المباشر (Active GPS Stream)
 
-      // 2. فحص صلاحيات الـ GPS
-      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        throw Exception('خدمة تحديد الموقع الجغرافي (GPS) معطلة في هاتفك. يرجى تفعيلها.');
-      }
-
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) {
-          throw Exception('تم رفض منح صلاحية الوصول للموقع الجغرافي.');
-        }
-      }
-
-      if (permission == LocationPermission.deniedForever) {
-        throw Exception('تم رفض صلاحية الموقع الجغرافي نهائياً، يرجى تفعيلها من إعدادات الهاتف.');
-      }
-
-      // الموقع الدقيق مطلوب: أندرويد 12+ وiOS 14+ يسمحون بموقع تقريبي يبعد كيلومترات
-      _preciseDenied = !await PreciseLocation.ensure();
-      if (_preciseDenied) throw Exception(PreciseLocation.reducedMessage);
-
-      // 3. المرحلة الأولى الفورية (Fast-Path): قراءة آخر موقع معروف في أقل من 20ms لتجهيز الشاشة فوراً
-      Position? initialPosition = await Geolocator.getLastKnownPosition();
-      if (initialPosition != null && mounted) {
-        setState(() {
-          _currentPosition = initialPosition;
-          _isLocating = false;
-          _distanceToBranch = _distanceFromBranch(initialPosition);
-        });
-
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
-            try {
-              _mapController.move(LatLng(initialPosition.latitude, initialPosition.longitude), 16.0);
-            } catch (_) {}
-          }
-        });
-      }
-
-      // 4. بدء تتبع الإحداثيات المباشر (Active GPS Stream)
-      _startPositionStream();
-
-      // 5. محاولة جلب أحدث بيانات الفرع والجدول والبصمات من Supabase بشكل متوازي
       final todayStr = companyDateStr();
-      String? syncWarning;
-      try {
-        // رفع البصمات المحفوظة أوفلاين أولاً حتى تظهر حالة اليوم الصحيحة
-        final rejectedPunches = await AttendanceSyncService.syncOfflinePunches();
-        if (rejectedPunches.isNotEmpty) {
-          syncWarning = rejectedPunches.first.message ??
-              'تعذر اعتماد بصمة محفوظة بدون إنترنت. راجع الإدارة.';
-        }
-
-        final List<Future<dynamic>> parallelQueries = [
-          _repo.fetchEmployeeBranch(user.id),
-          _repo.fetchTodayAttendance(user.id, todayStr),
-        ];
-
-        final results = await Future.wait(parallelQueries);
-        final empData = results[0] as Map<String, dynamic>?;
-        final attendanceData = results[1];
-
-        if (empData != null && empData['branches'] != null) {
-          final branch = Map<String, dynamic>.from(empData['branches'] as Map);
-          _applyBranch(branch);
-
-          final schedData = await ScheduleService.fetchEffectiveSchedule();
-
-          _workSchedule = schedData;
-
-          // تحديث الكاش المحلي
-          await AttendanceSyncService.cacheBranchAndSchedule(
-            branchData: branch,
-            scheduleData: schedData,
-          );
-        }
-
-        _todayAttendance = attendanceData as Map<String, dynamic>?;
-
-      } catch (networkError) {
-        appLog(' وضع الأوفلاين نشط: $networkError');
-      }
-
-      // 6. دمج البصمات المحلية المعلقة في طابور التزامن
-      final offlinePunches = await AttendanceSyncService.getOfflinePunchesQueue();
-      final combinedAttendance = mergeTodayOfflinePunches(
-        serverToday: _todayAttendance,
-        offlineQueue: offlinePunches,
-        userId: SupabaseService.currentUser?.id,
-        todayStr: todayStr,
-      );
-
-      if (mounted) {
-        setState(() {
-          if (syncWarning != null) _errorMessage = syncWarning;
-          if (combinedAttendance.isNotEmpty) {
-            _todayAttendance = combinedAttendance;
-            _selectedPunchType = nextPunchType(combinedAttendance);
-          } else {
-            _todayAttendance = null;
-            _selectedPunchType = 'check_in';
-          }
-
-          if (_currentPosition != null) {
-            _distanceToBranch = _distanceFromBranch(_currentPosition!);
-          }
-        });
-      }
-
+      final syncWarning = await _refreshFromServer(user.id, todayStr); // 5
+      await _applyTodayWithOfflinePunches(todayStr, syncWarning); // 6
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -288,6 +179,131 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       }
     }
   }
+
+  /// 1. الفرع والجدول من الكاش المحلي أولاً، حتى تنرسم الشاشة فوراً بدون انتظار الإنترنت.
+  Future<void> _restoreCachedBranch() async {
+    final cached = await AttendanceSyncService.getCachedData();
+    if (cached != null && cached['branch'] != null) {
+      final branch = Map<String, dynamic>.from(cached['branch'] as Map);
+      _applyBranch(branch);
+      _workSchedule = cached['schedule'] as Map<String, dynamic>?;
+    }
+  }
+
+  /// 2. الـ GPS مفعّل، صلاحية الموقع ممنوحة، والموقع **دقيق** — وإلا يرمي برسالة للموظف.
+  Future<void> _ensureLocationAccess() async {
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      throw Exception('خدمة تحديد الموقع الجغرافي (GPS) معطلة في هاتفك. يرجى تفعيلها.');
+    }
+
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        throw Exception('تم رفض منح صلاحية الوصول للموقع الجغرافي.');
+      }
+    }
+
+    if (permission == LocationPermission.deniedForever) {
+      throw Exception('تم رفض صلاحية الموقع الجغرافي نهائياً، يرجى تفعيلها من إعدادات الهاتف.');
+    }
+
+    // الموقع الدقيق مطلوب: أندرويد 12+ وiOS 14+ يسمحون بموقع تقريبي يبعد كيلومترات
+    _preciseDenied = !await PreciseLocation.ensure();
+    if (_preciseDenied) throw Exception(PreciseLocation.reducedMessage);
+  }
+
+  /// 3. المرحلة الفورية (Fast-Path): آخر موقع معروف (أقل من 20ms) حتى تجهز الشاشة قبل أول قراءة GPS.
+  Future<void> _showLastKnownPosition() async {
+    Position? initialPosition = await Geolocator.getLastKnownPosition();
+    if (initialPosition != null && mounted) {
+      setState(() {
+        _currentPosition = initialPosition;
+        _isLocating = false;
+        _distanceToBranch = _distanceFromBranch(initialPosition);
+      });
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          try {
+            _mapController.move(LatLng(initialPosition.latitude, initialPosition.longitude), 16.0);
+          } catch (_) {}
+        }
+      });
+    }
+  }
+
+  /// 5. من السيرفر: رفع البصمات المحفوظة أوفلاين أولاً (حتى تظهر حالة اليوم الصحيحة)، ثم الفرع وسجل اليوم بالتوازي،
+  /// والجدول، وتحديث الكاش. فشل الإنترنت ما يوقف الشاشة (وضع أوفلاين). يرجع تحذير إذا السيرفر رفض بصمة محفوظة.
+  Future<String?> _refreshFromServer(String userId, String todayStr) async {
+    String? syncWarning;
+    try {
+      final rejectedPunches = await AttendanceSyncService.syncOfflinePunches();
+      if (rejectedPunches.isNotEmpty) {
+        syncWarning = rejectedPunches.first.message ??
+            'تعذر اعتماد بصمة محفوظة بدون إنترنت. راجع الإدارة.';
+      }
+
+      final List<Future<dynamic>> parallelQueries = [
+        _repo.fetchEmployeeBranch(userId),
+        _repo.fetchTodayAttendance(userId, todayStr),
+      ];
+
+      final results = await Future.wait(parallelQueries);
+      final empData = results[0] as Map<String, dynamic>?;
+      final attendanceData = results[1];
+
+      if (empData != null && empData['branches'] != null) {
+        final branch = Map<String, dynamic>.from(empData['branches'] as Map);
+        _applyBranch(branch);
+
+        final schedData = await ScheduleService.fetchEffectiveSchedule();
+
+        _workSchedule = schedData;
+
+        // تحديث الكاش المحلي
+        await AttendanceSyncService.cacheBranchAndSchedule(
+          branchData: branch,
+          scheduleData: schedData,
+        );
+      }
+
+      _todayAttendance = attendanceData as Map<String, dynamic>?;
+    } catch (networkError) {
+      appLog(' وضع الأوفلاين نشط: $networkError');
+    }
+    return syncWarning;
+  }
+
+  /// 6. سجل اليوم = السيرفر + بصمات اليوم المحفوظة بالجهاز ولسه ما انرفعت، ونوع البصمة التالية.
+  Future<void> _applyTodayWithOfflinePunches(String todayStr, String? syncWarning) async {
+    final offlinePunches = await AttendanceSyncService.getOfflinePunchesQueue();
+    final combinedAttendance = mergeTodayOfflinePunches(
+      serverToday: _todayAttendance,
+      offlineQueue: offlinePunches,
+      userId: SupabaseService.currentUser?.id,
+      todayStr: todayStr,
+    );
+
+    if (mounted) {
+      setState(() {
+        if (syncWarning != null) _errorMessage = syncWarning;
+        if (combinedAttendance.isNotEmpty) {
+          _todayAttendance = combinedAttendance;
+          _selectedPunchType = nextPunchType(combinedAttendance);
+        } else {
+          _todayAttendance = null;
+          _selectedPunchType = 'check_in';
+        }
+
+        if (_currentPosition != null) {
+          _distanceToBranch = _distanceFromBranch(_currentPosition!);
+        }
+      });
+    }
+  }
+
 
   // إجراء عملية البصمة (حضور أو انصراف). السيرفر يحسب الوقت والمسافة والحالة؛
   // الفحوصات المحلية هنا فقط لإظهار رسالة فورية قبل الإرسال.

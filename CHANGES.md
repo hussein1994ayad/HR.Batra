@@ -534,3 +534,10 @@
   دائماً حتى لو الإجازة غطّت التأخير، فكان التقرير يكول "متأخر" بيوم ما انخصم.
 - فرق مقصود يبقى (موثّق بالكود وبـ `BUSINESS_RULES.md`): موظف بدون جدول يُقاس على 09:00–17:00 حتى ما يختفي تأخيره من التقرير.
 - **أُضيفت 5 اختبارات** بـ `test/unit/attendance_report_test.dart`. فحص: `dart analyze` ✓، `flutter test` 628 ✓ (لقطة التقرير مطابقة).
+
+## Step 53 — 19.14: تقسيم تهيئة شاشة البصمة لخطوات
+- `_initLocationAndBranch` (142 سطر) صارت 30 سطر تنادي 5 خطوات بنفس الترتيب وداخل نفس `try`:
+  `_restoreCachedBranch` (الكاش) ← `_ensureLocationAccess` (GPS والصلاحية والموقع الدقيق) ← `_showLastKnownPosition` ←
+  `_startPositionStream` ← `_refreshFromServer` (رفع البصمات المحفوظة، الفرع وسجل اليوم، الجدول والكاش — وضع أوفلاين إذا فشل) ←
+  `_applyTodayWithOfflinePunches`. **الكود داخل كل خطوة منقول حرفياً**؛ نفس الرسائل ونفس معالجة الأخطاء.
+- فحص: `dart analyze` ✓، `flutter test` 628 ✓، `flutter build apk --debug` ✓. ⚠️ يُنصح بتجربة بصمة على جهاز حقيقي.
