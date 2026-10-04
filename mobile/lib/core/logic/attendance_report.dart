@@ -178,7 +178,7 @@ List<ReportRow> buildDailyReport({
       if (att != null && att.status != 'absent') {
         final late = att.checkIn == null ? 0 : lateMinutes(att.checkIn!, schedule);
         final early = att.checkOut == null ? 0 : earlyLeaveMinutes(att.checkOut!, schedule);
-        final grace = schedule?.gracePeriodMinutes ?? 15;
+        final grace = schedule?.gracePeriodMinutes ?? kDefaultGraceMinutes;
         final status = att.status == 'late' || late > grace
             ? ReportStatus.late
             : early > grace || att.status == 'half_day'

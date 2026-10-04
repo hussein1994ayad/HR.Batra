@@ -6,6 +6,7 @@ import type { AttendanceRecord, LeaveRequest, WorkSchedule } from '@/lib/db-type
 import { formatLateDurationArabic, getLocalDateStr } from '@/lib/dates';
 import { formatClock } from '@/lib/format';
 import { resolveWorkSchedule } from '@/lib/schedules';
+import { DEFAULT_GRACE_MINUTES } from '@/lib/attendance';
 import type {
   AttendanceRow, Decision, DetectedStop, MapMarker, MockGpsAttempt, RawPoint, RawZone, TrackedEmployee,
 } from './types';
@@ -382,5 +383,5 @@ export const decisionKey = (d: Pick<Decision, 'employee' | 'type' | 'date'>) => 
 export function manualAttendanceStatus(schedule: Pick<WorkSchedule, 'check_in_time' | 'grace_period_minutes'> | undefined, checkIn: string): 'late' | 'present' {
   if (!schedule?.check_in_time || !checkIn) return 'present';
   const toMin = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + (m || 0); };
-  return toMin(checkIn) > toMin(schedule.check_in_time) + (schedule.grace_period_minutes ?? 0) ? 'late' : 'present';
+  return toMin(checkIn) > toMin(schedule.check_in_time) + (schedule.grace_period_minutes ?? DEFAULT_GRACE_MINUTES) ? 'late' : 'present';
 }

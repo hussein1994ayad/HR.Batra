@@ -10,6 +10,11 @@ const List<String> kArabicWeekdays = ['الأحد', 'الاثنين', 'الثل�
 /// دوام السبت إلى الخميس عند عدم وجود جدول.
 const List<int> kDefaultWorkDays = [6, 0, 1, 2, 3, 4];
 
+/// فترة السماح الفعلية هي اللي يحددها الأدمن بجدول الدوام (من لوحة الإدارة بالتطبيق أو الموقع).
+/// العمود إلزامي بالقاعدة (`grace_period_minutes NOT NULL DEFAULT 15`)، فهذا البديل للاحتياط فقط —
+/// ونفس رقم السيرفر (`COALESCE(grace_period_minutes, 15)` بـ sync_payroll_day).
+const int kDefaultGraceMinutes = 15;
+
 /// ترقيم قاعدة البيانات من DateTime.weekday في Dart (الاثنين = 1 ... الأحد = 7).
 int dbWeekday(DateTime date) => date.weekday % 7;
 
@@ -35,7 +40,7 @@ class WorkScheduleModel {
     this.employeeId,
     this.departmentId,
     this.branchId,
-    this.gracePeriodMinutes = 15,
+    this.gracePeriodMinutes = kDefaultGraceMinutes,
     this.workDays = kDefaultWorkDays,
     this.createdAt,
   });
@@ -48,7 +53,7 @@ class WorkScheduleModel {
         branchId: map.str('branch_id'),
         checkInTime: map.str('check_in_time') ?? '09:00:00',
         checkOutTime: map.str('check_out_time') ?? '17:00:00',
-        gracePeriodMinutes: map.integer('grace_period_minutes') ?? 15,
+        gracePeriodMinutes: map.integer('grace_period_minutes') ?? kDefaultGraceMinutes,
         workDays: map['work_days'] is List ? map.ints('work_days') : kDefaultWorkDays,
         createdAt: map.date('created_at'),
       );

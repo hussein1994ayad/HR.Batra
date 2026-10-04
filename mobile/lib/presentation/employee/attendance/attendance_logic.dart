@@ -2,6 +2,7 @@
 // نوع البصمة التالية، والفحوصات المحلية قبل الإرسال. السيرفر يبقى صاحب القرار النهائي (punch_attendance).
 
 import '../../../core/design/formatters.dart';
+import '../../../core/models/work_schedule_model.dart';
 import '../../../core/services/precise_location.dart';
 
 const attendanceOutOfRangeMessage = 'أنت خارج نطاق الفرع الجغرافي المسموح به للتبصيم.';
@@ -20,7 +21,7 @@ String? punchNote({required bool isCheckIn, required Map<String, dynamic>? sched
   if (isCheckIn) {
     final start = scheduleMinutesOf(schedule?['check_in_time']);
     if (start == null) return null;
-    final grace = (schedule?['grace_period_minutes'] as num?)?.toInt() ?? 0;
+    final grace = (schedule?['grace_period_minutes'] as num?)?.toInt() ?? kDefaultGraceMinutes;
     final late = nowMin - start;
     return late > grace ? 'متأخر ${Fmt.minutesLabel(late)} عن بداية الدوام' : null;
   }

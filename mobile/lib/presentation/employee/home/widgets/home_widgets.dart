@@ -200,7 +200,7 @@ class HomeTodayCard extends StatelessWidget {
     final parts = schedule?['check_in_time']?.toString().split(':');
     if (parts == null || parts.length < 2) return 0;
     final start = (int.tryParse(parts[0]) ?? 0) * 60 + (int.tryParse(parts[1]) ?? 0);
-    final grace = (schedule?['grace_period_minutes'] as num?)?.toInt() ?? 0;
+    final grace = (schedule?['grace_period_minutes'] as num?)?.toInt() ?? kDefaultGraceMinutes;
     final late = now.hour * 60 + now.minute - start;
     return late > grace ? late : 0;
   }

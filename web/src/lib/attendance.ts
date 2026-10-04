@@ -4,6 +4,12 @@ import { localDateStr } from './format';
 /** Iraqi default working week: Saturday (6) through Thursday (4). */
 export const DEFAULT_WORK_DAYS = [6, 0, 1, 2, 3, 4];
 
+/**
+ * فترة السماح الفعلية هي اللي يحددها الأدمن بجدول الدوام. العمود إلزامي بالقاعدة (NOT NULL DEFAULT 15)،
+ * فهذا البديل للاحتياط فقط — ونفس رقم السيرفر (COALESCE(grace_period_minutes, 15)).
+ */
+export const DEFAULT_GRACE_MINUTES = 15;
+
 interface ScheduleTarget {
   id: string;
   department_id?: string | null;

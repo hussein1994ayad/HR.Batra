@@ -471,9 +471,19 @@
 ## Step 45 — 19.15: تسجيل أشياء اللوحة اليدوية بـ migration
 - **أُنشئ** `supabase/migrations/20261005000000_capture_dashboard_objects.sql`: أعمدة `geofence_zones` الأربعة (`latitude`,
   `longitude`, `radius_meters`, `polygon_coordinates` — كانت موجودة بالقاعدة الحية بس مو بالملفات)، والدوال
-  `sync_geofence_coordinates` و`sync_geofences_to_branches` و`invoke_push_notification` **بنفس تعريفها الحي حرفياً**، وthe triggers
+  `sync_geofence_coordinates` و`sync_geofences_to_branches` و`invoke_push_notification` **بنفس تعريفها الحي حرفياً**، والـ triggers
   الثلاثة (تنعمل بس إذا ما موجودة).
 - على القاعدة الحية **ما يغيّر شي**: جُرّب داخل `BEGIN … ROLLBACK` على القاعدة الحية ونجح، والـ triggers بقت 3 بدون تكرار.
   اختبارات قاعدة البيانات (PGlite) تمر ويا الملف الجديد.
 - `rls_auto_enable` ما انضاف: ميزة من منصة Supabase نفسها.
 - ⚠️ **يحتاج من المستخدم:** `npx.cmd supabase db push`.
+
+## Step 46 — 19.5: فترة السماح من جدول الأدمن، والبديل واحد
+- فترة السماح **الفعلية دائماً هي اللي يحددها الأدمن** بجدول الدوام (لوحة الإدارة بالتطبيق أو الموقع): العمود إلزامي بالقاعدة
+  (`grace_period_minutes NOT NULL DEFAULT 15`)، فكل جدول يحمل قيمته.
+- البديل الاحتياطي صار ثابتاً واحداً بنفس رقم السيرفر: `kDefaultGraceMinutes` (`mobile/lib/core/models/work_schedule_model.dart`)
+  و`DEFAULT_GRACE_MINUTES` (`web/src/lib/attendance.ts`). كان 0 بثلاث أماكن (تنبيه البصمة، الرئيسية، الحضور اليدوي بالويب)
+  و15 بالباقي؛ عملياً ما يتغير شي لأن العمود ما يكون فارغ.
+- **اختبار اللقطات صار مستقل عن التاريخ والساعة:** اسم اليوم، اسم الشهر، ومدة العمل "حتى الآن" تتحول لعلامات ثابتة، وتصحيح
+  تطابق "قبل يومين". نفس التحويل على ملفات اللقطات (بدون إعادة تسجيل). جُرّب بعد منتصف الليل وبتاريخ جديد.
+- فحص: `dart analyze` ✓، `flutter test` 618 ✓؛ الويب `tsc` ✓ `lint` ✓ `vitest` 91 ✓.

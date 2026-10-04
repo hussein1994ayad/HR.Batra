@@ -168,7 +168,7 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
               children: [
                 _Info(Icons.login_rounded, 'الدخول', Fmt.timeOfDay(schedule.checkInTime)),
                 _Info(Icons.logout_rounded, 'الخروج', Fmt.timeOfDay(schedule.checkOutTime)),
-                _Info(Icons.timer_outlined, 'السماحية', '${schedule.gracePeriodMinutes ?? 15} د'),
+                _Info(Icons.timer_outlined, 'السماحية', '${schedule.gracePeriodMinutes ?? kDefaultGraceMinutes} د'),
                 _Info(Icons.notifications_active_outlined, 'التذكير بعد', '${schedule.reminderMinutesAfter ?? 5} د'),
               ],
             ),
@@ -237,7 +237,7 @@ class _ScheduleEditorState extends State<_ScheduleEditor> {
       : [0, 1, 2, 3, 4, 6]; // كل الأيام ما عدا الجمعة (5)
   late TimeOfDay _start = _parse(_schedule.checkInTime, const TimeOfDay(hour: 8, minute: 0));
   late TimeOfDay _end = _parse(_schedule.checkOutTime, const TimeOfDay(hour: 16, minute: 0));
-  late int _grace = _schedule.gracePeriodMinutes ?? 15;
+  late int _grace = _schedule.gracePeriodMinutes ?? kDefaultGraceMinutes;
   late int _reminder = _schedule.reminderMinutesAfter ?? 5;
   bool _saving = false;
 
