@@ -58,3 +58,16 @@
   داخل `classes.ts` لأن `display.tsx` يستعمله (غير مُصدَّر من `index.ts`).
 - استُبدلت فواصل الأقسام القديمة بسطر وصف بأعلى كل ملف.
 - فحص: `tsc` ✓، `lint` ✓، `vitest` 87 ✓، `build` ✓، `e2e` 27 ✓.
+
+## Step 6 — إطار اللوحة `dashboard/layout.tsx` (النقطة 10)
+- `web/src/app/dashboard/layout.tsx`: من 919 إلى 283 سطر — صار تركيب فقط (الشريط، الرأس، منطقة الصفحة، الاختصارات).
+- **أُنشئ** المجلد `web/src/features/shell/`:
+  - `nav.ts` — `NAV_GROUPS`, `ALL_ITEMS`, و`findActiveItem` (منطق "أطول بادئة" كان داخل useMemo)، و`initialsOf`.
+  - `useAdminSession.ts` — التحقق من الجلسة والصلاحية، كاش `batra_cache_admin`، العدّادات، قنوات Realtime الثلاث، النغمة،
+    تسجيل الخروج، "تحديد الكل كمقروء" (منقول حرفياً).
+  - `components/ErrorBoundary.tsx`, `Sidebar.tsx` (`SidebarNav`, `SidebarBrand`, `SidebarUserCard`), `NotificationsMenu.tsx`,
+    `LogoutConfirm.tsx`, `CommandPalette.tsx` — نفس الـ JSX والكلاسات.
+- **أُنشئ** `web/src/lib/useClickOutside.ts` (كان دالة داخلية بالإطار).
+- **أُضيف فحص** `web/src/features/shell/nav.test.ts` (`findActiveItem`, `initialsOf`).
+- ترتيب تسجيل الخروج نفسه: إغلاق النافذة ← مسح الكاش ← signOut ← /login.
+- فحص: `tsc` ✓، `lint` ✓، `vitest` 89 ✓، `build` ✓، `e2e` 27 ✓ (تشمل القائمة، الموبايل، صلاحيات مدير الفرع).
