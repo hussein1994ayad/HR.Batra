@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../../../core/logic/loan_rules.dart';
 import '../../../../core/models/models.dart';
 import '../../../../core/utils/app_log.dart';
 import '../../../../core/utils/arabic_format.dart';
@@ -106,7 +107,7 @@ class _CreateLoanSheetState extends State<_CreateLoanSheet> {
     final months = int.tryParse(_months.text.trim()) ?? 0;
     final installment = amount > 0 && months > 0 ? (amount / months).ceilToDouble() : 0.0;
     final salary = employee?.monthlySalary ?? 0;
-    final overHalf = salary > 0 && installment > salary / 2;
+    final overHalf = salary > 0 && installment > salary * kLoanSalaryWarningRatio;
 
     return Padding(
       padding: EdgeInsets.fromLTRB(AppSpace.xl, 0, AppSpace.xl, AppSpace.xl + MediaQuery.viewInsetsOf(context).bottom),

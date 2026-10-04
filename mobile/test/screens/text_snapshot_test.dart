@@ -28,7 +28,9 @@ const _tall = DeviceSize('tall', 430, 5000);
 /// ومعرّفات الأجهزة العشوائية بالاختبار (device_xxxxxxxx-...) نستبدلها بثابت.
 String _normalize(String s) => s
     .replaceAll(RegExp(r'device_[0-9a-fA-F-]+'), 'device_<id>')
-    .replaceAll(RegExp(r'[0-9٠-٩]+'), '#');
+    .replaceAll(RegExp(r'[0-9٠-٩]+'), '#')
+    // الوقت النسبي (Fmt.relative): "قبل 3 ساعات" تصير "قبل 11 ساعة" مع الساعة، فيصير علامة ثابتة
+    .replaceAll(RegExp(r'(قبل (دقيقة|دقيقتين|ساعة|ساعتين|يوم|يومين|# (دقائق|دقيقة|ساعات|ساعة|أيام|يوم)))|أمس|الآن'), '‹وقت›');
 
 List<String> _visibleTexts(WidgetTester tester) => [
       for (final e in find.byType(RichText).evaluate())

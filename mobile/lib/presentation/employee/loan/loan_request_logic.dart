@@ -1,6 +1,7 @@
 // حاسبة طلب السلفة بدون واجهة: عدد الأشهر، آخر قسط، شروط الطلب، وتنبيه الراتب.
 
 import '../../../core/design/formatters.dart';
+import '../../../core/logic/loan_rules.dart';
 import '../../../core/models/models.dart';
 
 /// عدد الأقساط (تقريب للأعلى).
@@ -29,9 +30,9 @@ String? loanRequestError({required double amount, required double installment, r
 /// تنبيه فقط (الطلب مسموح): القسط أكثر من نص الراتب، أو أكثر من الراتب كله فيطلع الراتب بالسالب.
 String? loanSalaryWarning({required double? salary, required double installment}) {
   final s = salary ?? 0;
-  if (s <= 0 || installment <= s * 0.5) return null;
+  if (s <= 0 || installment <= s * kLoanSalaryWarningRatio) return null;
   if (installment > s) {
     return '⚠️ القسط الشهري (${Fmt.iqd(installment)}) أكثر من راتبك كله (${Fmt.iqd(s)}). راتبك راح يطلع بالسالب، والفرق تدفعه نقداً للإدارة.';
   }
-  return '⚠️ القسط الشهري أكثر من نص راتبك (${Fmt.iqd(s * 0.5)}). راح يبقى لك من الراتب ${Fmt.iqd(s - installment)} بس.';
+  return '⚠️ القسط الشهري أكثر من نص راتبك (${Fmt.iqd(s * kLoanSalaryWarningRatio)}). راح يبقى لك من الراتب ${Fmt.iqd(s - installment)} بس.';
 }

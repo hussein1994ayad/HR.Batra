@@ -5,7 +5,6 @@
 import type { Loan, LoanInstallment } from '@/lib/db-types';
 import { getLocalDateStr } from '@/lib/dates';
 import { baghdadToday } from '@/features/payroll/period';
-import type { EditLoanDraft, ScheduledInstallment } from './types';
 
 /**
  * يضيف أشهراً لتاريخ YYYY-MM-DD مع تثبيت اليوم على آخر الشهر عند الحاجة
@@ -17,25 +16,6 @@ export function addMonths(dateStr: string, months: number): string {
   const lastDay = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate();
   target.setUTCDate(Math.min(d, lastDay));
   return target.toISOString().slice(0, 10);
-}
-
-/** يقسم المبلغ على عدد الأقساط؛ القسط الأخير يأخذ فرق التقريب حتى يساوي المجموع المبلغ بالضبط. */
-export function splitAmount(total: number, count: number): number[] {
-  if (count <= 0) return [];
-  const base = Math.floor(total / count);
-  const amounts = Array<number>(count).fill(base);
-  amounts[count - 1] = base + (total - base * count);
-  return amounts;
-}
-
-/** جدول أقساط شهرية يبدأ من firstDue. */
-export function buildInstallmentSchedule(total: number, count: number, firstDue: string): ScheduledInstallment[] {
-  return splitAmount(total, count).map((amount, i) => ({ due_date: addMonths(firstDue, i), amount }));
-}
-
-/** أول يوم من الشهر القادم (بداية جدولة الأقساط المتبقية عند التعديل). */
-export function firstOfNextMonth(now: Date = new Date()): string {
-  return getLocalDateStr(new Date(now.getFullYear(), now.getMonth() + 1, 1));
 }
 
 /** نفس اليوم من الشهر القادم (تاريخ أول قسط المقترح عند الاعتماد). */
@@ -50,15 +30,21 @@ export function validateApproval(amount: number, months: number): string | null 
 }
 
 /**
+ * نسبة الراتب اللي فوقها يطلع تنبيه بالسلفة (نص الراتب). تنبيه فقط وليس منعاً: بعض الموظفين
+ * يسددون جزءاً نقداً، والسيرفر (`_validate_loan_terms`) ما يمنعها. نفس القيمة بالتطبيق: kLoanSalaryWarningRatio.
+ */
+export const LOAN_SALARY_WARNING_RATIO = 0.5;
+
+/**
  * تنبيه (مو منع) إذا القسط أكثر من نص الراتب: مسموح للأدمن لأن بعض الموظفين
  * يسددون جزء نقداً. null = ضمن الحد أو الراتب غير معروف.
  */
 export function overHalfSalaryWarning(amount: number, months: number, monthlySalary: number): string | null {
   if (!(monthlySalary > 0) || !(months > 0)) return null;
   const installment = Math.floor(amount / months);
-  if (installment <= monthlySalary * 0.5) return null;
+  if (installment <= monthlySalary * LOAN_SALARY_WARNING_RATIO) return null;
   const fmt = (n: number) => Math.round(n).toLocaleString('en-US');
-  return `القسط الشهري ${fmt(installment)} د.ع أكثر من نص الراتب (${fmt(monthlySalary * 0.5)} د.ع)`
+  return `القسط الشهري ${fmt(installment)} د.ع أكثر من نص الراتب (${fmt(monthlySalary * LOAN_SALARY_WARNING_RATIO)} د.ع)`
     + (installment > monthlySalary ? ` وأكثر من الراتب كله (${fmt(monthlySalary)} د.ع)، فكشف راتبه راح يطلع بالسالب إذا ما سدد نقداً.` : '.')
     + '\nالباقي يسدده الموظف نقداً من زر "تسجيل دفعة" بتفاصيل السلفة.';
 }
@@ -66,11 +52,6 @@ export function overHalfSalaryWarning(amount: number, months: number, monthlySal
 /** الأقساط مرتبة حسب تاريخ الاستحقاق (نسخة جديدة؛ لا تعدّل مصفوفة الحالة). */
 export function sortInstallments(installments: LoanInstallment[] | null | undefined): LoanInstallment[] {
   return [...(installments ?? [])].sort((a, b) => a.due_date.localeCompare(b.due_date));
-}
-
-export function nextUnpaidInstallment(loan: Loan): { next: LoanInstallment | null; unpaidCount: number } {
-  const unpaid = sortInstallments(loan.loan_installments).filter(i => !i.is_paid);
-  return { next: unpaid[0] ?? null, unpaidCount: unpaid.length };
 }
 
 export function splitLoansByCompletion(loans: Loan[]): { incomplete: Loan[]; completed: Loan[] } {
@@ -82,16 +63,6 @@ export function splitLoansByCompletion(loans: Loan[]): { incomplete: Loan[]; com
 
 export function paidAmount(loan: Loan): number {
   return (Number(loan.amount) - Number(loan.remaining_amount)) || 0;
-}
-
-export function loanToEditDraft(loan: Loan): EditLoanDraft {
-  return {
-    loan,
-    amount: Number(loan.amount),
-    installmentAmount: Number(loan.installment_amount),
-    installmentCount: Number(loan.installment_count),
-    remainingAmount: Number(loan.remaining_amount),
-  };
 }
 
 export interface PaymentPreviewRow {

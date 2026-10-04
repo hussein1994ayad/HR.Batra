@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { Loan, LoanInstallment } from '@/lib/db-types';
 import {
-  addMonths, buildInstallmentSchedule, firstOfNextMonth, nextUnpaidInstallment, sameDayNextMonth, sortInstallments,
-  overHalfSalaryWarning, previewPayment, splitAmount, splitLoansByCompletion, validateApproval,
+  addMonths, sameDayNextMonth, sortInstallments,
+  overHalfSalaryWarning, previewPayment, splitLoansByCompletion, validateApproval,
 } from './logic';
 
 const inst = (id: string, due_date: string, is_paid = false): LoanInstallment =>
@@ -23,25 +23,7 @@ describe('addMonths', () => {
   });
 });
 
-describe('splitAmount / buildInstallmentSchedule', () => {
-  it('puts the rounding remainder on the last installment so the sum is exact', () => {
-    expect(splitAmount(1000, 3)).toEqual([333, 333, 334]);
-    expect(splitAmount(900, 3)).toEqual([300, 300, 300]);
-    expect(splitAmount(500, 0)).toEqual([]);
-  });
-  it('schedules monthly due dates from the first date', () => {
-    expect(buildInstallmentSchedule(1000, 3, '2026-01-31')).toEqual([
-      { due_date: '2026-01-31', amount: 333 },
-      { due_date: '2026-02-28', amount: 333 },
-      { due_date: '2026-03-31', amount: 334 },
-    ]);
-  });
-});
-
 describe('default dates', () => {
-  it('starts rescheduled installments on the first of next month', () => {
-    expect(firstOfNextMonth(new Date(2026, 11, 20))).toBe('2027-01-01');
-  });
   it('proposes the same day next month for the first installment', () => {
     expect(sameDayNextMonth(new Date(2026, 0, 31, 23, 30))).toBe('2026-02-28');
   });
@@ -61,13 +43,10 @@ describe('validateApproval', () => {
 });
 
 describe('installment helpers', () => {
-  it('sorts without mutating and finds the next unpaid one', () => {
+  it('sorts by due date without mutating', () => {
     const list = [inst('b', '2026-03-01'), inst('a', '2026-01-01', true), inst('c', '2026-02-01')];
     expect(sortInstallments(list).map(i => i.id)).toEqual(['a', 'c', 'b']);
     expect(list[0].id).toBe('b');
-    const { next, unpaidCount } = nextUnpaidInstallment(loan({ loan_installments: list }));
-    expect(next?.id).toBe('c');
-    expect(unpaidCount).toBe(2);
   });
 
   it('splits loans by remaining amount', () => {

@@ -137,7 +137,9 @@ class LocationService {
             appLog('📍 طلب صلاحية الموقع بالخلفية (Always Allow)...');
             await Permission.locationAlways.request();
           }
-        } catch (_) {}
+        } catch (e) {
+          appLog('تعذّر طلب صلاحية الموقع بالخلفية: $e');
+        }
       }
       return true;
     } catch (e) {
@@ -231,12 +233,16 @@ class LocationService {
     // الانصراف يوقف كل تتبع iOS (لا مواقع خارج الدوام)
     try {
       await IosRegionMonitor.stopMonitoring();
-    } catch (_) {}
+    } catch (e) {
+      appLog('تعذّر إيقاف مراقبة المناطق (iOS) عند الانصراف: $e');
+    }
 
     try {
       final service = FlutterBackgroundService();
       service.invoke('stopService');
-    } catch (_) {}
+    } catch (e) {
+      appLog('تعذّر إيقاف خدمة التتبع بالخلفية: $e');
+    }
 
     _isTracking = false;
     _activeEmployeeId = null;
@@ -334,7 +340,9 @@ class LocationService {
       if (Platform.isIOS) {
         try {
           await IosRegionMonitor.setCheckedIn(false);
-        } catch (_) {}
+        } catch (e) {
+          appLog('تعذّر تحديث حالة الحضور لمراقب iOS: $e');
+        }
       }
     }
 

@@ -18,5 +18,6 @@ export 'leave_request_model.dart';
 export 'loan_model.dart';
 export 'managed_employee.dart';
 export 'notification_model.dart';
+export 'roles.dart';
 export 'salary_slip_model.dart';
 export 'work_schedule_model.dart';

@@ -436,3 +436,20 @@
   (يقرا موقع الفرع وقت الاستدعاء نفسه)؛ و`AttendancePanelSkeleton` و`AttendanceDayCompleteCard` صاروا widgets.
 - **ما بقى أي ملف بالتطبيق فوق 503 سطر** (أكبرها `location_service.dart` = نقطة دخول خدمة التتبع الخلفية).
 - النتيجة: كل اللقطات **مطابقة**؛ `flutter test` 618 ✓.
+
+## Step 43 — مراجعة جودة الكود (القسم 19): الإصلاحات الآمنة — الكود
+- **19.3 حذف كود ميت يحمل قواعد تختلف عن السيرفر (الويب):** `minutesLate`/`minutesEarly` (تأخير بدون سماحية وبداية 09:00)،
+  `getCycleDates` (دورة 25←24 قديمة)، `getBaghdadMinutesFromIso`، `parseScheduleMinutes`، `toDateStr`، النسخة المكررة من
+  `formatLateDurationArabic` في `lib/attendance.ts`، و`splitAmount`/`buildInstallmentSchedule`/`firstOfNextMonth`/
+  `nextUnpaidInstallment`/`loanToEditDraft` + نوع `ScheduledInstallment`. ما حد كان يستدعيها إلا اختباراتها (حُذفت معها:
+  `tests/unit/payroll.test.ts` وأجزاء من `attendance.test.ts` و`loans/logic.test.ts`). الويب: 100 → 91 اختبار.
+- **19.7 نسبة "نص الراتب" بتنبيه السلفة صارت ثابتاً مسمّى:** `LOAN_SALARY_WARNING_RATIO` (الويب) و`kLoanSalaryWarningRatio`
+  (التطبيق، `core/logic/loan_rules.dart`) مع سبب القاعدة؛ بدل 0.5 و`/ 2` المكتوبة 5 مرات. نفس القيم بالضبط.
+- **19.12 أخطاء كانت تُبلع بصمت صار لها سجل (15 مكان):** حفظ رمز الإشعارات (FCM)، إيقاف التتبع ومراقبة iOS عند الانصراف
+  والخروج، طلب صلاحية الموقع بالخلفية، التحديث الصامت للتتبع الحي، نسخ PDF/Excel للتنزيلات، قراءة حجم الملف. نفس التصرف،
+  فقط سطر `appLog`. الأماكن غير المؤثرة (إلغاء اشتراك، تحريك خريطة، رقم النسخة) بقت كما هي.
+- **19.13 الأدوار بمكان واحد:** `mobile/lib/core/models/roles.dart` (`Roles.admin/manager/employee`, `isAdmin`, `canManage`)
+  بدل 14 مقارنة نصية بالتطبيق؛ وبالويب `isDashboardRole` صارت بـ `lib/role.tsx` وتستعملها صفحة الدخول وجلسة اللوحة.
+- **اختبار اللقطات:** الوقت النسبي ("قبل 3 ساعات" ← "قبل 11 ساعة"، "أمس"، "الآن") يتغير مع الساعة فصار علامة ثابتة `‹وقت›`؛
+  نفس التحويل طُبّق على ملفات اللقطات (بدون إعادة تسجيل).
+- فحص: الويب `tsc` ✓ `lint` ✓ `vitest` 91 ✓؛ التطبيق `dart analyze` ✓ `flutter test` 618 ✓.

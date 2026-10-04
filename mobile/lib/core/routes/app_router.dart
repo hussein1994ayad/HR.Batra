@@ -23,6 +23,7 @@ import '../../presentation/employee/directory/directory_screen.dart';
 import '../../presentation/employee/main_layout.dart';
 import '../../presentation/employee/notifications/notifications_screen.dart';
 import '../../presentation/employee/payslips/payslips_screen.dart';
+import '../models/models.dart';
 import '../services/auth_service.dart';
 import '../services/supabase_service.dart';
 
@@ -72,8 +73,7 @@ final GoRouter appRouter = GoRouter(
     }
     
     if (loggedIn && state.matchedLocation.startsWith('/admin')) {
-      final role = AuthService.currentUserRole;
-      if (role != 'admin' && role != 'manager') {
+      if (!Roles.canManage(AuthService.currentUserRole)) {
         return AppRoutes.employeeHome;
       }
     }

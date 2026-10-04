@@ -338,7 +338,9 @@ Future<String> buildAndSaveLoanStatementExcel(LoanRecord record) async {
         appLog('✅ تم حفظ نسخة في مجلد التنزيلات: ${publicFile.path}');
       }
     }
-  } catch (_) {}
+  } catch (e) {
+    appLog('تعذّر حفظ نسخة كشف السلفة بالتنزيلات: $e');
+  }
 
   appLog('✅ تم إنشاء ملف Excel بنجاح في المسار: $filePath');
   return filePath;

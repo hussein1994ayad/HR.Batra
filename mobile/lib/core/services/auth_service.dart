@@ -219,7 +219,9 @@ class AuthService {
     }
     try {
       await IosRegionMonitor.stopMonitoring();
-    } catch (_) {}
+    } catch (e) {
+      appLog('تعذّر إيقاف مراقبة المناطق (iOS) عند الخروج: $e');
+    }
     await NotificationService.unregisterDevice();
     StorageLinks.clearCache();
     try {
@@ -298,7 +300,9 @@ class AuthService {
       } else {
         await prefs.setString(_kCachedRoleKey, role);
       }
-    } catch (_) {}
+    } catch (e) {
+      appLog('تعذّر حفظ الدور بالكاش: $e');
+    }
   }
 
   static Future<String?> _cachedRole() async {

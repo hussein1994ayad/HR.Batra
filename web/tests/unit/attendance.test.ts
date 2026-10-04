@@ -2,14 +2,12 @@ import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_WORK_DAYS,
   findSchedule,
-  formatLateDurationArabic,
   isDateInRange,
-  minutesEarly,
-  minutesLate,
   toDateKey,
   weekdayOf,
   workDaysFor,
 } from '@/lib/attendance';
+import { formatLateDurationArabic } from '@/lib/dates';
 import type { WorkSchedule } from '@/lib/db-types';
 
 const sched = (over: Partial<WorkSchedule>): WorkSchedule => ({
@@ -66,20 +64,7 @@ describe('dates', () => {
   });
 });
 
-describe('lateness', () => {
-  it('measures minutes after the scheduled start', () => {
-    // 09:25 Baghdad = 06:25 UTC
-    expect(minutesLate('2026-09-20T06:25:00Z', '09:00:00')).toBe(25);
-    expect(minutesLate('2026-09-20T05:55:00Z', '09:00:00')).toBe(0);
-    expect(minutesLate(null)).toBe(0);
-  });
-
-  it('measures minutes before the scheduled end', () => {
-    // 16:15 Baghdad = 13:15 UTC
-    expect(minutesEarly('2026-09-20T13:15:00Z', '17:00:00')).toBe(45);
-    expect(minutesEarly('2026-09-20T14:30:00Z', '17:00:00')).toBe(0);
-  });
-
+describe('Arabic durations', () => {
   it('describes durations in Arabic', () => {
     expect(formatLateDurationArabic(0)).toBe('0 دقيقة');
     expect(formatLateDurationArabic(1)).toBe('دقيقة واحدة');

@@ -236,7 +236,7 @@ class _HomeScreenState extends State<HomeScreen> {
   // ==========================================================================
   // Build
   // ==========================================================================
-  bool get _isManager => _userRole == 'admin' || _userRole == 'manager';
+  bool get _isManager => Roles.canManage(_userRole);
 
   Future<void> _loadHolidayToday(String todayStr) async {
     try {

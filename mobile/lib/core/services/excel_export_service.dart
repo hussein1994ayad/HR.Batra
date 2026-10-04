@@ -3,10 +3,12 @@
 // =========================================================================
 
 import 'dart:io';
+
 import 'package:intl/intl.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+
 import '../logic/attendance_report.dart';
 import '../models/loan_model.dart';
 import '../utils/app_log.dart';
@@ -50,7 +52,9 @@ class ExcelExportService {
           await File('${downloadDir.path}/$fileName').writeAsBytes(bytes, flush: true);
         }
       }
-    } catch (_) {}
+    } catch (e) {
+      appLog('تعذّر حفظ نسخة Excel بالتنزيلات: $e');
+    }
     return file.path;
   }
 

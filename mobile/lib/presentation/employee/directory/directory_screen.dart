@@ -89,7 +89,7 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
       _ => 'موظف',
     };
     // وثائق الزملاء (هويات، عقود) للأدمن فقط — الموظف يرى الاسم والقسم والتواصل
-    final canSeeDocs = AuthService.currentUserRole == 'admin';
+    final canSeeDocs = Roles.isAdmin(AuthService.currentUserRole);
     final docUrls = canSeeDocs ? emp.documentUrls : const <String>[];
 
     showAppSheet<void>(
@@ -262,7 +262,7 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
         itemCount: _filteredEmployees.length,
         itemBuilder: (context, index) {
           final emp = _filteredEmployees[index];
-          final docs = AuthService.currentUserRole == 'admin' ? emp.documentUrls.length : 0;
+          final docs = Roles.isAdmin(AuthService.currentUserRole) ? emp.documentUrls.length : 0;
           return Padding(
             padding: const EdgeInsets.only(bottom: AppSpace.sm),
             child: ContentWidth(

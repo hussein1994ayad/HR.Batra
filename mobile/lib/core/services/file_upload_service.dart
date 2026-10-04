@@ -82,7 +82,9 @@ class FileUploadService {
       
       try {
         fileSizeBytes = await _getFileSizeInStorage(bucketName, filePath);
-      } catch (_) {}
+      } catch (e) {
+        appLog('تعذّر قراءة حجم الملف من التخزين: $e');
+      }
 
       await supabase.from('deleted_files').insert({
         'file_path': filePath,
@@ -112,7 +114,9 @@ class FileUploadService {
           return f.metadata?['size'] as int?;
         }
       }
-    } catch (_) {}
+    } catch (e) {
+      appLog('تعذّر قراءة بيانات الملف من التخزين: $e');
+    }
     return null;
   }
 }

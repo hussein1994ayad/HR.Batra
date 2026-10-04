@@ -10,7 +10,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
-import type { DashboardRole } from '@/lib/role';
+import { isDashboardRole, type DashboardRole } from '@/lib/role';
 import type { AppNotification } from '@/lib/db-types';
 import { clearLocalCaches } from '@/lib/local-cache';
 
@@ -83,7 +83,7 @@ export function useAdminSession() {
           .eq('id', session.user.id)
           .single();
 
-        if (error || !emp || (emp.role !== 'admin' && emp.role !== 'manager')) {
+        if (error || !emp || !isDashboardRole(emp.role)) {
           clearLocalCaches();
           await supabase.auth.signOut();
           router.replace('/login');

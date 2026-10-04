@@ -9,7 +9,7 @@ import { Field, Input, Modal, ModalFooter, Select } from '@/components/ui';
 import { formatIQD } from '@/lib/format';
 import { errorMessage } from '@/lib/error-utils';
 import { useConfirm } from '@/components/confirm';
-import { overHalfSalaryWarning } from '../logic';
+import { LOAN_SALARY_WARNING_RATIO, overHalfSalaryWarning } from '../logic';
 import { createDirectLoan, fetchLoanEmployees } from '../api';
 
 type Props = {
@@ -37,7 +37,7 @@ export function CreateLoanModal({ defaultFirstDue, onClose, onCreated }: Props) 
   const monthsNum = Math.max(0, Math.floor(Number(months) || 0));
   const installment = monthsNum > 0 ? Math.ceil(amountNum / monthsNum) : 0;
   const salary = Number(employees.find((e) => e.id === employeeId)?.monthly_salary_iqd ?? 0);
-  const overHalf = salary > 0 && installment > salary * 0.5;
+  const overHalf = salary > 0 && installment > salary * LOAN_SALARY_WARNING_RATIO;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,7 +76,7 @@ export function CreateLoanModal({ defaultFirstDue, onClose, onCreated }: Props) 
           </Field>
         </div>
         <p className={overHalf ? 'text-xs font-bold text-amber-300' : 'text-xs text-slate-400'}>
-          القسط الشهري: {formatIQD(installment)}{salary > 0 && ` · نص الراتب ${formatIQD(salary * 0.5)}${overHalf ? ' (أكثر من النص: مسموح، والباقي يتسدد نقداً)' : ''}`}
+          القسط الشهري: {formatIQD(installment)}{salary > 0 && ` · نص الراتب ${formatIQD(salary * LOAN_SALARY_WARNING_RATIO)}${overHalf ? ' (أكثر من النص: مسموح، والباقي يتسدد نقداً)' : ''}`}
         </p>
         <Field label="تاريخ أول قسط">
           <Input type="date" required value={firstDue} onChange={(e) => setFirstDue(e.target.value)} dir="ltr" />

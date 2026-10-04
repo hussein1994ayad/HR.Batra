@@ -153,7 +153,9 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
       _attendanceList = List<Map<String, dynamic>>.from(day[0] as Iterable<dynamic>);
       _locationTrackingList = List<Map<String, dynamic>>.from(day[1] as Iterable<dynamic>);
       setState(_process);
-    } catch (_) {}
+    } catch (e) {
+      appLog('تعذّر التحديث الصامت للتتبع الحي: $e');
+    }
   }
 
   void _process() {

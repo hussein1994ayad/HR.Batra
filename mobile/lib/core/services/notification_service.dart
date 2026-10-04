@@ -418,7 +418,9 @@ class NotificationService {
       await Supabase.instance.client
           .from('employees')
           .update({'fcm_token': token}).eq('id', user.id);
-    } catch (_) {}
+    } catch (e) {
+      appLog('تعذّر حفظ رمز الإشعارات (fcm_token) بملف الموظف: $e');
+    }
 
     try {
       await Supabase.instance.client.from('fcm_tokens').upsert({
@@ -427,7 +429,9 @@ class NotificationService {
         'device_platform': platform,
         'updated_at': DateTime.now().toUtc().toIso8601String(),
       }, onConflict: 'employee_id,token');
-    } catch (_) {}
+    } catch (e) {
+      appLog('تعذّر حفظ رمز الإشعارات بجدول الأجهزة: $e');
+    }
 
     try {
       await Supabase.instance.client.from('device_tokens').upsert({
@@ -435,7 +439,9 @@ class NotificationService {
         'token': token,
         'platform': platform,
       });
-    } catch (_) {}
+    } catch (e) {
+      appLog('تعذّر حفظ رمز الإشعارات (المحاولة البديلة): $e');
+    }
   }
 
   static Future<bool> isPermissionGranted() async {

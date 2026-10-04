@@ -14,6 +14,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/constants/constants.dart';
+import '../../../core/models/models.dart';
 import '../../../core/routes/app_router.dart';
 import '../../../core/services/auth_service.dart';
 import '../../../core/services/device_service.dart';
@@ -198,7 +199,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  bool get _isAdminOrManager => AuthService.currentUserRole == 'admin' || AuthService.currentUserRole == 'manager';
+  bool get _isAdminOrManager => Roles.canManage(AuthService.currentUserRole);
 
   // معاينة الوثيقة ومشاركتها
   Future<void> _previewDocument(String url) async {
@@ -368,7 +369,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       onTap: () => context.push(AppRoutes.adminTracking),
                     ),
                     // السلف للأدمن فقط (مدير الفرع ما يعتمد سلف — نفس الموقع)
-                    if (AuthService.currentUserRole == 'admin')
+                    if (Roles.isAdmin(AuthService.currentUserRole))
                       AppListTile(
                         leading: const ToneIcon(Icons.table_chart_rounded, tone: AppTone.accent),
                         title: 'سلف الموظفين وكشوف Excel',

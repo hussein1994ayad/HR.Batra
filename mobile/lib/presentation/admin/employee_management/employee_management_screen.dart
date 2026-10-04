@@ -67,7 +67,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
     try {
       final role = await RoleRepository().currentRole();
 
-      if (role != 'admin' && role != 'manager') {
+      if (!Roles.canManage(role)) {
         if (mounted) Navigator.pop(context);
         return;
       }
@@ -76,7 +76,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
 
       if (mounted) {
         setState(() {
-          _isAdmin = role == 'admin';
+          _isAdmin = Roles.isAdmin(role);
           _employees = results.employees;
           _branches = results.branches;
           _hasError = false;

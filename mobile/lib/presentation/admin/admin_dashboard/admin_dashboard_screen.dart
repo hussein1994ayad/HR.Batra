@@ -66,12 +66,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Ticker
         context.go(AppRoutes.login);
         return;
       }
-      if (role != 'admin' && role != 'manager') {
+      if (!Roles.canManage(role)) {
         context.go(AppRoutes.employeeHome);
         return;
       }
       _lookups = await _repo.loadLookups();
-      if (role == 'manager') {
+      if (role == Roles.manager) {
         final me = SupabaseService.currentUser?.id;
         final branchId = _lookups.employees.where((e) => e.id == me).firstOrNull?.branchId;
         if (!mounted) return;

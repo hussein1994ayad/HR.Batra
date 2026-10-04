@@ -1,8 +1,9 @@
 // دخول لوحة الإدارة: فحص الجلسة الحالية، وتسجيل الدخول مع التأكد إن الحساب أدمن أو مدير فرع.
 
+import { isDashboardRole } from '@/lib/role';
 import { supabase } from '@/lib/supabase';
 
-export const isDashboardRole = (role: unknown): boolean => role === 'admin' || role === 'manager';
+export { isDashboardRole };
 
 /** هل توجد جلسة لحساب أدمن أو مدير؟ (ترمي إذا فشل جلب الجلسة) */
 export async function hasDashboardSession(): Promise<boolean> {
@@ -49,7 +50,7 @@ export async function signInToDashboard(email: string, password: string): Promis
     throw new Error('عذراً! لا تمتلك صلاحيات كافية للوصول إلى لوحة الإدارة.');
   }
 
-  if (emp.role !== 'admin' && emp.role !== 'manager') {
+  if (!isDashboardRole(emp.role)) {
     await supabase.auth.signOut();
     throw new Error('عذراً! هذا الحساب مخصص للموظفين فقط. لوحة الويب للمسؤولين فقط.');
   }

@@ -4,6 +4,10 @@
 
 import '../models/loan_model.dart';
 
+/// نسبة الراتب اللي فوقها يطلع تنبيه بالسلفة (نص الراتب). تنبيه فقط وليس منعاً: بعض الموظفين
+/// يسددون جزءاً نقداً، والسيرفر (`_validate_loan_terms`) ما يمنعها. نفس القيمة بالويب: LOAN_SALARY_WARNING_RATIO.
+const double kLoanSalaryWarningRatio = 0.5;
+
 enum LoanStatusFilter { all, active, completed, pending }
 
 /// تصفية حسب الاسم والفرع والحالة (نشطة = معتمدة وعليها متبقي).
