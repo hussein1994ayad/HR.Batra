@@ -64,8 +64,10 @@ void main() {
       for (final e in find.byWidgetPredicate((w) => w is ButtonStyleButton || w is IconButton || w is TextField || w is FloatingActionButton).evaluate()) {
         final box = e.renderObject;
         if (box is! RenderBox || !box.hasSize || !box.attached) continue;
+        // محتوى القوائم يتمرر خلف الأشرطة (طبيعي)؛ نفحص العناصر الثابتة فقط (أشرطة، أزرار عائمة)
+        if (find.ancestor(of: find.byWidget(e.widget), matching: find.byType(Scrollable)).evaluate().isNotEmpty) continue;
         final rect = box.localToGlobal(Offset.zero) & box.size;
-        if (rect.height == 0 || rect.bottom <= 0 || rect.top >= mq.size.height) continue; // خارج الشاشة (داخل scroll)
+        if (rect.height == 0 || rect.bottom <= 0 || rect.top >= mq.size.height) continue; // خارج الشاشة
         if (rect.top < mq.viewPadding.top - 1 || rect.bottom > mq.size.height - mq.viewPadding.bottom + 1) {
           unsafe.add('${e.widget.runtimeType} @ ${rect.top.round()}..${rect.bottom.round()}');
         }

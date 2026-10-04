@@ -105,24 +105,31 @@ jobs:
             for t in $targets; do
               log=$OUT/$label/$t.log; mkdir -p $OUT/$label
               # حد 15 دقيقة لكل اختبار (macOS ما بيه أمر timeout)؛ إذا علّق نلتقط شاشة المحاكي لنعرف السبب
-              ( SCREENS_DIR=$OUT/$label flutter drive --driver=test_driver/integration_test.dart \
-                  --target=integration_test/$t.dart -d "$udid" $DEFINES > "$log" 2>&1 < /dev/null ) &
-              pid=$!; waited=0
-              while kill -0 $pid 2>/dev/null && [ $waited -lt 900 ]; do sleep 10; waited=$((waited+10)); done
-              if kill -0 $pid 2>/dev/null; then
-                xcrun simctl io "$udid" screenshot "$OUT/$label/${t}_STUCK.png" 2>/dev/null
-                pkill -P $pid 2>/dev/null; kill $pid 2>/dev/null; pkill -f "flutter_tools.*drive" 2>/dev/null
-                code=124
-              else
-                wait $pid; code=$?
-              fi
+              # محاولتين: أداة flutter drive أحياناً تفشل بالاتصال بالتطبيق على الآيباد ("log reader failed")
+              for attempt in 1 2; do
+                ( SCREENS_DIR=$OUT/$label flutter drive --driver=test_driver/integration_test.dart \
+                    --target=integration_test/$t.dart -d "$udid" $DEFINES > "$log" 2>&1 < /dev/null ) &
+                pid=$!; waited=0
+                while kill -0 $pid 2>/dev/null && [ $waited -lt 900 ]; do sleep 10; waited=$((waited+10)); done
+                if kill -0 $pid 2>/dev/null; then
+                  xcrun simctl io "$udid" screenshot "$OUT/$label/${t}_STUCK.png" 2>/dev/null
+                  pkill -P $pid 2>/dev/null; kill $pid 2>/dev/null; pkill -f "flutter_tools.*drive" 2>/dev/null
+                  code=124
+                else
+                  wait $pid; code=$?
+                fi
+                if grep -qE "Application failed to start|Error waiting for a debug connection" "$log"; then
+                  echo "tool could not attach (attempt $attempt)"; xcrun simctl terminate "$udid" "$BUNDLE_ID" 2>/dev/null; continue
+                fi
+                break
+              done
               xcrun simctl io "$udid" screenshot "$OUT/$label/${t}_end.png" 2>/dev/null
               if [ $code = 0 ]; then r="✅ PASS"; elif [ $code = 124 ]; then r="❌ STUCK (15 min)"; else r="❌ FAIL ($code)"; fi
               grep -q "LOCATION_TEST_SKIPPED" "$log" && r="$r (⚠️ location test skipped: permission not granted)"
               echo "| $name | $runtime | $t | $r |" >> $RES
               if [ $code != 0 ]; then
                 echo "" >> $OUT/FAILURES.md; echo "## $name — $t" >> $OUT/FAILURES.md; echo '```' >> $OUT/FAILURES.md
-                grep -E "EXCEPTION|Exception|Error|Expected|Actual|reason|FAIL|failed|══|overflow|unsafe|Which:|crash" "$log" | head -80 >> $OUT/FAILURES.md
+                grep -E "^flutter: .*(EXCEPTION|Expected|Actual|reason|\[E\]|overflow|Which:)|Application failed|Error waiting|Xcode build failed|error:" "$log" | head -60 >> $OUT/FAILURES.md
                 echo '```' >> $OUT/FAILURES.md
                 xcrun simctl spawn "$udid" log show --last 15m --style compact \
                   --predicate 'process == "Runner" AND (messageType == error OR messageType == fault OR eventMessage CONTAINS[c] "exception" OR eventMessage CONTAINS[c] "terminat")' \
