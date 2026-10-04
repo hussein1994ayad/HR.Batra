@@ -6,8 +6,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../../core/services/supabase_service.dart';
-import '../shared/ui/ui.dart';
+import '../../../data/repositories/storage_repository.dart';
+import '../../shared/ui/ui.dart';
+import 'storage_logic.dart';
 
 class TrashScreen extends StatefulWidget {
   const TrashScreen({super.key});
@@ -17,6 +18,7 @@ class TrashScreen extends StatefulWidget {
 }
 
 class _TrashScreenState extends State<TrashScreen> {
+  final StorageRepository _repo = StorageRepository();
   bool _isLoading = true;
   bool _hasError = false;
   List<Map<String, dynamic>> _deletedFiles = [];
@@ -31,15 +33,11 @@ class _TrashScreenState extends State<TrashScreen> {
   Future<void> _loadTrashFiles() async {
     setState(() => _isLoading = true);
     try {
-      final List<dynamic> data = await SupabaseService.client
-          .from('deleted_files')
-          .select('*, employees(full_name)')
-          .isFilter('restored_at', null)
-          .order('deleted_at', ascending: false);
+      final data = await _repo.fetchTrash();
 
       if (!mounted) return;
       setState(() {
-        _deletedFiles = List<Map<String, dynamic>>.from(data);
+        _deletedFiles = data;
         _hasError = false;
       });
     } catch (e) {
@@ -47,22 +45,6 @@ class _TrashScreenState extends State<TrashScreen> {
       if (mounted) setState(() => _hasError = true);
     } finally {
       if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  // اسم الـ bucket حسب نوع الملف
-  String _getBucketName(String fileType) {
-    switch (fileType) {
-      case 'avatar':
-        return 'avatars';
-      case 'document':
-        return 'employee-documents';
-      case 'pledge':
-        return 'loan-pledges';
-      case 'logo':
-        return 'company-logos';
-      default:
-        return 'employee-documents';
     }
   }
 
@@ -87,9 +69,7 @@ class _TrashScreenState extends State<TrashScreen> {
 
     setState(() => _isLoading = true);
     try {
-      await SupabaseService.client.from('deleted_files').update({
-        'restored_at': DateTime.now().toUtc().toIso8601String(),
-      }).eq('id', fileId);
+      await _repo.restore(fileId);
 
       if (mounted) AppSnack.success(context, 'استُعيد الملف');
       unawaited(_loadTrashFiles());
@@ -106,12 +86,11 @@ class _TrashScreenState extends State<TrashScreen> {
     final String fileId = fileRow['id'] as String;
     final String filePath = fileRow['file_path'] as String;
     final String fileType = fileRow['file_type'] as String;
-    final String bucket = _getBucketName(fileType);
+    final String bucket = bucketForFileType(fileType);
 
     setState(() => _isLoading = true);
     try {
-      await SupabaseService.client.storage.from(bucket).remove([filePath]);
-      await SupabaseService.client.from('deleted_files').delete().eq('id', fileId);
+      await _repo.deletePermanently(bucket: bucket, filePath: filePath, fileId: fileId);
 
       if (mounted) AppSnack.success(context, 'حُذف الملف نهائياً');
       unawaited(_loadTrashFiles());

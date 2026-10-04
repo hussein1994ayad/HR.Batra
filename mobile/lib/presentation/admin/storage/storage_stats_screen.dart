@@ -6,9 +6,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../core/routes/app_router.dart';
-import '../../core/services/supabase_service.dart';
-import '../shared/ui/ui.dart';
+import '../../../core/routes/app_router.dart';
+import '../../../data/repositories/storage_repository.dart';
+import '../../shared/ui/ui.dart';
+import 'storage_logic.dart';
 
 class StorageStatsScreen extends StatefulWidget {
   const StorageStatsScreen({super.key});
@@ -18,6 +19,7 @@ class StorageStatsScreen extends StatefulWidget {
 }
 
 class _StorageStatsScreenState extends State<StorageStatsScreen> {
+  final StorageRepository _repo = StorageRepository();
   bool _isLoading = true;
   bool _hasError = false;
   double _trashSizeBytes = 0;
@@ -40,50 +42,18 @@ class _StorageStatsScreenState extends State<StorageStatsScreen> {
     setState(() => _isLoading = true);
     try {
       // 1. حساب مجموع أحجام الملفات المحذوفة مؤقتاً من جدول deleted_files
-      final List<Map<String, dynamic>> trashData = await SupabaseService.client
-          .from('deleted_files')
-          .select('file_size_bytes')
-          .isFilter('restored_at', null);
-
-      double totalTrash = 0;
-      for (final row in trashData) {
-        if (row['file_size_bytes'] != null) {
-          totalTrash += (row['file_size_bytes'] as num).toDouble();
-        }
-      }
+      final totalTrash = sumTrashBytes(await _repo.fetchTrashSizes());
 
       // 2. قراءة المساحات الحقيقية من الدالة في Supabase
-      final dynamic statsData = await SupabaseService.client.rpc<dynamic>('get_storage_stats');
-      
-      double avatars = 0;
-      double documents = 0;
-      double pledges = 0;
-      double others = 0;
-
-      if (statsData != null && statsData is List) {
-        for (final raw in statsData) {
-          final stat = Map<String, dynamic>.from(raw as Map);
-          final bucket = stat['bucket_name']?.toString();
-          final size = (stat['total_size'] as num?)?.toDouble() ?? 0.0;
-          if (bucket == 'avatars') {
-            avatars += size;
-          } else if (bucket == 'employee-documents' || bucket == 'documents') {
-            documents += size;
-          } else if (bucket == 'loan-pledges') {
-            pledges += size;
-          } else {
-            others += size;
-          }
-        }
-      }
+      final totals = storageBucketTotals(await _repo.fetchStorageStats());
 
       if (mounted) {
         setState(() {
           _trashSizeBytes = totalTrash;
-          _avatarBytes = avatars;
-          _documentBytes = documents;
-          _pledgeBytes = pledges;
-          _otherBytes = others;
+          _avatarBytes = totals.avatars;
+          _documentBytes = totals.documents;
+          _pledgeBytes = totals.pledges;
+          _otherBytes = totals.others;
           _hasError = false;
         });
       }

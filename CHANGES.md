@@ -262,3 +262,15 @@
 - `uploadEmployeeDocuments` باقية بنفس الاسم وصارت تستدعي المستودع (نفس الضغط، نفس اسم الملف، نفس تخطي الملف الفاشل).
 - صلاحية الشاشة عبر `RoleRepository.currentRole()` (نفس الشرط، و`_isAdmin` من نفس القيمة).
 - فحص: `dart analyze` ✓، `flutter test` 561 ✓.
+
+## Step 24 — سلة المحذوفات، إحصائيات التخزين، نشر التعاميم (النقاط 3 و 4 و 8)
+- **نُقلت** `trash_screen.dart` و`storage_stats_screen.dart` → `presentation/admin/storage/`، و`announcement_screen.dart` →
+  `presentation/admin/announcements/` (+ مسارات `app_router.dart` و`test/support/screens.dart`، مع ترتيب الاستيرادات).
+- **أُنشئ** `mobile/lib/data/repositories/storage_repository.dart`: عرض السلة، الاستعادة، الحذف النهائي (التخزين أولاً ثم السجل —
+  نفس الترتيب)، أحجام السلة، و`get_storage_stats`.
+- **أُنشئ** `storage/storage_logic.dart`: `bucketForFileType` (كان `_getBucketName`)، `sumTrashBytes`، `storageBucketTotals`
+  (نفس التوزيع: `documents` القديم يُحسب مع الوثائق).
+- **وُسّع** `AnnouncementRepository`: `fetchTargets` (الأفرع + الموظفون النشطون) و`publish` (`publish_announcement`).
+- **أُضيف فحص** `mobile/test/unit/storage_logic_test.dart`.
+- بهذا **ما بقى أي استدعاء مباشر لـ Supabase داخل `presentation/`** — كلها بالـ repositories (الخدمات بـ `core/services` بقت كما هي).
+- فحص: `dart analyze` ✓، `flutter test` 565 ✓.

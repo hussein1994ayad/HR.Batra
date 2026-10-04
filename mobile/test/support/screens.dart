@@ -3,14 +3,14 @@
 import 'package:flutter/widgets.dart';
 import 'package:hr_pro/presentation/admin/admin_dashboard/admin_dashboard_screen.dart';
 import 'package:hr_pro/presentation/admin/admin_loans/admin_loans_screen.dart';
-import 'package:hr_pro/presentation/admin/announcement_screen.dart';
+import 'package:hr_pro/presentation/admin/announcements/announcement_screen.dart';
 import 'package:hr_pro/presentation/admin/attendance_report/attendance_report_screen.dart';
 import 'package:hr_pro/presentation/admin/branches/branch_management_screen.dart';
 import 'package:hr_pro/presentation/admin/branches/branch_schedule_screen.dart';
 import 'package:hr_pro/presentation/admin/employee_management/employee_management_screen.dart';
 import 'package:hr_pro/presentation/admin/live_tracking/admin_live_tracking_screen.dart';
-import 'package:hr_pro/presentation/admin/storage_stats_screen.dart';
-import 'package:hr_pro/presentation/admin/trash_screen.dart';
+import 'package:hr_pro/presentation/admin/storage/storage_stats_screen.dart';
+import 'package:hr_pro/presentation/admin/storage/trash_screen.dart';
 import 'package:hr_pro/presentation/auth/change_password_screen.dart';
 import 'package:hr_pro/presentation/auth/login_screen.dart';
 import 'package:hr_pro/presentation/employee/announcements/announcements_board_screen.dart';

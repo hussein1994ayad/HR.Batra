@@ -8,9 +8,9 @@
 
 import 'package:flutter/material.dart';
 
-import '../../core/services/supabase_service.dart';
-import '../../core/utils/error_text.dart';
-import '../shared/ui/ui.dart';
+import '../../../core/utils/error_text.dart';
+import '../../../data/repositories/announcement_repository.dart';
+import '../../shared/ui/ui.dart';
 
 class AnnouncementScreen extends StatefulWidget {
   const AnnouncementScreen({super.key});
@@ -20,6 +20,7 @@ class AnnouncementScreen extends StatefulWidget {
 }
 
 class _AnnouncementScreenState extends State<AnnouncementScreen> {
+  final AnnouncementRepository _repo = AnnouncementRepository();
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
   bool _loadingData = true;
@@ -92,10 +93,7 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
 
   Future<void> _loadData() async {
     try {
-      final futures = await Future.wait([
-        SupabaseService.client.from('branches').select('id, name').order('name'),
-        SupabaseService.client.from('employees').select('id, full_name').eq('is_active', true).order('full_name'),
-      ]);
+      final futures = await _repo.fetchTargets();
       if (!mounted) return;
       setState(() {
         _branches = List<Map<String, dynamic>>.from(futures[0]);
@@ -136,7 +134,7 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
 
     try {
       final end = _endDay;
-      final sent = await SupabaseService.client.rpc<dynamic>('publish_announcement', params: {
+      final sent = await _repo.publish({
         'p_title': _titleController.text.trim(),
         'p_content': _bodyController.text.trim(),
         'p_starts_at': _startsToday ? null : _startDay.toUtc().toIso8601String(),

@@ -1,5 +1,5 @@
 // =========================================================================
-// التعاميم السارية والمجازون/المتأخرون اليوم — للوحة التعاميم والشاشة الرئيسية.
+// التعاميم السارية والمجازون/المتأخرون اليوم — للوحة التعاميم والشاشة الرئيسية — ونشر تعميم للإدارة.
 // التعميم يظهر من تاريخ بدايته حتى تاريخ انتهائه، وللجمهور المستهدف فقط.
 // =========================================================================
 
@@ -29,4 +29,17 @@ class AnnouncementRepository {
     final r = await Future.wait<dynamic>([fetchActive(limit: limit), fetchOnLeaveAndLateToday()]);
     return [r[0], ...(r[1] as List<dynamic>)];
   }
+
+  // ── نشر تعميم (للإدارة) ──
+
+  /// [الأفرع (id, name)، الموظفون النشطون (id, full_name)] لاختيار الجمهور المستهدف.
+  Future<List<List<Map<String, dynamic>>>> fetchTargets() {
+    return Future.wait([
+      _db.from('branches').select('id, name').order('name'),
+      _db.from('employees').select('id, full_name').eq('is_active', true).order('full_name'),
+    ]);
+  }
+
+  /// ينشر التعميم ويرسل الإشعارات للجمهور المستهدف؛ يرجع ما تُرجعه الدالة (عدد المستلمين).
+  Future<dynamic> publish(Map<String, dynamic> params) => _db.rpc<dynamic>('publish_announcement', params: params);
 }
