@@ -8,18 +8,17 @@
 
 import 'package:flutter/material.dart';
 
+import '../../../core/models/models.dart';
 import '../../shared/ui/ui.dart';
-
-DateTime? _date(Object? v) => DateTime.tryParse(v?.toString() ?? '')?.toLocal();
 
 bool _sameDay(DateTime a, DateTime b) => a.year == b.year && a.month == b.month && a.day == b.day;
 
 /// "حتى 28 أيلول" / "آخر يوم اليوم" / "10:00 ص – 12:00 م"
-String onLeaveUntil(Map<String, dynamic> p, {DateTime? now}) {
-  if (p['is_hourly'] == true) {
-    return '${Fmt.timeOfDay(p['start_hour']?.toString())} – ${Fmt.timeOfDay(p['end_hour']?.toString())}';
+String onLeaveUntil(OnLeavePerson p, {DateTime? now}) {
+  if (p.isHourly) {
+    return '${Fmt.timeOfDay(p.startHour)} – ${Fmt.timeOfDay(p.endHour)}';
   }
-  final to = DateTime.tryParse(p['to_date']?.toString() ?? '');
+  final to = p.toDate;
   if (to == null) return 'مجاز اليوم';
   final today = now ?? DateTime.now();
   if (_sameDay(to, today)) return 'آخر يوم اليوم';
@@ -27,9 +26,9 @@ String onLeaveUntil(Map<String, dynamic> p, {DateTime? now}) {
 }
 
 /// "يعود غداً" / "يعود بعد 3 أيام" (للإجازة اليومية فقط)
-String? onLeaveReturn(Map<String, dynamic> p, {DateTime? now}) {
-  if (p['is_hourly'] == true) return null;
-  final to = DateTime.tryParse(p['to_date']?.toString() ?? '');
+String? onLeaveReturn(OnLeavePerson p, {DateTime? now}) {
+  if (p.isHourly) return null;
+  final to = p.toDate;
   if (to == null) return null;
   final today = now ?? DateTime.now();
   final days = DateTime(to.year, to.month, to.day).difference(DateTime(today.year, today.month, today.day)).inDays + 1;
@@ -39,17 +38,17 @@ String? onLeaveReturn(Map<String, dynamic> p, {DateTime? now}) {
 }
 
 /// نسبة ما مضى من مدة عرض التعميم (0..1)، أو null بدون نهاية.
-double? announcementProgress(Map<String, dynamic> a, {DateTime? now}) {
-  final starts = _date(a['starts_at'] ?? a['created_at']);
-  final ends = _date(a['ends_at']);
+double? announcementProgress(AnnouncementModel a, {DateTime? now}) {
+  final starts = a.shownFrom;
+  final ends = a.endsAt;
   if (starts == null || ends == null || !ends.isAfter(starts)) return null;
   final t = (now ?? DateTime.now()).difference(starts).inMinutes / ends.difference(starts).inMinutes;
   return t.clamp(0.0, 1.0);
 }
 
 /// "ينتهي اليوم" / "ينتهي غداً" / "باقي 5 أيام" / "ساري حتى 28 أيلول"
-String? announcementRemaining(Map<String, dynamic> a, {DateTime? now}) {
-  final ends = _date(a['ends_at']);
+String? announcementRemaining(AnnouncementModel a, {DateTime? now}) {
+  final ends = a.endsAt;
   if (ends == null) return null;
   final today = now ?? DateTime.now();
   final days = DateTime(ends.year, ends.month, ends.day).difference(DateTime(today.year, today.month, today.day)).inDays;
@@ -62,7 +61,7 @@ String? announcementRemaining(Map<String, dynamic> a, {DateTime? now}) {
 /// بطاقة تعميم: أيقونة، العنوان، النص، متى نُشر، وشريط المدة المتبقية.
 class AnnouncementCard extends StatelessWidget {
   const AnnouncementCard(this.a, {super.key, this.maxLines = 4, this.expand = false});
-  final Map<String, dynamic> a;
+  final AnnouncementModel a;
   final int? maxLines;
 
   /// يملأ ارتفاع الحاوية (شرائح الرئيسية)
@@ -70,10 +69,10 @@ class AnnouncementCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final pinned = a['is_pinned'] == true;
+    final pinned = a.isPinned;
     final tone = pinned ? AppTone.warning : AppTone.brand;
-    final title = (a['title'] ?? 'إعلان إداري').toString();
-    final body = (a['content'] ?? a['body'] ?? '').toString();
+    final title = a.title;
+    final body = a.body;
     final progress = announcementProgress(a);
     final remaining = announcementRemaining(a);
 
@@ -100,7 +99,7 @@ class AnnouncementCard extends StatelessWidget {
                 children: [
                   Text(title, style: AppText.titleSm.copyWith(fontSize: 16), maxLines: 2, overflow: TextOverflow.ellipsis),
                   Text(
-                    '${pinned ? 'مثبّت · ' : ''}${Fmt.relative(_date(a['starts_at'] ?? a['created_at']))}',
+                    '${pinned ? 'مثبّت · ' : ''}${Fmt.relative(a.shownFrom)}',
                     style: AppText.caption.copyWith(color: pinned ? AppColors.warning : AppColors.textMuted),
                   ),
                 ],
@@ -162,7 +161,7 @@ class AnnouncementCard extends StatelessWidget {
 /// شرائح التعاميم في الرئيسية: تُسحب أفقياً، مع نقاط تبيّن الشريحة الحالية.
 class AnnouncementCarousel extends StatefulWidget {
   const AnnouncementCarousel({super.key, required this.items, this.onOpen});
-  final List<Map<String, dynamic>> items;
+  final List<AnnouncementModel> items;
   final VoidCallback? onOpen;
 
   @override
@@ -228,7 +227,7 @@ class _AnnouncementCarouselState extends State<AnnouncementCarousel> {
 /// صورة المجاز داخل حلقة ملوّنة مع شارة نوع الإجازة.
 class _LeaveAvatar extends StatelessWidget {
   const _LeaveAvatar(this.p, {this.size = 60, this.toneOverride, this.icon});
-  final Map<String, dynamic> p;
+  final PersonCardData p;
   final double size;
 
   /// للمتأخرين: لون وأيقونة مختلفة
@@ -237,9 +236,9 @@ class _LeaveAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hourly = p['is_hourly'] == true;
+    final hourly = p is OnLeavePerson && (p as OnLeavePerson).isHourly;
     final tone = toneOverride ?? (hourly ? AppTone.info : AppTone.accent);
-    final name = (p['full_name'] ?? 'موظف').toString();
+    final name = p.fullName;
     return SizedBox(
       width: size + 8,
       height: size + 8,
@@ -255,7 +254,7 @@ class _LeaveAvatar extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.all(2),
               decoration: const BoxDecoration(shape: BoxShape.circle, color: AppColors.surface1),
-              child: AppAvatar(name: name, url: p['avatar_url']?.toString(), size: size - 1, tone: tone),
+              child: AppAvatar(name: name, url: p.avatarUrl, size: size - 1, tone: tone),
             ),
           ),
           PositionedDirectional(
@@ -281,7 +280,7 @@ class _LeaveAvatar extends StatelessWidget {
 /// شريط أفقي بالمجازين الآن: الصورة، الاسم، الفرع، وحتى متى.
 class OnLeaveStrip extends StatelessWidget {
   const OnLeaveStrip({super.key, required this.people});
-  final List<Map<String, dynamic>> people;
+  final List<OnLeavePerson> people;
 
   @override
   Widget build(BuildContext context) {
@@ -300,12 +299,12 @@ class OnLeaveStrip extends StatelessWidget {
 
 class _OnLeaveCard extends StatelessWidget {
   const _OnLeaveCard(this.p);
-  final Map<String, dynamic> p;
+  final OnLeavePerson p;
 
   @override
   Widget build(BuildContext context) {
-    final name = (p['full_name'] ?? 'موظف').toString();
-    final hourly = p['is_hourly'] == true;
+    final name = p.fullName;
+    final hourly = p.isHourly;
     final tone = hourly ? AppTone.info : AppTone.accent;
     final back = onLeaveReturn(p);
     return Semantics(
@@ -328,14 +327,14 @@ class _OnLeaveCard extends StatelessWidget {
             _LeaveAvatar(p),
             const SizedBox(height: AppSpace.sm),
             Text(name, style: AppText.label, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center),
-            Text((p['branch_name'] ?? '—').toString(), style: AppText.caption, maxLines: 1, overflow: TextOverflow.ellipsis),
+            Text(p.branchLabel, style: AppText.caption, maxLines: 1, overflow: TextOverflow.ellipsis),
             const Spacer(),
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: AppSpace.sm, vertical: AppSpace.xs),
               decoration: BoxDecoration(color: tone.container, borderRadius: AppRadius.pill),
               child: Text(
-                hourly ? 'زمنية حتى ${Fmt.timeOfDay(p['end_hour']?.toString())}' : (back ?? onLeaveUntil(p)),
+                hourly ? 'زمنية حتى ${Fmt.timeOfDay(p.endHour)}' : (back ?? onLeaveUntil(p)),
                 style: AppText.caption.copyWith(color: tone.color, fontWeight: FontWeight.w700),
                 textAlign: TextAlign.center,
                 maxLines: 1,
@@ -352,18 +351,18 @@ class _OnLeaveCard extends StatelessWidget {
 /// سطر مجاز في صفحة التعاميم.
 class OnLeaveTile extends StatelessWidget {
   const OnLeaveTile(this.p, {super.key});
-  final Map<String, dynamic> p;
+  final OnLeavePerson p;
 
   @override
   Widget build(BuildContext context) {
-    final name = (p['full_name'] ?? 'موظف').toString();
-    final hourly = p['is_hourly'] == true;
+    final name = p.fullName;
+    final hourly = p.isHourly;
     final tone = hourly ? AppTone.info : AppTone.accent;
     final back = onLeaveReturn(p);
     return AppListTile(
       leading: _LeaveAvatar(p, size: 40),
       title: name,
-      subtitle: '${p['branch_name'] ?? '—'} · ${hourly ? 'زمنية ${onLeaveUntil(p)}' : onLeaveUntil(p)}',
+      subtitle: '${p.branchLabel} · ${hourly ? 'زمنية ${onLeaveUntil(p)}' : onLeaveUntil(p)}',
       trailing: back == null ? null : StatusBadge(back, tone: tone),
     );
   }
@@ -374,18 +373,18 @@ class OnLeaveTile extends StatelessWidget {
 // ---------------------------------------------------------------------------
 
 /// "40 دقيقة" / "1 س 15 د"
-String lateDuration(Map<String, dynamic> p, {bool short = false}) {
-  final mins = (p['late_minutes'] as num?)?.toInt() ?? 0;
+String lateDuration(LatePerson p, {bool short = false}) {
+  final mins = p.lateMinutes;
   if (mins >= 60) return '${mins ~/ 60} س ${mins % 60} د';
   return short ? '$mins د' : '$mins دقيقة';
 }
 
-String _punchTime(Map<String, dynamic> p) => Fmt.time(DateTime.tryParse(p['check_in_time']?.toString() ?? ''));
+String _punchTime(LatePerson p) => Fmt.time(p.checkInTime);
 
 /// شريط أفقي بالمتأخرين اليوم: الصورة، الاسم، الفرع، مدة التأخير ووقت البصمة.
 class LateStrip extends StatelessWidget {
   const LateStrip({super.key, required this.people});
-  final List<Map<String, dynamic>> people;
+  final List<LatePerson> people;
 
   @override
   Widget build(BuildContext context) {
@@ -404,12 +403,12 @@ class LateStrip extends StatelessWidget {
 
 class _LateCard extends StatelessWidget {
   const _LateCard(this.p);
-  final Map<String, dynamic> p;
+  final LatePerson p;
 
   @override
   Widget build(BuildContext context) {
     const tone = AppTone.warning;
-    final name = (p['full_name'] ?? 'موظف').toString();
+    final name = p.fullName;
     return Semantics(
       container: true,
       label: '$name متأخر ${lateDuration(p)}، البصمة ${_punchTime(p)}',
@@ -430,7 +429,7 @@ class _LateCard extends StatelessWidget {
             _LeaveAvatar(p, toneOverride: tone, icon: Icons.alarm_rounded),
             const SizedBox(height: AppSpace.sm),
             Text(name, style: AppText.label, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center),
-            Text((p['branch_name'] ?? '—').toString(), style: AppText.caption, maxLines: 1, overflow: TextOverflow.ellipsis),
+            Text(p.branchLabel, style: AppText.caption, maxLines: 1, overflow: TextOverflow.ellipsis),
             const Spacer(),
             Container(
               width: double.infinity,
@@ -456,15 +455,15 @@ class _LateCard extends StatelessWidget {
 /// سطر متأخر في صفحة التعاميم.
 class LateTile extends StatelessWidget {
   const LateTile(this.p, {super.key});
-  final Map<String, dynamic> p;
+  final LatePerson p;
 
   @override
   Widget build(BuildContext context) {
-    final name = (p['full_name'] ?? 'موظف').toString();
+    final name = p.fullName;
     return AppListTile(
       leading: _LeaveAvatar(p, size: 40, toneOverride: AppTone.warning, icon: Icons.alarm_rounded),
       title: name,
-      subtitle: '${p['branch_name'] ?? '—'} · البصمة ${_punchTime(p)}',
+      subtitle: '${p.branchLabel} · البصمة ${_punchTime(p)}',
       trailing: StatusBadge(lateDuration(p, short: true), tone: AppTone.warning),
     );
   }

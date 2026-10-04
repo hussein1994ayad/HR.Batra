@@ -5,6 +5,7 @@
 
 export '../utils/json_map.dart';
 export 'admin_models.dart';
+export 'announcement_model.dart';
 export 'attendance_model.dart';
 export 'branch_model.dart';
 export 'employee_model.dart';

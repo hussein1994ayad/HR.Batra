@@ -13,6 +13,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../core/models/models.dart';
 import '../../../core/routes/app_router.dart';
 import '../../../core/services/location_service.dart';
 import '../../../core/services/notification_service.dart';
@@ -40,9 +41,9 @@ class _HomeScreenState extends State<HomeScreen> {
   String _departmentName = 'القسم العام';
   String _avatarUrl = '';
   bool _isLoading = true;
-  List<Map<String, dynamic>> _announcements = [];
-  List<Map<String, dynamic>> _onLeave = [];
-  List<Map<String, dynamic>> _lateToday = [];
+  List<AnnouncementModel> _announcements = [];
+  List<OnLeavePerson> _onLeave = [];
+  List<LatePerson> _lateToday = [];
 
   /// اليوم عطلة رسمية (من الإعدادات) — الكارد يگول "اليوم عطلة" بدل "لم تسجّل بعد"
   bool _isHolidayToday = false;
@@ -206,7 +207,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
       setState(() {
         _workSchedule = schedData != null ? schedData as Map<String, dynamic> : null;
-        _announcements = List<Map<String, dynamic>>.from(announcementsData);
+        _announcements = rowsStrict(announcementsData, AnnouncementModel.fromMap);
         _todayAttendance = attendanceData != null ? attendanceData as Map<String, dynamic> : null;
         _unreadNotificationsCount = unreadRes.length;
       });
@@ -252,8 +253,8 @@ class _HomeScreenState extends State<HomeScreen> {
       final r = await _repo.fetchOnLeaveAndLateToday();
       if (mounted) {
         setState(() {
-          if (r[0] is List) _onLeave = List<Map<String, dynamic>>.from(r[0] as List);
-          if (r[1] is List) _lateToday = List<Map<String, dynamic>>.from(r[1] as List);
+          if (r[0] is List) _onLeave = rowsStrict(r[0], OnLeavePerson.fromMap);
+          if (r[1] is List) _lateToday = rowsStrict(r[1], LatePerson.fromMap);
         });
       }
     } catch (e) {
@@ -279,7 +280,7 @@ class _HomeScreenState extends State<HomeScreen> {
       attendance: _todayAttendance,
       schedule: _workSchedule,
       // مجاز الآن = ما نعرض "متأخر"
-      onLeave: _onLeave.any((p) => p['employee_id'] == SupabaseService.currentUser?.id),
+      onLeave: _onLeave.any((p) => p.employeeId == SupabaseService.currentUser?.id),
       isHoliday: _isHolidayToday,
       onAction: () => widget.onTabChange(1),
     );

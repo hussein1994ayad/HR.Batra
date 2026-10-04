@@ -3,6 +3,7 @@
 
 import 'package:flutter/material.dart';
 
+import '../../../../core/models/models.dart';
 import '../../../shared/ui/ui.dart';
 import '../../announcements/announcement_widgets.dart';
 
@@ -306,7 +307,7 @@ class HomeQuickActions extends StatelessWidget {
 class HomeAnnouncements extends StatelessWidget {
   const HomeAnnouncements({super.key, required this.loading, required this.items, this.onOpen});
   final bool loading;
-  final List<Map<String, dynamic>> items;
+  final List<AnnouncementModel> items;
   final VoidCallback? onOpen;
 
   @override

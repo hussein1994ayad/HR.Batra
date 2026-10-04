@@ -351,3 +351,13 @@
   الـ `work_month` الناقص يبقى بنفس البديل لكل مكان ('' بالقائمة، '0000-00' بالتفاصيل والـ PDF).
 - النتيجة: لقطات `10_payslips` و`10b_payslip_sheet` **مطابقة حرفياً**، واختبار الـ PDF يمر.
 - فحص: `dart analyze` ✓، `flutter test` 607 ✓.
+
+## Step 33 — النقطة 5 (4): التعاميم والمجازون والمتأخرون بالنماذج
+- **أُنشئ** `mobile/lib/core/models/announcement_model.dart`: `AnnouncementModel`، `OnLeavePerson`، `LatePerson` (+ `PersonCardData`
+  للصورة والاسم والفرع)، و`rowsStrict` — تحويل صارم يرمي مثل `List<Map>.from(x as List)` القديم حتى تبقى حالة الخطأ نفسها.
+- القيم الافتراضية نفسها: «إعلان إداري»، «موظف»، «—» للفرع؛ بداية العرض = `starts_at` وإلا `created_at`؛ و`to_date` (عمود DATE)
+  يُقرأ بدون تحويل منطقة زمنية كما كان.
+- `announcement_widgets.dart` (الكروت والشرائح والأسطر)، لوحة التعاميم، والرئيسية تستعمل الحقول بدل `p['...']`.
+- النتيجة: لقطات `03_home` و`11b_announcements_board` **مطابقة حرفياً**.
+- **أُضيف فحص** `mobile/test/unit/announcement_models_test.dart` (7 حالات).
+- فحص: `dart analyze` ✓، `flutter test` ✓.
