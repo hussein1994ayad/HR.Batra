@@ -23,7 +23,7 @@ import { confetti } from '@/lib/lazy';
 import { useQuery } from '@/lib/useQuery';
 import { toDateKey } from '@/lib/attendance';
 import { errorMessage, formatDateTime } from '@/lib/format';
-import type { LeaveRequest, RequestStatus } from '@/lib/types';
+import type { LeaveRequest, RequestStatus } from '@/lib/db-types';
 import { Avatar, Badge, Button, Card, EmptyState, PageHeader, SearchInput, SegmentedTabs, Toggle, cn } from '@/components/ui';
 import { openStorageUrl } from '@/lib/signed-urls';
 

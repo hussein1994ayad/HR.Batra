@@ -37,7 +37,7 @@ import { CreateLoanModal } from '@/features/loans/components/CreateLoanModal';
 import { baghdadToday } from '@/features/payroll/period';
 import { ReasonModal } from '@/components/ReasonModal';
 import type { Loan as DbLoan } from '@/lib/db-types';
-import type { Loan, LoanInstallment } from '@/lib/types';
+import type { Loan, LoanInstallment } from '@/lib/db-types';
 import { useConfirm } from '@/components/confirm';
 import {
   AmountInput,

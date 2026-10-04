@@ -25,7 +25,7 @@ import { confetti } from '@/lib/lazy';
 import { readCache, useQuery, writeCache } from '@/lib/useQuery';
 import { BAGHDAD_CENTER, distanceMeters, resolveMapUrl } from '@/lib/geo';
 import { errorMessage, formatClock, localDateStr } from '@/lib/format';
-import type { Attendance, Branch } from '@/lib/types';
+import type { Attendance, Branch } from '@/lib/db-types';
 import { useConfirm } from '@/components/confirm';
 import {
   Avatar,

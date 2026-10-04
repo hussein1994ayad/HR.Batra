@@ -32,7 +32,7 @@ import { useQuery } from '@/lib/useQuery';
 import { currentPayrollMonth, previewPayrollPeriod } from '@/features/payroll/period';
 import { DEFAULT_WORK_DAYS } from '@/lib/attendance';
 import { WEEKDAYS_AR, errorMessage, formatDateTime, formatTime12h } from '@/lib/format';
-import type { Announcement, Branch, Department, Employee, LeaveTypeOption, WorkSchedule } from '@/lib/types';
+import type { Announcement, Branch, Department, Employee, LeaveTypeOption, WorkSchedule } from '@/lib/db-types';
 import { useConfirm } from '@/components/confirm';
 import {
   Badge,

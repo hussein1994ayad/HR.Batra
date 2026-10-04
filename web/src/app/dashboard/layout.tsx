@@ -32,7 +32,7 @@ import {
 import type { User } from '@supabase/supabase-js';
 import { ConfirmProvider } from '@/components/confirm';
 import { RoleContext, canSeePath, isAdminOnlyPath, type DashboardRole } from '@/lib/role';
-import type { AppNotification } from '@/lib/types';
+import type { AppNotification } from '@/lib/db-types';
 import { useIsClient } from '@/lib/useIsClient';
 import { clearLocalCaches } from '@/lib/local-cache';
 

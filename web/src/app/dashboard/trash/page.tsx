@@ -8,7 +8,7 @@ import { confetti } from '@/lib/lazy';
 import { useQuery } from '@/lib/useQuery';
 import { daysUntil, errorMessage, formatBytes, formatDate } from '@/lib/format';
 import { bucketFor } from '@/lib/storage';
-import type { DeletedFile } from '@/lib/types';
+import type { DeletedFile } from '@/lib/db-types';
 import { useConfirm } from '@/components/confirm';
 import { Badge, Button, Card, EmptyState, PageHeader, StatTile } from '@/components/ui';
 

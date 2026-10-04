@@ -10,7 +10,7 @@ import {
   weekdayOf,
   workDaysFor,
 } from '@/lib/attendance';
-import type { WorkSchedule } from '@/lib/types';
+import type { WorkSchedule } from '@/lib/db-types';
 
 const sched = (over: Partial<WorkSchedule>): WorkSchedule => ({
   id: over.id ?? 'x',

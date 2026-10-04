@@ -1,4 +1,4 @@
-import type { WorkSchedule } from './types';
+import type { WorkSchedule } from './db-types';
 import { localDateStr } from './format';
 
 /** Iraqi default working week: Saturday (6) through Thursday (4). */

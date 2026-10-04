@@ -40,7 +40,7 @@ import type {
   MockGpsAttempt,
   StorageStat,
   WorkSchedule,
-} from '@/lib/types';
+} from '@/lib/db-types';
 import {
   Avatar,
   Badge,

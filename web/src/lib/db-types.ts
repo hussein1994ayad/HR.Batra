@@ -246,3 +246,67 @@ export interface LocationPoint {
   is_moving?: boolean | null;
   timestamp: string;
 }
+
+// ---- أنواع كانت في lib/types.ts فقط (نُقلت حرفياً عند توحيد الملفين) ----
+
+export type DeductionStatus = 'pending' | 'applied' | 'ignored';
+
+export interface Attendance {
+  id: string;
+  employee_id: string;
+  branch_id?: string | null;
+  work_date: string;
+  check_in_time?: string | null;
+  check_out_time?: string | null;
+  check_in_lat?: number | null;
+  check_in_lng?: number | null;
+  status: string;
+  deduction_status?: DeductionStatus | null;
+  deduction_reason?: string | null;
+  employees?: {
+    full_name: string;
+    branch_id?: string | null;
+    phone?: string | null;
+    email?: string | null;
+  } | null;
+}
+
+export type RequestStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';
+
+export interface DeviceRequest {
+  id: string;
+  employee_id: string;
+  device_id: string;
+  device_model?: string | null;
+  model?: string | null;
+  os_version?: string | null;
+  employees?: { full_name: string } | null;
+}
+
+export interface MockGpsAttempt {
+  id: string;
+  employee_id?: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  app_used?: string | null;
+  timestamp: string;
+  employees?: { full_name: string } | null;
+}
+
+export interface GeofenceViolation {
+  id: string;
+  violation_type: 'entry' | 'exit';
+  timestamp: string;
+  employees?: { full_name: string } | null;
+  geofence_zones?: { name: string } | null;
+}
+
+export interface LeaveTypeOption {
+  id: string;
+  name: string;
+}
+
+export interface StorageStat {
+  bucket_name: string;
+  total_size: number | string | null;
+}
