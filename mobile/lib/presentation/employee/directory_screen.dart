@@ -10,6 +10,7 @@ import '../../core/services/auth_service.dart';
 import '../../core/services/share_helper.dart';
 import '../../core/services/storage_links.dart';
 import '../../core/services/supabase_service.dart';
+import '../../core/utils/arabic_format.dart';
 import '../shared/ui/ui.dart';
 
 class EmployeeDirectoryScreen extends StatefulWidget {
@@ -43,17 +44,6 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
   }
 
   /// دالة تسوية الحروف العربية للبحث الفوري الدقيق
-  String _normalizeArabic(String text) {
-    return text
-        .replaceAll(RegExp(r'[أإآٱ]'), 'ا')
-        .replaceAll('ة', 'ه')
-        .replaceAll('ى', 'ي')
-        .replaceAll('ئ', 'ي')
-        .replaceAll('ؤ', 'و')
-        .replaceAll(RegExp(r'[\u064B-\u065F]'), '') // إزالة الحركات
-        .trim()
-        .toLowerCase();
-  }
 
   /// قائمة الزملاء من دالة get_employee_directory (أعمدة غير حساسة فقط).
   /// الـ View مقيّد بـ RLS ويعيد صف الموظف نفسه فقط.
@@ -84,7 +74,7 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
   /// تطبيق البحث والتصفية الفورية بمجرد كتابة أي حرف
   void _applyFilters() {
     final query = _searchController.text.trim();
-    final normalizedQuery = _normalizeArabic(query);
+    final normalizedQuery = normalizeArabicForSearch(query);
 
     setState(() {
       _filteredEmployees = _allEmployees.where((emp) {
@@ -96,9 +86,9 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
         // إذا كان البحث فارغاً، يظهر جميع الموظفين في الفرع
         if (normalizedQuery.isEmpty) return true;
 
-        final name = _normalizeArabic((emp['full_name'] ?? '') as String);
-        final dept = _normalizeArabic((emp['department_name'] ?? '') as String);
-        final branch = _normalizeArabic((emp['branch_name'] ?? '') as String);
+        final name = normalizeArabicForSearch((emp['full_name'] ?? '') as String);
+        final dept = normalizeArabicForSearch((emp['department_name'] ?? '') as String);
+        final branch = normalizeArabicForSearch((emp['branch_name'] ?? '') as String);
         final code = (emp['employee_code'] ?? '').toString().toLowerCase();
         final phone = (emp['phone'] ?? '').toString();
         final email = (emp['email'] ?? '').toString().toLowerCase();

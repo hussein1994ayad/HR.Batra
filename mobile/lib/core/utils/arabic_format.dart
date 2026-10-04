@@ -54,3 +54,15 @@ String formatThousands(num value) =>
 
 /// عكس [formatThousands]: يحذف النقاط والفواصل.
 double parseThousands(String text) => double.tryParse(text.replaceAll('.', '').replaceAll(',', '').trim()) ?? 0;
+
+/// نص عربي موحّد للبحث: يساوي أشكال الألف والتاء المربوطة والألف المقصورة والهمزات،
+/// ويحذف الحركات — حتى "أحمد" يطابق "احمد" و"فاطمة" يطابق "فاطمه" (نفس normalizeArabic في الويب).
+String normalizeArabicForSearch(String text) => text
+    .replaceAll(RegExp(r'[أإآٱ]'), 'ا')
+    .replaceAll('ة', 'ه')
+    .replaceAll('ى', 'ي')
+    .replaceAll('ئ', 'ي')
+    .replaceAll('ؤ', 'و')
+    .replaceAll(RegExp(r'[ً-ٟ]'), '') // الحركات
+    .trim()
+    .toLowerCase();

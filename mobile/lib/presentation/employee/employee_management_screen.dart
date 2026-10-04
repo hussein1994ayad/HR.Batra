@@ -12,6 +12,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../core/services/supabase_service.dart';
+import '../../core/utils/arabic_format.dart';
 import '../shared/ui/ui.dart';
 import 'employee_management/employee_documents.dart';
 import 'employee_management/employee_form_sheet.dart';
@@ -170,32 +171,23 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
 
   void _openProfile(Map<String, dynamic> emp) => showEmployeeProfileSheet(context, emp, onEditDocuments: () => _editDocuments(emp));
 
-  static String _normalizeArabic(String text) => text
-      .replaceAll(RegExp(r'[أإآٱ]'), 'ا')
-      .replaceAll('ة', 'ه')
-      .replaceAll('ى', 'ي')
-      .replaceAll('ئ', 'ي')
-      .replaceAll('ؤ', 'و')
-      .replaceAll(RegExp(r'[ً-ٟ]'), '')
-      .trim()
-      .toLowerCase();
 
   static String? _nested(Object? v) => v is Map ? v['name']?.toString() : null;
 
   List<Map<String, dynamic>> get _filtered {
-    final q = _normalizeArabic(_searchQuery);
+    final q = normalizeArabicForSearch(_searchQuery);
     return _employees.where((e) {
       final active = e['is_active'] != false;
       if (_statusFilter == 'active' && !active) return false;
       if (_statusFilter == 'inactive' && active) return false;
       if (q.isEmpty) return true;
       final fields = [
-        _normalizeArabic(e['full_name']?.toString() ?? ''),
+        normalizeArabicForSearch(e['full_name']?.toString() ?? ''),
         (e['email']?.toString() ?? '').toLowerCase(),
         (e['employee_code']?.toString() ?? '').toLowerCase(),
         (e['phone_number']?.toString() ?? e['phone']?.toString() ?? '').toLowerCase(),
-        _normalizeArabic(_nested(e['departments']) ?? ''),
-        _normalizeArabic(_nested(e['branches']) ?? ''),
+        normalizeArabicForSearch(_nested(e['departments']) ?? ''),
+        normalizeArabicForSearch(_nested(e['branches']) ?? ''),
       ];
       return fields.any((f) => f.contains(q));
     }).toList();
