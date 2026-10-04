@@ -12,7 +12,7 @@ import '../../presentation/admin/announcement_screen.dart';
 import '../../presentation/admin/attendance_report/attendance_report_screen.dart';
 import '../../presentation/admin/branches/branch_management_screen.dart';
 import '../../presentation/admin/branches/branch_schedule_screen.dart';
-import '../../presentation/admin/employee_management_screen.dart';
+import '../../presentation/admin/employee_management/employee_management_screen.dart';
 import '../../presentation/admin/live_tracking/admin_live_tracking_screen.dart';
 import '../../presentation/admin/storage_stats_screen.dart';
 import '../../presentation/admin/trash_screen.dart';

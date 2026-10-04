@@ -6,9 +6,9 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
 
-import '../../../core/services/supabase_service.dart';
 import '../../../core/utils/arabic_format.dart';
 import '../../../core/utils/input_formatters.dart';
+import '../../../data/repositories/employee_admin_repository.dart';
 import '../../shared/ui/ui.dart';
 import 'employee_documents.dart';
 
@@ -76,7 +76,7 @@ class _EmployeeFormState extends State<_EmployeeForm> {
       final uploadedDocs = _documents.isEmpty ? <String>[] : await uploadEmployeeDocuments(_documents, newEmpId);
       final empCode = _code.text.trim().isNotEmpty ? _code.text.trim() : 'EMP-${DateTime.now().millisecondsSinceEpoch % 10000}';
 
-      await SupabaseService.client.rpc<dynamic>('create_employee_secure', params: {
+      await EmployeeAdminRepository().createEmployee({
         'p_email': _email.text.trim(),
         'p_password': _password.text,
         'p_full_name': _name.text.trim(),

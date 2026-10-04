@@ -11,12 +11,14 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../../core/services/supabase_service.dart';
-import '../../core/utils/arabic_format.dart';
-import '../shared/ui/ui.dart';
-import 'employee_management/employee_documents.dart';
-import 'employee_management/employee_form_sheet.dart';
-import 'employee_management/employee_profile_sheet.dart';
+import '../../../core/services/supabase_service.dart';
+import '../../../core/utils/arabic_format.dart';
+import '../../../data/repositories/employee_admin_repository.dart';
+import '../../../data/repositories/role_repository.dart';
+import '../../shared/ui/ui.dart';
+import 'employee_documents.dart';
+import 'employee_form_sheet.dart';
+import 'employee_profile_sheet.dart';
 
 class EmployeeManagementScreen extends StatefulWidget {
   const EmployeeManagementScreen({super.key});
@@ -26,6 +28,7 @@ class EmployeeManagementScreen extends StatefulWidget {
 }
 
 class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
+  final EmployeeAdminRepository _repo = EmployeeAdminRepository();
   bool _isLoading = true;
   bool _hasError = false;
 
@@ -60,21 +63,18 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
     }
 
     try {
-      final employeeRes = await SupabaseService.client.from('employees').select('role').eq('id', user.id).maybeSingle();
+      final role = await RoleRepository().currentRole();
 
-      if (employeeRes == null || (employeeRes['role'] != 'admin' && employeeRes['role'] != 'manager')) {
+      if (role != 'admin' && role != 'manager') {
         if (mounted) Navigator.pop(context);
         return;
       }
 
-      final results = await Future.wait<dynamic>([
-        SupabaseService.client.from('employees').select('*, employee_devices(id, model), branches(name), departments(name)').order('full_name'),
-        SupabaseService.client.from('branches').select('id, name').order('name'),
-      ]);
+      final results = await _repo.fetchEmployeesAndBranches();
 
       if (mounted) {
         setState(() {
-          _isAdmin = employeeRes['role'] == 'admin';
+          _isAdmin = role == 'admin';
           _employees = List<Map<String, dynamic>>.from(results[0] as Iterable<dynamic>);
           _branches = List<Map<String, dynamic>>.from(results[1] as Iterable<dynamic>);
           _hasError = false;
@@ -112,10 +112,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
     }
     try {
       setState(() => _isLoading = true);
-      await SupabaseService.client.from('employees').update({
-        'is_active': !isActive,
-        if (lastDay != null) 'termination_date': '${lastDay.year}-${lastDay.month.toString().padLeft(2, '0')}-${lastDay.day.toString().padLeft(2, '0')}',
-      }).eq('id', emp['id'] as String);
+      await _repo.setActive(emp['id'] as String, active: !isActive, lastDay: lastDay);
       if (mounted) AppSnack.show(context, isActive ? 'عُطّل الحساب' : 'فُعّل الحساب', tone: isActive ? AppTone.warning : AppTone.success);
       unawaited(_loadEmployees());
     } catch (e) {
@@ -138,10 +135,8 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
     final employeeId = emp['id'] as String;
     try {
       setState(() => _isLoading = true);
-      // 1. مسح تسجيلات الجهاز القديمة
-      await SupabaseService.client.from('employee_devices').delete().eq('employee_id', employeeId);
-      // 2. تحديث قفل الموظف ليكون نشطاً للجهاز القادم
-      await SupabaseService.client.from('employees').update({'device_id_lock': 'force_lock_active'}).eq('id', employeeId);
+      // مسح تسجيلات الجهاز القديمة ثم قفل الحساب على الجهاز القادم
+      await _repo.unbindDevice(employeeId);
       if (mounted) AppSnack.success(context, 'فُكّ ربط الجهاز');
       unawaited(_loadEmployees());
     } catch (e) {

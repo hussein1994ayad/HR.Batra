@@ -6,28 +6,14 @@ import 'package:image_picker/image_picker.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
 
-import '../../../core/services/image_compression_service.dart';
 import '../../../core/services/share_helper.dart';
 import '../../../core/services/storage_links.dart';
-import '../../../core/services/supabase_service.dart';
+import '../../../data/repositories/employee_admin_repository.dart';
 import '../../shared/ui/ui.dart';
 
 /// يضغط الصور ويرفعها إلى bucket 'employee-documents' ويرجع روابطها.
-Future<List<String>> uploadEmployeeDocuments(List<File> files, String employeeId) async {
-  final uploadedUrls = <String>[];
-  for (final file in files) {
-    try {
-      // ضغط الصورة، أو الملف كما هو إذا لم يكن صورة (مثل PDF)
-      final processedFile = await ImageCompressionService.compressImage(file);
-      final fileName = '$employeeId/${DateTime.now().millisecondsSinceEpoch}_${file.path.split(Platform.pathSeparator).last}';
-      await SupabaseService.client.storage.from('employee-documents').upload(fileName, processedFile);
-      uploadedUrls.add(SupabaseService.client.storage.from('employee-documents').getPublicUrl(fileName));
-    } catch (e) {
-      debugPrint('Error compressing/uploading file: $e');
-    }
-  }
-  return uploadedUrls;
-}
+Future<List<String>> uploadEmployeeDocuments(List<File> files, String employeeId) =>
+    EmployeeAdminRepository().uploadDocuments(files, employeeId);
 
 /// ينزّل الملف مؤقتاً ويفتحه بالتطبيق المناسب.
 Future<void> downloadAndOpenDocument(BuildContext context, String url) async {
@@ -202,14 +188,14 @@ class _DocumentsEditorState extends State<_DocumentsEditor> {
         try {
           final match = RegExp(r'/employee-documents/(.+)').firstMatch(url);
           if (match != null) {
-            await SupabaseService.client.storage.from('employee-documents').remove([match.group(1)!]);
+            await EmployeeAdminRepository().removeDocumentObject(match.group(1)!);
           }
         } catch (e) {
           debugPrint('تعذر حذف المستند القديم من التخزين: $e');
         }
       }
       final newUrls = _new.isEmpty ? <String>[] : await uploadEmployeeDocuments(_new, widget.emp['id'] as String);
-      await SupabaseService.client.from('employees').update({'document_urls': [..._existing, ...newUrls]}).eq('id', widget.emp['id'] as Object);
+      await EmployeeAdminRepository().updateDocumentUrls(widget.emp['id'] as Object, [..._existing, ...newUrls]);
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
       if (mounted) {

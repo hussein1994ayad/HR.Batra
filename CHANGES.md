@@ -253,3 +253,12 @@
 - **أُنشئ** `branches/branches_logic.dart`: `mergeBranchSchedules` (دمج الفرع مع جدوله — كان داخل `_loadBranches`).
 - **أُضيف فحص** `mobile/test/unit/branches_logic_test.dart`.
 - فحص: `dart analyze` ✓، `flutter test` 561 ✓.
+
+## Step 23 — إدارة الموظفين (النقاط 3 و 4 و 8)
+- **نُقلت** `presentation/admin/employee_management_screen.dart` → `presentation/admin/employee_management/employee_management_screen.dart`
+  (صار بنفس مجلد أجزائه: الوثائق، نموذج الإضافة، ملف الموظف) + مسارات `app_router.dart` والاختبارات.
+- **أُنشئ** `mobile/lib/data/repositories/employee_admin_repository.dart`: الموظفون مع الأجهزة والأفرع (بالتوازي)، التفعيل/التعطيل
+  مع آخر يوم عمل، فك ربط الجهاز (نفس الخطوتين بنفس الترتيب)، `create_employee_secure`، ورفع/حذف وثائق الموظف وتحديث روابطها.
+- `uploadEmployeeDocuments` باقية بنفس الاسم وصارت تستدعي المستودع (نفس الضغط، نفس اسم الملف، نفس تخطي الملف الفاشل).
+- صلاحية الشاشة عبر `RoleRepository.currentRole()` (نفس الشرط، و`_isAdmin` من نفس القيمة).
+- فحص: `dart analyze` ✓، `flutter test` 561 ✓.
