@@ -1,6 +1,9 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+// صفحة الفروع والسياج الجغرافي: خريطة الفروع ونطاق البصمة، ومن بصم اليوم بكل فرع.
+// البيانات في features/geofences/api، والحسابات في features/geofences/logic.
+
+import React, { useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import toast from 'react-hot-toast';
 import {
@@ -13,20 +16,17 @@ import {
   Users,
   ExternalLink,
   Radius,
-  Link2,
-  Loader2,
-  CheckCircle2,
   Info,
   AlertTriangle,
-  Save,
 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
-import { confetti } from '@/lib/lazy';
-import { readCache, useQuery, writeCache } from '@/lib/useQuery';
-import { BAGHDAD_CENTER, distanceMeters, resolveMapUrl } from '@/lib/geo';
-import { errorMessage, formatClock, localDateStr } from '@/lib/format';
-import type { Attendance, Branch } from '@/lib/db-types';
+import { readCache, useQuery } from '@/lib/useQuery';
+import { BAGHDAD_CENTER } from '@/lib/geo';
+import { errorMessage, formatClock } from '@/lib/format';
+import type { Branch } from '@/lib/db-types';
 import { useConfirm } from '@/components/confirm';
+import { GEOFENCES_CACHE_KEY, deleteBranch as removeBranch, fetchGeofences, type GeofencesData } from '@/features/geofences/api';
+import { DEFAULT_RADIUS, attendeesForBranch, branchCircles, type BranchDraft } from '@/features/geofences/logic';
+import { BranchFormModal } from '@/features/geofences/components/BranchFormModal';
 import {
   Avatar,
   Badge,
@@ -34,16 +34,11 @@ import {
   Card,
   CardHeader,
   EmptyState,
-  Field,
   IconButton,
   InfoNote,
-  Input,
-  Modal,
-  ModalFooter,
   PageHeader,
   PageSkeleton,
   StatTile,
-  Textarea,
   cn,
 } from '@/components/ui';
 
@@ -52,41 +47,10 @@ const MapComponent = dynamic(() => import('@/components/MapComponent'), {
   loading: () => <div className="skeleton w-full h-full min-h-[420px] rounded-2xl" />,
 });
 
-interface GeofencesData {
-  branches: Branch[];
-  todayLogs: Attendance[];
-}
-
-const CACHE_KEY = 'batra_cache_geofences_v2';
-const DEFAULT_RADIUS = 150;
-
-async function fetchGeofences(): Promise<GeofencesData> {
-  const [branches, logs] = await Promise.all([
-    supabase.from('branches').select('*').order('created_at', { ascending: false }),
-    supabase
-      .from('attendance')
-      .select('*, employees!employee_id(full_name, phone, email, branch_id)')
-      .eq('work_date', localDateStr()),
-  ]);
-  if (branches.error) throw branches.error;
-  const data = { branches: (branches.data ?? []) as Branch[], todayLogs: (logs.data ?? []) as Attendance[] };
-  writeCache(CACHE_KEY, data);
-  return data;
-}
-
-interface BranchDraft {
-  id?: string;
-  name: string;
-  lat: number;
-  lng: number;
-  radius: number;
-  address: string;
-}
-
 export default function GeofencesPage() {
   const confirm = useConfirm();
   const [cached] = useState(() => {
-    const c = readCache<GeofencesData>(CACHE_KEY);
+    const c = readCache<GeofencesData>(GEOFENCES_CACHE_KEY);
     return c && Array.isArray(c.branches) ? c : undefined;
   });
   const query = useQuery('geofences', fetchGeofences, cached);
@@ -97,29 +61,12 @@ export default function GeofencesPage() {
   const branches = useMemo(() => query.data?.branches ?? [], [query.data]);
   const selected = branches.find((b) => b.id === selectedId) ?? null;
 
-  const circles = useMemo(
-    () =>
-      branches
-        .filter((b) => b.latitude && b.longitude)
-        .map((b) => ({ id: b.id, name: b.name, lat: Number(b.latitude), lng: Number(b.longitude), radius: Number(b.radius_meters) || DEFAULT_RADIUS })),
-    [branches],
-  );
+  const circles = useMemo(() => branchCircles(branches), [branches]);
 
-  const attendees = useMemo(() => {
-    if (!selected || !query.data) return [];
-    const bLat = Number(selected.latitude);
-    const bLng = Number(selected.longitude);
-    const radius = Number(selected.radius_meters) || DEFAULT_RADIUS;
-    return query.data.todayLogs
-      .map((log) => {
-        const hasCoords = !!log.check_in_lat && !!log.check_in_lng;
-        const distance = hasCoords ? distanceMeters(Number(log.check_in_lat), Number(log.check_in_lng), bLat, bLng) : null;
-        const belongs =
-          log.branch_id === selected.id || log.employees?.branch_id === selected.id || (distance !== null && distance <= radius);
-        return belongs ? { log, distance } : null;
-      })
-      .filter((x): x is { log: Attendance; distance: number | null } => x !== null);
-  }, [selected, query.data]);
+  const attendees = useMemo(
+    () => (!selected || !query.data ? [] : attendeesForBranch(selected, query.data.todayLogs)),
+    [selected, query.data],
+  );
 
   if (!query.data) {
     if (query.error) {
@@ -153,8 +100,7 @@ export default function GeofencesPage() {
     if (!ok) return;
     setDeleting(b.id);
     try {
-      const { error } = await supabase.from('branches').delete().eq('id', b.id);
-      if (error) throw error;
+      await removeBranch(b.id);
       query.mutate((d) => ({ ...d, branches: d.branches.filter((x) => x.id !== b.id) }));
       if (selectedId === b.id) setSelectedId(null);
       toast.success('تم حذف الفرع ونطاق البصمة الخاص به');
@@ -294,125 +240,5 @@ export default function GeofencesPage() {
         />
       )}
     </div>
-  );
-}
-
-function BranchFormModal({ draft, onClose, onSaved }: { draft: BranchDraft; onClose: () => void; onSaved: (id?: string) => void }) {
-  const [form, setForm] = useState(draft);
-  const [mapLink, setMapLink] = useState('');
-  const [resolving, setResolving] = useState(false);
-  const [resolved, setResolved] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const isEdit = !!draft.id;
-
-  // Resolve pasted Google Maps links / coordinates shortly after typing stops.
-  useEffect(() => {
-    const text = mapLink.trim();
-    if (!text) return;
-    let cancelled = false;
-    const timer = setTimeout(() => {
-      setResolving(true);
-      setResolved(false);
-      resolveMapUrl(text)
-        .then((coords) => {
-          if (cancelled) return;
-          if (coords) {
-            setForm((f) => ({ ...f, lat: coords.lat, lng: coords.lng }));
-            setResolved(true);
-          } else {
-            toast.error('تعذر استخراج الإحداثيات من الرابط');
-          }
-        })
-        .finally(() => !cancelled && setResolving(false));
-    }, 600);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [mapLink]);
-
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (form.radius <= 0) {
-      toast.error('يجب أن يكون نطاق البصمة أكبر من 0 متر');
-      return;
-    }
-    setSaving(true);
-    try {
-      const payload = { name: form.name, latitude: form.lat, longitude: form.lng, radius_meters: form.radius, address: form.address };
-      if (isEdit) {
-        const { error } = await supabase.from('branches').update(payload).eq('id', draft.id);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.from('branches').insert(payload);
-        if (error) throw error;
-      }
-      confetti({ particleCount: 80, spread: 60, colors: ['#2DD4BF', '#818CF8'] });
-      toast.success(isEdit ? 'تم تحديث بيانات الفرع' : 'تم إضافة الفرع ونطاق البصمة');
-      onSaved(draft.id);
-    } catch (err) {
-      toast.error(errorMessage(err));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <Modal title={isEdit ? 'تعديل الفرع' : 'إضافة فرع جديد'} subtitle="حدد الموقع ونطاق البصمة المسموح" icon={isEdit ? Pencil : Plus} tone="brand" onClose={onClose}>
-      <form onSubmit={submit} className="space-y-4">
-        <Field label="اسم الفرع">
-          <Input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="مثال: فرع المنصور" />
-        </Field>
-
-        <Field
-          label={
-            <span className="flex items-center justify-between">
-              <span>رابط Google Maps أو إحداثيات</span>
-              {resolving ? (
-                <span className="flex items-center gap-1 text-amber-300"><Loader2 className="w-3 h-3 animate-spin" /> جاري الاستخراج</span>
-              ) : resolved ? (
-                <span className="flex items-center gap-1 text-emerald-300"><CheckCircle2 className="w-3 h-3" /> تم التحديث</span>
-              ) : null}
-            </span>
-          }
-          hint="الصق رابط الموقع من خرائط Google وستُملأ الإحداثيات تلقائياً."
-        >
-          <div className="relative">
-            <Link2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" />
-            <Input value={mapLink} onChange={(e) => setMapLink(e.target.value)} placeholder="https://maps.app.goo.gl/... أو 33.3152, 44.3661" className="pr-9" dir="ltr" />
-          </div>
-        </Field>
-
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="خط العرض (Latitude)">
-            <Input type="number" step="any" required value={form.lat} onChange={(e) => setForm({ ...form, lat: Number(e.target.value) })} dir="ltr" className="text-left font-mono" />
-          </Field>
-          <Field label="خط الطول (Longitude)">
-            <Input type="number" step="any" required value={form.lng} onChange={(e) => setForm({ ...form, lng: Number(e.target.value) })} dir="ltr" className="text-left font-mono" />
-          </Field>
-        </div>
-
-        <Field label={`نطاق البصمة: ${form.radius} متر`}>
-          <div className="flex items-center gap-3">
-            <input
-              type="range"
-              min={20}
-              max={1000}
-              step={10}
-              value={form.radius}
-              onChange={(e) => setForm({ ...form, radius: Number(e.target.value) })}
-              className="flex-1"
-            />
-            <Input type="number" min={1} required value={form.radius} onChange={(e) => setForm({ ...form, radius: Number(e.target.value) })} className="w-24 text-left font-mono" dir="ltr" />
-          </div>
-        </Field>
-
-        <Field label="العنوان (اختياري)">
-          <Textarea rows={2} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} placeholder="مثال: بغداد، شارع المنصور، قرب مول المنصور" />
-        </Field>
-
-        <ModalFooter onCancel={onClose} loading={saving} submitLabel={isEdit ? 'حفظ التعديلات' : 'إضافة الفرع'} submitIcon={isEdit ? Save : Plus} />
-      </form>
-    </Modal>
   );
 }

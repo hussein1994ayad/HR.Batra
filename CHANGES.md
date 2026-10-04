@@ -106,3 +106,18 @@
   - `nextCutoffDay` صار `nextCutoffDate` في `features/loans/logic.ts`.
   - حُذفت تحويلات `as unknown as DbLoan` (بعد الخطوة 4 صار النوعان نفس النوع).
 - فحص: `tsc` ✓، `lint` ✓، `vitest` 92 ✓، `build` ✓، `e2e` 27 ✓ (منها اختبارات السلف: الاعتماد، الدفعة، التعديل).
+
+## Step 10 — صفحتا التخزين والفروع (النقطة 14)
+**التخزين** — `web/src/app/dashboard/storage/page.tsx`: من 539 إلى 34 سطر.
+- **أُنشئ** `web/src/features/storage/`: `api.ts` (`fetchStorageStats`, `emptyTrash`)، `logic.ts` (`TABLE_LABELS`، ألوان الجداول،
+  حدود الباقة المجانية `MAX_STORAGE_BYTES`/`MAX_DB_BYTES`، و`formatBytes` الخاص بالصفحة — موثّق اختلافه عن `lib/format`)،
+  `useStorageStats.ts` (الحالة والنسب)، و`components/` (`StorageSummary`, `TableSizesCard`, `BucketsCard`, `StorageStatusPanel`).
+- **إزالة تكرار:** `getBucketName` المحلي = `bucketFor` في `lib/storage.ts` (نفس الربط ونفس الافتراضي) → تُستعمل الموجودة.
+- بقيت نافذة التأكيد الأصلية للمتصفح (`confirm`) لإفراغ السلة كما هي (تغييرها يغيّر ما يراه المستخدم).
+
+**الفروع** — `web/src/app/dashboard/geofences/page.tsx`: من 418 إلى 244 سطر.
+- **أُنشئ** `web/src/features/geofences/`: `api.ts` (`fetchGeofences` + الكاش، `deleteBranch`، `saveBranch`)،
+  `logic.ts` (`DEFAULT_RADIUS`, `BranchDraft`, `branchCircles`, `attendeesForBranch` — قاعدة "من بصم بالفرع" موثّقة)،
+  و`components/BranchFormModal.tsx`.
+- **أُضيف فحص** `features/geofences/logic.test.ts`.
+- فحص: `tsc` ✓، `lint` ✓، `vitest` 94 ✓، `build` ✓، `e2e` 27 ✓.
