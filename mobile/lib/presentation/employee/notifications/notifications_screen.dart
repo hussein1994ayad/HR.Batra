@@ -5,9 +5,9 @@
 
 import 'package:flutter/material.dart';
 
-
-import '../../core/services/supabase_service.dart';
-import '../shared/ui/ui.dart';
+import '../../../core/services/supabase_service.dart';
+import '../../../data/repositories/notification_repository.dart';
+import '../../shared/ui/ui.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -17,6 +17,7 @@ class NotificationsScreen extends StatefulWidget {
 }
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
+  final NotificationRepository _repo = NotificationRepository();
   List<Map<String, dynamic>> _notifications = [];
   bool _isLoading = true;
   bool _hasError = false;
@@ -34,15 +35,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     if (user == null) return;
 
     try {
-      final List<dynamic> data = await SupabaseService.client
-          .from('notifications')
-          .select()
-          .eq('employee_id', user.id)
-          .order('created_at', ascending: false);
+      final data = await _repo.fetchMine(user.id);
 
       if (!mounted) return;
       setState(() {
-        _notifications = List<Map<String, dynamic>>.from(data);
+        _notifications = data;
         _hasError = false;
       });
 
@@ -52,9 +49,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           .toList();
 
       if (unreadIds.isNotEmpty) {
-        await SupabaseService.client
-            .from('notifications')
-            .update({'is_read': true}).inFilter('id', unreadIds);
+        await _repo.markRead(unreadIds);
       }
     } catch (e) {
       debugPrint('خطأ في تحميل الإشعارات: $e');

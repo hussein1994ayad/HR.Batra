@@ -214,3 +214,14 @@
 - `main_layout.dart`: مسار الاستيراد فقط.
 - **أُضيف فحص** `mobile/test/unit/settings_logic_test.dart`.
 - فحص: `dart analyze` ✓، `flutter test` 555 ✓.
+
+## Step 19 — الإشعارات، دليل الموظفين، لوحة التعاميم (النقاط 3 و 4 و 8)
+- **نُقلت** `notifications_screen.dart` → `employee/notifications/`، و`directory_screen.dart` → `employee/directory/`
+  (+ `app_router.dart` و`test/support/screens.dart` مسارات فقط).
+- **أُنشئ** `NotificationRepository` (`fetchMine`, `markRead`) و`DirectoryRepository` (`fetchDirectory` = `get_employee_directory`).
+- **أُنشئ** `directory/directory_logic.dart`: `directoryBranchOptions` و`filterDirectory` (نفس البحث العربي وفلتر الفرع حرفياً)؛
+  وحُذف تعليق يتيم بقي من الخطوة 3.
+- **أُنشئ** `AnnouncementRepository`: `fetchActive`, `fetchOnLeaveAndLateToday`, `fetchBoard` (الثلاثة بالتوازي كما كان).
+  `HomeRepository` صار يستدعيه بدل نسخة مكررة من نفس الاستعلامات (نفس الدوال ونفس `catchError` لدالة المتأخرين).
+- **أُضيف فحص** `mobile/test/unit/directory_logic_test.dart`.
+- فحص: `dart analyze` ✓، `flutter test` 559 ✓.

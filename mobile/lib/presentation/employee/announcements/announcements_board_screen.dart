@@ -7,7 +7,7 @@
 
 import 'package:flutter/material.dart';
 
-import '../../../core/services/supabase_service.dart';
+import '../../../data/repositories/announcement_repository.dart';
 import '../../shared/ui/ui.dart';
 import 'announcement_widgets.dart';
 
@@ -19,6 +19,7 @@ class AnnouncementsBoardScreen extends StatefulWidget {
 }
 
 class _AnnouncementsBoardScreenState extends State<AnnouncementsBoardScreen> {
+  final AnnouncementRepository _repo = AnnouncementRepository();
   bool _loading = true;
   bool _failed = false;
   List<Map<String, dynamic>> _announcements = [];
@@ -33,11 +34,7 @@ class _AnnouncementsBoardScreenState extends State<AnnouncementsBoardScreen> {
 
   Future<void> _load() async {
     try {
-      final r = await Future.wait<dynamic>([
-        SupabaseService.client.rpc<dynamic>('get_active_announcements', params: {'p_limit': 50}),
-        SupabaseService.client.rpc<dynamic>('get_on_leave_now'),
-        SupabaseService.client.rpc<dynamic>('get_late_today').catchError((Object _) => <dynamic>[]),
-      ]);
+      final r = await _repo.fetchBoard();
       if (!mounted) return;
       setState(() {
         _announcements = List<Map<String, dynamic>>.from(r[0] as List);

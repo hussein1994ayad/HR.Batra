@@ -14,9 +14,9 @@ import 'package:hr_pro/presentation/admin/trash_screen.dart';
 import 'package:hr_pro/presentation/auth/change_password_screen.dart';
 import 'package:hr_pro/presentation/auth/login_screen.dart';
 import 'package:hr_pro/presentation/employee/announcements/announcements_board_screen.dart';
-import 'package:hr_pro/presentation/employee/directory_screen.dart';
+import 'package:hr_pro/presentation/employee/directory/directory_screen.dart';
 import 'package:hr_pro/presentation/employee/main_layout.dart';
-import 'package:hr_pro/presentation/employee/notifications_screen.dart';
+import 'package:hr_pro/presentation/employee/notifications/notifications_screen.dart';
 import 'package:hr_pro/presentation/employee/payslips/payslips_screen.dart';
 
 class ScreenCase {

@@ -6,12 +6,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../core/services/auth_service.dart';
-import '../../core/services/share_helper.dart';
-import '../../core/services/storage_links.dart';
-import '../../core/services/supabase_service.dart';
-import '../../core/utils/arabic_format.dart';
-import '../shared/ui/ui.dart';
+import '../../../core/services/auth_service.dart';
+import '../../../core/services/share_helper.dart';
+import '../../../core/services/storage_links.dart';
+import '../../../data/repositories/directory_repository.dart';
+import '../../shared/ui/ui.dart';
+import 'directory_logic.dart';
 
 class EmployeeDirectoryScreen extends StatefulWidget {
   const EmployeeDirectoryScreen({super.key});
@@ -21,6 +21,7 @@ class EmployeeDirectoryScreen extends StatefulWidget {
 }
 
 class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
+  final DirectoryRepository _repo = DirectoryRepository();
   List<Map<String, dynamic>> _allEmployees = [];
   List<Map<String, dynamic>> _filteredEmployees = [];
   bool _isLoading = true;
@@ -43,24 +44,21 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
     super.dispose();
   }
 
-  /// دالة تسوية الحروف العربية للبحث الفوري الدقيق
-
   /// قائمة الزملاء من دالة get_employee_directory (أعمدة غير حساسة فقط).
   /// الـ View مقيّد بـ RLS ويعيد صف الموظف نفسه فقط.
   Future<void> _loadDirectory() async {
     setState(() => _isLoading = true);
 
     try {
-      final dynamic data = await SupabaseService.client.rpc<dynamic>('get_employee_directory');
+      final list = await _repo.fetchDirectory();
 
       if (!mounted) return;
-      final list = (data as List<dynamic>).map((e) => Map<String, dynamic>.from(e as Map)).toList();
-      final branches = {'all', ...list.map((e) => (e['branch_name'] ?? '').toString()).where((b) => b.isNotEmpty)};
+      final branches = directoryBranchOptions(list);
 
       setState(() {
         _allEmployees = list;
         _hasError = false;
-        _branchOptions = branches.toList();
+        _branchOptions = branches;
         _applyFilters();
       });
     } catch (e) {
@@ -73,33 +71,8 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
 
   /// تطبيق البحث والتصفية الفورية بمجرد كتابة أي حرف
   void _applyFilters() {
-    final query = _searchController.text.trim();
-    final normalizedQuery = normalizeArabicForSearch(query);
-
     setState(() {
-      _filteredEmployees = _allEmployees.where((emp) {
-        // تصفية الفرع
-        if (_selectedBranch != 'all' && (emp['branch_name'] ?? '') != _selectedBranch) {
-          return false;
-        }
-
-        // إذا كان البحث فارغاً، يظهر جميع الموظفين في الفرع
-        if (normalizedQuery.isEmpty) return true;
-
-        final name = normalizeArabicForSearch((emp['full_name'] ?? '') as String);
-        final dept = normalizeArabicForSearch((emp['department_name'] ?? '') as String);
-        final branch = normalizeArabicForSearch((emp['branch_name'] ?? '') as String);
-        final code = (emp['employee_code'] ?? '').toString().toLowerCase();
-        final phone = (emp['phone'] ?? '').toString();
-        final email = (emp['email'] ?? '').toString().toLowerCase();
-
-        return name.contains(normalizedQuery) ||
-            dept.contains(normalizedQuery) ||
-            branch.contains(normalizedQuery) ||
-            code.contains(normalizedQuery) ||
-            phone.contains(query) ||
-            email.contains(query.toLowerCase());
-      }).toList();
+      _filteredEmployees = filterDirectory(_allEmployees, query: _searchController.text.trim(), branch: _selectedBranch);
     });
   }
 

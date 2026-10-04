@@ -7,10 +7,14 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/services/supabase_service.dart';
+import 'announcement_repository.dart';
 
 class HomeRepository {
-  HomeRepository({SupabaseClient? client}) : _db = client ?? SupabaseService.client;
+  HomeRepository({SupabaseClient? client})
+      : _db = client ?? SupabaseService.client,
+        _announcements = AnnouncementRepository(client: client);
   final SupabaseClient _db;
+  final AnnouncementRepository _announcements;
 
   /// الاسم والقسم والفرع والصورة والدور من دليل الموظفين.
   Future<Map<String, dynamic>?> fetchProfile(String userId) {
@@ -22,9 +26,7 @@ class HomeRepository {
   }
 
   /// التعاميم السارية الآن لهذا الموظف فقط (مدة + جمهور مستهدف)
-  Future<dynamic> fetchActiveAnnouncements({int limit = 3}) {
-    return _db.rpc<dynamic>('get_active_announcements', params: {'p_limit': limit});
-  }
+  Future<dynamic> fetchActiveAnnouncements({int limit = 3}) => _announcements.fetchActive(limit: limit);
 
   Future<List<dynamic>> fetchUnreadNotificationIds(String userId) async {
     return await _db.from('notifications').select('id').eq('employee_id', userId).eq('is_read', false);
@@ -36,12 +38,7 @@ class HomeRepository {
   }
 
   /// [المجازون الآن، المتأخرون اليوم]. دالة المتأخرين قد لا تكون منشورة على السيرفر: فشلها = قائمة فارغة.
-  Future<List<dynamic>> fetchOnLeaveAndLateToday() {
-    return Future.wait<dynamic>([
-      _db.rpc<dynamic>('get_on_leave_now'),
-      _db.rpc<dynamic>('get_late_today').catchError((Object _) => <dynamic>[]),
-    ]);
-  }
+  Future<List<dynamic>> fetchOnLeaveAndLateToday() => _announcements.fetchOnLeaveAndLateToday();
 
   /// إشعار جديد للموظف (لزيادة العداد وإظهار إشعار داخل التطبيق).
   RealtimeChannel subscribeToNewNotifications(String userId, void Function(PostgresChangePayload payload) onInsert) {
