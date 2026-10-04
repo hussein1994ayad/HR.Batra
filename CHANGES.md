@@ -428,3 +428,11 @@
   `widgets/edit_times_sheet.dart` تأخذ `ReportTimeEdit` (record مُنمّط بدل Map). الشاشة 517 → 429.
 - **أُضيف فحص** `mobile/test/unit/edit_times_sheet_test.dart`.
 - النتيجة: كل اللقطات **مطابقة**؛ `flutter test` 618 ✓.
+
+## Step 42 — آخر تصغير: التعاميم وشاشة البصمة
+- `announcement_widgets.dart` (470 → 201): المجازون والمتأخرون انتقلوا حرفياً إلى `announcements/people_widgets.dart`
+  (يُصدَّر من الملف القديم، فالاستيرادات بقت نفسها).
+- شاشة البصمة (538 → 493): حساب المسافة عن الفرع كان مكرر 6 مرات بنفس المعادلة → `_distanceFromBranch(position)`
+  (يقرا موقع الفرع وقت الاستدعاء نفسه)؛ و`AttendancePanelSkeleton` و`AttendanceDayCompleteCard` صاروا widgets.
+- **ما بقى أي ملف بالتطبيق فوق 503 سطر** (أكبرها `location_service.dart` = نقطة دخول خدمة التتبع الخلفية).
+- النتيجة: كل اللقطات **مطابقة**؛ `flutter test` 618 ✓.

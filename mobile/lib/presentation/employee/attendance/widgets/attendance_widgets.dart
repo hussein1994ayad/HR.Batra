@@ -344,3 +344,41 @@ class PunchSuccessDialog extends StatelessWidget {
     );
   }
 }
+
+/// مكان اللوحة أثناء تحديد الموقع.
+class AttendancePanelSkeleton extends StatelessWidget {
+  const AttendancePanelSkeleton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Skeleton(height: 96, radius: AppRadius.md),
+        SizedBox(height: AppSpace.lg),
+        Skeleton(height: 56, radius: AppRadius.sm),
+        SizedBox(height: AppSpace.md),
+        Center(child: Text('نحدد موقعك...', style: AppText.caption)),
+      ],
+    );
+  }
+}
+
+/// بدل أزرار البصمة بعد تسجيل الحضور والانصراف.
+class AttendanceDayCompleteCard extends StatelessWidget {
+  const AttendanceDayCompleteCard({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const AppCard(
+      tone: AppTone.success,
+      child: Row(
+        children: [
+          ToneIcon(Icons.task_alt_rounded, tone: AppTone.success),
+          SizedBox(width: AppSpace.md),
+          Expanded(child: Text('سجّلت حضورك وانصرافك لهذا اليوم. يومك مكتمل.', style: AppText.subtitle)),
+        ],
+      ),
+    );
+  }
+}

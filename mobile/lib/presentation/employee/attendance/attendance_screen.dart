@@ -85,12 +85,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         setState(() {
           _currentPosition = position;
           _isLocating = false;
-          _distanceToBranch = Geolocator.distanceBetween(
-            position.latitude,
-            position.longitude,
-            _branchLat,
-            _branchLng,
-          );
+          _distanceToBranch = _distanceFromBranch(position);
           // رسالة "خارج النطاق" القديمة تختفي أول ما يدخل الموظف النطاق
           if (_inRange && (_errorMessage?.contains(attendanceOutOfRangeMessage) ?? false)) _errorMessage = null;
         });
@@ -118,12 +113,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         setState(() {
           _currentPosition = freshPos;
           _isLocating = false;
-          _distanceToBranch = Geolocator.distanceBetween(
-            freshPos.latitude,
-            freshPos.longitude,
-            _branchLat,
-            _branchLng,
-          );
+          _distanceToBranch = _distanceFromBranch(freshPos);
         });
 
         _mapController.move(LatLng(freshPos.latitude, freshPos.longitude), 16.0);
@@ -135,16 +125,14 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         setState(() {
           _currentPosition = lastPos;
           _isLocating = false;
-          _distanceToBranch = Geolocator.distanceBetween(
-            lastPos.latitude,
-            lastPos.longitude,
-            _branchLat,
-            _branchLng,
-          );
+          _distanceToBranch = _distanceFromBranch(lastPos);
         });
       }
     }
   }
+
+  /// المسافة بالمتر بين [p] وموقع الفرع.
+  double _distanceFromBranch(Position p) => Geolocator.distanceBetween(p.latitude, p.longitude, _branchLat, _branchLng);
 
   /// موقع الفرع ونطاقه (من الكاش أو من السيرفر).
   void _applyBranch(Map<String, dynamic> branch) {
@@ -203,12 +191,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         setState(() {
           _currentPosition = initialPosition;
           _isLocating = false;
-          _distanceToBranch = Geolocator.distanceBetween(
-            initialPosition.latitude,
-            initialPosition.longitude,
-            _branchLat,
-            _branchLng,
-          );
+          _distanceToBranch = _distanceFromBranch(initialPosition);
         });
 
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -285,12 +268,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           }
 
           if (_currentPosition != null) {
-            _distanceToBranch = Geolocator.distanceBetween(
-              _currentPosition!.latitude,
-              _currentPosition!.longitude,
-              _branchLat,
-              _branchLng,
-            );
+            _distanceToBranch = _distanceFromBranch(_currentPosition!);
           }
         });
       }
@@ -340,12 +318,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     final position = _currentPosition!;
 
     try {
-      final double distanceInMeters = Geolocator.distanceBetween(
-        position.latitude,
-        position.longitude,
-        _branchLat,
-        _branchLng,
-      );
+      final double distanceInMeters = _distanceFromBranch(position);
       final localError = localPunchError(
         punchType: punchType,
         accuracy: position.accuracy,
@@ -478,16 +451,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
   Widget _buildPanel() {
     if (_isLocating) {
-      return const Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Skeleton(height: 96, radius: AppRadius.md),
-          SizedBox(height: AppSpace.lg),
-          Skeleton(height: 56, radius: AppRadius.sm),
-          SizedBox(height: AppSpace.md),
-          Center(child: Text('نحدد موقعك...', style: AppText.caption)),
-        ],
-      );
+      return const AttendancePanelSkeleton();
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -506,16 +470,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         ],
         const SizedBox(height: AppSpace.lg),
         if (_hasCheckOut)
-          const AppCard(
-            tone: AppTone.success,
-            child: Row(
-              children: [
-                ToneIcon(Icons.task_alt_rounded, tone: AppTone.success),
-                SizedBox(width: AppSpace.md),
-                Expanded(child: Text('سجّلت حضورك وانصرافك لهذا اليوم. يومك مكتمل.', style: AppText.subtitle)),
-              ],
-            ),
-          )
+          const AttendanceDayCompleteCard()
         else
           AttendancePunchControls(
             selectedType: _selectedPunchType,
