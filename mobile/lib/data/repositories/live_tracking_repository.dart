@@ -5,14 +5,15 @@
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/models/models.dart';
 import '../../core/services/supabase_service.dart';
 
 class LiveTrackingRepository {
   LiveTrackingRepository({SupabaseClient? client}) : _db = client ?? SupabaseService.client;
   final SupabaseClient _db;
 
-  Future<List<Map<String, dynamic>>> fetchBranches() async {
-    return List<Map<String, dynamic>>.from(await _db.from('branches').select().order('name'));
+  Future<List<BranchModel>> fetchBranches() async {
+    return List<Map<String, dynamic>>.from(await _db.from('branches').select().order('name')).map(BranchModel.fromMap).toList();
   }
 
   Future<List<Map<String, dynamic>>> fetchActiveEmployees() async {

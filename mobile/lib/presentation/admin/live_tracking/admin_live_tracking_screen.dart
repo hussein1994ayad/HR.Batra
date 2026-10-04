@@ -17,6 +17,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/logic/tracking_rules.dart';
+import '../../../core/models/models.dart';
 import '../../../core/routes/app_router.dart';
 import '../../../core/services/supabase_service.dart';
 import '../../../core/utils/app_log.dart';
@@ -46,7 +47,7 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
   TrackStatus? _statusFilter;
   String _searchQuery = '';
 
-  List<Map<String, dynamic>> _branchesList = [];
+  List<BranchModel> _branchesList = [];
   List<Map<String, dynamic>> _employeesList = [];
   List<Map<String, dynamic>> _attendanceList = [];
   List<Map<String, dynamic>> _locationTrackingList = [];
@@ -124,7 +125,7 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
         _fetchDay(),
       ]);
 
-      _branchesList = List<Map<String, dynamic>>.from(results[0] as Iterable<dynamic>);
+      _branchesList = results[0] as List<BranchModel>;
       _employeesList = List<Map<String, dynamic>>.from(results[1] as Iterable<dynamic>);
       final day = results[2] as List<dynamic>;
       _attendanceList = List<Map<String, dynamic>>.from(day[0] as Iterable<dynamic>);
@@ -161,11 +162,11 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
 
   void _centerMapOnSelectedBranch() {
     if (_branchesList.isEmpty) return;
-    final b = _selectedBranchId == 'all' ? _branchesList.first : _branchesList.firstWhere((br) => br['id'] == _selectedBranchId, orElse: () => _branchesList.first);
-    final lat = b['latitude'];
-    final lng = b['longitude'];
-    if (lat is num && lng is num) {
-      _mapCenter = LatLng(lat.toDouble(), lng.toDouble());
+    final b = _selectedBranchId == 'all' ? _branchesList.first : _branchesList.firstWhere((br) => br.id == _selectedBranchId, orElse: () => _branchesList.first);
+    final lat = b.latitude;
+    final lng = b.longitude;
+    if (lat != null && lng != null) {
+      _mapCenter = LatLng(lat, lng);
       if (_selectedBranchId != 'all') {
         try {
           _mapController.move(_mapCenter, 14);
@@ -216,7 +217,7 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
       context,
       title: 'الفرع',
       current: _selectedBranchId,
-      options: [('all', 'كل الفروع'), for (final b in _branchesList) (b['id'] as String, b['name'].toString())],
+      options: [('all', 'كل الفروع'), for (final b in _branchesList) (b.id, '${b.rawName}')],
     );
     if (id == null) return;
     setState(() {
@@ -229,14 +230,14 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
   @override
   Widget build(BuildContext context) {
     final isToday = DateUtils.isSameDay(_selectedDate, DateTime.now());
-    final branchName = _branchesList.where((b) => b['id'] == _selectedBranchId).firstOrNull?['name']?.toString();
+    final branchName = _branchesList.where((b) => b.id == _selectedBranchId).firstOrNull?.rawName;
     final size = MediaQuery.sizeOf(context);
     final sidePanel = size.width >= AppBreakpoints.expanded || (size.width >= AppBreakpoints.medium && size.width > size.height);
 
     final map = LiveTrackingMap(
       controller: _mapController,
       center: _mapCenter,
-      branches: _branchesList.where((b) => _selectedBranchId == 'all' || b['id'] == _selectedBranchId).toList(),
+      branches: _branchesList.where((b) => _selectedBranchId == 'all' || b.id == _selectedBranchId).toList(),
       employees: _filtered,
       focused: _focused,
       showTrail: _showTrail,

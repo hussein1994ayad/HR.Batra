@@ -5,6 +5,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../../../core/logic/tracking_rules.dart';
+import '../../../../core/models/models.dart';
 import '../../../shared/ui/ui.dart';
 
 /// لون واسم حالة الموظف بالتتبع.
@@ -69,7 +70,7 @@ class LiveTrackingMap extends StatelessWidget {
 
   final MapController controller;
   final LatLng center;
-  final List<Map<String, dynamic>> branches;
+  final List<BranchModel> branches;
   final List<TrackedEmployee> employees;
   final TrackedEmployee? focused;
   final bool showTrail;
@@ -86,10 +87,10 @@ class LiveTrackingMap extends StatelessWidget {
           CircleLayer(
             circles: [
               for (final b in branches)
-                if (b['latitude'] is num && b['longitude'] is num)
+                if (b.hasLocation)
                   CircleMarker(
-                    point: LatLng((b['latitude'] as num).toDouble(), (b['longitude'] as num).toDouble()),
-                    radius: (b['radius_meters'] as num?)?.toDouble() ?? 100,
+                    point: LatLng(b.latitude!, b.longitude!),
+                    radius: b.radiusMeters ?? 100,
                     useRadiusInMeter: true,
                     color: AppColors.brand.withValues(alpha: 0.12),
                     borderColor: AppColors.brand,

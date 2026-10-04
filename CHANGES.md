@@ -401,3 +401,10 @@
 - `EmployeeAdminRepository.fetchEmployeesAndBranches` ترجع `(employees, branches)` مُنمّطة؛ الشاشة، البحث، نافذة الملف، نافذة
   الوثائق، ونموذج الإضافة (قائمة الأفرع `BranchModel`) تستعمل الحقول بنفس البدائل.
 - النتيجة: لقطات `15_employee_management` و`15b` و`15c` **مطابقة حرفياً**؛ `flutter test` 617 ✓.
+
+## Step 39 — النقطة 5 (10): أفرع التتبع الحي بالنموذج
+- `LiveTrackingRepository.fetchBranches` ترجع `List<BranchModel>`؛ توسيط الخريطة، دوائر النطاق (نفس شرط "الموقع رقم")،
+  ونافذة اختيار الفرع تستعمل الحقول (نطاق 100 م إذا ماكو).
+- الموظفون والبصمات والنقاط تبقى صفوفاً تمر لـ `buildTracking` (core/logic) — هي **مُحلّل** يحوّلها لـ `TrackedEmployee`
+  وله اختباراته (`tracking_rules_test`)، فهذا هو مكان التحويل الصحيح.
+- النتيجة: لقطة `14_admin_tracking` **مطابقة**.
