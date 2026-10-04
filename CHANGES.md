@@ -341,3 +341,13 @@
   نفس نتيجة مقارنة نص "YYYY-MM-DD"). كل الأعمدة المعروضة `NOT NULL` بالقاعدة، والمبالغ تُقرّب بـ `formatThousands`.
 - النتيجة: كارت السلفة واللقطات النصية **مطابقة حرفياً**.
 - فحص: `dart analyze` ✓، الاختبارات ✓.
+
+## Step 32 — النقطة 5 (3): كشوف الرواتب بالنماذج
+- **أُنشئ** `mobile/lib/core/models/salary_slip_model.dart`: `SalarySlipModel` (الكشف)، `PayslipDetail` (بند مكافأة/خصم + `toMap()`
+  للـ PDF بنفس المفاتيح)، `PayrollPreview` و`PayrollPreviewEvent` (مسير الشهر الحالي).
+- `PayslipsRepository`: `fetchSlipsAndProfile` ترجع `PayslipsData` (الكشوف + `PayslipOwner` لاسم الموظف وفرعه بنفس القاعدة:
+  الفرع '' إذا ماكو)، و`fetchPayrollPreview` ترجع `PayrollPreview?` (null إذا الدالة ما رجعت كائن — نفس الشرط).
+- `slipLinesToDetails` و`itemsIncludedInSlip` ترجع `PayslipDetail`؛ الشاشة و`CurrentPayrollCard` و`SlipDetailsView` تستعمل الحقول.
+  الـ `work_month` الناقص يبقى بنفس البديل لكل مكان ('' بالقائمة، '0000-00' بالتفاصيل والـ PDF).
+- النتيجة: لقطات `10_payslips` و`10b_payslip_sheet` **مطابقة حرفياً**، واختبار الـ PDF يمر.
+- فحص: `dart analyze` ✓، `flutter test` 607 ✓.

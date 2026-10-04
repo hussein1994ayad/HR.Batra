@@ -32,13 +32,13 @@ void main() {
   test('itemsIncludedInSlip keeps linked items and manual items recorded before the slip', () {
     final slipCreated = DateTime.utc(2026, 10, 1, 12);
     final rows = <Map<String, dynamic>>[
-      {'id': 'linked', 'salary_slip_id': 's1'},
-      {'id': 'other-slip', 'salary_slip_id': 's2'},
-      {'id': 'before', 'created_at': '2026-09-30T10:00:00Z'},
-      {'id': 'after', 'created_at': '2026-10-02T10:00:00Z'},
-      {'id': 'no-date'},
+      {'id': 'linked', 'reason': 'linked', 'salary_slip_id': 's1'},
+      {'id': 'other-slip', 'reason': 'other-slip', 'salary_slip_id': 's2'},
+      {'id': 'before', 'reason': 'before', 'created_at': '2026-09-30T10:00:00Z'},
+      {'id': 'after', 'reason': 'after', 'created_at': '2026-10-02T10:00:00Z'},
+      {'id': 'no-date', 'reason': 'no-date'},
     ];
-    final kept = itemsIncludedInSlip(rows, slipId: 's1', slipCreated: slipCreated).map((r) => r['id']).toList();
+    final kept = itemsIncludedInSlip(rows, slipId: 's1', slipCreated: slipCreated).map((r) => r.reason).toList();
     expect(kept, ['linked', 'before', 'no-date']);
     expect(itemsIncludedInSlip(rows, slipId: 's1', slipCreated: null).length, 4);
   });

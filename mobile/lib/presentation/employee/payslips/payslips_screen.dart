@@ -6,6 +6,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../core/models/models.dart';
 import '../../../core/services/pdf_export_service.dart';
 import '../../../core/services/supabase_service.dart';
 import '../../../core/utils/app_log.dart';
@@ -26,12 +27,12 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
   bool _isLoading = true;
   bool _hasError = false;
   String? _exportingSlipId;
-  Map<String, dynamic>? _employeeProfile;
-  List<Map<String, dynamic>> _slips = [];
+  PayslipOwner? _employeeProfile;
+  List<SalarySlipModel> _slips = [];
 
   /// مسير الشهر الحالي قبل الاعتماد (get_my_payroll_preview)
-  Map<String, dynamic>? _preview;
-  final Map<String, List<Map<String, dynamic>>> _slipsDetails = {}; // Record of slip_id -> list of details
+  PayrollPreview? _preview;
+  final Map<String, List<PayslipDetail>> _slipsDetails = {}; // slip_id -> بنود الكشف
   int _cycleStartDay = 25;
   int _cycleEndDay = 24;
 
@@ -69,10 +70,9 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
     try {
       final results = await _repo.fetchSlipsAndProfile(user.id);
 
-      Map<String, dynamic>? preview;
+      PayrollPreview? preview;
       try {
-        final p = await _repo.fetchPayrollPreview();
-        if (p is Map) preview = Map<String, dynamic>.from(p);
+        preview = await _repo.fetchPayrollPreview();
       } catch (e) {
         appLog('تعذّر تحميل مسير الشهر الحالي: $e');
       }
@@ -80,10 +80,10 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
       if (!mounted) return;
       setState(() {
         _preview = preview;
-        _slips = List<Map<String, dynamic>>.from(results[0] as List);
+        _slips = results.slips;
         _hasError = false;
-        if (results[1] != null) {
-          _employeeProfile = results[1] as Map<String, dynamic>;
+        if (results.owner != null) {
+          _employeeProfile = results.owner;
         }
       });
     } catch (e) {
@@ -99,17 +99,17 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
   // فقط البنود التي دخلت في هذا الكشف: المرتبطة به (salary_slip_id)، أو اليدوية
   // المسجلة قبل اعتماده. البنود المضافة بعد الاعتماد تخص كشفاً قادماً، وكانت تظهر
   // في الكشف بدون أن تُحسب في صافيه.
-  Future<void> _loadSlipDetails(Map<String, dynamic> slip) async {
-    final slipId = (slip['id'] ?? '').toString();
-    final workMonth = (slip['work_month'] ?? '0000-00').toString();
-    final slipCreated = DateTime.tryParse((slip['created_at'] ?? '').toString());
+  Future<void> _loadSlipDetails(SalarySlipModel slip) async {
+    final slipId = slip.id;
+    final workMonth = slip.workMonth ?? '0000-00';
+    final slipCreated = slip.createdAt;
     if (_slipsDetails.containsKey(slipId)) return; // محملة مسبقاً
 
     final user = SupabaseService.currentUser;
     if (user == null) return;
 
     // كشوف محرّك الرواتب: التفاصيل محفوظة مع الكشف نفسه سطراً سطراً
-    if (slip['computed_by_engine'] == true) {
+    if (slip.computedByEngine) {
       try {
         final lines = await _repo.fetchSlipLines(slipId);
         if (!mounted) return;
@@ -138,9 +138,9 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
 
 
   // تصدير كشف الراتب PDF ثم عرض خيارات الفتح والمشاركة
-  Future<void> _exportPayslipToPdf(Map<String, dynamic> slip) async {
-    final String slipId = (slip['id'] ?? '') as String;
-    final String workMonth = (slip['work_month'] ?? '0000-00') as String;
+  Future<void> _exportPayslipToPdf(SalarySlipModel slip) async {
+    final String slipId = slip.id;
+    final String workMonth = slip.workMonth ?? '0000-00';
     setState(() => _exportingSlipId = slipId);
 
     try {
@@ -148,23 +148,22 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
         await _loadSlipDetails(slip);
       }
 
-      final List<Map<String, dynamic>> details = _slipsDetails[slipId] ?? [];
-      final bonuses = details.where((d) => d['type'] == 'bonus').toList();
-      final deductions = details.where((d) => d['type'] == 'deduction').toList();
+      final List<PayslipDetail> details = _slipsDetails[slipId] ?? [];
+      final bonuses = [for (final d in details) if (d.type == 'bonus') d.toMap()];
+      final deductions = [for (final d in details) if (d.type == 'deduction') d.toMap()];
 
-      final String empName = (_employeeProfile?['full_name'] ?? 'الموظف') as String;
-      final branches = _employeeProfile?['branches'];
-      final String branchName = branches is Map ? (branches['name'] ?? '').toString() : '';
+      final String empName = _employeeProfile?.fullName ?? 'الموظف';
+      final String branchName = _employeeProfile?.branchName ?? '';
 
       final String filePath = await PdfExportService.generatePayslipPdf(
         employeeName: empName,
         branchName: branchName,
         workMonth: workMonth,
-        basicSalary: (slip['basic_salary'] as num?)?.toDouble() ?? 0.0,
-        allowances: (slip['allowances'] as num?)?.toDouble() ?? 0.0,
-        deductions: (slip['deductions'] as num?)?.toDouble() ?? 0.0,
-        loansDeduction: (slip['loans_deduction'] as num?)?.toDouble() ?? 0.0,
-        netSalary: (slip['net_salary'] as num?)?.toDouble() ?? 0.0,
+        basicSalary: slip.basicSalary,
+        allowances: slip.allowances,
+        deductions: slip.deductions,
+        loansDeduction: slip.loansDeduction,
+        netSalary: slip.netSalary,
         bonusesList: bonuses,
         deductionsList: deductions,
       );
@@ -212,11 +211,9 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
 
   static (int month, int year) _monthOf(String workMonth) => payslipMonthOf(workMonth);
 
-  static double _num(Object? v) => (v as num?)?.toDouble() ?? 0.0;
-
-  Future<void> _openSlip(Map<String, dynamic> slip) async {
-    final slipId = (slip['id'] ?? '').toString();
-    final workMonth = (slip['work_month'] ?? '0000-00').toString();
+  Future<void> _openSlip(SalarySlipModel slip) async {
+    final slipId = slip.id;
+    final workMonth = slip.workMonth ?? '0000-00';
     unawaited(_loadSlipDetails(slip));
     final (m, y) = _monthOf(workMonth);
     await showAppSheet<void>(
@@ -258,7 +255,7 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
       ];
     } else {
       final latest = _slips.first;
-      final (lm, ly) = _monthOf((latest['work_month'] ?? '').toString());
+      final (lm, ly) = _monthOf(latest.workMonth ?? '');
       final recent = _slips.take(6).toList().reversed.toList();
       body = [
         if (_preview != null) ...[CurrentPayrollCard(preview: _preview!), const SizedBox(height: AppSpace.lg)],
@@ -269,12 +266,12 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
             children: [
               Text('آخر راتب · ${Fmt.monthNumber(lm, ly)}', style: AppText.bodySm),
               const SizedBox(height: AppSpace.xs),
-              AnimatedNumber(_num(latest['net_salary']), format: Fmt.iqd, style: AppText.display.copyWith(color: AppColors.brand, fontSize: 30)),
+              AnimatedNumber(latest.netSalary, format: Fmt.iqd, style: AppText.display.copyWith(color: AppColors.brand, fontSize: 30)),
               if (recent.length > 1) ...[
                 const SizedBox(height: AppSpace.lg),
                 MiniBarChart(
-                  values: [for (final s in recent) _num(s['net_salary'])],
-                  labels: [for (final s in recent) 'شهر ${_monthOf((s['work_month'] ?? '').toString()).$1}'],
+                  values: [for (final s in recent) s.netSalary],
+                  labels: [for (final s in recent) 'شهر ${_monthOf(s.workMonth ?? '').$1}'],
                   height: 72,
                   semanticLabel: 'صافي الراتب لآخر ${recent.length} أشهر',
                 ),
@@ -297,9 +294,9 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
     );
   }
 
-  Widget _slipTile(Map<String, dynamic> slip) {
-    final (m, y) = _monthOf((slip['work_month'] ?? '').toString());
-    final deductions = _num(slip['deductions']) + _num(slip['loans_deduction']);
+  Widget _slipTile(SalarySlipModel slip) {
+    final (m, y) = _monthOf(slip.workMonth ?? '');
+    final deductions = slip.deductions + slip.loansDeduction;
     return AppCard(
       padding: EdgeInsets.zero,
       onTap: () => _openSlip(slip),
@@ -307,7 +304,7 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
         leading: const ToneIcon(Icons.receipt_long_rounded, tone: AppTone.success),
         title: 'راتب ${Fmt.monthNumber(m, y)}',
         subtitle: '${Fmt.months[m - 1]} · ${deductions > 0 ? 'استقطاعات ${Fmt.iqd(deductions)}' : 'بدون استقطاعات'}',
-        trailing: Text(Fmt.iqd(_num(slip['net_salary'])), style: AppText.subtitle.copyWith(color: AppColors.brand)),
+        trailing: Text(Fmt.iqd(slip.netSalary), style: AppText.subtitle.copyWith(color: AppColors.brand)),
         onTap: () => _openSlip(slip),
       ),
     );

@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hr_pro/core/models/models.dart';
 import 'package:hr_pro/core/theme/app_theme.dart';
 import 'package:hr_pro/presentation/employee/payslips/widgets/payslip_widgets.dart';
 import 'package:hr_pro/presentation/shared/ui/ui.dart';
@@ -10,18 +11,18 @@ void main() {
   testWidgets('current payroll card shows expected net and each movement with its status', (tester) async {
     await tester.pumpWidget(MaterialApp(
       theme: AppTheme.darkTheme,
-      home: const Directionality(
+      home: Directionality(
         textDirection: TextDirection.rtl,
         child: Scaffold(
           body: SingleChildScrollView(
-            child: CurrentPayrollCard(preview: {
+            child: CurrentPayrollCard(preview: PayrollPreview.fromMap(const {
               'period': {'period_month': '2026-10'},
               'summary': {'basic': 900000, 'earnings': 50000, 'deductions': 31250, 'loans': 100000, 'net': 818750},
               'events': [
                 {'event_date': '2026-10-05', 'event_type': 'absence', 'minutes': 0, 'amount': 30000, 'direction': -1, 'status': 'approved'},
                 {'event_date': '2026-10-06', 'event_type': 'late', 'minutes': 40, 'amount': 1250, 'direction': -1, 'status': 'pending'},
               ],
-            }),
+            })),
           ),
         ),
       ),

@@ -1,6 +1,8 @@
 // منطق كشوف الرواتب بدون واجهة: تواريخ الدورة المالية، أي البنود تخص الكشف،
 // وتحويل أسطر محرّك الرواتب لشكل التفاصيل القديم.
 
+import '../../../core/models/models.dart';
+
 /// تواريخ الدورة المالية لشهر مالي (YYYY-MM): من يوم البداية (قد يكون بالشهر السابق) ليوم النهاية،
 /// مقصوصة على آخر يوم بالشهر. نص غير صالح = تواريخ فارغة.
 Map<String, String> payslipCycleDates(String monthStr, {required int startDay, required int endDay}) {
@@ -47,13 +49,13 @@ Map<String, String> payslipCycleDates(String monthStr, {required int startDay, r
 
 /// فقط البنود التي دخلت في هذا الكشف: المرتبطة به (salary_slip_id)، أو اليدوية
 /// المسجلة قبل اعتماده. البنود المضافة بعد الاعتماد تخص كشفاً قادماً.
-List<Map<String, dynamic>> itemsIncludedInSlip(List<Map<String, dynamic>> rows, {required String slipId, required DateTime? slipCreated}) {
+List<PayslipDetail> itemsIncludedInSlip(List<Map<String, dynamic>> rows, {required String slipId, required DateTime? slipCreated}) {
   return rows.where((d) {
     final linked = d['salary_slip_id']?.toString();
     if (linked != null) return linked == slipId;
     final created = DateTime.tryParse((d['created_at'] ?? '').toString());
     return slipCreated == null || created == null || !created.isAfter(slipCreated);
-  }).toList();
+  }).map(PayslipDetail.fromMap).toList();
 }
 
 const _lineLabels = {
@@ -71,15 +73,15 @@ const _lineLabels = {
 /// أسطر كشف المحرّك (salary_slip_lines) بنفس شكل تفاصيل الكشف القديمة
 /// (reason / amount / issue_date / type) — أقساط السلف لها سطرها الخاص في الكشف،
 /// والإجازات المدفوعة بلا مبلغ لا تظهر.
-List<Map<String, dynamic>> slipLinesToDetails(List<Map<String, dynamic>> lines) => [
+List<PayslipDetail> slipLinesToDetails(List<Map<String, dynamic>> lines) => [
       for (final l in lines)
         if (l['line_type'] != 'loan' && ((l['amount'] as num?) ?? 0) > 0)
-          {
-            'reason': _lineReason(l),
-            'amount': l['amount'],
-            'issue_date': l['event_date'],
-            'type': ((l['direction'] as num?) ?? -1) > 0 ? 'bonus' : 'deduction',
-          },
+          PayslipDetail(
+            reason: _lineReason(l),
+            amount: (l['amount'] as num).toDouble(),
+            issueDate: l['event_date']?.toString(),
+            type: ((l['direction'] as num?) ?? -1) > 0 ? 'bonus' : 'deduction',
+          ),
     ];
 
 String _lineReason(Map<String, dynamic> l) {

@@ -5,7 +5,25 @@
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/models/models.dart';
 import '../../core/services/supabase_service.dart';
+
+/// اسم الموظف وفرعه لترويسة الـ PDF.
+class PayslipOwner {
+  const PayslipOwner({this.fullName, required this.branchName});
+  final String? fullName;
+
+  /// '' إذا الموظف بلا فرع.
+  final String branchName;
+}
+
+class PayslipsData {
+  const PayslipsData({required this.slips, this.owner});
+  final List<SalarySlipModel> slips;
+
+  /// null إذا ما رجع صف الموظف.
+  final PayslipOwner? owner;
+}
 
 class PayslipsRepository {
   PayslipsRepository({SupabaseClient? client}) : _db = client ?? SupabaseService.client;
@@ -16,16 +34,25 @@ class PayslipsRepository {
     return _db.from('system_settings').select('value').eq('key', 'payroll_policy').maybeSingle();
   }
 
-  /// [الكشوف المعتمدة (الأحدث أولاً)، اسم الموظف وفرعه] بالتوازي.
-  Future<List<dynamic>> fetchSlipsAndProfile(String userId) {
-    return Future.wait([
+  /// الكشوف المعتمدة (الأحدث أولاً) واسم الموظف وفرعه — بالتوازي.
+  Future<PayslipsData> fetchSlipsAndProfile(String userId) async {
+    final results = await Future.wait([
       _db.from('salary_slips').select().eq('employee_id', userId).eq('status', 'published').order('work_month', ascending: false),
       _db.from('employees').select('full_name, branch_id, branches(name)').eq('id', userId).maybeSingle(),
     ]);
+    final me = rowOf(results[1]);
+    final branches = me?['branches'];
+    return PayslipsData(
+      slips: rowsOf(results[0]).map(SalarySlipModel.fromMap).toList(),
+      owner: me == null ? null : PayslipOwner(fullName: me.str('full_name'), branchName: branches is Map ? (branches['name'] ?? '').toString() : ''),
+    );
   }
 
-  /// مسير الشهر الحالي قبل الاعتماد.
-  Future<dynamic> fetchPayrollPreview() => _db.rpc<dynamic>('get_my_payroll_preview');
+  /// مسير الشهر الحالي قبل الاعتماد؛ null إذا الدالة ما رجعت كائن.
+  Future<PayrollPreview?> fetchPayrollPreview() async {
+    final p = await _db.rpc<dynamic>('get_my_payroll_preview');
+    return p is Map ? PayrollPreview.fromMap(Map<String, dynamic>.from(p)) : null;
+  }
 
   /// أسطر كشف محرّك الرواتب حسب التاريخ.
   Future<List<Map<String, dynamic>>> fetchSlipLines(String slipId) async {
