@@ -4,6 +4,24 @@
 
 import '../utils/json_map.dart';
 
+/// أسماء أنواع حركات الرواتب (payroll_events.event_type) — قائمة واحدة للتطبيق، نفس EVENT_LABELS بالويب
+/// (web/src/features/payroll/calc.ts). نوع جديد؟ انظر BUSINESS_RULES.md «إضافة نوع حركة جديد».
+const Map<String, String> kPayrollEventLabels = {
+  'absence': 'غياب',
+  'late': 'تأخير',
+  'early_leave': 'خروج مبكر',
+  'missing_punch': 'بصمة ناقصة',
+  'unpaid_leave': 'إجازة بدون راتب',
+  'paid_leave': 'إجازة مدفوعة',
+  'overtime': 'ساعات إضافية',
+  'manual_deduction': 'خصم',
+  'bonus': 'مكافأة',
+  'allowance': 'مخصصات',
+  'advance': 'سلفة',
+  'adjustment': 'تسوية',
+  'other': 'أخرى',
+};
+
 class SalarySlipModel {
   final String id;
 

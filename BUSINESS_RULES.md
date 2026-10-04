@@ -64,7 +64,7 @@
 1. قيد `payroll_events.event_type` (migration جديد) + `sync_payroll_day` أو مصدر الحركة.
 2. أسماء الأنواع بالسيرفر: `_payroll_settle` (`v_labels`).
 3. الويب: `EVENT_LABELS` (و`DECIDABLE` إذا يحتاج قرار) في `web/src/features/payroll/calc.ts`.
-4. التطبيق: `_lineLabels` في `mobile/lib/presentation/employee/payslips/payslips_logic.dart` و`_labels` في `mobile/lib/presentation/employee/payslips/widgets/payslip_widgets.dart`.
+4. التطبيق: `kPayrollEventLabels` في `mobile/lib/core/models/salary_slip_model.dart` (قائمة واحدة لكل التطبيق).
 5. اختبار بـ `supabase/tests/test_payroll_engine.mjs`.
 
 ## قرارات تقنية غير واضحة

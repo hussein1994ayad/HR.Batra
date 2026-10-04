@@ -11,19 +11,6 @@ class CurrentPayrollCard extends StatelessWidget {
   const CurrentPayrollCard({super.key, required this.preview});
   final PayrollPreview preview;
 
-  static const _labels = {
-    'absence': 'غياب',
-    'late': 'تأخير',
-    'early_leave': 'خروج مبكر',
-    'missing_punch': 'بصمة ناقصة',
-    'unpaid_leave': 'إجازة بدون راتب',
-    'paid_leave': 'إجازة مدفوعة',
-    'overtime': 'ساعات إضافية',
-    'manual_deduction': 'خصم',
-    'bonus': 'مكافأة',
-    'adjustment': 'تسوية',
-  };
-
   static String _status(Object? s) => switch (s) {
         'pending' => 'بانتظار القرار',
         'ignored' => 'معفى',
@@ -72,7 +59,7 @@ class CurrentPayrollCard extends StatelessWidget {
             const SizedBox(height: AppSpace.xs),
             for (final e in events)
               KeyValueRow(
-                '${_labels[e.eventType] ?? e.eventType}'
+                '${kPayrollEventLabels[e.eventType] ?? e.eventType}'
                 '${e.minutes > 0 ? ' ${e.minutes.round()} د' : ''}'
                 ' · ${Fmt.date(DateTime.tryParse(e.eventDate ?? ''))} · ${_status(e.status)}',
                 e.amount <= 0 ? '—' : '${e.direction > 0 ? '+' : '-'}${Fmt.iqd(e.amount)}',

@@ -58,18 +58,6 @@ List<PayslipDetail> itemsIncludedInSlip(List<Map<String, dynamic>> rows, {requir
   }).map(PayslipDetail.fromMap).toList();
 }
 
-const _lineLabels = {
-  'absence': 'غياب',
-  'late': 'تأخير',
-  'early_leave': 'خروج مبكر',
-  'unpaid_leave': 'إجازة بدون راتب',
-  'overtime': 'ساعات إضافية',
-  'manual_deduction': 'خصم',
-  'bonus': 'مكافأة',
-  'allowance': 'مخصصات',
-  'adjustment': 'تسوية',
-};
-
 /// أسطر كشف المحرّك (salary_slip_lines) بنفس شكل تفاصيل الكشف القديمة
 /// (reason / amount / issue_date / type) — أقساط السلف لها سطرها الخاص في الكشف،
 /// والإجازات المدفوعة بلا مبلغ لا تظهر.
@@ -86,7 +74,7 @@ List<PayslipDetail> slipLinesToDetails(List<Map<String, dynamic>> lines) => [
 
 String _lineReason(Map<String, dynamic> l) {
   final type = (l['line_type'] ?? '').toString();
-  final label = _lineLabels[type] ?? 'بند';
+  final label = kPayrollEventLabels[type] ?? 'بند';
   final minutes = ((l['minutes'] as num?) ?? 0).round();
   final notes = (l['notes'] ?? '').toString().trim();
   final base = type == 'bonus' || type == 'manual_deduction' || type == 'adjustment'
