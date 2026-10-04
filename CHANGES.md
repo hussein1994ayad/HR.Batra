@@ -467,3 +467,13 @@
 - **19.9** تعليق على `buildDailyReport`: التقرير للعرض فقط ومصدر الخصم هو `payroll_events`.
 - `DEVELOPER_GUIDE.md`: مجلد `supabase/schema/`.
 - لا تغيير بالسلوك ولا بالقاعدة.
+
+## Step 45 — 19.15: تسجيل أشياء اللوحة اليدوية بـ migration
+- **أُنشئ** `supabase/migrations/20261005000000_capture_dashboard_objects.sql`: أعمدة `geofence_zones` الأربعة (`latitude`,
+  `longitude`, `radius_meters`, `polygon_coordinates` — كانت موجودة بالقاعدة الحية بس مو بالملفات)، والدوال
+  `sync_geofence_coordinates` و`sync_geofences_to_branches` و`invoke_push_notification` **بنفس تعريفها الحي حرفياً**، وthe triggers
+  الثلاثة (تنعمل بس إذا ما موجودة).
+- على القاعدة الحية **ما يغيّر شي**: جُرّب داخل `BEGIN … ROLLBACK` على القاعدة الحية ونجح، والـ triggers بقت 3 بدون تكرار.
+  اختبارات قاعدة البيانات (PGlite) تمر ويا الملف الجديد.
+- `rls_auto_enable` ما انضاف: ميزة من منصة Supabase نفسها.
+- ⚠️ **يحتاج من المستخدم:** `npx.cmd supabase db push`.

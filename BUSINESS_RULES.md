@@ -79,12 +79,13 @@
 - **البيانات بالشاشات تبقى `Map<String, dynamic>` حالياً (النقطة 5):** النماذج الموجودة (`NotificationModel`، `LoanModel`…)
   قيمها الافتراضية تختلف عن اللي تعرضه الشاشات (مثلاً عنوان الإشعار الفارغ = «تنبيه» بالشاشة و`''` بالنموذج)، فالتحويل
   مو آلي ويغيّر العرض. يصير لاحقاً شاشة شاشة مع اختبار يثبت نفس العرض قبل/بعد.
-- **أشياء بالقاعدة الحية ما موجودة بأي migration** (انعملت يدوياً من لوحة Supabase؛ إذا انبنت قاعدة جديدة من الـ migrations
-  ما راح تكون موجودة):
+- **أشياء انعملت يدوياً من لوحة Supabase** وصارت مسجّلة بـ `supabase/migrations/20261005000000_capture_dashboard_objects.sql`
+  (بنفس تعريفها الحي، حتى قاعدة جديدة من الـ migrations تطلع مطابقة):
   - `geofence_zones` ← الـ triggers `trg_sync_geofences_to_branches` و`trg_sync_geofence_coordinates`: **رسم منطقة بالويب ينشئ
     أو يعدّل أو يحذف فرعاً بنفس المعرّف** بجدول `branches` (القيم الافتراضية: بغداد، نطاق 150 م).
   - `notifications` ← `on_notification_insert` → `invoke_push_notification()`: كل إشعار ينكتب يرسل push عبر Edge Function.
-  - `rls_auto_enable`: event trigger يفعّل RLS تلقائياً على أي جدول جديد بـ `public`.
+  - `rls_auto_enable` (event trigger `ensure_rls`): ميزة من منصة Supabase تفعّل RLS تلقائياً على أي جدول جديد — ما مسجّلة
+    بملف لأن إنشاءها يحتاج صلاحيات المنصة.
   تعريفاتهم الحالية بـ `supabase/schema/current_functions.sql`.
 - **تقرير الحضور بالتطبيق للعرض فقط** (`mobile/lib/core/logic/attendance_report.dart`): يصنّف "متأخر/خروج مبكر" بقاعدته
   (ما يطرح وقت الإجازة الزمنية مثل السيرفر)، فممكن يطلع "متأخر" بيوم ما انخصم بيه. مصدر الحقيقة للخصم هو `payroll_events`.
