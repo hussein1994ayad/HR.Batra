@@ -3,9 +3,9 @@
 
 import 'package:flutter/material.dart';
 
-import '../../core/services/supabase_service.dart';
-import '../../core/utils/arabic_format.dart';
-import '../shared/ui/ui.dart';
+import '../../../../core/services/supabase_service.dart';
+import '../../../../data/repositories/attendance_repository.dart';
+import '../../../shared/ui/ui.dart';
 
 class AttendanceHistoryCard extends StatefulWidget {
   const AttendanceHistoryCard({super.key, this.days = 30});
@@ -33,14 +33,8 @@ class _AttendanceHistoryCardState extends State<AttendanceHistoryCard> {
     if (user == null) return;
     final today = DateTime.now();
     try {
-      final data = await SupabaseService.client
-          .from('attendance')
-          .select('work_date, check_in_time, check_out_time, status')
-          .eq('employee_id', user.id)
-          .gte('work_date', isoDate(today.subtract(Duration(days: widget.days))))
-          .lt('work_date', isoDate(today))
-          .order('work_date', ascending: false);
-      if (mounted) setState(() => _rows = List<Map<String, dynamic>>.from(data));
+      final rows = await AttendanceRepository().fetchRecentHistory(user.id, today: today, days: widget.days);
+      if (mounted) setState(() => _rows = rows);
     } catch (e) {
       debugPrint('تعذّر تحميل سجل الدوام: $e');
       if (mounted) setState(() => _failed = true);

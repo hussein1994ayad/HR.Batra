@@ -158,3 +158,14 @@
   `_AdminEntry→HomeAdminEntry`, `_QuickAction(s)→HomeQuickAction(s)`, `_Announcements→HomeAnnouncements` (+ `super.key`).
 - `main_layout.dart`: مسار الاستيراد فقط.
 - فحص: `dart analyze` ✓، `flutter test` 523 ✓.
+
+## Step 14 — شاشة البصمة (النقاط 3 و 4 و 8)
+- **نُقلت** `presentation/employee/attendance_screen.dart` → `presentation/employee/attendance/attendance_screen.dart` (773 → 670 سطر)،
+  و`attendance_history_card.dart` → `presentation/employee/attendance/widgets/attendance_history_card.dart`.
+- **أُنشئ** `mobile/lib/data/repositories/attendance_repository.dart`: فرع الموظف + دوام اليوم + سجل آخر الأيام — نفس الاستعلامات حرفياً.
+  البصمة نفسها ما تغيّرت (تبقى عبر `AttendanceSyncService`).
+- **أُنشئ** `attendance/widgets/attendance_widgets.dart`: `AttendanceBranchMap` (من `_buildMap`)، `AttendanceLocationCard`
+  (من `_buildLocationCard`)، `AttendanceTodayCard` (من `_buildTodayCard`) — نفس العناصر ونفس النصوص. اللوحة ومنطق البصمة بقيت بالشاشة.
+- `main_layout.dart`: مسار الاستيراد فقط.
+- **أُضيف فحص** `mobile/test/unit/attendance_widgets_test.dart` (حالات كارت الموقع وكارت اليوم).
+- فحص: `dart analyze` ✓، `flutter test` 528 ✓.

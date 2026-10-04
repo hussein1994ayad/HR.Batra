@@ -10,13 +10,15 @@ import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 
-import '../../core/services/attendance_sync_service.dart';
-import '../../core/services/location_service.dart';
-import '../../core/services/precise_location.dart';
-import '../../core/services/schedule_service.dart';
-import '../../core/services/supabase_service.dart';
-import '../shared/ui/ui.dart';
-import 'attendance_history_card.dart';
+import '../../../core/services/attendance_sync_service.dart';
+import '../../../core/services/location_service.dart';
+import '../../../core/services/precise_location.dart';
+import '../../../core/services/schedule_service.dart';
+import '../../../core/services/supabase_service.dart';
+import '../../../data/repositories/attendance_repository.dart';
+import '../../shared/ui/ui.dart';
+import 'widgets/attendance_history_card.dart';
+import 'widgets/attendance_widgets.dart';
 
 class AttendanceScreen extends StatefulWidget {
   const AttendanceScreen({super.key});
@@ -45,6 +47,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   Map<String, dynamic>? _workSchedule;
 
   final MapController _mapController = MapController();
+  final AttendanceRepository _repo = AttendanceRepository();
   StreamSubscription<Position>? _positionStreamSubscription;
 
   @override
@@ -225,17 +228,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         }
 
         final List<Future<dynamic>> parallelQueries = [
-          SupabaseService.client
-              .from('employees')
-              .select('branch_id, department_id, branches(id, name, latitude, longitude, radius_meters)')
-              .eq('id', user.id)
-              .maybeSingle(),
-          SupabaseService.client
-              .from('attendance')
-              .select()
-              .eq('employee_id', user.id)
-              .eq('work_date', todayStr)
-              .maybeSingle(),
+          _repo.fetchEmployeeBranch(user.id),
+          _repo.fetchTodayAttendance(user.id, todayStr),
         ];
 
         final results = await Future.wait(parallelQueries);
@@ -484,7 +478,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     return early > 0 ? 'خروج قبل نهاية الدوام بـ ${Fmt.minutesLabel(early)}' : null;
   }
 
-  bool get _hasCheckIn => _todayAttendance?['check_in_time'] != null;
   bool get _hasCheckOut => _todayAttendance?['check_out_time'] != null;
   bool get _inRange => _distanceToBranch != null && _distanceToBranch! <= _branchRadius;
 
@@ -494,7 +487,16 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     final landscapeWide = size.width >= AppBreakpoints.medium && size.width > size.height;
     final map = ClipRRect(
       borderRadius: landscapeWide ? AppRadius.card : BorderRadius.zero,
-      child: RepaintBoundary(child: _buildMap()),
+      child: RepaintBoundary(
+        child: AttendanceBranchMap(
+          mapController: _mapController,
+          branchLat: _branchLat,
+          branchLng: _branchLng,
+          branchRadius: _branchRadius,
+          branchName: _branchName,
+          currentPosition: _currentPosition,
+        ),
+      ),
     );
     final panel = _buildPanel();
 
@@ -541,61 +543,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     );
   }
 
-  Widget _buildMap() {
-    return FlutterMap(
-      mapController: _mapController,
-      options: MapOptions(initialCenter: LatLng(_branchLat, _branchLng), initialZoom: 15.0, backgroundColor: AppColors.surface1),
-      children: [
-        appMapTiles(),
-        CircleLayer(
-          circles: [
-            CircleMarker(
-              point: LatLng(_branchLat, _branchLng),
-              color: AppColors.brand.withValues(alpha: 0.14),
-              borderStrokeWidth: 2,
-              borderColor: AppColors.brand,
-              useRadiusInMeter: true,
-              radius: _branchRadius,
-            ),
-          ],
-        ),
-        MarkerLayer(
-          markers: [
-            Marker(
-              point: LatLng(_branchLat, _branchLng),
-              width: 44,
-              height: 44,
-              child: Semantics(
-                label: 'موقع $_branchName',
-                child: Container(
-                  decoration: BoxDecoration(color: AppColors.brand, shape: BoxShape.circle, border: Border.all(color: AppColors.bg, width: 3)),
-                  child: const Icon(Icons.business_rounded, color: AppColors.onBrand, size: 20),
-                ),
-              ),
-            ),
-            if (_currentPosition != null)
-              Marker(
-                point: LatLng(_currentPosition!.latitude, _currentPosition!.longitude),
-                width: 28,
-                height: 28,
-                child: Semantics(
-                  label: 'موقعك الحالي',
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: AppColors.info,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: AppColors.textPrimary, width: 3),
-                      boxShadow: AppElevation.low,
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ],
-    );
-  }
-
   Widget _buildPanel() {
     if (_isLocating) {
       return const Column(
@@ -612,7 +559,14 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _buildLocationCard(),
+        AttendanceLocationCard(
+          branchName: _branchName,
+          branchRadius: _branchRadius,
+          currentPosition: _currentPosition,
+          distanceToBranch: _distanceToBranch,
+          inRange: _inRange,
+          mockDetected: _mockDetected,
+        ),
         if (_errorMessage != null) ...[
           const SizedBox(height: AppSpace.md),
           AppCard(
@@ -693,7 +647,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           ),
         ],
         const SizedBox(height: AppSpace.lg),
-        _buildTodayCard(),
+        AttendanceTodayCard(todayAttendance: _todayAttendance, workSchedule: _workSchedule),
         const SizedBox(height: AppSpace.lg),
         const AttendanceHistoryCard(),
         const SizedBox(height: AppSpace.lg),
@@ -711,70 +665,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           ],
         ),
       ],
-    );
-  }
-
-  Widget _buildLocationCard() {
-    final tone = _mockDetected
-        ? AppTone.danger
-        : _currentPosition == null
-            ? AppTone.neutral
-            : _inRange
-                ? AppTone.success
-                : AppTone.warning;
-    final label = _mockDetected
-        ? 'موقع مزيّف'
-        : _currentPosition == null
-            ? 'بلا موقع'
-            : _inRange
-                ? 'داخل النطاق'
-                : 'خارج النطاق';
-    final distanceText = _distanceToBranch == null
-        ? 'بانتظار إشارة GPS'
-        : _inRange
-            ? 'تبعد ${_distanceToBranch!.round()} م عن الفرع'
-            : 'باقي ${(_distanceToBranch! - _branchRadius).round()} م للدخول بالنطاق';
-    return AppCard(
-      child: Row(
-        children: [
-          ToneIcon(_inRange ? Icons.where_to_vote_rounded : Icons.location_searching_rounded, tone: tone, size: 48),
-          const SizedBox(width: AppSpace.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(_branchName, style: AppText.subtitle, maxLines: 1, overflow: TextOverflow.ellipsis),
-                Text(distanceText, style: AppText.bodySm),
-                if (_currentPosition != null)
-                  Text('دقة GPS: ${_currentPosition!.accuracy.round()} م · النطاق ${_branchRadius.round()} م', style: AppText.caption),
-              ],
-            ),
-          ),
-          const SizedBox(width: AppSpace.sm),
-          StatusBadge(label, tone: tone, dot: true),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTodayCard() {
-    DateTime? parse(Object? v) => v == null ? null : DateTime.tryParse(v.toString())?.toLocal();
-    return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text('اليوم · ${Fmt.dateWithDay(DateTime.now())}', style: AppText.label),
-          const SizedBox(height: AppSpace.sm),
-          KeyValueRow('الحضور', _hasCheckIn ? Fmt.time(parse(_todayAttendance!['check_in_time'])) : '--:--', icon: Icons.login_rounded),
-          KeyValueRow('الانصراف', _hasCheckOut ? Fmt.time(parse(_todayAttendance!['check_out_time'])) : '--:--', icon: Icons.logout_rounded),
-          if (_workSchedule != null)
-            KeyValueRow(
-              'الدوام المعتمد',
-              '${Fmt.timeOfDay(_workSchedule!['check_in_time']?.toString())} - ${Fmt.timeOfDay(_workSchedule!['check_out_time']?.toString())}',
-              icon: Icons.schedule_rounded,
-            ),
-        ],
-      ),
     );
   }
 }
