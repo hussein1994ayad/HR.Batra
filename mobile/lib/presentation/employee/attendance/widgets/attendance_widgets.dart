@@ -6,6 +6,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../../../../core/services/precise_location.dart';
 import '../../../shared/ui/ui.dart';
 
 /// خريطة الفرع: دائرة النطاق + علامة الفرع + موقع الموظف الحالي.
@@ -176,6 +177,170 @@ class AttendanceTodayCard extends StatelessWidget {
             ),
         ],
       ),
+    );
+  }
+}
+
+/// رسالة الخطأ تحت كارت الموقع، مع "إعادة المحاولة" و"فتح الإعدادات" إذا الموقع الدقيق مرفوض.
+class AttendanceErrorCard extends StatelessWidget {
+  const AttendanceErrorCard({super.key, required this.message, required this.preciseDenied, required this.onRetry});
+
+  final String message;
+  final bool preciseDenied;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      tone: AppTone.danger,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.error_outline_rounded, color: AppColors.danger),
+              const SizedBox(width: AppSpace.md),
+              Expanded(child: Text(message.trim(), style: AppText.bodySm.copyWith(color: AppColors.textPrimary))),
+            ],
+          ),
+          const SizedBox(height: AppSpace.md),
+          Wrap(
+            alignment: WrapAlignment.end,
+            spacing: AppSpace.sm,
+            runSpacing: AppSpace.sm,
+            children: [
+              if (preciseDenied)
+                const AppButton.secondary(label: 'فتح الإعدادات', icon: Icons.settings_rounded, size: AppButtonSize.small, onPressed: PreciseLocation.openSettings),
+              AppButton.secondary(label: 'إعادة المحاولة', icon: Icons.refresh_rounded, size: AppButtonSize.small, onPressed: onRetry),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// اختيار حضور/انصراف + زر البصمة + سطر الحالة تحته.
+class AttendancePunchControls extends StatelessWidget {
+  const AttendancePunchControls({
+    super.key,
+    required this.selectedType,
+    required this.onTypeChanged,
+    required this.submitting,
+    required this.mockDetected,
+    required this.hasPosition,
+    required this.inRange,
+    required this.onSubmit,
+  });
+
+  final String selectedType;
+  final ValueChanged<String> onTypeChanged;
+  final bool submitting;
+  final bool mockDetected;
+  final bool hasPosition;
+  final bool inRange;
+  final VoidCallback onSubmit;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SegmentedButton<String>(
+          segments: const [
+            ButtonSegment(value: 'check_in', label: Text('حضور'), icon: Icon(Icons.login_rounded)),
+            ButtonSegment(value: 'check_out', label: Text('انصراف'), icon: Icon(Icons.logout_rounded)),
+          ],
+          selected: {selectedType},
+          showSelectedIcon: false,
+          onSelectionChanged: (s) {
+            AppHaptics.select();
+            onTypeChanged(s.first);
+          },
+        ),
+        const SizedBox(height: AppSpace.md),
+        AppButton(
+          label: selectedType == 'check_out' ? 'بصمة الانصراف' : 'بصمة الحضور',
+          icon: Icons.fingerprint_rounded,
+          variant: selectedType == 'check_out' ? AppButtonVariant.warning : AppButtonVariant.primary,
+          size: AppButtonSize.large,
+          expand: true,
+          loading: submitting,
+          haptic: false,
+          onPressed: mockDetected || !hasPosition ? null : onSubmit,
+        ),
+        const SizedBox(height: AppSpace.sm),
+        Text(
+          mockDetected
+              ? 'البصمة موقوفة لأن الجهاز يستعمل موقعاً مزيّفاً.'
+              : !hasPosition
+                  ? 'ننتظر تحديد موقعك حتى تقدر تبصم.'
+                  : inRange
+                  ? 'أنت داخل نطاق الفرع، تقدر تبصم الآن.'
+                  : 'اقترب من الفرع حتى تدخل ضمن النطاق المسموح.',
+          style: AppText.caption.copyWith(color: mockDetected ? AppColors.danger : null),
+          textAlign: TextAlign.center,
+        ),
+      ],
+    );
+  }
+}
+
+/// ملاحظة الخصوصية أسفل الشاشة.
+class AttendancePrivacyNote extends StatelessWidget {
+  const AttendancePrivacyNote({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(Icons.privacy_tip_outlined, size: 16, color: AppColors.textMuted),
+        SizedBox(width: AppSpace.sm),
+        Expanded(
+          child: Text(
+            'نستعمل موقعك فقط لتأكيد وجودك في الفرع أثناء ساعات الدوام الرسمية.',
+            style: AppText.caption,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// رسالة نجاح البصمة (أو حفظها بالجهاز بدون إنترنت).
+class PunchSuccessDialog extends StatelessWidget {
+  const PunchSuccessDialog({super.key, required this.isCheckIn, required this.isSynced, required this.note});
+
+  final bool isCheckIn;
+  final bool isSynced;
+
+  /// تنبيه التأخير/الخروج المبكر، أو null.
+  final String? note;
+
+  @override
+  Widget build(BuildContext context) {
+    final tone = isSynced ? AppTone.success : AppTone.warning;
+    return AlertDialog(
+      contentPadding: const EdgeInsets.fromLTRB(AppSpace.xxl, AppSpace.xxl, AppSpace.xxl, AppSpace.lg),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ToneIcon(isSynced ? Icons.check_rounded : Icons.cloud_off_rounded, tone: tone, size: 72),
+          const SizedBox(height: AppSpace.xl),
+          Text(isCheckIn ? 'تم تسجيل حضورك' : 'تم تسجيل انصرافك', style: AppText.title, textAlign: TextAlign.center),
+          const SizedBox(height: AppSpace.sm),
+          Text(
+            isSynced
+                ? '${Fmt.time(DateTime.now())} — ${note ?? (isCheckIn ? 'دوام موفق' : 'شكراً على يومك')}'
+                : 'انقطع الإنترنت، فحفظنا البصمة بالجهاز وسنرسلها تلقائياً عند عودة الاتصال.',
+            style: AppText.bodySm,
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+      actions: [AppButton(label: 'تم', expand: true, onPressed: () => Navigator.of(context).pop())],
     );
   }
 }

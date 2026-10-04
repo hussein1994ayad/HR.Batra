@@ -303,3 +303,13 @@
 - بهذا **ما بقى أي استيراد لـ `@/lib/supabase` داخل `web/src/app` أو `web/src/components`.**
 - **أُضيف فحص** `features/leaves/logic.test.ts` و`features/auth/api.test.ts`.
 - فحص: `tsc` ✓، `lint` ✓، `vitest` 100 ✓، `build` ✓، Playwright 27 ✓.
+
+## Step 28 — شاشة البصمة: فصل المنطق والعرض (إكمال النقطة 4)
+- **أُنشئ** `attendance/attendance_logic.dart` (بدون واجهة): `scheduleMinutesOf`, `punchNote` (التأخير بعد السماحية / الخروج المبكر)،
+  `mergeTodayOfflinePunches` (دمج بصمات اليوم المحفوظة بالجهاز فوق سجل السيرفر)، `nextPunchType`، و`localPunchError`
+  (دقة GPS ← النطاق ← البصمة المكررة، بنفس الترتيب ونفس الرسائل). نفس ترتيب العمليات (قراءة الطابور قبل قراءة سجل اليوم).
+- تكرار تعبئة موقع الفرع (من الكاش ومن السيرفر) صار دالة واحدة `_applyBranch` بنفس ترتيب الحقول.
+- **أُضيفت** للـ widgets: `AttendanceErrorCard`, `AttendancePunchControls`, `AttendancePrivacyNote`, `PunchSuccessDialog` — نفس العناصر والنصوص.
+- **منطق البصمة نفسه لم يتغير**: الإرسال عبر `AttendanceSyncService.punch`، تشغيل/إيقاف التتبع، ورسائل السيرفر كما هي.
+- الشاشة 671 → 538 سطر. **أُضيف فحص** `mobile/test/unit/attendance_logic_test.dart` (13 حالة).
+- فحص: `dart analyze` ✓، `flutter test` 578 ✓.

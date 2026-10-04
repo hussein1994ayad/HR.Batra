@@ -18,6 +18,7 @@ import '../../../core/services/supabase_service.dart';
 import '../../../core/utils/app_log.dart';
 import '../../../data/repositories/attendance_repository.dart';
 import '../../shared/ui/ui.dart';
+import 'attendance_logic.dart';
 import 'widgets/attendance_history_card.dart';
 import 'widgets/attendance_widgets.dart';
 
@@ -91,7 +92,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             _branchLng,
           );
           // رسالة "خارج النطاق" القديمة تختفي أول ما يدخل الموظف النطاق
-          if (_inRange && (_errorMessage?.contains(_outOfRangeMessage) ?? false)) _errorMessage = null;
+          if (_inRange && (_errorMessage?.contains(attendanceOutOfRangeMessage) ?? false)) _errorMessage = null;
         });
       },
       onError: (dynamic e) {
@@ -145,6 +146,15 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     }
   }
 
+  /// موقع الفرع ونطاقه (من الكاش أو من السيرفر).
+  void _applyBranch(Map<String, dynamic> branch) {
+    _branchId = branch['id'] as String?;
+    _branchName = (branch['name'] ?? 'فرع الشركة') as String;
+    _branchLat = (branch['latitude'] as num).toDouble();
+    _branchLng = (branch['longitude'] as num).toDouble();
+    _branchRadius = (branch['radius_meters'] as num).toDouble();
+  }
+
   // تهيئة وتحديد موقع الموظف والفرع المخصص له بسرعة فائقة (Dual-phase Fast Init)
   Future<void> _initLocationAndBranch() async {
     setState(() {
@@ -161,11 +171,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       final cached = await AttendanceSyncService.getCachedData();
       if (cached != null && cached['branch'] != null) {
         final branch = Map<String, dynamic>.from(cached['branch'] as Map);
-        _branchId = branch['id'] as String?;
-        _branchName = (branch['name'] ?? 'فرع الشركة') as String;
-        _branchLat = (branch['latitude'] as num).toDouble();
-        _branchLng = (branch['longitude'] as num).toDouble();
-        _branchRadius = (branch['radius_meters'] as num).toDouble();
+        _applyBranch(branch);
         _workSchedule = cached['schedule'] as Map<String, dynamic>?;
       }
 
@@ -239,11 +245,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
         if (empData != null && empData['branches'] != null) {
           final branch = Map<String, dynamic>.from(empData['branches'] as Map);
-          _branchId = branch['id'] as String?;
-          _branchName = (branch['name'] ?? 'فرع الشركة') as String;
-          _branchLat = (branch['latitude'] as num).toDouble();
-          _branchLng = (branch['longitude'] as num).toDouble();
-          _branchRadius = (branch['radius_meters'] as num).toDouble();
+          _applyBranch(branch);
 
           final schedData = await ScheduleService.fetchEffectiveSchedule();
 
@@ -264,39 +266,19 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
       // 6. دمج البصمات المحلية المعلقة في طابور التزامن
       final offlinePunches = await AttendanceSyncService.getOfflinePunchesQueue();
-      final me = SupabaseService.currentUser?.id;
-      final todayOfflinePunches = offlinePunches.where((p) {
-        if (p['user_id'] != me) return false;
-        final time = DateTime.tryParse(p['time'] as String? ?? '')?.toLocal();
-        return time != null && time.toIso8601String().startsWith(todayStr);
-      }).toList();
-
-      final Map<String, dynamic> combinedAttendance = _todayAttendance != null 
-          ? Map<String, dynamic>.from(_todayAttendance!) 
-          : {};
-
-      for (final punch in todayOfflinePunches) {
-        if (punch['type'] == 'check_in') {
-          combinedAttendance['check_in_time'] = punch['time'];
-          combinedAttendance['check_in_lat'] = punch['latitude'];
-          combinedAttendance['check_in_lng'] = punch['longitude'];
-        } else if (punch['type'] == 'check_out') {
-          combinedAttendance['check_out_time'] = punch['time'];
-          combinedAttendance['check_out_lat'] = punch['latitude'];
-          combinedAttendance['check_out_lng'] = punch['longitude'];
-        }
-      }
+      final combinedAttendance = mergeTodayOfflinePunches(
+        serverToday: _todayAttendance,
+        offlineQueue: offlinePunches,
+        userId: SupabaseService.currentUser?.id,
+        todayStr: todayStr,
+      );
 
       if (mounted) {
         setState(() {
           if (syncWarning != null) _errorMessage = syncWarning;
           if (combinedAttendance.isNotEmpty) {
             _todayAttendance = combinedAttendance;
-            if (combinedAttendance['check_in_time'] != null && combinedAttendance['check_out_time'] == null) {
-              _selectedPunchType = 'check_out';
-            } else {
-              _selectedPunchType = 'check_in';
-            }
+            _selectedPunchType = nextPunchType(combinedAttendance);
           } else {
             _todayAttendance = null;
             _selectedPunchType = 'check_in';
@@ -364,19 +346,14 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         _branchLat,
         _branchLng,
       );
-      if (position.accuracy > PreciseLocation.maxAccuracyFor(_branchRadius)) {
-        throw Exception(PreciseLocation.lowAccuracyMessage(position.accuracy));
-      }
-      if (distanceInMeters > _branchRadius) {
-        final double outOfRange = distanceInMeters - _branchRadius;
-        throw Exception('$_outOfRangeMessage المتبقي لتصل للفرع: ${outOfRange.toStringAsFixed(1)} متر.');
-      }
-      if (punchType == 'check_in' && _todayAttendance?['check_in_time'] != null) {
-        throw Exception('لقد قمت بتسجيل بصمة الحضور مسبقاً لهذا اليوم!');
-      }
-      if (punchType == 'check_out' && _todayAttendance?['check_out_time'] != null) {
-        throw Exception('لقد قمت بتسجيل بصمة الانصراف مسبقاً لهذا اليوم!');
-      }
+      final localError = localPunchError(
+        punchType: punchType,
+        accuracy: position.accuracy,
+        distanceMeters: distanceInMeters,
+        branchRadius: _branchRadius,
+        today: _todayAttendance,
+      );
+      if (localError != null) throw Exception(localError);
 
       final result = await AttendanceSyncService.punch(
         type: punchType,
@@ -426,58 +403,13 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     } else {
       AppHaptics.submit();
     }
-    final tone = isSynced ? AppTone.success : AppTone.warning;
     showDialog<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        contentPadding: const EdgeInsets.fromLTRB(AppSpace.xxl, AppSpace.xxl, AppSpace.xxl, AppSpace.lg),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ToneIcon(isSynced ? Icons.check_rounded : Icons.cloud_off_rounded, tone: tone, size: 72),
-            const SizedBox(height: AppSpace.xl),
-            Text(isCheckIn ? 'تم تسجيل حضورك' : 'تم تسجيل انصرافك', style: AppText.title, textAlign: TextAlign.center),
-            const SizedBox(height: AppSpace.sm),
-            Text(
-              isSynced
-                  ? '${Fmt.time(DateTime.now())} — ${_punchNote(isCheckIn) ?? (isCheckIn ? 'دوام موفق' : 'شكراً على يومك')}'
-                  : 'انقطع الإنترنت، فحفظنا البصمة بالجهاز وسنرسلها تلقائياً عند عودة الاتصال.',
-              style: AppText.bodySm,
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-        actions: [AppButton(label: 'تم', expand: true, onPressed: () => Navigator.of(ctx).pop())],
-      ),
+      builder: (ctx) => PunchSuccessDialog(isCheckIn: isCheckIn, isSynced: isSynced, note: _punchNote(isCheckIn)),
     );
   }
 
-  static const _outOfRangeMessage = 'أنت خارج نطاق الفرع الجغرافي المسموح به للتبصيم.';
-
-  /// دقائق الوقت الحالي بعد منتصف الليل مقارنة بوقت من الجدول (HH:mm أو HH:mm:ss)
-  static int? _minutesOf(Object? hhmm) {
-    final parts = hhmm?.toString().split(':');
-    if (parts == null || parts.length < 2) return null;
-    final h = int.tryParse(parts[0]), m = int.tryParse(parts[1]);
-    return h == null || m == null ? null : h * 60 + m;
-  }
-
-  /// تنبيه التأخير أو الخروج المبكر في رسالة البصمة (كانت تقول "دوام موفق" حتى مع تأخير ساعات)
-  String? _punchNote(bool isCheckIn) {
-    final now = DateTime.now();
-    final nowMin = now.hour * 60 + now.minute;
-    if (isCheckIn) {
-      final start = _minutesOf(_workSchedule?['check_in_time']);
-      if (start == null) return null;
-      final grace = (_workSchedule?['grace_period_minutes'] as num?)?.toInt() ?? 0;
-      final late = nowMin - start;
-      return late > grace ? 'متأخر ${Fmt.minutesLabel(late)} عن بداية الدوام' : null;
-    }
-    final end = _minutesOf(_workSchedule?['check_out_time']);
-    if (end == null) return null;
-    final early = end - nowMin;
-    return early > 0 ? 'خروج قبل نهاية الدوام بـ ${Fmt.minutesLabel(early)}' : null;
-  }
+  String? _punchNote(bool isCheckIn) => punchNote(isCheckIn: isCheckIn, schedule: _workSchedule, now: DateTime.now());
 
   bool get _hasCheckOut => _todayAttendance?['check_out_time'] != null;
   bool get _inRange => _distanceToBranch != null && _distanceToBranch! <= _branchRadius;
@@ -570,33 +502,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         ),
         if (_errorMessage != null) ...[
           const SizedBox(height: AppSpace.md),
-          AppCard(
-            tone: AppTone.danger,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Icon(Icons.error_outline_rounded, color: AppColors.danger),
-                    const SizedBox(width: AppSpace.md),
-                    Expanded(child: Text(_errorMessage!.trim(), style: AppText.bodySm.copyWith(color: AppColors.textPrimary))),
-                  ],
-                ),
-                const SizedBox(height: AppSpace.md),
-                Wrap(
-                  alignment: WrapAlignment.end,
-                  spacing: AppSpace.sm,
-                  runSpacing: AppSpace.sm,
-                  children: [
-                    if (_preciseDenied)
-                      const AppButton.secondary(label: 'فتح الإعدادات', icon: Icons.settings_rounded, size: AppButtonSize.small, onPressed: PreciseLocation.openSettings),
-                    AppButton.secondary(label: 'إعادة المحاولة', icon: Icons.refresh_rounded, size: AppButtonSize.small, onPressed: _initLocationAndBranch),
-                  ],
-                ),
-              ],
-            ),
-          ),
+          AttendanceErrorCard(message: _errorMessage!, preciseDenied: _preciseDenied, onRetry: _initLocationAndBranch),
         ],
         const SizedBox(height: AppSpace.lg),
         if (_hasCheckOut)
@@ -610,61 +516,22 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
               ],
             ),
           )
-        else ...[
-          SegmentedButton<String>(
-            segments: const [
-              ButtonSegment(value: 'check_in', label: Text('حضور'), icon: Icon(Icons.login_rounded)),
-              ButtonSegment(value: 'check_out', label: Text('انصراف'), icon: Icon(Icons.logout_rounded)),
-            ],
-            selected: {_selectedPunchType},
-            showSelectedIcon: false,
-            onSelectionChanged: (s) {
-              AppHaptics.select();
-              setState(() => _selectedPunchType = s.first);
-            },
+        else
+          AttendancePunchControls(
+            selectedType: _selectedPunchType,
+            onTypeChanged: (t) => setState(() => _selectedPunchType = t),
+            submitting: _isSubmitting,
+            mockDetected: _mockDetected,
+            hasPosition: _currentPosition != null,
+            inRange: _inRange,
+            onSubmit: _handleAttendanceSubmit,
           ),
-          const SizedBox(height: AppSpace.md),
-          AppButton(
-            label: _selectedPunchType == 'check_out' ? 'بصمة الانصراف' : 'بصمة الحضور',
-            icon: Icons.fingerprint_rounded,
-            variant: _selectedPunchType == 'check_out' ? AppButtonVariant.warning : AppButtonVariant.primary,
-            size: AppButtonSize.large,
-            expand: true,
-            loading: _isSubmitting,
-            haptic: false,
-            onPressed: _mockDetected || _currentPosition == null ? null : _handleAttendanceSubmit,
-          ),
-          const SizedBox(height: AppSpace.sm),
-          Text(
-            _mockDetected
-                ? 'البصمة موقوفة لأن الجهاز يستعمل موقعاً مزيّفاً.'
-                : _currentPosition == null
-                    ? 'ننتظر تحديد موقعك حتى تقدر تبصم.'
-                    : _inRange
-                    ? 'أنت داخل نطاق الفرع، تقدر تبصم الآن.'
-                    : 'اقترب من الفرع حتى تدخل ضمن النطاق المسموح.',
-            style: AppText.caption.copyWith(color: _mockDetected ? AppColors.danger : null),
-            textAlign: TextAlign.center,
-          ),
-        ],
         const SizedBox(height: AppSpace.lg),
         AttendanceTodayCard(todayAttendance: _todayAttendance, workSchedule: _workSchedule),
         const SizedBox(height: AppSpace.lg),
         const AttendanceHistoryCard(),
         const SizedBox(height: AppSpace.lg),
-        const Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(Icons.privacy_tip_outlined, size: 16, color: AppColors.textMuted),
-            SizedBox(width: AppSpace.sm),
-            Expanded(
-              child: Text(
-                'نستعمل موقعك فقط لتأكيد وجودك في الفرع أثناء ساعات الدوام الرسمية.',
-                style: AppText.caption,
-              ),
-            ),
-          ],
-        ),
+        const AttendancePrivacyNote(),
       ],
     );
   }
