@@ -185,6 +185,22 @@ export async function forceCheckout(recordId: string) {
   if (error) throw error;
 }
 
+/** حركة رواتب (غياب/تأخير) لنفس الموظف واليوم تحتاج قرار، أو null (ماكو حركة، أو ما مسموح نقراها). */
+async function findDecidablePayrollEvent(employeeId: string, date: string, eventType: 'absence' | 'late'): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('payroll_events')
+    .select('id')
+    .eq('employee_id', employeeId)
+    .eq('event_date', date)
+    .eq('event_type', eventType)
+    .neq('status', 'void')
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) return null; // نفس المسار القديم: نكتب بسجل الحضور
+  return (data as { id: string } | null)?.id ?? null;
+}
+
 /**
  * قرار خصم/إعفاء لمخالفة غياب أو تأخير، مع إشعار الموظف حسب القواعد.
  * المبلغ لا يُكتب هنا: محرّك الرواتب يحسبه من سجل الحضور (أجر اليوم ÷ 30، والتأخير بالدقيقة)
@@ -207,9 +223,22 @@ export async function saveDecision(decision: {
     throw new Error('الموظف غير مرتبط بفرع، يرجى ربطه بفرع أولاً.');
   }
 
-  // القرار ينكتب بسجل الحضور (deduction_status)، والـ trigger trg_payroll_attendance بالسيرفر ينقله لحركة
-  // الرواتب (payroll_events). الباب الثاني لنفس القرار هو decide_payroll_event (صفحة الرواتب) — أي تغيير
-  // بمسار القرار لازم يراعي البابين. التفاصيل: BUSINESS_RULES.md «دورة حياة المسير» البند 3.
+  // إذا لليوم حركة رواتب (غياب/تأخير)، القرار يمر بنفس باب صفحة الرواتب والتطبيق: decide_payroll_event
+  // (يحدّث الحركة وسجل الحضور، يتحقق من صلاحية المدير وفرعه، ويسوّي تسوية إذا الكشف صادر، ويشعر الموظف).
+  // التفاصيل: BUSINESS_RULES.md «دورة حياة المسير» البند 3.
+  const eventId = await findDecidablePayrollEvent(employee.id, date, type === 'late' ? 'late' : 'absence');
+  if (eventId) {
+    const { error } = await supabase.rpc('decide_payroll_event', {
+      p_event_id: eventId,
+      p_approve: status === 'applied',
+      p_reason: reason,
+    });
+    if (error) throw error;
+    return;
+  }
+
+  // ماكو حركة بعد (مثل غياب اليوم قبل حسابه): القرار ينكتب بسجل الحضور، والـ trigger trg_payroll_attendance
+  // بالسيرفر ينقله لحركة الرواتب لما تنحسب.
   if (type === 'virtual_absent') {
     const { data: existing, error: findErr } = await supabase
       .from('attendance')

@@ -34,12 +34,12 @@
 2. **حالة الحركة:** `pending` تنتظر قرار الإدارة (الغياب، التأخير، الخروج المبكر، البصمة الناقصة) ← `approved` تنحسب
    أو `ignored` إعفاء. `void` = ألغاها النظام نفسه (مثلاً انحذفت البصمة أو تغيّرت). ليش ما يُخصم تلقائياً؟ لأن الغياب ممكن
    يكون نسيان بصمة أو عذر، فالإدارة هي اللي تقرر.
-3. **القرار يدخل من بابين (انتبه):**
-   - `decide_payroll_event` (صفحة الرواتب ولوحة الإدارة إذا الحركة موجودة) يحدّث الحركة **و** `attendance.deduction_status`.
-   - تحديث مباشر لـ `attendance.deduction_status` (صفحة التتبع بالويب `web/src/features/tracking/api.ts`، ولوحة الإدارة بالتطبيق
-     `mobile/lib/data/repositories/admin_actions_repository.dart` للأيام بدون حركة) ← الـ trigger `trg_payroll_attendance` ينقله لحالة الحركة
-     (`applied` = `approved`، `ignored` = `ignored`). الحقل `deduction_applied` نسخة قديمة من نفس المعنى.
-   أي تغيير بمسار القرار لازم يراعي البابين.
+3. **القرار (خصم أو إعفاء):**
+   - **إذا لليوم حركة** (الحالة الطبيعية): كل الشاشات تستعمل `decide_payroll_event` — صفحة الرواتب، صفحة التتبع بالويب
+     (`web/src/features/tracking/api.ts` تدوّر على الحركة وقت الحفظ)، ولوحة الإدارة بالتطبيق. الدالة تحدّث الحركة **و**
+     `attendance.deduction_status`، تمنع المدير من القرار على نفسه أو على فرع ثاني، تسوّي تسوية إذا الكشف صادر، وتشعر الموظف.
+   - **إذا ماكو حركة بعد** (مثل غياب اليوم قبل ما ينحسب): يُكتب القرار بسجل الحضور مباشرة، والـ trigger `trg_payroll_attendance`
+     ينقله لحالة الحركة لما تنحسب (`applied` = `approved`، `ignored` = `ignored`). الحقل `deduction_applied` نسخة قديمة من نفس المعنى.
 4. **الاعتماد** `approve_payroll_slip`: المسير لازم مفتوح ← إعادة مزامنة أيام الموظف ← التعديلات اليدوية وقت الاعتماد تصير حركات
    `bonus`/`manual_deduction` ← `payroll_employee_summary` يحسب ← كشف `salary_slips` + أسطره `salary_slip_lines` ← أقساط السلف
    المستحقة بالفترة (غير النقدية) تتعلّم مدفوعة `paid_by_slip_id`.
