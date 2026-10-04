@@ -112,4 +112,46 @@ void main() {
     // ملف xlsx = أرشيف zip
     expect(bytes.take(2), [0x50, 0x4B]);
   });
+
+  group('hourly leave time is not lateness or early leave (same as the payroll engine)', () {
+    ReportLeave hourly(int day, String from, String to) => ReportLeave(
+        employeeId: 'e1', from: DateTime(2026, 9, day, int.parse(from.split(':')[0])), to: DateTime(2026, 9, day, int.parse(to.split(':')[0])),
+        typeName: 'زمنية', isHourly: true, startHour: from, endHour: to);
+    ReportAttendance punch(int day, String status, int inH, int inM, int outH, int outM) => ReportAttendance(
+        id: 'a$day', employeeId: 'e1', date: DateTime(2026, 9, day), status: status,
+        checkIn: DateTime(2026, 9, day, inH, inM), checkOut: DateTime(2026, 9, day, outH, outM));
+    ReportRow of(List<ReportRow> rows, int day) => rows.firstWhere((r) => r.employee.id == 'e1' && r.date.day == day);
+
+    test('a leave covering the late minutes means not late, even if the punch said late', () {
+      final rows = build(att: [punch(20, 'late', 9, 40, 17, 0)], leaves: [hourly(20, '09:00', '10:00')]);
+      expect(of(rows, 20).status, ReportStatus.present);
+      expect(of(rows, 20).lateMinutes, 0);
+    });
+
+    test('only the uncovered minutes count', () {
+      final rows = build(att: [punch(21, 'present', 9, 50, 17, 0)], leaves: [hourly(21, '09:00', '09:30')]);
+      expect(of(rows, 21).status, ReportStatus.late); // 50 − 30 = 20 > 15
+      expect(of(rows, 21).lateMinutes, 20);
+    });
+
+    test('punch status "late" with minutes left under the grace is still late (like the server)', () {
+      final rows = build(att: [punch(22, 'late', 9, 40, 17, 0)], leaves: [hourly(22, '09:00', '09:30')]);
+      expect(of(rows, 22).status, ReportStatus.late);
+      expect(of(rows, 22).lateMinutes, 10);
+    });
+
+    test('a leave covering the end of the day means no early leave', () {
+      final rows = build(att: [punch(23, 'present', 9, 0, 15, 0)], leaves: [hourly(23, '15:00', '17:00')]);
+      expect(of(rows, 23).status, ReportStatus.present);
+      expect(of(rows, 23).earlyMinutes, 0);
+    });
+
+    test('hourlyLeaveOverlap sums only the intersecting minutes', () {
+      final leaves = [hourly(24, '09:00', '10:00'), hourly(24, '14:00', '15:00')];
+      expect(hourlyLeaveOverlap(leaves, 9 * 60 + 30, 14 * 60 + 30), 30 + 30);
+      expect(hourlyLeaveOverlap(leaves, 11 * 60, 12 * 60), 0);
+      expect(hourlyLeaveOverlap(leaves, 12 * 60, 11 * 60), 0);
+    });
+  });
+
 }
