@@ -12,14 +12,13 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:url_launcher/url_launcher.dart';
-import 'package:uuid/uuid.dart';
 
-import '../../core/services/file_upload_service.dart';
-import '../../core/services/storage_links.dart';
-import '../../core/services/supabase_service.dart';
-import '../../core/utils/error_text.dart';
-import '../shared/ui/ui.dart';
+import '../../../core/services/supabase_service.dart';
+import '../../../core/utils/error_text.dart';
+import '../../../data/repositories/leave_repository.dart';
+import '../../shared/ui/ui.dart';
+import 'leave_logic.dart';
+import 'widgets/leave_widgets.dart';
 
 class LeaveRequestScreen extends StatefulWidget {
   const LeaveRequestScreen({super.key});
@@ -30,6 +29,7 @@ class LeaveRequestScreen extends StatefulWidget {
 
 class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  final LeaveRepository _repo = LeaveRepository();
   final _formKey = GlobalKey<FormState>();
 
   // حقول الطلب
@@ -72,67 +72,11 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
 
   Future<void> _loadBalance() async {
     try {
-      final data = await SupabaseService.client.rpc<dynamic>('get_leave_balance');
+      final data = await _repo.fetchBalance();
       if (mounted && data is Map) setState(() => _balance = Map<String, dynamic>.from(data));
     } catch (e) {
       debugPrint('Error loading leave balance: $e');
     }
-  }
-
-  static String _fmt(Object? v) {
-    final n = (v as num?)?.toDouble() ?? 0;
-    return n == n.roundToDouble() ? n.round().toString() : n.toStringAsFixed(1);
-  }
-
-  Widget _buildBalanceCard() {
-    final b = _balance;
-    if (b == null) return const SizedBox.shrink();
-    final annual = Map<String, dynamic>.from(b['annual'] as Map);
-    final sick = Map<String, dynamic>.from(b['sick'] as Map);
-    final hourly = Map<String, dynamic>.from(b['hourly'] as Map);
-
-    Widget item(String label, Object? left, Object? total, String unit, bool active) => Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(AppSpace.sm),
-        decoration: BoxDecoration(
-          color: active ? AppColors.brand.withValues(alpha: 0.12) : AppColors.surface2,
-          borderRadius: AppRadius.control,
-          border: Border.all(color: active ? AppColors.brand : AppColors.border),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(label, style: AppText.caption),
-            const SizedBox(height: 2),
-            Text('${_fmt(left)} $unit', style: AppText.label.copyWith(color: AppColors.textPrimary)),
-            Text('من ${_fmt(total)}', style: AppText.caption),
-          ],
-        ),
-      ),
-    );
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpace.lg),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text('رصيدك المتبقي', style: AppText.bodySm.copyWith(fontWeight: FontWeight.w700)),
-          const SizedBox(height: AppSpace.sm),
-          IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                item('السنوية (${b['year']})', annual['left'], annual['entitlement'], 'يوم', !_isHourly && _leaveType == 'annual'),
-                const SizedBox(width: AppSpace.sm),
-                item('المرضية', sick['left'], sick['entitlement'], 'يوم', !_isHourly && _leaveType == 'sick'),
-                const SizedBox(width: AppSpace.sm),
-                item('زمنيات الشهر', hourly['left_hours'], hourly['allowance_hours'], 'ساعة', _isHourly),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
   }
 
   @override
@@ -148,11 +92,11 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
     if (user == null) return;
 
     try {
-      final data = await SupabaseService.client.from('leave_requests').select().eq('employee_id', user.id).order('created_at', ascending: false);
+      final data = await _repo.fetchMyRequests(user.id);
 
       if (!mounted) return;
       setState(() {
-        _leaveHistory = List<Map<String, dynamic>>.from(data);
+        _leaveHistory = data;
         _historyError = false;
       });
     } catch (e) {
@@ -166,26 +110,14 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
   // أنواع الإجازات من إعدادات النظام (leave_policy.active_types)
   Future<void> _loadLeaveTypes() async {
     try {
-      final data = await SupabaseService.client.from('system_settings').select('value').eq('key', 'leave_policy').maybeSingle();
-
-      if (data != null && data['value'] != null) {
-        final policy = data['value'] as Map<String, dynamic>;
-        if (policy['active_types'] != null) {
-          final typesList = policy['active_types'] as List<dynamic>;
-          final List<Map<String, String>> mappedTypes = [];
-          for (final t in typesList) {
-            final typeMap = t as Map<String, dynamic>;
-            mappedTypes.add({'id': typeMap['id']?.toString() ?? '', 'name': typeMap['name']?.toString() ?? ''});
+      final mappedTypes = parseActiveLeaveTypes(await _repo.fetchLeavePolicy());
+      if (mappedTypes.isNotEmpty && mounted) {
+        setState(() {
+          _leaveTypes = mappedTypes;
+          if (!_leaveTypes.any((t) => t['id'] == _leaveType)) {
+            _leaveType = _leaveTypes.first['id']!;
           }
-          if (mappedTypes.isNotEmpty && mounted) {
-            setState(() {
-              _leaveTypes = mappedTypes;
-              if (!_leaveTypes.any((t) => t['id'] == _leaveType)) {
-                _leaveType = _leaveTypes.first['id']!;
-              }
-            });
-          }
-        }
+        });
       }
     } catch (e) {
       debugPrint('خطأ في تحميل أنواع الإجازات من السيرفر: $e');
@@ -210,51 +142,29 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
   /// مدة الإجازة الساعية بالدقائق.
   int get _hourlyMinutes => (_endHour.hour * 60 + _endHour.minute) - (_startHour.hour * 60 + _startHour.minute);
 
-  /// اسم النوع بدون كلمة "إجازة" (أسماء السياسة تبدأ بها أحياناً، والنص يضيفها) — كان يظهر "إجازة إجازة سنوية"
-  static String _bareTypeName(String name) => name.replaceFirst(RegExp(r'^إجازة\s*'), '');
-
-  String get _typeName => _bareTypeName(_leaveTypes.firstWhere((t) => t['id'] == _leaveType, orElse: () => {'name': _leaveType})['name']!);
+  String get _typeName => bareLeaveTypeName(_leaveTypes.firstWhere((t) => t['id'] == _leaveType, orElse: () => {'name': _leaveType})['name']!);
 
   String get _durationSummary {
     if (_isHourly) {
       final m = _hourlyMinutes;
       if (m <= 0) return 'وقت النهاية قبل البداية';
-      return '${Fmt.dateWithDay(_startDate)} · ${_fmtTod(_startHour)} - ${_fmtTod(_endHour)} (${formatMinutes(m)})';
+      return '${Fmt.dateWithDay(_startDate)} · ${_fmtTod(_startHour)} - ${_fmtTod(_endHour)} (${formatLeaveMinutes(m)})';
     }
     if (_dayCount <= 0) return 'تاريخ النهاية قبل البداية';
     return '${Fmt.days(_dayCount)} · ${Fmt.date(_startDate)} إلى ${Fmt.date(_endDate)}';
   }
 
-  static String formatMinutes(int m) {
-    final h = m ~/ 60;
-    final r = m % 60;
-    if (h == 0) return '$r د';
-    return r == 0 ? '$h س' : '$h س $r د';
-  }
-
   String _fmtTod(TimeOfDay t) => Fmt.time(DateTime(2000, 1, 1, t.hour, t.minute));
 
   /// التحقق قبل الإرسال — يرجع رسالة الخطأ أو null.
-  String? _validateDates() {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    if (_startDay.isBefore(today.subtract(const Duration(days: 30)))) return 'لا يمكن طلب إجازة لتاريخ مضى عليه أكثر من 30 يوماً';
-    if (!_isHourly && _endDay.isBefore(_startDay)) return 'تاريخ النهاية يجب أن يكون بعد تاريخ البداية أو مساوياً له';
-    if (_isHourly && _hourlyMinutes <= 0) return 'وقت النهاية يجب أن يكون بعد وقت البداية';
-
-    for (final req in _leaveHistory) {
-      if (req['status'] == 'rejected' || req['status'] == 'cancelled') continue;
-      if (req['start_date'] == null || req['end_date'] == null) continue;
-      final reqStart = DateTime.parse(req['start_date'] as String).toLocal();
-      final reqEnd = DateTime.parse(req['end_date'] as String).toLocal();
-      final rStartDay = DateTime(reqStart.year, reqStart.month, reqStart.day);
-      final rEndDay = DateTime(reqEnd.year, reqEnd.month, reqEnd.day);
-      if (!(_endDay.isBefore(rStartDay) || _startDay.isAfter(rEndDay))) {
-        return 'توجد إجازة سابقة تتعارض مع التواريخ المحددة';
-      }
-    }
-    return null;
-  }
+  String? _validateDates() => validateLeaveDates(
+        startDay: _startDay,
+        endDay: _endDay,
+        isHourly: _isHourly,
+        hourlyMinutes: _hourlyMinutes,
+        history: _leaveHistory,
+        now: DateTime.now(),
+      );
 
   // مراجعة ثم إرسال الطلب
   Future<void> _submitLeaveRequest() async {
@@ -287,23 +197,19 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
 
       // 1. رفع المرفق إن وجد (مع الضغط التلقائي)
       if (_attachmentFile != null) {
-        final uniqueId = const Uuid().v4();
-        final fileExtension = _attachmentFile!.path.split('.').last;
-        final remotePath = 'leaves/${user.id}/$uniqueId.$fileExtension';
-
-        attachmentUrl = await FileUploadService.uploadFile(file: _attachmentFile!, bucketName: 'employee-documents', remotePath: remotePath);
+        attachmentUrl = await _repo.uploadAttachment(user.id, _attachmentFile!);
       }
 
       // 2. أوقات الإجازة الساعية
       String? startHourStr;
       String? endHourStr;
       if (_isHourly) {
-        startHourStr = '${_startHour.hour.toString().padLeft(2, '0')}:${_startHour.minute.toString().padLeft(2, '0')}:00';
-        endHourStr = '${_endHour.hour.toString().padLeft(2, '0')}:${_endHour.minute.toString().padLeft(2, '0')}:00';
+        startHourStr = leaveHourString(_startHour.hour, _startHour.minute);
+        endHourStr = leaveHourString(_endHour.hour, _endHour.minute);
       }
 
       // 3. إدراج الطلب
-      await SupabaseService.client.from('leave_requests').insert({
+      await _repo.submitRequest({
         'employee_id': user.id,
         'leave_type': _leaveType,
         'is_hourly': _isHourly,
@@ -391,7 +297,7 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _buildBalanceCard(),
+          LeaveBalanceCard(balance: _balance, isHourly: _isHourly, leaveType: _leaveType),
           AppChoiceChips<String>(
             label: 'نوع الإجازة',
             value: _leaveType,
@@ -567,7 +473,7 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
                 child: FadeSlideIn(
                   index: i,
                   child: ContentWidth(
-                    child: _LeaveCard(req: items[i], typeName: _typeLabel(items[i]['leave_type']), onCancel: _cancelLeave),
+                    child: LeaveCard(req: items[i], typeName: leaveTypeLabel(items[i]['leave_type'], _leaveTypes), onCancel: _cancelLeave),
                   ),
                 ),
               ),
@@ -587,7 +493,7 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
     );
     if (!ok || !mounted) return;
     try {
-      await SupabaseService.client.from('leave_requests').update({'status': 'cancelled'}).eq('id', req['id'] as String).eq('status', 'pending');
+      await _repo.cancelPending(req['id'] as String);
       if (!mounted) return;
       AppSnack.success(context, 'أُلغي طلب الإجازة');
       unawaited(_loadHistory());
@@ -595,20 +501,6 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
     } catch (e) {
       if (mounted) AppSnack.error(context, 'تعذّر إلغاء الطلب: ${errorText(e)}');
     }
-  }
-
-  String _typeLabel(Object? type) {
-    final id = (type ?? 'other').toString();
-    final fromPolicy = _leaveTypes.where((t) => t['id'] == id);
-    if (fromPolicy.isNotEmpty) return _bareTypeName(fromPolicy.first['name']!);
-    return switch (id) {
-      'annual' => 'اعتيادية',
-      'sick' => 'مرضية',
-      'emergency' => 'طارئة',
-      'maternity' => 'أمومة',
-      'other' => 'أخرى',
-      _ => id,
-    };
   }
 
   Future<void> _selectDate(bool isStart) async {
@@ -651,87 +543,5 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
         }
       });
     }
-  }
-}
-
-class _LeaveCard extends StatelessWidget {
-  const _LeaveCard({required this.req, required this.typeName, this.onCancel});
-
-  final Map<String, dynamic> req;
-  final String typeName;
-  final void Function(Map<String, dynamic> req)? onCancel;
-
-  @override
-  Widget build(BuildContext context) {
-    final isHourly = req['is_hourly'] == true;
-    final start = DateTime.tryParse(req['start_date']?.toString() ?? '');
-    final end = DateTime.tryParse(req['end_date']?.toString() ?? '');
-    final reason = req['reason']?.toString();
-    final rejection = req['rejection_reason']?.toString();
-    final url = req['attachment_url']?.toString();
-    final period = isHourly
-        ? '${Fmt.date(start)} · ${Fmt.timeOfDay(req['start_hour']?.toString())} - ${Fmt.timeOfDay(req['end_hour']?.toString())}'
-        : (start != null && end != null && Fmt.date(start) == Fmt.date(end))
-        ? Fmt.dateWithDay(start)
-        : '${Fmt.date(start)} إلى ${Fmt.date(end)}';
-
-    return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              ToneIcon(isHourly ? Icons.schedule_rounded : Icons.event_rounded, tone: AppTone.accent),
-              const SizedBox(width: AppSpace.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('إجازة $typeName${isHourly ? ' زمنية' : ''}', style: AppText.subtitle),
-                    Text(period, style: AppText.caption),
-                  ],
-                ),
-              ),
-              StatusBadge.request(req['status']?.toString()),
-            ],
-          ),
-          if (reason != null && reason.isNotEmpty) ...[
-            const SizedBox(height: AppSpace.md),
-            Text(reason, style: AppText.bodySm, maxLines: 3, overflow: TextOverflow.ellipsis),
-          ],
-          if (rejection != null && rejection.isNotEmpty) ...[
-            const SizedBox(height: AppSpace.sm),
-            Text('سبب الرفض: $rejection', style: AppText.bodySm.copyWith(color: AppColors.danger)),
-          ],
-          if (url != null && url.isNotEmpty) ...[
-            const SizedBox(height: AppSpace.xs),
-            AppButton.ghost(
-              label: 'عرض المرفق',
-              icon: Icons.attach_file_rounded,
-              size: AppButtonSize.small,
-              onPressed: () async {
-                final uri = Uri.tryParse(await StorageLinks.resolve(url));
-                if (uri != null && await canLaunchUrl(uri)) {
-                  await launchUrl(uri, mode: LaunchMode.externalApplication);
-                }
-              },
-            ),
-          ],
-          const SizedBox(height: AppSpace.xs),
-          Row(
-            children: [
-              Expanded(child: Text('قُدّم ${Fmt.relative(DateTime.tryParse(req['created_at']?.toString() ?? ''))}', style: AppText.overline)),
-              if (req['status'] == 'pending' && onCancel != null)
-                AppButton.ghost(
-                  label: 'إلغاء الطلب',
-                  icon: Icons.close_rounded,
-                  size: AppButtonSize.small,
-                  onPressed: () => onCancel!(req),
-                ),
-            ],
-          ),
-        ],
-      ),
-    );
   }
 }

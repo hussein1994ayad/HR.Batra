@@ -169,3 +169,14 @@
 - `main_layout.dart`: مسار الاستيراد فقط.
 - **أُضيف فحص** `mobile/test/unit/attendance_widgets_test.dart` (حالات كارت الموقع وكارت اليوم).
 - فحص: `dart analyze` ✓، `flutter test` 528 ✓.
+
+## Step 15 — شاشة الإجازات (النقاط 3 و 4 و 8)
+- **نُقلت** `presentation/employee/leave_request_screen.dart` → `presentation/employee/leave/leave_request_screen.dart` (737 → 547 سطر).
+- **أُنشئ** `mobile/lib/data/repositories/leave_repository.dart`: الرصيد (`get_leave_balance`)، سجل طلباتي، سياسة الأنواع،
+  رفع المرفق (نفس المسار `leaves/<id>/<uuid>.<ext>` ونفس الـ bucket)، تقديم الطلب، إلغاء طلب قيد المراجعة — نفس الاستعلامات.
+- **أُنشئ** `leave/leave_logic.dart` (منطق بدون واجهة): `bareLeaveTypeName`, `formatLeaveMinutes`, `parseActiveLeaveTypes`,
+  `leaveTypeLabel`, `leaveHourString`, `validateLeaveDates` — نفس الرسائل ونفس الشروط.
+- **أُنشئ** `leave/widgets/leave_widgets.dart`: `LeaveBalanceCard` (من `_buildBalanceCard`) و`LeaveCard` (كان `_LeaveCard`).
+- `main_layout.dart`: مسار الاستيراد فقط.
+- **أُضيف فحص** `mobile/test/unit/leave_logic_test.dart` (التحقق من التواريخ والتداخل، قراءة السياسة، الأسماء، كارت الرصيد).
+- فحص: `dart analyze` ✓، `flutter test` 538 ✓.
