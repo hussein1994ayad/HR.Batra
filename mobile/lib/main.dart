@@ -20,6 +20,7 @@ import 'core/services/location_service.dart';
 import 'core/services/notification_service.dart';
 import 'core/services/supabase_service.dart';
 import 'core/theme/app_theme.dart';
+import 'core/utils/app_log.dart';
 import 'firebase_options.dart';
 import 'presentation/shared/widgets/offline_banner.dart';
 
@@ -40,6 +41,7 @@ void main() async {
     systemNavigationBarColor: Colors.transparent,
     systemNavigationBarContrastEnforced: false,
     statusBarIconBrightness: Brightness.light,
+    statusBarBrightness: Brightness.dark, // iOS: أيقونات شريط الحالة فاتحة (iOS يتجاهل statusBarIconBrightness)
     systemNavigationBarIconBrightness: Brightness.light,
   ));
 
@@ -56,11 +58,11 @@ void main() async {
 
   FlutterError.onError = (FlutterErrorDetails details) {
     FlutterError.presentError(details);
-    debugPrint('🛑 Flutter Framework Error: ${details.exceptionAsString()}');
+    appLog('🛑 Flutter Framework Error: ${details.exceptionAsString()}');
   };
 
   PlatformDispatcher.instance.onError = (Object error, StackTrace stack) {
-    debugPrint('🛑 PlatformDispatcher Handled Async Error: $error\n$stack');
+    appLog('🛑 PlatformDispatcher Handled Async Error: $error\n$stack');
     return true;
   };
 
@@ -72,7 +74,7 @@ void main() async {
       try {
         await SupabaseService.init();
       } catch (e, stack) {
-        debugPrint('⚠️ فشل تهيئة Supabase: $e\n$stack');
+        appLog('⚠️ فشل تهيئة Supabase: $e\n$stack');
       }
     }),
     // Firebase ثم الإشعارات — الإشعارات المحلية (تذكيرات البصمة) تعمل حتى لو
@@ -81,12 +83,12 @@ void main() async {
       try {
         final options = DefaultFirebaseOptions.currentPlatform;
         if (options.appId.startsWith('PLACEHOLDER') || options.apiKey.startsWith('PLACEHOLDER')) {
-          debugPrint('⚠️ Firebase غير مضبوط لهذه المنصة — إشعارات Push معطلة.');
+          appLog('⚠️ Firebase غير مضبوط لهذه المنصة — إشعارات Push معطلة.');
         } else {
           await Firebase.initializeApp(options: options);
         }
       } catch (e, stack) {
-        debugPrint('⚠️ فشل تهيئة Firebase: $e\n$stack');
+        appLog('⚠️ فشل تهيئة Firebase: $e\n$stack');
       }
       await NotificationService.init();
     }),
@@ -104,7 +106,7 @@ void main() async {
         }
       });
     } catch (e) {
-      debugPrint('⚠️ iOS token bridge: $e');
+      appLog('⚠️ iOS token bridge: $e');
     }
   }
 
@@ -125,7 +127,7 @@ void main() async {
       try {
         await LocationService.initializeBackgroundService();
       } catch (e, stack) {
-        debugPrint('⚠️ فشل تهيئة خدمة الموقع بالخلفية: $e\n$stack');
+        appLog('⚠️ فشل تهيئة خدمة الموقع بالخلفية: $e\n$stack');
       }
     });
   });

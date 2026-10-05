@@ -5,10 +5,11 @@
 import 'dart:io';
 
 import 'package:device_info_plus/device_info_plus.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
+
+import '../utils/app_log.dart';
 
 /// خدمة للتعامل مع معلومات الجهاز الحالي للحفاظ على أمان الحساب
 /// وتفعيل خاصية قفل الحساب على جهاز واحد (Single-device locking).
@@ -30,7 +31,7 @@ class DeviceService {
       final id = await _channel.invokeMethod<String>('getStableDeviceId');
       if (id != null && id.isNotEmpty) return _cachedId = id;
     } catch (e) {
-      debugPrint('device: stable id unavailable, using local id: $e');
+      appLog('device: stable id unavailable, using local id: $e');
     }
     return _cachedId = await _localFallbackId();
   }

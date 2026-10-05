@@ -11,11 +11,11 @@ import 'package:flutter/material.dart';
 
 import '../../core/design/design.dart';
 import '../shared/widgets/bottom_nav_bar.dart';
-import 'attendance_screen.dart';
-import 'home_screen.dart';
-import 'leave_request_screen.dart';
-import 'loan_request_screen.dart';
-import 'settings_screen.dart';
+import 'attendance/attendance_screen.dart';
+import 'home/home_screen.dart';
+import 'leave/leave_request_screen.dart';
+import 'loan/loan_request_screen.dart';
+import 'settings/settings_screen.dart';
 
 class MainLayout extends StatefulWidget {
   final int initialTab;

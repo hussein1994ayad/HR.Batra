@@ -2,16 +2,17 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hr_pro/presentation/employee/admin_dashboard/admin_dashboard_screen.dart';
-import 'package:hr_pro/presentation/employee/admin_loans/admin_loans_screen.dart';
-import 'package:hr_pro/presentation/employee/admin_loans/widgets/loan_card.dart';
-import 'package:hr_pro/presentation/employee/branch_management_screen.dart';
-import 'package:hr_pro/presentation/employee/branch_schedule_screen.dart';
-import 'package:hr_pro/presentation/employee/employee_management_screen.dart';
+import 'package:hr_pro/presentation/admin/admin_dashboard/admin_dashboard_screen.dart';
+import 'package:hr_pro/presentation/admin/admin_loans/admin_loans_screen.dart';
+import 'package:hr_pro/presentation/admin/admin_loans/widgets/loan_card.dart';
+import 'package:hr_pro/presentation/admin/branches/branch_management_screen.dart';
+import 'package:hr_pro/presentation/admin/branches/branch_schedule_screen.dart';
+import 'package:hr_pro/presentation/admin/employee_management/employee_management_screen.dart';
 
 import '../support/harness.dart';
 
 const _small = DeviceSize('small', 320, 640);
+const _island = DeviceSize('iphone_pro_island', 402, 874, top: 62, bottom: 34, ios: true);
 
 Future<void> _settle(WidgetTester tester) async {
   for (var i = 0; i < 4; i++) {
@@ -85,6 +86,33 @@ void main() {
       await _settle(tester);
       expect(find.text('إضافة الفرع'), findsOneWidget);
       await capture(tester, 'sheet_branch_editor');
+      await disposeScreen(tester);
+    });
+  }
+
+  // آيفون بشريط هوم (34): زر الحفظ بآخر النافذة لازم يبقى فوق الشريط، مو تحته (نفس أندرويد من الحافة للحافة)
+  for (final (name, open, action) in <(String, Future<void> Function(WidgetTester), String)>[
+    ('schedule editor', (t) async {
+      await pumpScreen(t, const BranchScheduleScreen(), device: _island);
+      await t.tap(find.text('فرع المنصور').first);
+    }, 'حفظ الجدول'),
+    ('add employee', (t) async {
+      await pumpScreen(t, const EmployeeManagementScreen(), device: _island);
+      await t.tap(find.byType(FloatingActionButton));
+    }, 'إنشاء الحساب'),
+    ('create loan', (t) async {
+      await pumpScreen(t, const AdminLoansManagementScreen(), device: _island);
+      await t.tap(find.byType(FloatingActionButton));
+    }, 'اعتماد السلفة'),
+  ]) {
+    testWidgets('$name sheet: last button above the iPhone home indicator', (tester) async {
+      await open(tester);
+      await _settle(tester);
+      final sheet = find.byType(BottomSheet);
+      await tester.drag(find.descendant(of: sheet, matching: find.byType(Scrollable)).first, const Offset(0, -3000));
+      await _settle(tester);
+      final bottom = tester.getRect(find.ancestor(of: find.text(action), matching: find.byWidgetPredicate((w) => w is ButtonStyleButton)).first).bottom;
+      expect(bottom, lessThanOrEqualTo(_island.height - _island.bottom), reason: 'الزر تحت شريط الهوم');
       await disposeScreen(tester);
     });
   }

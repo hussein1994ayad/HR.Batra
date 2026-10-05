@@ -5,10 +5,19 @@
 
 export '../utils/json_map.dart';
 export 'admin_models.dart';
+export 'announcement_model.dart';
 export 'attendance_model.dart';
 export 'branch_model.dart';
+export 'branch_schedule_model.dart';
+export 'deleted_file_model.dart';
+export 'directory_entry.dart';
 export 'employee_model.dart';
+export 'employee_ref.dart';
+export 'leave_balance_model.dart';
 export 'leave_request_model.dart';
 export 'loan_model.dart';
+export 'managed_employee.dart';
 export 'notification_model.dart';
+export 'roles.dart';
+export 'salary_slip_model.dart';
 export 'work_schedule_model.dart';

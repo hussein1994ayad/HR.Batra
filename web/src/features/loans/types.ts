@@ -1,6 +1,6 @@
 // أنواع صفحة السلف.
 
-import type { Loan } from '@/lib/db-types';
+import type { Loan, LoanInstallment } from '@/lib/db-types';
 
 export type LoansTab = 'active' | 'completed';
 
@@ -23,10 +23,12 @@ export interface EditLoanDraft {
 
 export type InstallmentPrompt = { installmentId: string; amount: number };
 
-/** قسط جديد قبل إدخاله (بدون loan_id). */
-export interface ScheduledInstallment {
-  due_date: string;
-  amount: number;
-}
-
 export type PaymentMethod = 'cash' | 'salary_deduction';
+
+/** مسودة تسجيل دفعة بأي مبلغ على قسط (الزيادة تُخصم من آخر الأقساط والنقص يُضاف لآخر قسط). */
+export interface PayDraft {
+  installment: LoanInstallment;
+  amount: number;
+  method: PaymentMethod;
+  note: string;
+}

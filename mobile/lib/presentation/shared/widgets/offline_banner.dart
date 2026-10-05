@@ -100,6 +100,8 @@ class _Bar extends StatelessWidget {
 
 /// غلاف عام للتطبيق: يحدّ تكبير الخط عند 1.3 حتى لا تتكسر التصاميم،
 /// ويعرض شريط "غير متصل" أعلى الشاشة ويزيح المحتوى تحته.
+/// على الآيفون: اللمس خارج الحقل يسكّر الكيبورد — كيبورد الأرقام بالآيفون ما بيه زر "تم"
+/// وماكو زر رجوع، فبدون هذا يبقى مفتوح ويغطي الأزرار. اللمس على زر أو حقل يشتغل طبيعي (هو يفوز باللمسة).
 class AppChrome extends StatelessWidget {
   const AppChrome({super.key, required this.child});
 
@@ -108,6 +110,16 @@ class AppChrome extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final mq = MediaQuery.of(context);
+    final chrome = _withBanner(mq);
+    if (Theme.of(context).platform != TargetPlatform.iOS) return chrome;
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+      child: chrome,
+    );
+  }
+
+  Widget _withBanner(MediaQueryData mq) {
     return MediaQuery(
       data: mq.copyWith(textScaler: mq.textScaler.clamp(maxScaleFactor: 1.3)),
       child: ValueListenableBuilder<bool>(

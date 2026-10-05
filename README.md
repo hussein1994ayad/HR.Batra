@@ -1,4 +1,6 @@
-# HR Pro v6.0 — نظام إدارة الموارد البشرية
+# HR Pro — نظام إدارة الموارد البشرية
+
+> رقم إصدار التطبيق الفعلي في `mobile/pubspec.yaml` (`version:`). عبارة "v6.0" في عناوين بعض الملفات اسم قديم للمشروع وليست رقم إصدار.
 
 نظام إدارة موارد بشرية متكامل لشركة **بترا** ذات الفروع المتعددة (القناة، العكد، كمب سارة، بغداد الجديدة).
 واجهة عربية RTL كاملة، دينار عراقي، وتغطي: الحضور بالبصمة الجغرافية، الرواتب، السلف، الإجازات، التتبع الميداني الحي.
@@ -10,14 +12,17 @@ HR.Batra/
 ├── mobile/          Flutter (Dart) — تطبيق الموظف والأدمن (Android + iOS)
 ├── web/             Next.js 16 (TypeScript + Tailwind v4) — لوحة الإدارة
 ├── supabase/        قاعدة بيانات PostgreSQL + Edge Functions
-│   ├── migrations/  29 ملف SQL بترتيب زمني
+│   ├── migrations/  ملفات SQL بترتيب زمني (الملف المطبّق لا يُعدَّل — أي تغيير بملف جديد)
+│   ├── tests/       فحوصات قاعدة البيانات (PGlite محلياً: `cd supabase/tests && npm test`)
 │   ├── functions/   daily-cleanup, push-notification (Deno)
 │   └── seed_dev_data.sql
-├── .github/workflows/  CI: Android APK + iOS IPA + Web static export
+├── .github/workflows/  CI: Android APK + iOS IPA + Web + فحص محاكي آيفون (نتائجه بفرع ios-sim-results)
 └── .env.example     قالب متغيرات البيئة
 ```
 
-راجع [`ARCHITECTURE.md`](./ARCHITECTURE.md) لتفاصيل معمارية النظام والقرارات التصميمية.
+راجع [`ARCHITECTURE.md`](./ARCHITECTURE.md) لتفاصيل معمارية النظام والقرارات التصميمية،
+و[`BUSINESS_RULES.md`](./BUSINESS_RULES.md) لمكان كل قاعدة عمل (الحضور، الرواتب، السلف) ونسخها،
+و[`CHANGES.md`](./CHANGES.md) لسجل إعادة الهيكلة.
 
 ## متطلبات التطوير
 

@@ -1,6 +1,6 @@
 // استعلامات Supabase الخاصة بصفحة الموظفين. كل دالة ترمي عند الخطأ.
 
-import imageCompression from 'browser-image-compression';
+import { imageCompression } from '@/lib/lazy';
 import { supabase } from '@/lib/supabase';
 import type { ArchivedEmployee, Department, Employee, EmployeeDevice } from '@/lib/db-types';
 import { documentPathFromUrl } from './logic';

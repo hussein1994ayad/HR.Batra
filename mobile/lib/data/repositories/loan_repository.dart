@@ -1,5 +1,5 @@
 // =========================================================================
-// سلف الموظفين: السجل الكامل للإدارة، ومنح سلفة مباشرة
+// سلف الموظفين: السجل الكامل للإدارة، ومنح سلفة مباشرة، وطلبات الموظف نفسه وإلغاؤها
 // =========================================================================
 
 import 'dart:io';
@@ -75,5 +75,29 @@ class LoanRepository {
       'p_pledge_url': pledgeUrl,
       'p_notes': notes,
     });
+  }
+
+  // ── طلبات الموظف نفسه (شاشة السلف) ──
+
+  /// سلف الموظف مع أقساطها، الأحدث أولاً.
+  Future<List<LoanModel>> fetchMyLoans(String userId) async {
+    final data = await _db.from('loans').select('*, loan_installments(*)').eq('employee_id', userId).order('created_at', ascending: false);
+    return rowsOf(data).map(LoanModel.fromMap).toList();
+  }
+
+  /// راتب الموظف الشهري (لتنبيه القسط فوق نص الراتب أو فوق الراتب كله).
+  Future<double?> fetchMySalary(String userId) async {
+    final me = await _db.from('employees').select('monthly_salary_iqd').eq('id', userId).maybeSingle();
+    return (me?['monthly_salary_iqd'] as num?)?.toDouble();
+  }
+
+  /// طلب سلفة جديد (pending). إشعار المدراء يُرسل من قاعدة البيانات (trg_notify_admins_new_loan_request).
+  Future<void> submitLoanRequest(Map<String, dynamic> row) async {
+    await _db.from('loans').insert(row);
+  }
+
+  /// إلغاء طلب سلفة ما زال قيد المراجعة.
+  Future<void> cancelMyLoanRequest(Object? loanId) async {
+    await _db.rpc<void>('cancel_my_loan_request', params: {'p_loan_id': loanId});
   }
 }

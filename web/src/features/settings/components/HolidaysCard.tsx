@@ -5,10 +5,8 @@ import toast from 'react-hot-toast';
 import { CalendarOff, Plus, Trash2 } from 'lucide-react';
 import { useConfirm } from '@/components/confirm';
 import { Button, Card, CardHeader, Field, IconButton, InfoNote, Input } from '@/components/ui';
-import { supabase } from '@/lib/supabase';
+import { addHoliday, deleteHoliday, fetchRecentHolidays, type Holiday } from '../api';
 import { errorMessage } from '@/lib/format';
-
-type Holiday = { holiday_date: string; name: string };
 
 /**
  * العطل الرسمية: لا يُحسب فيها غياب "بدون بصمة" ولا تُرسل تذكيرات البصمة.
@@ -22,11 +20,7 @@ export function HolidaysCard() {
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
-    const { data, error } = await supabase
-      .from('official_holidays')
-      .select('holiday_date, name')
-      .gte('holiday_date', new Date(Date.now() - 60 * 86400000).toISOString().slice(0, 10))
-      .order('holiday_date');
+    const { data, error } = await fetchRecentHolidays();
     if (error) {
       toast.error(`تعذر تحميل العطل: ${errorMessage(error)}`);
       return;
@@ -45,8 +39,7 @@ export function HolidaysCard() {
       return;
     }
     setBusy(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    const { error } = await supabase.from('official_holidays').insert({ holiday_date: date, name: name.trim(), created_by: user?.id });
+    const error = await addHoliday(date, name.trim());
     setBusy(false);
     if (error) {
       toast.error(error.code === '23505' ? 'هذا اليوم مسجّل عطلة مسبقاً' : `تعذر الإضافة: ${errorMessage(error)}`);
@@ -66,7 +59,7 @@ export function HolidaysCard() {
       tone: 'danger',
     });
     if (!ok) return;
-    const { error } = await supabase.from('official_holidays').delete().eq('holiday_date', h.holiday_date);
+    const error = await deleteHoliday(h.holiday_date);
     if (error) {
       toast.error(`تعذر الحذف: ${errorMessage(error)}`);
       return;

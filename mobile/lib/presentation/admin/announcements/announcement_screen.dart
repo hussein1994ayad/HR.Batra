@@ -1,0 +1,392 @@
+// =========================================================================
+// HR Pro — إرسال تعميم للموظفين
+// =========================================================================
+// عنوان ونص، الاستهداف (الجميع / فرع / أشخاص)، ومدة الظهور (من تاريخ إلى تاريخ)،
+// مع معاينة حيّة. publish_announcement يحفظ التعميم ويُشعر المستهدفين معاً؛
+// التعميم يظهر في "التعاميم" خلال مدته فقط ثم يختفي تلقائياً.
+// =========================================================================
+
+import 'package:flutter/material.dart';
+
+import '../../../core/models/models.dart';
+import '../../../core/utils/app_log.dart';
+import '../../../core/utils/error_text.dart';
+import '../../../data/repositories/announcement_repository.dart';
+import '../../shared/ui/ui.dart';
+
+class AnnouncementScreen extends StatefulWidget {
+  const AnnouncementScreen({super.key});
+
+  @override
+  State<AnnouncementScreen> createState() => _AnnouncementScreenState();
+}
+
+class _AnnouncementScreenState extends State<AnnouncementScreen> {
+  final AnnouncementRepository _repo = AnnouncementRepository();
+  final _formKey = GlobalKey<FormState>();
+  bool _isLoading = false;
+  bool _loadingData = true;
+  final _titleController = TextEditingController();
+  final _bodyController = TextEditingController();
+
+  String _selectedTarget = 'all'; // 'all', 'branch', 'employees'
+  String? _selectedBranchId;
+  List<BranchModel> _branches = [];
+  List<EmployeeRef> _employees = [];
+  final List<String> _selectedEmployeeIds = [];
+
+  // مدة الظهور: 'day' | '3' | '7' | '30' | 'none' | 'custom'
+  String _duration = '7';
+  DateTime _startDay = DateUtils.dateOnly(DateTime.now());
+  DateTime? _customEndDay;
+
+  bool get _startsToday => DateUtils.isSameDay(_startDay, DateTime.now());
+
+  /// آخر يوم يظهر فيه التعميم (نهاية اليوم)، أو null بدون نهاية.
+  DateTime? get _endDay => switch (_duration) {
+        'none' => null,
+        'custom' => _customEndDay,
+        'day' => _startDay,
+        _ => _startDay.add(Duration(days: int.parse(_duration) - 1)),
+      };
+
+  String get _periodLabel {
+    final from = _startsToday ? 'من الآن' : 'من ${Fmt.dateWithDay(_startDay)}';
+    final end = _endDay;
+    return end == null ? '$from وبدون نهاية' : '$from حتى نهاية ${Fmt.dateWithDay(end)}';
+  }
+
+  Future<void> _pickStart() async {
+    final now = DateUtils.dateOnly(DateTime.now());
+    final d = await showDatePicker(context: context, initialDate: _startDay, firstDate: now, lastDate: now.add(const Duration(days: 365)));
+    if (d == null) return;
+    setState(() {
+      _startDay = d;
+      if (_customEndDay != null && _customEndDay!.isBefore(d)) _customEndDay = d;
+    });
+  }
+
+  Future<void> _pickEnd() async {
+    final d = await showDatePicker(
+      context: context,
+      initialDate: _customEndDay ?? _startDay.add(const Duration(days: 6)),
+      firstDate: _startDay,
+      lastDate: _startDay.add(const Duration(days: 730)),
+    );
+    if (d != null) setState(() => _customEndDay = d);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+    _titleController.addListener(_refresh);
+    _bodyController.addListener(_refresh);
+  }
+
+  void _refresh() => setState(() {});
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _bodyController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadData() async {
+    try {
+      final futures = await _repo.fetchTargets();
+      if (!mounted) return;
+      setState(() {
+        _branches = futures.branches;
+        _employees = futures.employees;
+      });
+    } catch (e) {
+      appLog('Error loading data: $e');
+    } finally {
+      if (mounted) setState(() => _loadingData = false);
+    }
+  }
+
+  String get _targetLabel => switch (_selectedTarget) {
+        'branch' => 'موظفو ${_branches.where((b) => b.id == _selectedBranchId).firstOrNull?.rawName ?? 'الفرع'}',
+        'employees' => '${_selectedEmployeeIds.length} موظف',
+        _ => 'كل الموظفين (${_employees.length})',
+      };
+
+  Future<void> _sendAnnouncement() async {
+    if (!_formKey.currentState!.validate()) return;
+    if (_selectedTarget == 'branch' && _selectedBranchId == null) {
+      AppSnack.error(context, 'اختر الفرع');
+      return;
+    }
+    if (_selectedTarget == 'employees' && _selectedEmployeeIds.isEmpty) {
+      AppSnack.error(context, 'اختر موظفاً واحداً على الأقل');
+      return;
+    }
+    if (_duration == 'custom' && _customEndDay == null) {
+      AppSnack.error(context, 'اختر تاريخ انتهاء التعميم');
+      return;
+    }
+
+    final ok = await showAppConfirm(context, title: 'إرسال التعميم؟', message: 'راح يوصل إشعار إلى $_targetLabel، ويظهر في التعاميم $_periodLabel.', confirmLabel: 'إرسال');
+    if (!ok || !mounted) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      final end = _endDay;
+      final sent = await _repo.publish({
+        'p_title': _titleController.text.trim(),
+        'p_content': _bodyController.text.trim(),
+        'p_starts_at': _startsToday ? null : _startDay.toUtc().toIso8601String(),
+        // نهاية اليوم الأخير بتوقيت الهاتف
+        'p_ends_at': end == null ? null : DateTime(end.year, end.month, end.day, 23, 59, 59).toUtc().toIso8601String(),
+        'p_target': _selectedTarget,
+        'p_branch_id': _selectedTarget == 'branch' ? _selectedBranchId : null,
+        'p_employee_ids': _selectedTarget == 'employees' ? _selectedEmployeeIds : null,
+      });
+
+      if (mounted) {
+        _titleController.clear();
+        _bodyController.clear();
+        AppSnack.success(context, 'نُشر التعميم ووصل إشعاره إلى ${sent ?? 0} موظف');
+      }
+    } catch (e) {
+      appLog('Error sending announcement: $e');
+      if (mounted) AppSnack.error(context, 'تعذّر الإرسال: ${errorText(e)}');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _pickEmployees() async {
+    await showAppSheet<void>(
+      context,
+      title: 'اختر الموظفين',
+      builder: (ctx) => _EmployeePicker(employees: _employees, selected: _selectedEmployeeIds, onChanged: _refresh),
+    );
+  }
+
+  Future<void> _pickBranch() async {
+    final id = await showAppSheet<String>(
+      context,
+      title: 'اختر الفرع',
+      builder: (ctx) => Column(
+        children: [
+          for (final b in _branches)
+            AppListTile(
+              dense: true,
+              leading: const ToneIcon(Icons.store_rounded, tone: AppTone.accent, size: 36),
+              title: '${b.rawName}',
+              trailing: b.id == _selectedBranchId ? const Icon(Icons.check_rounded, color: AppColors.brand) : null,
+              onTap: () => Navigator.pop(ctx, b.id),
+            ),
+        ],
+      ),
+    );
+    if (id != null) setState(() => _selectedBranchId = id);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final title = _titleController.text.trim();
+    final body = _bodyController.text.trim();
+    return AppPage(
+      title: 'تعميم جديد',
+      maxWidth: AppBreakpoints.maxForm,
+      body: Form(
+        key: _formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            AppTextField(
+              controller: _titleController,
+              label: 'العنوان',
+              hint: 'مثلاً: عطلة رسمية يوم الخميس',
+              maxLength: 80,
+              textInputAction: TextInputAction.next,
+              validator: (v) => v == null || v.trim().isEmpty ? 'اكتب عنوان التعميم' : null,
+            ),
+            const SizedBox(height: AppSpace.lg),
+            AppTextField(
+              controller: _bodyController,
+              label: 'النص',
+              hint: 'تفاصيل التعميم...',
+              maxLines: 6,
+              minLines: 3,
+              validator: (v) => v == null || v.trim().isEmpty ? 'اكتب نص التعميم' : null,
+            ),
+            const SizedBox(height: AppSpace.lg),
+            AppChoiceChips<String>(
+              label: 'إلى من؟',
+              value: _selectedTarget,
+              options: const [
+                ('all', 'الجميع', Icons.groups_rounded),
+                ('branch', 'فرع', Icons.store_rounded),
+                ('employees', 'أشخاص', Icons.person_add_alt_1_rounded),
+              ],
+              onChanged: (v) => setState(() => _selectedTarget = v),
+            ),
+            if (_selectedTarget == 'branch') ...[
+              const SizedBox(height: AppSpace.md),
+              AppPickerField(
+                label: 'الفرع',
+                icon: Icons.store_rounded,
+                value: _branches.where((b) => b.id == _selectedBranchId).firstOrNull?.rawName,
+                placeholder: 'اختر الفرع',
+                onTap: _loadingData ? null : _pickBranch,
+              ),
+            ],
+            if (_selectedTarget == 'employees') ...[
+              const SizedBox(height: AppSpace.md),
+              AppPickerField(
+                label: 'الموظفون',
+                icon: Icons.person_search_rounded,
+                value: _selectedEmployeeIds.isEmpty ? null : 'تم اختيار ${_selectedEmployeeIds.length} موظف',
+                placeholder: 'اختر الموظفين',
+                onTap: _loadingData ? null : _pickEmployees,
+              ),
+            ],
+            const SizedBox(height: AppSpace.lg),
+            AppChoiceChips<String>(
+              label: 'مدة الظهور',
+              value: _duration,
+              options: const [
+                ('day', 'يوم', null),
+                ('3', '3 أيام', null),
+                ('7', 'أسبوع', null),
+                ('30', 'شهر', null),
+                ('none', 'بدون نهاية', null),
+                ('custom', 'تاريخ محدد', Icons.event_rounded),
+              ],
+              onChanged: (v) => setState(() => _duration = v),
+            ),
+            const SizedBox(height: AppSpace.md),
+            Row(
+              children: [
+                Expanded(
+                  child: AppPickerField(
+                    label: 'يبدأ',
+                    value: _startsToday ? 'اليوم' : Fmt.dateWithDay(_startDay),
+                    onTap: _pickStart,
+                  ),
+                ),
+                if (_duration == 'custom') ...[
+                  const SizedBox(width: AppSpace.md),
+                  Expanded(
+                    child: AppPickerField(
+                      label: 'ينتهي',
+                      value: _customEndDay == null ? null : Fmt.dateWithDay(_customEndDay),
+                      placeholder: 'اختر التاريخ',
+                      onTap: _pickEnd,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            const SectionHeader('معاينة'),
+            AppCard(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const ToneIcon(Icons.campaign_rounded, tone: AppTone.info),
+                  const SizedBox(width: AppSpace.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(title.isEmpty ? 'عنوان التعميم' : title, style: AppText.subtitle.copyWith(color: title.isEmpty ? AppColors.textMuted : null)),
+                        const SizedBox(height: AppSpace.xs),
+                        Text(body.isEmpty ? 'هنا يظهر النص كما سيراه الموظف.' : body, style: AppText.bodySm),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: AppSpace.sm),
+            Text('يصل إلى: $_targetLabel', style: AppText.caption),
+            const SizedBox(height: AppSpace.xs),
+            Row(
+              children: [
+                const Icon(Icons.schedule_rounded, size: 14, color: AppColors.textMuted),
+                const SizedBox(width: AppSpace.xs),
+                Expanded(child: Text('يظهر في التعاميم $_periodLabel ثم يختفي تلقائياً', style: AppText.caption)),
+              ],
+            ),
+            const SizedBox(height: AppSpace.xxl),
+            AppButton(label: 'نشر التعميم', icon: Icons.send_rounded, size: AppButtonSize.large, expand: true, loading: _isLoading, onPressed: _sendAnnouncement),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// قائمة اختيار متعدد للموظفين مع بحث وتحديد الكل.
+class _EmployeePicker extends StatefulWidget {
+  const _EmployeePicker({required this.employees, required this.selected, required this.onChanged});
+  final List<EmployeeRef> employees;
+  final List<String> selected;
+  final VoidCallback onChanged;
+
+  @override
+  State<_EmployeePicker> createState() => _EmployeePickerState();
+}
+
+class _EmployeePickerState extends State<_EmployeePicker> {
+  String _q = '';
+
+  void _toggle(String id, bool on) {
+    setState(() => on ? widget.selected.add(id) : widget.selected.remove(id));
+    widget.onChanged();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final items = widget.employees.where((e) => _q.isEmpty || '${e.fullName}'.contains(_q)).toList();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        TextField(
+          decoration: const InputDecoration(hintText: 'بحث بالاسم', prefixIcon: Icon(Icons.search_rounded)),
+          onChanged: (v) => setState(() => _q = v.trim()),
+        ),
+        Row(
+          children: [
+            Expanded(child: Text('${widget.selected.length} مختار', style: AppText.caption)),
+            TextButton(
+              onPressed: () {
+                setState(() {
+                  widget.selected
+                    ..clear()
+                    ..addAll(items.map((e) => e.id));
+                });
+                widget.onChanged();
+              },
+              child: const Text('تحديد الكل'),
+            ),
+            TextButton(
+              onPressed: () {
+                setState(widget.selected.clear);
+                widget.onChanged();
+              },
+              child: const Text('مسح'),
+            ),
+          ],
+        ),
+        for (final e in items)
+          CheckboxListTile.adaptive(
+            value: widget.selected.contains(e.id),
+            title: Text('${e.fullName}', style: AppText.body),
+            secondary: AppAvatar(name: '${e.fullName}', size: 36),
+            contentPadding: EdgeInsets.zero,
+            onChanged: (v) => _toggle(e.id, v ?? false),
+          ),
+        const SizedBox(height: AppSpace.md),
+        AppButton(label: 'تم', expand: true, onPressed: () => Navigator.pop(context)),
+      ],
+    );
+  }
+}

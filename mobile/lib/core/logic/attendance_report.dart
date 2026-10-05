@@ -5,6 +5,8 @@
 // مجاز (مع نوع الإجازة) / عطلة. الإجازة الزمنية تظهر ملاحظة على يوم الموظف.
 // =========================================================================
 
+import 'dart:math' as math;
+
 import '../models/work_schedule_model.dart';
 import 'attendance_rules.dart';
 
@@ -145,7 +147,32 @@ class ReportRow {
 
 DateTime _d(DateTime t) => DateTime(t.year, t.month, t.day);
 
+int? _hhmmMinutes(String? hhmm) {
+  final p = hhmm?.split(':');
+  if (p == null || p.length < 2) return null;
+  final h = int.tryParse(p[0]), m = int.tryParse(p[1]);
+  return h == null || m == null ? null : h * 60 + m;
+}
+
+/// دقائق الإجازات الزمنية المعتمدة اللي تقع بين [fromMin] و[toMin] (دقائق اليوم) — نفس payroll_hourly_leave_overlap
+/// بالسيرفر: وقت الإجازة الزمنية ما ينحسب تأخيراً ولا خروجاً مبكراً.
+int hourlyLeaveOverlap(Iterable<ReportLeave> hourlyLeaves, int fromMin, int toMin) {
+  if (toMin <= fromMin) return 0;
+  var sum = 0;
+  for (final l in hourlyLeaves) {
+    final start = _hhmmMinutes(l.startHour) ?? l.from.hour * 60 + l.from.minute;
+    final end = _hhmmMinutes(l.endHour) ?? l.to.hour * 60 + l.to.minute;
+    sum += math.max(math.min(toMin, end) - math.max(fromMin, start), 0);
+  }
+  return sum;
+}
+
 /// سطر لكل موظف ولكل يوم من [from] إلى [to] (لا يتجاوز [today]).
+///
+/// للعرض فقط — مصدر الحقيقة للخصم هو payroll_events (sync_payroll_day بالسيرفر). التأخير والخروج المبكر هنا
+/// بنفس قاعدة السيرفر: يُطرح منهما وقت الإجازة الزمنية المعتمدة، و"متأخر" = الدقائق > السماحية، أو حالة البصمة
+/// "متأخر" وبقت دقائق بعد الطرح. فرق مقصود: موظف بدون جدول يُقاس على 09:00–17:00 هنا (حتى ما يختفي تأخيره من التقرير)،
+/// بينما المحرّك ما يحسب تأخير بدون جدول.
 List<ReportRow> buildDailyReport({
   required DateTime from,
   required DateTime to,
@@ -173,10 +200,16 @@ List<ReportRow> buildDailyReport({
       final hourlyLeave = dayLeaves.where((l) => l.isHourly).firstOrNull;
 
       if (att != null && att.status != 'absent') {
-        final late = att.checkIn == null ? 0 : lateMinutes(att.checkIn!, schedule);
-        final early = att.checkOut == null ? 0 : earlyLeaveMinutes(att.checkOut!, schedule);
-        final grace = schedule?.gracePeriodMinutes ?? 15;
-        final status = att.status == 'late' || late > grace
+        final hourlyLeaves = dayLeaves.where((l) => l.isHourly);
+        final dayStart = schedule?.checkInMinutes ?? 9 * 60;
+        final dayEnd = schedule?.checkOutMinutes ?? 17 * 60;
+        final rawLate = att.checkIn == null ? 0 : lateMinutes(att.checkIn!, schedule);
+        final rawEarly = att.checkOut == null ? 0 : earlyLeaveMinutes(att.checkOut!, schedule);
+        final late = rawLate - hourlyLeaveOverlap(hourlyLeaves, dayStart, dayStart + rawLate);
+        final early = rawEarly - hourlyLeaveOverlap(hourlyLeaves, dayEnd - rawEarly, dayEnd);
+        final grace = schedule?.gracePeriodMinutes ?? kDefaultGraceMinutes;
+        final isLate = late > grace || (att.status == 'late' && late > 0);
+        final status = isLate
             ? ReportStatus.late
             : early > grace || att.status == 'half_day'
                 ? ReportStatus.earlyLeave
@@ -187,7 +220,7 @@ List<ReportRow> buildDailyReport({
           status: status,
           attendance: att,
           leave: hourlyLeave,
-          lateMinutes: late > grace || att.status == 'late' ? late : 0,
+          lateMinutes: isLate ? late : 0,
           earlyMinutes: early > grace ? early : 0,
         ));
       } else if (att == null && (!isWorkingDay(day, schedule) || holidayByDay.containsKey(day))) {

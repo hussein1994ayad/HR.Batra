@@ -26,7 +26,8 @@ class AdminActionsRepository {
   /// المبلغ لا يُكتب من التطبيق: محرّك الرواتب يحسبه (أجر اليوم = الراتب ÷ 30، والدقائق
   /// بأجر دقيقة دوام الموظف). كان يُضاف قيد خصم منفصل فوق خصم الحضور فيُخصم الموظف مرتين.
   /// إن وُجدت حركة للمحرّك يُرسل القرار لها مباشرة (والسيرفر يحدّث الحضور ويُشعر الموظف)؛
-  /// وإلا (مثل غياب اليوم قبل حسابه) يُسجَّل في الحضور والمحرّك يلتقطه.
+  /// وإلا (مثل غياب اليوم قبل حسابه) يُسجَّل في الحضور والمحرّك يلتقطه (trigger trg_payroll_attendance).
+  /// التفاصيل: BUSINESS_RULES.md «دورة حياة المسير» البند 3.
   Future<void> applyDecision(PendingDecision item, {required bool deduct, required String reason}) async {
     final status = deduct ? 'applied' : 'ignored';
 

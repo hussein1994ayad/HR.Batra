@@ -11,6 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:hr_pro/core/services/location_service.dart';
 import 'package:hr_pro/core/services/precise_location.dart';
 import 'package:hr_pro/main.dart' as app;
 import 'package:integration_test/integration_test.dart';
@@ -95,6 +96,21 @@ void main() {
     final d = Geolocator.distanceBetween(pos.latitude, pos.longitude, _simLat, _simLng);
     expect(d, lessThan(200), reason: 'الموقع ${pos.latitude},${pos.longitude} بعيد ${d.round()} م');
     expect(pos.accuracy, lessThanOrEqualTo(PreciseLocation.maxPunchAccuracyMeters));
+  });
+
+  testWidgets('tracking service starts and stops (location split refactor)', (tester) async {
+    final permission = await Geolocator.checkPermission();
+    if (permission != LocationPermission.always && permission != LocationPermission.whileInUse) {
+      debugPrint('LOCATION_TEST_SKIPPED: tracking (permission=$permission)');
+      markTestSkipped('صلاحية الموقع غير ممنوحة في بيئة الاختبار');
+      return;
+    }
+    // بدون جلسة: الرفع يُرفض من السيرفر فتبقى النقاط بالطابور المحلي — ما ينكتب شي بالقاعدة الحية
+    await LocationService.startTracking(employeeId: '00000000-0000-0000-0000-000000000001');
+    expect(LocationService.isTracking, isTrue);
+    await Future<void>.delayed(const Duration(seconds: 5));
+    await LocationService.stopTracking();
+    expect(LocationService.isTracking, isFalse);
   });
 }
 

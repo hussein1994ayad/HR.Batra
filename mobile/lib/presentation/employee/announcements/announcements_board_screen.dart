@@ -7,7 +7,9 @@
 
 import 'package:flutter/material.dart';
 
-import '../../../core/services/supabase_service.dart';
+import '../../../core/models/models.dart';
+import '../../../core/utils/app_log.dart';
+import '../../../data/repositories/announcement_repository.dart';
 import '../../shared/ui/ui.dart';
 import 'announcement_widgets.dart';
 
@@ -19,11 +21,12 @@ class AnnouncementsBoardScreen extends StatefulWidget {
 }
 
 class _AnnouncementsBoardScreenState extends State<AnnouncementsBoardScreen> {
+  final AnnouncementRepository _repo = AnnouncementRepository();
   bool _loading = true;
   bool _failed = false;
-  List<Map<String, dynamic>> _announcements = [];
-  List<Map<String, dynamic>> _onLeave = [];
-  List<Map<String, dynamic>> _late = [];
+  List<AnnouncementModel> _announcements = [];
+  List<OnLeavePerson> _onLeave = [];
+  List<LatePerson> _late = [];
 
   @override
   void initState() {
@@ -33,20 +36,16 @@ class _AnnouncementsBoardScreenState extends State<AnnouncementsBoardScreen> {
 
   Future<void> _load() async {
     try {
-      final r = await Future.wait<dynamic>([
-        SupabaseService.client.rpc<dynamic>('get_active_announcements', params: {'p_limit': 50}),
-        SupabaseService.client.rpc<dynamic>('get_on_leave_now'),
-        SupabaseService.client.rpc<dynamic>('get_late_today').catchError((Object _) => <dynamic>[]),
-      ]);
+      final r = await _repo.fetchBoard();
       if (!mounted) return;
       setState(() {
-        _announcements = List<Map<String, dynamic>>.from(r[0] as List);
-        _onLeave = List<Map<String, dynamic>>.from(r[1] as List);
-        _late = List<Map<String, dynamic>>.from(r[2] as List);
+        _announcements = rowsStrict(r[0], AnnouncementModel.fromMap);
+        _onLeave = rowsStrict(r[1], OnLeavePerson.fromMap);
+        _late = rowsStrict(r[2], LatePerson.fromMap);
         _failed = false;
       });
     } catch (e) {
-      debugPrint('Error loading announcements board: $e');
+      appLog('Error loading announcements board: $e');
       if (mounted) setState(() => _failed = true);
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -61,8 +60,8 @@ class _AnnouncementsBoardScreenState extends State<AnnouncementsBoardScreen> {
     } else if (_failed) {
       content = [ErrorView(title: 'تعذّر تحميل التعاميم', onRetry: _load)];
     } else {
-      final daily = _onLeave.where((p) => p['is_hourly'] != true).toList();
-      final hourly = _onLeave.where((p) => p['is_hourly'] == true).toList();
+      final daily = _onLeave.where((p) => !p.isHourly).toList();
+      final hourly = _onLeave.where((p) => p.isHourly).toList();
       content = [
         SectionHeader('المجازون اليوم', trailing: _onLeave.isEmpty ? null : StatusBadge('${_onLeave.length}', tone: AppTone.accent)),
         if (_onLeave.isEmpty)

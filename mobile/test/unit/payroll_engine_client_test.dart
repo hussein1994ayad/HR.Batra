@@ -5,8 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hr_pro/core/models/models.dart';
 import 'package:hr_pro/core/theme/app_theme.dart';
 import 'package:hr_pro/data/repositories/admin_dashboard_repository.dart';
-import 'package:hr_pro/presentation/employee/admin_dashboard/widgets/decision_card.dart';
-import 'package:hr_pro/presentation/employee/payslips_screen.dart';
+import 'package:hr_pro/presentation/admin/admin_dashboard/widgets/decision_card.dart';
+import 'package:hr_pro/presentation/employee/payslips/payslips_logic.dart';
 
 void main() {
   group('attachEngineEvents', () {
@@ -82,8 +82,8 @@ void main() {
       {'line_type': 'paid_leave', 'event_date': '2026-09-15', 'amount': 0, 'direction': 0},
       {'line_type': 'loan', 'event_date': '2026-09-20', 'amount': 100000, 'direction': -1},
     ]);
-    expect(details.map((d) => d['reason']), ['غياب', 'تأخير 30 دقيقة', 'غياب (مرحّل من 2026-08)', 'مكافأة أداء']);
-    expect(details.map((d) => d['type']), ['deduction', 'deduction', 'deduction', 'bonus']);
+    expect(details.map((d) => d.reason), ['غياب', 'تأخير 30 دقيقة', 'غياب (مرحّل من 2026-08)', 'مكافأة أداء']);
+    expect(details.map((d) => d.type), ['deduction', 'deduction', 'deduction', 'bonus']);
   });
 
   testWidgets('decision card shows the server amount and has no amount field', (tester) async {

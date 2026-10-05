@@ -12,10 +12,10 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../utils/app_log.dart';
 import 'device_service.dart';
 import 'notification_service.dart';
 import 'supabase_service.dart';
@@ -87,7 +87,7 @@ class AttendanceSyncService {
       );
     } catch (e) {
       if (!isNetworkError(e)) rethrow;
-      debugPrint('⚠️ لا يوجد اتصال، حفظ البصمة محلياً: $e');
+      appLog('⚠️ لا يوجد اتصال، حفظ البصمة محلياً: $e');
       // علامة الموقع الوهمي وصاحب البصمة تُحفظ معها: بدونها كان وضع الطيران
       // + موقع وهمي يمرّر البصمة، وبصمة موظف تُرسل باسم من يدخل بعده.
       await _queueOfflinePunch({
@@ -148,7 +148,7 @@ class AttendanceSyncService {
       };
       await file.writeAsString(jsonEncode(data));
     } catch (e) {
-      debugPrint('❌ فشل حفظ كاش الحضور: $e');
+      appLog('❌ فشل حفظ كاش الحضور: $e');
     }
   }
 
@@ -163,7 +163,7 @@ class AttendanceSyncService {
         }
       }
     } catch (e) {
-      debugPrint('❌ فشل قراءة كاش الحضور: $e');
+      appLog('❌ فشل قراءة كاش الحضور: $e');
     }
     return null;
   }
@@ -187,7 +187,7 @@ class AttendanceSyncService {
         }
       }
     } catch (e) {
-      debugPrint('❌ فشل قراءة طابور البصمات: $e');
+      appLog('❌ فشل قراءة طابور البصمات: $e');
     }
     return [];
   }
@@ -248,7 +248,7 @@ class AttendanceSyncService {
         if (isNetworkError(e)) {
           remaining.add(punch);
         } else {
-          debugPrint('⚠️ رفض السيرفر بصمة محفوظة: $e');
+          appLog('⚠️ رفض السيرفر بصمة محفوظة: $e');
           rejected.add(PunchResult.rejected('server_error', e.toString()));
         }
       }

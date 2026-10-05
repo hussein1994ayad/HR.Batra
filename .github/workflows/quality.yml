@@ -27,8 +27,13 @@ jobs:
         run: dart analyze
       - name: Unit & widget tests
         working-directory: ./mobile
-        run: flutter test
-
+        # أسماء الاختبارات الفاشلة ورسائلها تطلع كـ annotations (تنقرا بدون تسجيل دخول)
+        run: |
+          set +e
+          flutter test --file-reporter json:test-results.json
+          code=$?
+          node ../.github/scripts/report_failed_tests.js test-results.json
+          exit $code
   web:
     runs-on: ubuntu-latest
     steps:

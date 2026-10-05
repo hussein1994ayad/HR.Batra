@@ -21,6 +21,6 @@ class RoleRepository {
 
   Future<bool> isAdminOrManager() async {
     final role = await currentRole();
-    return role == 'admin' || role == 'manager';
+    return Roles.canManage(role);
   }
 }

@@ -1,7 +1,8 @@
 import 'dart:io' show Platform;
 
-import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
+
+import '../utils/app_log.dart';
 
 /// البصمة تحتاج الموقع الدقيق: أندرويد 12+ وiOS 14+ يسمحون للمستخدم يعطي موقعاً تقريبياً
 /// (يبعد كيلومترات) فتفشل البصمة أو تطلع نتيجتها غلط.
@@ -38,7 +39,7 @@ class PreciseLocation {
       return await Geolocator.getLocationAccuracy() == LocationAccuracyStatus.precise;
     } catch (e) {
       // منصة/إصدار بدون خيار الموقع التقريبي: لا نمنع البصمة
-      debugPrint('precise location check skipped: $e');
+      appLog('precise location check skipped: $e');
       return true;
     }
   }

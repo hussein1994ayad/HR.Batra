@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../utils/app_log.dart';
 import 'image_compression_service.dart';
 import 'supabase_service.dart';
 
@@ -43,11 +44,11 @@ class FileUploadService {
             .remove([oldRemotePath]);
         
         if (kDebugMode) {
-          debugPrint('تم مسح الملف المستبدل القديم بنجاح من التخزين: $oldRemotePath');
+          appLog('تم مسح الملف المستبدل القديم بنجاح من التخزين: $oldRemotePath');
         }
       } catch (e) {
         if (kDebugMode) {
-          debugPrint('فشل مسح الملف المستبدل القديم تلقائياً: $e');
+          appLog('فشل مسح الملف المستبدل القديم تلقائياً: $e');
         }
       }
     }
@@ -72,7 +73,7 @@ class FileUploadService {
       await supabase.storage.from(bucketName).remove([filePath]);
       
       if (kDebugMode) {
-        debugPrint('تم حذف الملف نهائياً وفورياً من التخزين: $filePath');
+        appLog('تم حذف الملف نهائياً وفورياً من التخزين: $filePath');
       }
     } else {
       // نقل الملف لسلة المحذوفات (Deleted Files) لمدة 30 يوماً
@@ -81,7 +82,9 @@ class FileUploadService {
       
       try {
         fileSizeBytes = await _getFileSizeInStorage(bucketName, filePath);
-      } catch (_) {}
+      } catch (e) {
+        appLog('تعذّر قراءة حجم الملف من التخزين: $e');
+      }
 
       await supabase.from('deleted_files').insert({
         'file_path': filePath,
@@ -94,7 +97,7 @@ class FileUploadService {
       });
 
       if (kDebugMode) {
-        debugPrint('تم نقل الملف لسلة المحذوفات مؤقتاً لمدة 30 يوماً: $filePath');
+        appLog('تم نقل الملف لسلة المحذوفات مؤقتاً لمدة 30 يوماً: $filePath');
       }
     }
   }
@@ -111,7 +114,9 @@ class FileUploadService {
           return f.metadata?['size'] as int?;
         }
       }
-    } catch (_) {}
+    } catch (e) {
+      appLog('تعذّر قراءة بيانات الملف من التخزين: $e');
+    }
     return null;
   }
 }

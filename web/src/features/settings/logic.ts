@@ -1,5 +1,6 @@
-// منطق أداة تنظيف قاعدة البيانات — دوال نقية.
+// منطق وثوابت صفحة الإعدادات — بدون React/Supabase.
 
+import type { LeaveTypeOption } from '@/lib/db-types';
 import type { PurgeOptions, PurgeResult } from './types';
 
 export const ARABIC_MONTH_NAMES = [
@@ -18,3 +19,16 @@ export function purgeSummary(options: PurgeOptions, result: PurgeResult | null |
   if (options.absences) parts.push(`${r.absences_deleted || 0} سجل حضور وغياب`);
   return `تم التنظيف بنجاح! 🧹 تم حذف: ${parts.join('، ')}`;
 }
+
+/** أنواع الإجازات إذا ما محفوظة سياسة إجازات بعد. */
+export const DEFAULT_LEAVE_TYPES: LeaveTypeOption[] = [
+  { id: 'annual', name: 'إجازة سنوية' },
+  { id: 'sick', name: 'إجازة مرضية' },
+  { id: 'emergency', name: 'إجازة طارئة' },
+  { id: 'maternity', name: 'إجازة أمومة' },
+  { id: 'other', name: 'إجازة أخرى' },
+];
+/** السنوية والمرضية لها أرصدة بالسيرفر فما تنحذف من الأنواع. */
+export const PROTECTED_LEAVE_TYPES = ['annual', 'sick'];
+// Saturday first, matching the Iraqi working week.
+export const WEEK_ORDER = [6, 0, 1, 2, 3, 4, 5];

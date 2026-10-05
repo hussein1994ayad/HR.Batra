@@ -1,12 +1,12 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+// الصفحة الرئيسية (نظرة عامة): ملخص اليوم، مؤشرات الطلبات، مركز المراقبة، إجراءات سريعة، وغيابات اليوم.
+// البيانات في features/overview/api (كاش يظهر فوراً ثم تحديث)، والحسابات في features/overview/logic.
+
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import toast from 'react-hot-toast';
 import {
   Users,
-  MapPin,
-  ShieldAlert,
   CalendarRange,
   Coins,
   Smartphone,
@@ -14,216 +14,37 @@ import {
   UserPlus,
   Send,
   AlertTriangle,
-  Clock,
   CheckCircle,
   FileSpreadsheet,
   RefreshCw,
   Banknote,
   ChevronLeft,
-  Building2,
-  ShieldCheck,
   Sparkles,
   type LucideIcon,
 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
-import { confetti } from '@/lib/lazy';
-import { readCache, useQuery, writeCache } from '@/lib/useQuery';
-import { findSchedule, isDateInRange, weekdayOf, workDaysFor } from '@/lib/attendance';
-import { errorMessage, formatBytes, localDateStr, timeAgo } from '@/lib/format';
-import { addDaysStr, getLocalDateStr } from '@/lib/dates';
-import type {
-  Attendance,
-  Branch,
-  Employee,
-  GeofenceViolation,
-  LeaveRequest,
-  MockGpsAttempt,
-  StorageStat,
-  WorkSchedule,
-} from '@/lib/types';
+import { readCache, useQuery } from '@/lib/useQuery';
+import { errorMessage, formatBytes, timeAgo } from '@/lib/format';
+import { Card, CardHeader, EmptyState, TONE_CHIP, cn, type Tone } from '@/components/ui';
+import { DASHBOARD_CACHE_KEY, fetchDashboard, isDashboardData, type DashboardData } from '@/features/overview/api';
+import { AnnouncementModal } from '@/features/overview/components/AnnouncementModal';
+import { AbsentTodayCard } from '@/features/overview/components/AbsentTodayCard';
+import { SecurityCenter } from '@/features/overview/components/SecurityCenter';
 import {
-  Avatar,
-  Badge,
-  Card,
-  CardHeader,
-  EmptyState,
-  Field,
-  Input,
-  Modal,
-  ModalFooter,
-  SearchInput,
-  Select,
-  SegmentedTabs,
-  TONE_CHIP,
-  Textarea,
-  cn,
-  type Tone,
-} from '@/components/ui';
-
-interface SecurityLog {
-  id: string;
-  type: 'mock_gps' | 'geofence';
-  name: string;
-  timestamp: string;
-  details: string;
-  coords: string;
-}
-
-type DirectoryEmployee = Pick<Employee, 'id' | 'full_name' | 'branch_id' | 'department_id'>;
-
-interface DashboardData {
-  stats: {
-    employees: number;
-    presentToday: number;
-    absentToday: number;
-    pendingLeaves: number;
-    pendingLoans: number;
-    pendingDevices: number;
-    securityIncidents: number;
-    totalStorageBytes: number;
-  };
-  securityLogs: SecurityLog[];
-  branches: Pick<Branch, 'id' | 'name'>[];
-  employeesList: DirectoryEmployee[];
-  absentList: DirectoryEmployee[];
-  syncedAt: string;
-}
-
-const CACHE_KEY = 'batra_cache_dashboard';
-
-async function fetchDashboard(): Promise<DashboardData> {
-  // Daily cleanup & scheduled salary activation run server-side; fire and forget.
-  supabase.rpc('perform_daily_cleanup').then(({ error }) => {
-    if (error) console.error('Error running daily cleanup:', error);
-  });
-
-  const todayStr = localDateStr();
-  const [
-    { count: empCount },
-    { data: attToday },
-    { count: leaveCount },
-    { count: loanCount },
-    { count: deviceCount },
-    { count: mockCount },
-    { count: geoCount },
-    { data: delFiles },
-    { data: statsData },
-    { data: mockAttempts },
-    { data: geoViolations },
-    { data: branchList },
-    { data: empList },
-    { data: leavesData },
-    { data: schedules },
-  ] = await Promise.all([
-    supabase.from('employees').select('*', { count: 'exact', head: true }),
-    supabase.from('attendance').select('status, employee_id').eq('work_date', todayStr),
-    supabase.from('leave_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
-    supabase.from('loans').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
-    supabase.from('employee_devices').select('*', { count: 'exact', head: true }).eq('is_approved', false),
-    supabase.from('mock_gps_attempts').select('*', { count: 'exact', head: true }),
-    supabase.from('geofence_violations').select('*', { count: 'exact', head: true }),
-    supabase.from('deleted_files').select('file_size_bytes').is('restored_at', null),
-    supabase.rpc('get_storage_stats'),
-    supabase.from('mock_gps_attempts').select('*, employees(full_name)').order('timestamp', { ascending: false }).limit(5),
-    supabase
-      .from('geofence_violations')
-      .select('*, employees(full_name), geofence_zones(name)')
-      .order('timestamp', { ascending: false })
-      .limit(5),
-    supabase.from('branches').select('id, name'),
-    supabase.from('employees').select('id, full_name, branch_id, department_id').eq('is_active', true).order('full_name'),
-    supabase.from('leave_requests').select('*').eq('status', 'approved'),
-    supabase.from('work_schedules').select('*'),
-  ]);
-
-  const employees = (empList ?? []) as DirectoryEmployee[];
-  const scheduleList = (schedules ?? []) as WorkSchedule[];
-  const leaves = (leavesData ?? []) as LeaveRequest[];
-  const weekday = weekdayOf(todayStr);
-  const isWorkingDay = (emp: DirectoryEmployee) => workDaysFor(findSchedule(emp, scheduleList)).includes(weekday);
-
-  let present = 0;
-  const accounted = new Set<string>();
-  const absentList: DirectoryEmployee[] = [];
-
-  ((attToday ?? []) as Pick<Attendance, 'status' | 'employee_id'>[]).forEach((r) => {
-    if (['present', 'late', 'half_day'].includes(r.status)) {
-      present++;
-      accounted.add(r.employee_id);
-    } else if (r.status === 'absent') {
-      const emp = employees.find((e) => e.id === r.employee_id);
-      if (emp && isWorkingDay(emp)) {
-        accounted.add(r.employee_id);
-        absentList.push(emp);
-      }
-    }
-  });
-
-  // Employees with no record who are not on leave and were due to work today.
-  employees.forEach((emp) => {
-    if (accounted.has(emp.id)) return;
-    const onLeave = leaves.some((l) => l.employee_id === emp.id && isDateInRange(todayStr, l.start_date, l.end_date));
-    if (!onLeave && isWorkingDay(emp)) absentList.push(emp);
-  });
-
-  const trashBytes = (delFiles ?? []).reduce((sum, f) => sum + (Number(f.file_size_bytes) || 0), 0);
-  const bucketBytes = ((statsData ?? []) as StorageStat[]).reduce((sum, s) => sum + (Number(s.total_size) || 0), 0);
-
-  const logs: SecurityLog[] = [
-    ...((mockAttempts ?? []) as MockGpsAttempt[]).map((log) => ({
-      id: log.id,
-      type: 'mock_gps' as const,
-      name: log.employees?.full_name || 'موظف غير معروف',
-      timestamp: log.timestamp,
-      details: `محاولة تزييف موقع باستخدام: ${log.app_used || 'تطبيق غير معروف'}`,
-      coords: log.latitude && log.longitude ? `${log.latitude}, ${log.longitude}` : '',
-    })),
-    ...((geoViolations ?? []) as GeofenceViolation[]).map((log) => ({
-      id: log.id,
-      type: 'geofence' as const,
-      name: log.employees?.full_name || 'موظف غير معروف',
-      timestamp: log.timestamp,
-      details: `${log.violation_type === 'entry' ? 'دخول' : 'خروج'} غير مصرح به في منطقة: ${log.geofence_zones?.name || 'مجهولة'}`,
-      coords: '',
-    })),
-  ]
-    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-    .slice(0, 5);
-
-  const data: DashboardData = {
-    stats: {
-      employees: empCount || 0,
-      presentToday: present,
-      absentToday: absentList.length,
-      pendingLeaves: leaveCount || 0,
-      pendingLoans: loanCount || 0,
-      pendingDevices: deviceCount || 0,
-      securityIncidents: (mockCount || 0) + (geoCount || 0),
-      totalStorageBytes: trashBytes + bucketBytes,
-    },
-    securityLogs: logs,
-    branches: (branchList ?? []) as DashboardData['branches'],
-    employeesList: employees,
-    absentList,
-    syncedAt: new Date().toISOString(),
-  };
-  writeCache(CACHE_KEY, data);
-  return data;
-}
-
-function isDashboardData(value: unknown): value is DashboardData {
-  return !!value && typeof value === 'object' && 'stats' in value && Array.isArray((value as DashboardData).absentList);
-}
+  AttendanceRing,
+  DashboardSkeleton,
+  LegendRow,
+  StatCard,
+  type StatCardProps,
+} from '@/features/overview/components/OverviewWidgets';
 
 export default function DashboardPage() {
   const [cached] = useState(() => {
-    const c = readCache<DashboardData>(CACHE_KEY);
+    const c = readCache<DashboardData>(DASHBOARD_CACHE_KEY);
     return isDashboardData(c) ? c : undefined;
   });
   const [adminName] = useState(() => readCache<{ name?: string }>('batra_cache_admin')?.name ?? '');
   const query = useQuery('dashboard', fetchDashboard, cached);
   const [showAnnounceModal, setShowAnnounceModal] = useState(false);
-  const [absentSearch, setAbsentSearch] = useState('');
   const [now, setNow] = useState(() => Date.now());
 
   // Keep the "last synced" label fresh.
@@ -233,16 +54,6 @@ export default function DashboardPage() {
   }, []);
 
   const data = query.data;
-
-  const absentGroups = useMemo(() => {
-    if (!data) return [];
-    const q = absentSearch.trim().toLowerCase();
-    const list = q ? data.absentList.filter((e) => (e.full_name || '').toLowerCase().includes(q)) : data.absentList;
-    return [
-      ...data.branches.map((b) => ({ id: b.id, name: b.name, members: list.filter((e) => e.branch_id === b.id) })),
-      { id: '__none', name: 'بدون فرع', members: list.filter((e) => !e.branch_id) },
-    ].filter((g) => g.members.length > 0);
-  }, [data, absentSearch]);
 
   if (!data) {
     if (query.error) {
@@ -355,54 +166,7 @@ export default function DashboardPage() {
       </section>
 
       <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Security center */}
-        <Card className="lg:col-span-2 flex flex-col">
-          <CardHeader
-            icon={ShieldAlert}
-            tone="rose"
-            title="مركز المراقبة الأمنية"
-            description="أحدث محاولات تزييف المواقع وخروقات السياج الجغرافي"
-            actions={
-              <Badge tone={stats.securityIncidents > 0 ? 'rose' : 'emerald'}>{stats.securityIncidents} خرق مرصود</Badge>
-            }
-          />
-          {securityLogs.length === 0 ? (
-            <EmptyState icon={ShieldCheck} tone="emerald" title="كل شيء آمن" description="لا توجد خروقات مسجلة حالياً" className="flex-grow" />
-          ) : (
-            <ol className="relative space-y-3 before:absolute before:top-2 before:bottom-2 before:right-[19px] before:w-px before:bg-slate-800">
-              {securityLogs.map((log) => {
-                const isMock = log.type === 'mock_gps';
-                return (
-                  <li key={log.id} className="relative flex items-start gap-4">
-                    <div
-                      className={cn(
-                        'relative z-10 w-10 h-10 shrink-0 rounded-xl border flex items-center justify-center',
-                        isMock ? 'bg-rose-950 border-rose-500/30 text-rose-400' : 'bg-amber-950 border-amber-500/30 text-amber-400',
-                      )}
-                    >
-                      {isMock ? <MapPin className="w-[18px] h-[18px]" /> : <AlertTriangle className="w-[18px] h-[18px]" />}
-                    </div>
-                    <div className="flex-1 min-w-0 p-3.5 rounded-2xl bg-slate-900/50 border border-slate-800/70 hover:border-slate-700/70 transition-colors">
-                      <div className="flex items-center justify-between gap-2 mb-1">
-                        <h4 className="text-[13px] font-bold text-white truncate">{log.name}</h4>
-                        <span className="shrink-0 text-[10px] text-slate-500 flex items-center gap-1" dir="ltr">
-                          <Clock className="w-3 h-3" />
-                          {formatLogTime(log.timestamp)}
-                        </span>
-                      </div>
-                      <p className="text-xs text-slate-400 leading-relaxed">{log.details}</p>
-                      {log.coords && (
-                        <span className="inline-block mt-2 text-[10px] bg-slate-950 border border-slate-800 px-2 py-0.5 rounded-md font-mono text-slate-400" dir="ltr">
-                          {log.coords}
-                        </span>
-                      )}
-                    </div>
-                  </li>
-                );
-              })}
-            </ol>
-          )}
-        </Card>
+        <SecurityCenter securityLogs={securityLogs} incidents={stats.securityIncidents} />
 
         <div className="flex flex-col gap-6">
           <Card>
@@ -447,54 +211,7 @@ export default function DashboardPage() {
         </div>
       </section>
 
-      {/* Absentees */}
-      <Card id="absent-section" className="scroll-mt-24">
-        <CardHeader
-          icon={AlertTriangle}
-          tone="rose"
-          title={
-            <>
-              غيابات اليوم <Badge tone="rose">{stats.absentToday}</Badge>
-            </>
-          }
-          description="موظفون لم يسجلوا دخولهم اليوم وغير مجازين، مقسمون حسب الفروع"
-          actions={
-            data.absentList.length > 0 && (
-              <SearchInput value={absentSearch} onChange={setAbsentSearch} placeholder="ابحث عن موظف..." className="w-full sm:w-64" />
-            )
-          }
-        />
-
-        {data.absentList.length === 0 ? (
-          tracked === 0
-            ? <EmptyState icon={CheckCircle} tone="emerald" title="اليوم عطلة" description="ماكو أحد عنده دوام اليوم." />
-            : <EmptyState icon={CheckCircle} tone="emerald" title="الجميع حاضرون!" description="لا توجد غيابات مسجلة لهذا اليوم." />
-        ) : absentGroups.length === 0 ? (
-          <p className="py-10 text-center text-xs text-slate-500">لا توجد نتائج مطابقة للبحث</p>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {absentGroups.map((group) => (
-              <div key={group.id} className="rounded-2xl bg-slate-950/40 border border-slate-800/70 overflow-hidden flex flex-col">
-                <div className="px-4 py-3 border-b border-slate-800/70 flex justify-between items-center">
-                  <span className="font-bold text-[13px] text-white flex items-center gap-2 min-w-0">
-                    <Building2 className="w-4 h-4 text-indigo-400 shrink-0" />
-                    <span className="truncate">{group.name}</span>
-                  </span>
-                  <Badge tone="rose">{group.members.length} غائب</Badge>
-                </div>
-                <ul className="p-2 space-y-0.5 overflow-y-auto max-h-[240px]">
-                  {group.members.map((emp) => (
-                    <li key={emp.id} className="px-2.5 py-2 rounded-xl flex items-center gap-3 hover:bg-slate-800/40 transition-colors">
-                      <Avatar name={emp.full_name} size="sm" />
-                      <p className="text-xs font-semibold text-slate-200 truncate">{emp.full_name}</p>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-        )}
-      </Card>
+      <AbsentTodayCard data={data} tracked={tracked} />
 
       {showAnnounceModal && (
         <AnnouncementModal
@@ -505,297 +222,4 @@ export default function DashboardPage() {
       )}
     </div>
   );
-}
-
-/* ----------------------------- Announcement ----------------------------- */
-
-function AnnouncementModal({
-  branches,
-  employees,
-  onClose,
-}: {
-  branches: DashboardData['branches'];
-  employees: DirectoryEmployee[];
-  onClose: () => void;
-}) {
-  const [title, setTitle] = useState('');
-  const [text, setText] = useState('');
-  const today = getLocalDateStr();
-  // مدة ظهور التعميم في التطبيق: من تاريخ إلى تاريخ (فارغ = بدون نهاية)
-  const [startDate, setStartDate] = useState(today);
-  const [endDate, setEndDate] = useState(() => addDaysStr(today, 6));
-  const [targetType, setTargetType] = useState<'all' | 'branch' | 'employee'>('all');
-  const [branchId, setBranchId] = useState('');
-  const [employeeIds, setEmployeeIds] = useState<string[]>([]);
-  const [search, setSearch] = useState('');
-  const [sending, setSending] = useState(false);
-
-  const visibleEmployees = employees.filter((e) => (e.full_name || '').toLowerCase().includes(search.toLowerCase()));
-
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!text.trim() || !title.trim()) return;
-    if (targetType === 'branch' && !branchId) return void toast.error('يرجى اختيار الفرع المستهدف أولاً');
-    if (targetType === 'employee' && employeeIds.length === 0) return void toast.error('يرجى اختيار موظف واحد على الأقل');
-    if (endDate && endDate < startDate) return void toast.error('تاريخ الانتهاء يجب أن يكون بعد تاريخ البداية');
-    setSending(true);
-    try {
-      // يحفظ التعميم بمدته وجمهوره ويُشعر المستهدفين في خطوة واحدة؛ يختفي من التطبيق بعد مدته
-      const { data: sent, error } = await supabase.rpc('publish_announcement', {
-        p_title: title.trim(),
-        p_content: text.trim(),
-        p_starts_at: startDate === today ? null : new Date(`${startDate}T00:00:00`).toISOString(),
-        p_ends_at: endDate ? new Date(`${endDate}T23:59:59`).toISOString() : null,
-        p_target: targetType === 'employee' ? 'employees' : targetType,
-        p_branch_id: targetType === 'branch' ? branchId : null,
-        p_employee_ids: targetType === 'employee' ? employeeIds : null,
-      });
-      if (error) throw error;
-
-      confetti({ particleCount: 80, spread: 60, origin: { y: 0.8 } });
-      toast.success(`تم نشر التعميم ووصل إشعاره إلى ${sent ?? 0} موظف`);
-      onClose();
-    } catch (err) {
-      toast.error(`فشل إرسال التعميم: ${errorMessage(err)}`);
-    } finally {
-      setSending(false);
-    }
-  };
-
-  return (
-    <Modal title="بث تعميم إداري" subtitle="يصل التعميم فوراً كإشعار على هواتف الموظفين المستهدفين" icon={Send} tone="brand" onClose={onClose}>
-      <form onSubmit={submit} className="space-y-4">
-        <Field label="المستلمون">
-          <SegmentedTabs
-            value={targetType}
-            onChange={setTargetType}
-            className="w-full"
-            options={[
-              { value: 'all', label: 'الكل' },
-              { value: 'branch', label: 'فرع معين' },
-              { value: 'employee', label: 'موظفون محددون', count: employeeIds.length || undefined },
-            ]}
-          />
-        </Field>
-
-        {targetType === 'branch' && (
-          <Field label="الفرع المستهدف">
-            <Select value={branchId} onChange={(e) => setBranchId(e.target.value)} required>
-              <option value="">اختر الفرع...</option>
-              {branches.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name}
-                </option>
-              ))}
-            </Select>
-          </Field>
-        )}
-
-        {targetType === 'employee' && (
-          <Field label={`الموظفون المستهدفون (${employeeIds.length} محدد)`}>
-            <SearchInput value={search} onChange={setSearch} placeholder="ابحث باسم الموظف..." className="mb-2" />
-            <div className="max-h-[180px] overflow-y-auto border border-slate-800 rounded-xl p-1.5 bg-slate-950/50">
-              {visibleEmployees.map((emp) => {
-                const checked = employeeIds.includes(emp.id);
-                return (
-                  <label
-                    key={emp.id}
-                    className={cn(
-                      'flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs cursor-pointer transition-colors',
-                      checked ? 'bg-indigo-500/10 text-white' : 'text-slate-300 hover:bg-slate-800/50',
-                    )}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={() =>
-                        setEmployeeIds((prev) => (checked ? prev.filter((id) => id !== emp.id) : [...prev, emp.id]))
-                      }
-                      className="w-4 h-4 rounded"
-                    />
-                    {emp.full_name}
-                  </label>
-                );
-              })}
-            </div>
-          </Field>
-        )}
-
-        <Field label="عنوان التعميم">
-          <Input value={title} onChange={(e) => setTitle(e.target.value)} required maxLength={80} placeholder="مثال: عطلة رسمية يوم الخميس" />
-        </Field>
-
-        <Field label="نص التعميم">
-          <Textarea value={text} onChange={(e) => setText(e.target.value)} required rows={4} placeholder="اكتب نص التعميم هنا..." />
-        </Field>
-
-        <Field label="مدة الظهور في التطبيق" hint="يظهر في قسم التعاميم خلال هذه المدة ثم يختفي تلقائياً. اترك تاريخ الانتهاء فارغاً ليبقى بدون نهاية.">
-          <div className="grid grid-cols-2 gap-3">
-            <label className="block">
-              <span className="block text-[11px] text-slate-500 mb-1">من</span>
-              <Input type="date" value={startDate} min={today} onChange={(e) => setStartDate(e.target.value)} required dir="ltr" className="text-left" />
-            </label>
-            <label className="block">
-              <span className="block text-[11px] text-slate-500 mb-1">إلى</span>
-              <Input type="date" value={endDate} min={startDate} onChange={(e) => setEndDate(e.target.value)} dir="ltr" className="text-left" />
-            </label>
-          </div>
-          <div className="flex flex-wrap gap-1.5 mt-2">
-            {[
-              { label: 'يوم', days: 0 },
-              { label: '3 أيام', days: 2 },
-              { label: 'أسبوع', days: 6 },
-              { label: 'شهر', days: 29 },
-            ].map((d) => (
-              <button
-                key={d.label}
-                type="button"
-                onClick={() => setEndDate(addDaysStr(startDate, d.days))}
-                className={cn(
-                  'h-7 px-3 rounded-lg text-[11px] font-bold border cursor-pointer transition-colors',
-                  endDate === addDaysStr(startDate, d.days)
-                    ? 'bg-indigo-500/15 border-indigo-500/40 text-indigo-200'
-                    : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200',
-                )}
-              >
-                {d.label}
-              </button>
-            ))}
-            <button
-              type="button"
-              onClick={() => setEndDate('')}
-              className={cn(
-                'h-7 px-3 rounded-lg text-[11px] font-bold border cursor-pointer transition-colors',
-                endDate === '' ? 'bg-indigo-500/15 border-indigo-500/40 text-indigo-200' : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200',
-              )}
-            >
-              بدون نهاية
-            </button>
-          </div>
-        </Field>
-
-        <ModalFooter onCancel={onClose} loading={sending} submitLabel="نشر التعميم" loadingLabel="جاري النشر..." submitIcon={Send} />
-      </form>
-    </Modal>
-  );
-}
-
-/* ----------------------------- UI helpers ----------------------------- */
-
-interface StatCardProps {
-  title: string;
-  value: number;
-  subtitle: string;
-  icon: LucideIcon;
-  tone: Tone;
-  href: string;
-  attention?: boolean;
-}
-
-const GLOW: Partial<Record<Tone, string>> = {
-  indigo: 'from-indigo-500/15',
-  emerald: 'from-emerald-500/15',
-  rose: 'from-rose-500/15',
-  amber: 'from-amber-500/15',
-  sky: 'from-sky-500/15',
-  violet: 'from-violet-500/15',
-};
-
-function StatCard({ title, value, subtitle, icon: Icon, tone, href, attention }: StatCardProps) {
-  return (
-    <Link href={href} className="group relative overflow-hidden surface rounded-2xl p-4 md:p-5 hover:border-slate-700 hover:-translate-y-0.5 transition-all duration-200">
-      <div className={cn('absolute inset-0 bg-gradient-to-bl to-transparent to-60% opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none', GLOW[tone])} />
-      <div className="relative flex items-start justify-between gap-2">
-        <div className={cn('w-10 h-10 rounded-xl border flex items-center justify-center', TONE_CHIP[tone])}>
-          <Icon className="w-5 h-5" />
-        </div>
-        {attention ? (
-          <span className="flex items-center gap-1 text-[10px] font-bold text-amber-300 bg-amber-400/10 border border-amber-400/20 px-2 py-0.5 rounded-full">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-            <span className="hidden sm:inline">يتطلب إجراء</span>
-          </span>
-        ) : (
-          <ChevronLeft className="w-4 h-4 text-slate-600 group-hover:text-slate-300 group-hover:-translate-x-0.5 transition-all" />
-        )}
-      </div>
-      <div className="relative mt-4">
-        <p className="text-2xl md:text-3xl font-extrabold tracking-tight text-white">{value.toLocaleString('en-US')}</p>
-        <p className="text-xs font-bold text-slate-300 mt-1">{title}</p>
-        <p className="text-[10px] md:text-[11px] text-slate-500 mt-0.5 truncate">{subtitle}</p>
-      </div>
-    </Link>
-  );
-}
-
-function AttendanceRing({ percent }: { percent: number }) {
-  const r = 52;
-  const c = 2 * Math.PI * r;
-  const offset = c - (Math.min(Math.max(percent, 0), 100) / 100) * c;
-  return (
-    <div className="relative w-36 h-36 shrink-0">
-      <svg viewBox="0 0 128 128" className="w-full h-full -rotate-90">
-        <defs>
-          <linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor="#34D399" />
-            <stop offset="100%" stopColor="#22D3EE" />
-          </linearGradient>
-        </defs>
-        <circle cx="64" cy="64" r={r} fill="none" stroke="rgb(255 255 255 / 0.08)" strokeWidth="10" />
-        <circle
-          cx="64"
-          cy="64"
-          r={r}
-          fill="none"
-          stroke="url(#ringGrad)"
-          strokeWidth="10"
-          strokeLinecap="round"
-          strokeDasharray={c}
-          strokeDashoffset={offset}
-          style={{ transition: 'stroke-dashoffset 0.9s cubic-bezier(0.16, 1, 0.3, 1)' }}
-        />
-      </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-3xl font-extrabold text-white" dir="ltr">
-          {percent}%
-        </span>
-        <span className="text-[10px] font-semibold text-slate-400">نسبة الحضور</span>
-      </div>
-    </div>
-  );
-}
-
-function LegendRow({ color, label, value }: { color: string; label: string; value: number }) {
-  return (
-    <div className="flex items-center gap-3">
-      <span className={cn('w-2.5 h-2.5 rounded-full', color)} />
-      <span className="flex-1 text-xs text-slate-300">{label}</span>
-      <span className="text-sm font-extrabold text-white">{value.toLocaleString('en-US')}</span>
-    </div>
-  );
-}
-
-function DashboardSkeleton() {
-  return (
-    <div className="space-y-6" aria-busy="true">
-      <div className="skeleton h-44 rounded-3xl" />
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="skeleton h-32 rounded-2xl" />
-        ))}
-      </div>
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="skeleton h-80 rounded-3xl lg:col-span-2" />
-        <div className="skeleton h-80 rounded-3xl" />
-      </div>
-    </div>
-  );
-}
-
-function formatLogTime(ts: string) {
-  const d = new Date(ts);
-  if (isNaN(d.getTime())) return 'غير محدد';
-  const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-  return d.toDateString() === new Date().toDateString()
-    ? time
-    : `${d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' })} · ${time}`;
 }

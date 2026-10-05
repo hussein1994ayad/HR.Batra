@@ -1,8 +1,15 @@
+import 'dart:math' as math;
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/design/design.dart';
 import 'app_button.dart';
+
+/// المسافة تحت محتوى أي نافذة سفلية: فوق الكيبورد إذا مفتوح، وإلا فوق شريط الهوم بالآيفون (وشريط التنقل
+/// بأندرويد من الحافة للحافة). showModalBottomSheet ما يحسبها — useSafeArea يحمي الأعلى والجوانب فقط.
+double sheetBottomPadding(BuildContext context) =>
+    AppSpace.xl + math.max(MediaQuery.viewInsetsOf(context).bottom, MediaQuery.viewPaddingOf(context).bottom);
 
 /// نافذة سفلية موحّدة مع عنوان، تتمدد مع الكيبورد وتبقى داخل عرض مريح على التابلت.
 Future<T?> showAppSheet<T>(
@@ -19,7 +26,7 @@ Future<T?> showAppSheet<T>(
     backgroundColor: AppColors.surface1,
     builder: (ctx) {
       final content = Padding(
-        padding: EdgeInsets.fromLTRB(AppSpace.xl, 0, AppSpace.xl, AppSpace.xl + MediaQuery.viewInsetsOf(ctx).bottom),
+        padding: EdgeInsets.fromLTRB(AppSpace.xl, 0, AppSpace.xl, sheetBottomPadding(ctx)),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,

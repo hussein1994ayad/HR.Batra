@@ -6,23 +6,24 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/design/design.dart';
+import '../../presentation/admin/admin_dashboard/admin_dashboard_screen.dart';
+import '../../presentation/admin/admin_loans/admin_loans_screen.dart';
+import '../../presentation/admin/announcements/announcement_screen.dart';
+import '../../presentation/admin/attendance_report/attendance_report_screen.dart';
+import '../../presentation/admin/branches/branch_management_screen.dart';
+import '../../presentation/admin/branches/branch_schedule_screen.dart';
+import '../../presentation/admin/employee_management/employee_management_screen.dart';
+import '../../presentation/admin/live_tracking/admin_live_tracking_screen.dart';
+import '../../presentation/admin/storage/storage_stats_screen.dart';
+import '../../presentation/admin/storage/trash_screen.dart';
 import '../../presentation/auth/change_password_screen.dart';
 import '../../presentation/auth/login_screen.dart';
-import '../../presentation/employee/admin_dashboard/admin_dashboard_screen.dart';
-import '../../presentation/employee/admin_live_tracking_screen.dart';
-import '../../presentation/employee/admin_loans/admin_loans_screen.dart';
-import '../../presentation/employee/announcement_screen.dart';
 import '../../presentation/employee/announcements/announcements_board_screen.dart';
-import '../../presentation/employee/attendance_report_screen.dart';
-import '../../presentation/employee/branch_management_screen.dart';
-import '../../presentation/employee/branch_schedule_screen.dart';
-import '../../presentation/employee/directory_screen.dart';
-import '../../presentation/employee/employee_management_screen.dart';
+import '../../presentation/employee/directory/directory_screen.dart';
 import '../../presentation/employee/main_layout.dart';
-import '../../presentation/employee/notifications_screen.dart';
-import '../../presentation/employee/payslips_screen.dart';
-import '../../presentation/employee/storage_stats_screen.dart';
-import '../../presentation/employee/trash_screen.dart';
+import '../../presentation/employee/notifications/notifications_screen.dart';
+import '../../presentation/employee/payslips/payslips_screen.dart';
+import '../models/models.dart';
 import '../services/auth_service.dart';
 import '../services/supabase_service.dart';
 
@@ -72,8 +73,7 @@ final GoRouter appRouter = GoRouter(
     }
     
     if (loggedIn && state.matchedLocation.startsWith('/admin')) {
-      final role = AuthService.currentUserRole;
-      if (role != 'admin' && role != 'manager') {
+      if (!Roles.canManage(AuthService.currentUserRole)) {
         return AppRoutes.employeeHome;
       }
     }

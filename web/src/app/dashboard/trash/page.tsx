@@ -3,12 +3,11 @@
 import React, { useState } from 'react';
 import toast from 'react-hot-toast';
 import { Trash2, RotateCcw, Trash, FileIcon, Clock, User, HardDrive, AlertTriangle, Sparkles } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
 import { confetti } from '@/lib/lazy';
 import { useQuery } from '@/lib/useQuery';
 import { daysUntil, errorMessage, formatBytes, formatDate } from '@/lib/format';
-import { bucketFor } from '@/lib/storage';
-import type { DeletedFile } from '@/lib/types';
+import { destroyDeletedFile, fetchDeletedFiles, restoreDeletedFile } from '@/features/storage/api';
+import type { DeletedFile } from '@/lib/db-types';
 import { useConfirm } from '@/components/confirm';
 import { Badge, Button, Card, EmptyState, PageHeader, StatTile } from '@/components/ui';
 
@@ -18,16 +17,6 @@ const TYPE_LABEL: Record<string, string> = {
   pledge: 'تعهد سلفة',
   logo: 'شعار الشركة',
 };
-
-async function fetchDeletedFiles(): Promise<DeletedFile[]> {
-  const { data, error } = await supabase
-    .from('deleted_files')
-    .select('*, employees(full_name)')
-    .is('restored_at', null)
-    .order('deleted_at', { ascending: false });
-  if (error) throw error;
-  return (data ?? []) as DeletedFile[];
-}
 
 export default function TrashPage() {
   const confirm = useConfirm();
@@ -42,8 +31,7 @@ export default function TrashPage() {
   const handleRestore = async (file: DeletedFile) => {
     setActionLoading(file.id);
     try {
-      const { error } = await supabase.from('deleted_files').update({ restored_at: new Date().toISOString() }).eq('id', file.id);
-      if (error) throw error;
+      await restoreDeletedFile(file.id);
       removeLocally(file.id);
       confetti({ particleCount: 50, spread: 40, colors: ['#818CF8', '#34D399'] });
       toast.success('تم استعادة الملف وإرجاعه لمساره الأصلي');
@@ -64,11 +52,7 @@ export default function TrashPage() {
 
     setActionLoading(`${file.id}_delete`);
     try {
-      const bucket = bucketFor(file.file_type);
-      const { error: storeErr } = await supabase.storage.from(bucket).remove([file.file_path]);
-      if (storeErr) throw storeErr;
-      const { error: dbErr } = await supabase.from('deleted_files').delete().eq('id', file.id);
-      if (dbErr) throw dbErr;
+      await destroyDeletedFile(file);
       removeLocally(file.id);
       toast.success('تم إتلاف الملف نهائياً وتحرير مساحته');
     } catch (err) {

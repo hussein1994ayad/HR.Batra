@@ -3,6 +3,7 @@
 // =========================================================================
 
 import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:intl/intl.dart';
@@ -10,7 +11,9 @@ import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
+
 import '../constants/constants.dart';
+import '../utils/app_log.dart';
 import 'share_helper.dart';
 
 class PdfExportService {
@@ -55,7 +58,9 @@ class PdfExportService {
           await File('${downloadDir.path}/$fileName').writeAsBytes(bytes, flush: true);
         }
       }
-    } catch (_) {}
+    } catch (e) {
+      appLog('تعذّر حفظ نسخة PDF بالتنزيلات: $e');
+    }
 
     return path;
   }
@@ -289,7 +294,7 @@ class PdfExportService {
         await sharePdfFile(filePath);
       }
     } catch (e) {
-      debugPrint('تعذر فتح ملف PDF عبر OpenFilex: $e');
+      appLog('تعذر فتح ملف PDF عبر OpenFilex: $e');
       await sharePdfFile(filePath);
     }
   }
@@ -302,7 +307,7 @@ class PdfExportService {
         text: 'كشف الراتب الشهري الرسمي - HR Pro Batra',
       ));
     } catch (e) {
-      debugPrint('تعذر مشاركة ملف PDF: $e');
+      appLog('تعذر مشاركة ملف PDF: $e');
     }
   }
 }

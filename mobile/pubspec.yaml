@@ -74,6 +74,8 @@ dev_dependencies:
     sdk: flutter
   integration_test:
     sdk: flutter
+  # رحلات المستخدم: كاميرا/معرض وهمي (صورة أو صلاحية مرفوضة) بدل نافذة النظام
+  image_picker_platform_interface: ^2.11.1
   flutter_lints: ^3.0.2
   flutter_launcher_icons: ^0.13.1
 

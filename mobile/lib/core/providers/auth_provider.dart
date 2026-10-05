@@ -21,18 +21,19 @@
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../models/roles.dart';
+
 /// دور المستخدم الحالي (null إذا غير مسجّل دخول).
 final currentUserRoleProvider = StateProvider<String?>((ref) => null);
 
 /// اختصار: هل المستخدم أدمن؟
 final isAdminProvider = Provider<bool>((ref) {
-  return ref.watch(currentUserRoleProvider) == 'admin';
+  return Roles.isAdmin(ref.watch(currentUserRoleProvider));
 });
 
 /// اختصار: هل المستخدم مدير أو أدمن؟ (صلاحيات وسيطة)
 final isManagerOrAdminProvider = Provider<bool>((ref) {
-  final role = ref.watch(currentUserRoleProvider);
-  return role == 'admin' || role == 'manager';
+  return Roles.canManage(ref.watch(currentUserRoleProvider));
 });
 
 /// اختصار: هل المستخدم موظف عادي فقط؟

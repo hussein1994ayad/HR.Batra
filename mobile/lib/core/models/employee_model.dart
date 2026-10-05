@@ -3,6 +3,7 @@
 // =========================================================================
 
 import '../utils/json_map.dart';
+import 'roles.dart';
 
 class EmployeeModel {
   final String id;
@@ -77,8 +78,8 @@ class EmployeeModel {
     );
   }
 
-  bool get isAdmin => role == 'admin';
-  bool get isManager => role == 'manager';
+  bool get isAdmin => role == Roles.admin;
+  bool get isManager => role == Roles.manager;
   bool get isDeviceLocked => deviceIdLock != null;
   String get initials => fullName.isNotEmpty ? fullName[0] : '؟';
 

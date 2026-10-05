@@ -57,6 +57,10 @@ class FakeBackend {
     if (path.startsWith('/storage/v1/object/list')) {
       return http.Response('[]', 200, headers: _json);
     }
+    // رفع ملف (صورة التعهد، المرفقات): نفس شكل رد Supabase
+    if (req.method == 'POST' && path.startsWith('/storage/v1/object/') && !path.startsWith('/storage/v1/object/sign')) {
+      return http.Response(jsonEncode({'Key': path.substring('/storage/v1/object/'.length), 'Id': 'fake-object'}), 200, headers: _json);
+    }
     if (path.startsWith('/storage/v1/bucket')) {
       return http.Response('[]', 200, headers: _json);
     }
@@ -154,7 +158,6 @@ class FakeBackend {
       'plugins.flutter.io/firebase_messaging',
       'id.flutter/background_service',
       'id.flutter/background_service_android',
-      'id.flutter/background_service_ios',
       'com.llfbandit.app_links/messages',
     ]) {
       messenger.setMockMethodCallHandler(MethodChannel(name), (call) async {
@@ -163,6 +166,8 @@ class FakeBackend {
         return null;
       });
     }
+    // مكتبة خدمة الخلفية بالآيفون تستعمل JSON (بالترميز العادي ترجع "Message corrupted" على المحاكي)
+    messenger.setMockMethodCallHandler(const MethodChannel('id.flutter/background_service_ios', JSONMethodCodec()), (call) async => null);
     for (final name in const [
       'flutter.baseflow.com/geolocator_updates',
       'flutter.baseflow.com/geolocator_updates_android',
