@@ -134,8 +134,10 @@ class JourneyDriver {
   Future<void> tap(Finder f, {int settleRounds = 4}) async {
     expect(f, findsWidgets, reason: '[$journey] ما لگيت العنصر ${f.toString(describeSelf: true)}. الظاهر: $texts');
     await t.ensureVisible(f.first);
-    await t.pump();
-    await t.tap(f.first, warnIfMissed: false);
+    await settle(1);
+    // مثل المستخدم: يضغط بس على شي ظاهر ومو مغطّى (بشريط علوي، رسالة، كيبورد...)
+    expect(f.hitTestable(), findsWidgets, reason: '[$journey] ${f.toString(describeSelf: true)} مغطّى بعنصر ثاني. الظاهر: $texts');
+    await t.tap(f.hitTestable().first);
     await settle(settleRounds);
   }
 
@@ -178,7 +180,9 @@ class JourneyDriver {
     expect(find.text(label), findsWidgets, reason: '[$journey] الحقل "$label" مو موجود. الظاهر: $texts');
     final f = field(label);
     await t.ensureVisible(f);
-    await t.tap(f, warnIfMissed: false);
+    await settle(1);
+    expect(f.hitTestable(), findsOneWidget, reason: '[$journey] الحقل "$label" مغطّى');
+    await t.tap(f.hitTestable());
     await keyboardUp();
     await t.enterText(f, value);
     await settle(2);
@@ -196,7 +200,10 @@ class JourneyDriver {
   /// لمس مكان فارغ (نص عادي) — على الآيفون يسكّر الكيبورد.
   Future<void> tapEmpty(Finder plainText) async {
     expect(plainText, findsWidgets, reason: '[$journey] ما لگيت ${plainText.toString(describeSelf: true)}. الظاهر: $texts');
-    await t.tap(plainText.first, warnIfMissed: false);
+    await t.ensureVisible(plainText.first);
+    await settle(1);
+    expect(plainText.hitTestable(), findsWidgets, reason: '[$journey] المكان الفارغ مغطّى');
+    await t.tap(plainText.hitTestable().first);
     await keyboardDown();
     if (isIOS) expect(anyFieldFocused, isFalse, reason: '[$journey] الكيبورد ما تسكّر باللمس خارج الحقل');
     FocusManager.instance.primaryFocus?.unfocus();
