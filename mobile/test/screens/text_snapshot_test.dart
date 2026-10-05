@@ -26,7 +26,11 @@ const _tall = DeviceSize('tall', 430, 5000);
 
 /// الأوقات النسبية والتواريخ تتغير مع الساعة؛ كل رقم (مهما طال) يصير # حتى تبقى اللقطة ثابتة بين ساعة وساعة ويوم ويوم.
 /// ومعرّفات الأجهزة العشوائية بالاختبار (device_xxxxxxxx-...) نستبدلها بثابت.
+/// وجهاز الاختبار نفسه (ويندوز عندنا، لينكس بـ GitHub) يطلع بقسم "الجهاز" بالإعدادات، والتحية حسب ساعة التشغيل.
 String _normalize(String s) => s
+    .replaceAll(Platform.operatingSystemVersion, '‹نظام›')
+    .replaceAll(Platform.operatingSystem, '‹منصة›')
+    .replaceAll(RegExp(r'صباح الخير|نهارك سعيد|مساء الخير'), '‹تحية›')
     .replaceAll(RegExp(r'device_[0-9a-fA-F-]+'), 'device_<id>')
     .replaceAll(RegExp(r'[0-9٠-٩]+'), '#')
     // الوقت النسبي (Fmt.relative): "قبل 3 ساعات" تصير "قبل 11 ساعة" مع الساعة، فيصير علامة ثابتة
