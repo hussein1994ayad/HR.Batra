@@ -1,5 +1,6 @@
 import { Gavel } from 'lucide-react';
 import { Avatar, Badge, Button, Card, CardHeader, DataTable, Input, TableEmpty } from '@/components/ui';
+import { DEDUCT_REASONS, EXCUSE_REASONS } from '@/features/payroll/decisionReasons';
 import { decisionKey } from '../logic';
 import type { Decision } from '../types';
 
@@ -69,7 +70,8 @@ export function DecisionsTable({ decisionsList, selectedReasons, busyKey, onReas
                     )}
                   </td>
                   <td>
-                    <Input value={reason} onChange={(e) => onReasonChange(key, e.target.value)} className="h-8 min-w-[200px] text-xs" />
+                    <Input value={reason} onChange={(e) => onReasonChange(key, e.target.value)} list="decision-reasons"
+                      className="h-8 min-w-[200px] text-xs" />
                   </td>
                   <td className="!text-left">
                     <div className="flex justify-end gap-1.5">
@@ -97,6 +99,10 @@ export function DecisionsTable({ decisionsList, selectedReasons, busyKey, onReas
           )}
         </tbody>
       </DataTable>
+      {/* ملاحظات جاهزة تطلع بالحقل (مثل: نسي البصمة وهو مداوم) */}
+      <datalist id="decision-reasons">
+        {[...EXCUSE_REASONS, ...DEDUCT_REASONS].map((r) => <option key={r} value={r} />)}
+      </datalist>
     </Card>
   );
 }

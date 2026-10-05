@@ -66,6 +66,19 @@ describe('saveDecision — one decision path when a payroll event exists', () =>
     expect(calls.some((c) => c.table === 'notifications' && c.op === 'insert')).toBe(true);
   });
 
+  it('excuse without an event: saved with its note, and the employee is NOT notified', async () => {
+    await saveDecision({ employee, type: 'late', date: '2026-10-05', status: 'ignored', recordId: 'a9', reason: 'نسي البصمة وهو مداوم', fallbackBranchId: null });
+
+    const update = calls.find((c) => c.table === 'attendance' && c.op === 'update');
+    expect(update?.args[0]).toMatchObject({ deduction_status: 'ignored', deduction_reason: 'نسي البصمة وهو مداوم' });
+    expect(calls.some((c) => c.table === 'notifications')).toBe(false);
+  });
+
+  it('excused absence without an event: no notification either', async () => {
+    await saveDecision({ employee, type: 'virtual_absent', date: '2026-10-05', status: 'ignored', recordId: null, reason: 'تأخير مبرر', fallbackBranchId: null });
+    expect(calls.some((c) => c.table === 'notifications')).toBe(false);
+  });
+
   it('absence decisions look for an "absence" event', async () => {
     payrollEventRow = { id: 'pe2' };
     await saveDecision({ employee, type: 'absent', date: '2026-10-02', status: 'applied', recordId: 'a2', reason: '', fallbackBranchId: null });

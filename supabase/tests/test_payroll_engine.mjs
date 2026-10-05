@@ -20,6 +20,8 @@ await db.exec(`
   INSERT INTO work_schedules (employee_id, name, check_in_time, check_out_time, grace_period_minutes, work_days) VALUES
     ('${E3}', 'صباحي', '09:00', '17:00', 15, '{0,1,2,3,4,5,6}'),
     ('${E4}', 'قصير', '08:00', '14:00', 15, '{0,1,2,3,4,5,6}');
+  -- جداول موجودة من قبل الأيام المختبرة (الجدول المضاف اليوم يسري من اليوم فقط)
+  UPDATE work_schedule_history SET effective_from = '-infinity';
   UPDATE employees SET is_active = false, termination_date = '2026-09-10' WHERE id = '${T}';
 `);
 // أيام بلا بصمة قبل تشغيل المحرّك لا تُعتبر غياباً
@@ -256,6 +258,7 @@ await db.exec(`
     VALUES ('${Q}', 'Q1', 'موظف فحص', '${IDS.branch}', 1000000, '2026-01-01', false);
   INSERT INTO work_schedules (employee_id, name, check_in_time, check_out_time, grace_period_minutes, work_days)
     VALUES ('${Q}', 'صباحي', '09:00', '17:00', 15, '{0,1,2,3,4,5,6}');
+  UPDATE work_schedule_history SET effective_from = '-infinity' WHERE employee_id = '${Q}';
 `);
 const qEvents = async (d) => q(`SELECT event_type, minutes, amount, status FROM payroll_events WHERE employee_id=$1 AND event_date=$2 AND status<>'void' ORDER BY event_type`, [Q, d]);
 
