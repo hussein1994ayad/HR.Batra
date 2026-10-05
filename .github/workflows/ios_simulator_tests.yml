@@ -3,6 +3,7 @@ name: iOS Simulator Tests
 # يشغّل التطبيق على محاكيات آيفون/آيباد حقيقية (macOS من GitHub، بدون حساب مطور):
 #  1) التطبيق الحقيقي يفتح بدون crash + الكود الأصلي (Keychain، مراقب الموقع، الموقع الدقيق)
 #  2) كل الشاشات ببيانات وهمية على كل جهاز، مع لقطة لكل شاشة وفحص المساحة الآمنة
+#  3) رحلات المستخدم: التطبيق يُستعمل مثل الموظف والمدير (كتابة، كيبورد، نوافذ، رجوع بالسحب، كاميرا، إرسال)
 # النتائج واللقطات تُنشر على فرع ios-sim-results (بيانات وهمية فقط).
 
 on:
@@ -100,7 +101,7 @@ jobs:
             xcrun simctl location "$udid" set "$SIM_LAT,$SIM_LNG"
             # صلاحيات الموقع مسبقاً (نفس اختيار المستخدم "دائماً")
             xcrun simctl privacy "$udid" grant location-always "$BUNDLE_ID" || xcrun simctl privacy "$udid" grant location "$BUNDLE_ID"
-            targets="screens_gallery_test"
+            targets="screens_gallery_test user_journeys_test"
             if [ $first = 1 ] || [ "$label" = "iphone_se" ]; then targets="app_launch_test $targets"; fi
             for t in $targets; do
               log=$OUT/$label/$t.log; mkdir -p $OUT/$label

@@ -239,11 +239,14 @@ class LocationService {
       appLog('تعذّر إيقاف مراقبة المناطق (iOS) عند الانصراف: $e');
     }
 
-    try {
-      final service = FlutterBackgroundService();
-      service.invoke('stopService');
-    } catch (e) {
-      appLog('تعذّر إيقاف خدمة التتبع بالخلفية: $e');
+    // خدمة الخلفية تشتغل بأندرويد فقط (انظر startTracking)؛ بالآيفون الأمر يروح لقناة المكتبة بلا فائدة
+    if (Platform.isAndroid) {
+      try {
+        final service = FlutterBackgroundService();
+        service.invoke('stopService');
+      } catch (e) {
+        appLog('تعذّر إيقاف خدمة التتبع بالخلفية: $e');
+      }
     }
 
     _isTracking = false;
