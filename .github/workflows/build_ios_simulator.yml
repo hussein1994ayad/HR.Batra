@@ -9,6 +9,9 @@ on:
     branches: [ "main", "design-v2" ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
@@ -59,3 +62,15 @@ jobs:
           name: HRBatra-iOS-Simulator-App
           path: mobile/dist/*
           if-no-files-found: error
+
+      # رابط تنزيل عام بدون تسجيل دخول (ملف التطبيق فقط، بدون أسرار):
+      # https://github.com/<repo>/raw/appetize-build/HRBatra_Appetize.zip
+      - name: Publish public download (branch appetize-build)
+        run: |
+          mkdir -p publish && cp mobile/dist/HRBatra_Appetize.zip publish/
+          cd publish
+          echo "# iOS Simulator build — commit ${GITHUB_SHA::7}" > README.md
+          git init -q -b appetize-build
+          git config user.name "ios-build-bot"; git config user.email "ios-build-bot@users.noreply.github.com"
+          git add -A && git commit -qm "iOS simulator build for ${GITHUB_SHA::7}"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" appetize-build
