@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from 'react';
 import { Card, PageSkeleton } from '@/components/ui';
-import { useConfirm } from '@/components/confirm';
+import { useConfirmNote } from '@/components/confirm';
+import { DEDUCT_REASONS, EXCUSE_REASONS } from '@/features/payroll/decisionReasons';
 import { ARABIC_MONTHS } from '@/lib/dates';
 import { usePayroll } from '@/features/payroll/usePayroll';
 import { sumPayroll, type PayrollRow } from '@/features/payroll/calc';
@@ -17,7 +18,7 @@ import { PayrollToolbar, type PayrollStatusFilter } from '@/features/payroll/com
 
 export default function PayrollPage() {
   const p = usePayroll();
-  const confirm = useConfirm();
+  const confirmNote = useConfirmNote();
   const [statusFilter, setStatusFilter] = useState<PayrollStatusFilter>('all');
 
   const [adjustmentFor, setAdjustmentFor] = useState<{ row: PayrollRow; type: 'bonus' | 'deduction' } | null>(null);
@@ -127,14 +128,17 @@ export default function PayrollPage() {
           onClose={() => setBreakdownEmployeeId(null)}
           onAddAdjustment={(type) => setAdjustmentFor({ row: breakdownRow, type })}
           onDecide={async (id, approve) => {
-            // قرار مالي: تأكيد قبل التنفيذ (كان يتم بضغطة وحدة)
-            const ok = await confirm({
+            // قرار مالي: تأكيد قبل التنفيذ، مع ملاحظة تنحفظ بالقرار (مثل: نسي البصمة وهو مداوم)
+            const note = await confirmNote({
               title: approve ? 'اعتماد هذه الحركة؟' : 'إعفاء من هذه الحركة؟',
-              message: approve ? 'تنحسب على راتب هذا المسير.' : 'ما تنحسب على الراتب، ويوصل للموظف إشعار.',
+              message: approve
+                ? 'تنحسب على راتب هذا المسير، ويوصل للموظف إشعار بالخصم.'
+                : 'ما تنحسب على الراتب، وما يوصل للموظف إشعار. الملاحظة تنحفظ مع القرار.',
               confirmLabel: approve ? 'اعتماد' : 'إعفاء',
               tone: approve ? 'warning' : 'primary',
+              note: { presets: approve ? DEDUCT_REASONS : EXCUSE_REASONS, placeholder: 'ملاحظة (اختياري)' },
             });
-            if (ok) await p.decideEvent(id, approve);
+            if (note !== null) await p.decideEvent(id, approve, note || undefined);
           }}
         />
       )}

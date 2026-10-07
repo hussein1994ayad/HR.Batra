@@ -72,6 +72,10 @@ await db.exec(`
     ('${IDS.emp}', '${IDS.branch}', '${today}', 'late', '${today} 09:40:00+03'),
     ('${IDS.manager}', '${IDS.branch}', '${today}', 'present', '${today} 08:55:00+03');
 `);
+// التأخير ما يظهر للزملاء إلا إذا الإدارة طبّقت الخصم
+const hidden = (await as(db, 'emp2', `SELECT full_name FROM get_late_today()`)).rows;
+check('late today hides a late arrival until the deduction is applied', hidden.length === 0, JSON.stringify(hidden));
+await db.exec(`UPDATE attendance SET deduction_status = 'applied' WHERE work_date = '${today}' AND status = 'late'`);
 const late = (await as(db, 'emp2', `SELECT full_name, late_minutes, branch_name FROM get_late_today()`)).rows;
 check('late today lists only late arrivals with minutes from the shift start',
   late.length === 1 && late[0].full_name === 'موظف' && late[0].late_minutes === 40 && late[0].branch_name === 'الفرع الرئيسي', JSON.stringify(late));

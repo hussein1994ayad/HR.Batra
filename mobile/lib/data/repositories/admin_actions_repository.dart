@@ -71,12 +71,13 @@ class AdminActionsRepository {
       await _db.from('attendance').update(values).eq('id', item.attendanceId!);
     }
 
+    // إشعار بس عند الخصم. الإعفاء (مثل: نسي البصمة وهو مداوم) بدون إشعار — الموظف ما تبلّغ بالتأخير أصلاً،
+    // والملاحظة تبقى محفوظة بسجل الحضور (نفس السيرفر decide_payroll_event والموقع).
+    if (!deduct) return;
     await _db.from('notifications').insert({
       'employee_id': item.employeeId,
-      'title': deduct ? 'إشعار بخصم غياب/تأخير ⚠️' : 'إعفاء من الخصم 🎉',
-      'body': deduct
-          ? 'تم تطبيق خصم بسبب ${item.statusArabic} ليوم ${item.workDate}. السبب: $reason'
-          : 'تم إعفاؤك من خصم ${item.statusArabic} ليوم ${item.workDate}. السبب: $reason',
+      'title': 'إشعار بخصم غياب/تأخير ⚠️',
+      'body': 'تم تطبيق خصم بسبب ${item.statusArabic} ليوم ${item.workDate}. السبب: $reason',
       'type': 'attendance',
     });
   }

@@ -261,19 +261,13 @@ export async function saveDecision(decision: {
     if (error) throw error;
   }
 
-  // الإشعار: الغياب المسجّل والإعفاء فقط (لا إشعار عند تطبيق خصم تأخير)
-  if (type === 'virtual_absent') {
+  // الإشعار: بس عند تسجيل غياب بخصم. الإعفاء ما يوصل بيه إشعار (الموظف ما تبلّغ بالتأخير أصلاً)،
+  // والتأخير يوصل إشعاره من السيرفر لما ينحسب الخصم.
+  if (type === 'virtual_absent' && status === 'applied') {
     await supabase.from('notifications').insert({
       employee_id: employee.id,
       title: 'تسجيل غياب يومي ⚠️',
       body: `تم تسجيل غيابك عن العمل ليوم ${date} من قبل الإدارة. السبب: ${reason || 'غير محدد'}`,
-      type: 'attendance',
-    });
-  } else if (status === 'ignored') {
-    await supabase.from('notifications').insert({
-      employee_id: employee.id,
-      title: 'إعفاء من الخصم المالي ✅',
-      body: `تم إعفاؤك من الخصم المالي المترتب على ${type === 'late' ? 'التأخير الصباحي' : 'الغياب'} ليوم ${date}.`,
       type: 'attendance',
     });
   }

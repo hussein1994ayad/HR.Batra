@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 
 import '../../../../core/logic/attendance_rules.dart';
+import '../../../../core/logic/decision_reasons.dart';
 import '../../../../core/models/models.dart';
 import '../../../../core/utils/arabic_format.dart';
 import '../../../shared/ui/ui.dart';
@@ -12,7 +13,8 @@ typedef DecisionCallback = void Function({required bool deduct, required String 
 
 /// قرار خصم/إعفاء لسجل غياب أو تأخير أو خروج مبكر. المبلغ يحسبه محرّك الرواتب في السيرفر
 /// (أجر اليوم = الراتب ÷ 30، والدقائق بأجر دقيقة دوام الموظف) ولا يُكتب يدوياً.
-/// حقل السبب يحتفظ بما كتبه المدير عند إعادة بناء القائمة.
+/// حقل السبب يحتفظ بما كتبه المدير عند إعادة بناء القائمة، وتحته ملاحظات جاهزة تنضغط
+/// (مثل: نسي البصمة وهو مداوم). الإعفاء ما يوصل بيه إشعار للموظف.
 class DecisionCard extends StatefulWidget {
   const DecisionCard({super.key, required this.item, required this.schedule, required this.onDecide, this.busy = false});
 
@@ -104,6 +106,18 @@ class _DecisionCardState extends State<DecisionCard> {
         ),
         const SizedBox(height: AppSpace.sm),
         AppTextField(controller: _reason, label: 'السبب', hint: 'سبب الخصم أو الإعفاء'),
+        const SizedBox(height: AppSpace.sm),
+        Wrap(
+          spacing: AppSpace.sm,
+          runSpacing: AppSpace.xs,
+          children: [
+            for (final r in [...kExcuseReasons, ...kDeductReasons])
+              ActionChip(
+                label: Text(r),
+                onPressed: widget.busy ? null : () => setState(() => _reason.text = r),
+              ),
+          ],
+        ),
       ],
     );
   }
