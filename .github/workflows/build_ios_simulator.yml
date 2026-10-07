@@ -6,9 +6,7 @@ name: Build iOS Simulator App
 
 on:
   push:
-    branches: [ "main" ]
-  pull_request:
-    paths: [ ".github/workflows/build_ios_simulator.yml" ]
+    branches: [ "main", "design-v2" ]
   workflow_dispatch:
 
 env:
