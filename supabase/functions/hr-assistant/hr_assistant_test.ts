@@ -203,3 +203,24 @@ Deno.test("propose_decisions: cards only for events still pending (data from the
     amount: 1042, suggest: "excuse", reason: "أول تأخير بالشهر" }]);
   assertEquals(r.forModel.skipped_not_pending, 1);
 });
+
+// ---------------- المرحلة C: الصوت ----------------
+import { cleanTranscript, MAX_AUDIO_BASE64, transcriptionInstruction, validateAudio } from "./voice.ts";
+
+Deno.test("voice: audio validation (type, empty, too long)", () => {
+  assertEquals(validateAudio({ mime: "audio/WAV", base64: "UklG" }), { mime: "audio/wav", base64: "UklG" });
+  assertEquals(validateAudio({ mime: "audio/webm", base64: "x" }), "نوع التسجيل غير مدعوم.");
+  assertEquals(validateAudio(null), "التسجيل فارغ. سجّل مرة ثانية.");
+  assertEquals(validateAudio({ mime: "audio/wav", base64: "x".repeat(MAX_AUDIO_BASE64 + 1) }), "التسجيل طويل. أقصاه دقيقة وحدة.");
+});
+
+Deno.test("voice: transcription instruction keeps Iraqi dialect and system spelling of names", () => {
+  const t = transcriptionInstruction({ employees: ["علي محمد سعيد"], branches: ["كمب سارة"] });
+  assert(t.includes("اللهجة العراقية") && t.includes("علي محمد سعيد") && t.includes("كمب سارة"));
+});
+
+Deno.test("voice: unclear or empty transcripts are rejected, quotes trimmed", () => {
+  assertEquals(cleanTranscript("[غير واضح]"), null);
+  assertEquals(cleanTranscript("   "), null);
+  assertEquals(cleanTranscript("«شكد انخصم من علي هالشهر؟»"), "شكد انخصم من علي هالشهر؟");
+});

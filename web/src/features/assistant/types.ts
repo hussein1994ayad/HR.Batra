@@ -9,6 +9,8 @@ export type AssistantAttachment =
 
 export interface AssistantReply {
   text: string;
+  /** لسؤال بالصوت: شنو انفهم من التسجيل (يظهر كرسالة الأدمن). */
+  transcript?: string;
   attachments: AssistantAttachment[];
 }
 
@@ -18,4 +20,6 @@ export interface ChatMessage {
   attachments?: AssistantAttachment[];
   /** رسالة خطأ للعرض فقط (ما تنرسل للذكاء). */
   error?: boolean;
+  /** سؤال بالصوت (النص هو اللي انفهم من التسجيل). */
+  voice?: boolean;
 }

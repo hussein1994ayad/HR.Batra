@@ -1,9 +1,9 @@
 'use client';
 
-// واجهة المحادثة: الرسائل، الملفات (تنزيل)، الوثائق (فتح برابط موقّع)، والأسئلة الجاهزة.
+// واجهة المحادثة: الرسائل، الملفات (تنزيل)، الوثائق (فتح برابط موقّع)، الأسئلة الجاهزة، والسؤال بالصوت.
 
 import { useEffect, useRef, useState } from 'react';
-import { FileSpreadsheet, FileText, Download, Send, Sparkles, MessageSquarePlus, Gavel } from 'lucide-react';
+import { FileSpreadsheet, FileText, Download, Send, Sparkles, MessageSquarePlus, Gavel, Mic, Trash2 } from 'lucide-react';
 import { Button, Card, Textarea, cn } from '@/components/ui';
 import { openStorageUrl } from '@/lib/signed-urls';
 import { decidePayrollEvent } from '@/features/payroll/api';
@@ -12,6 +12,8 @@ import type { PayrollEventType } from '@/features/payroll/calc';
 import { downloadBase64File } from '../api';
 import { ASSISTANT_SUGGESTIONS, assistantDisplayText, decisionReason } from '../logic';
 import type { AssistantAttachment, ChatMessage } from '../types';
+import { useVoiceRecorder } from '../useVoiceRecorder';
+import { MAX_RECORDING_SECONDS } from '../voice';
 
 /** بطاقة اقتراح قرار: ما ينفذ شي إلا لما الأدمن يضغط «تأكيد» (أو العكس)، وبعدها تنقفل. */
 function DecisionCard({ d }: { d: Extract<AssistantAttachment, { kind: 'decision' }> }) {
@@ -92,6 +94,9 @@ function Bubble({ m }: { m: ChatMessage }) {
         user ? 'bg-indigo-500/15 border-indigo-400/30 text-slate-100'
           : m.error ? 'bg-rose-950/40 border-rose-500/30 text-rose-200'
             : 'bg-slate-900/70 border-slate-800 text-slate-100')}>
+        {m.voice && (
+          <span className="flex items-center gap-1 mb-1 text-[11px] text-slate-400"><Mic className="w-3.5 h-3.5" /> سؤال بالصوت · هذا اللي انفهم</span>
+        )}
         {user ? m.text : assistantDisplayText(m.text)}
         {m.attachments?.map((a, i) => <Attachment key={i} a={a} />)}
       </div>
@@ -99,13 +104,17 @@ function Bubble({ m }: { m: ChatMessage }) {
   );
 }
 
-export function AssistantChat({ messages, thinking, onSend, onReset }: {
+const mmss = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+
+export function AssistantChat({ messages, thinking, onSend, onVoice, onReset }: {
   messages: ChatMessage[];
   thinking: boolean;
   onSend: (text: string) => void;
+  onVoice: (wav: Uint8Array) => void;
   onReset: () => void;
 }) {
   const [draft, setDraft] = useState('');
+  const voice = useVoiceRecorder(onVoice);
   const end = useRef<HTMLDivElement>(null);
   useEffect(() => end.current?.scrollIntoView({ behavior: 'smooth' }), [messages.length, thinking]);
 
@@ -135,12 +144,25 @@ export function AssistantChat({ messages, thinking, onSend, onReset }: {
         <div ref={end} />
       </div>
       <div className="border-t border-slate-800 p-4 space-y-2">
+        {voice.recording ? (
+          <div className="flex items-center gap-3">
+            <Button variant="secondary" icon={Trash2} onClick={voice.cancel}>إلغاء</Button>
+            <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse" />
+            <span className="flex-1 text-sm text-slate-200">
+              يسمعك… احچي سؤالك {mmss(voice.seconds)} (باقي {mmss(Math.max(0, MAX_RECORDING_SECONDS - voice.seconds))})
+            </span>
+            <Button icon={Send} onClick={voice.stop}>إرسال التسجيل</Button>
+          </div>
+        ) : (
         <div className="flex items-end gap-2">
           <Textarea rows={2} value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="اسأل عن موظف، دوام، خصومات، سلف…"
             onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); } }} aria-label="سؤالك" />
+          <Button variant="secondary" icon={Mic} onClick={() => void voice.start()} disabled={thinking} aria-label="اسأل بالصوت" title="اسأل بالصوت">صوت</Button>
           <Button icon={Send} onClick={submit} disabled={thinking || !draft.trim()}>إرسال</Button>
           {messages.length > 0 && <Button variant="secondary" icon={MessageSquarePlus} onClick={onReset} disabled={thinking}>جديدة</Button>}
         </div>
+        )}
+        {voice.error && <p className="text-xs text-amber-300">{voice.error}</p>}
         <p className="text-[11px] text-slate-500">يعمل بـ Gemini من Google · للقراءة فقط، ما يعدّل أي شي</p>
       </div>
     </Card>

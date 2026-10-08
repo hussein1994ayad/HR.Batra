@@ -6,10 +6,11 @@ import '../utils/json_map.dart';
 
 /// رسالة بالمحادثة. المرفقات (ملفات/وثائق) تبقى بالشاشة وما ترجع للسيرفر.
 class AssistantMessage {
-  const AssistantMessage.user(this.text) : fromUser = true, files = const [], documents = const [], decisions = const [], isError = false;
+  const AssistantMessage.user(this.text, {this.voice = false})
+      : fromUser = true, files = const [], documents = const [], decisions = const [], isError = false;
   const AssistantMessage.assistant(this.text, {this.files = const [], this.documents = const [], this.decisions = const []})
-      : fromUser = false, isError = false;
-  const AssistantMessage.error(this.text) : fromUser = false, files = const [], documents = const [], decisions = const [], isError = true;
+      : fromUser = false, isError = false, voice = false;
+  const AssistantMessage.error(this.text) : fromUser = false, files = const [], documents = const [], decisions = const [], isError = true, voice = false;
 
   final bool fromUser;
   final String text;
@@ -21,6 +22,9 @@ class AssistantMessage {
 
   /// رسالة خطأ (ما تنرسل للذكاء كجزء من المحادثة).
   final bool isError;
+
+  /// سؤال بالصوت (النص هو اللي فهمه المساعد من التسجيل).
+  final bool voice;
 
   /// الشكل اللي يرسله التطبيق للسيرفر.
   Map<String, String> toHistory() => {'role': fromUser ? 'user' : 'assistant', 'text': text};
@@ -80,11 +84,21 @@ class AssistantDecision {
   }
 }
 
+/// تسجيل صوتي (WAV) للسؤال بالصوت. ما ينحفظ بأي مكان.
+class AssistantAudio {
+  const AssistantAudio({required this.bytes, this.mime = 'audio/wav'});
+  final List<int> bytes;
+  final String mime;
+}
+
 /// رد المساعد: نص + مرفقات.
 class AssistantReply {
-  const AssistantReply({required this.text, this.files = const [], this.documents = const [], this.decisions = const []});
+  const AssistantReply({required this.text, this.transcript, this.files = const [], this.documents = const [], this.decisions = const []});
 
   final String text;
+
+  /// لسؤال بالصوت: شنو انفهم من التسجيل (يظهر كرسالة الأدمن).
+  final String? transcript;
   final List<AssistantFile> files;
   final List<AssistantDocuments> documents;
   final List<AssistantDecision> decisions;
@@ -107,7 +121,7 @@ class AssistantReply {
         ));
       }
     }
-    return AssistantReply(text: map.str('text') ?? '', files: files, documents: docs, decisions: decisions);
+    return AssistantReply(text: map.str('text') ?? '', transcript: map.str('transcript'), files: files, documents: docs, decisions: decisions);
   }
 
   AssistantMessage toMessage() => AssistantMessage.assistant(text, files: files, documents: documents, decisions: decisions);

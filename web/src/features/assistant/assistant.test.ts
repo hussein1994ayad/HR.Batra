@@ -6,6 +6,7 @@ vi.mock('@/lib/supabase', () => ({ supabase: { functions: { invoke: (...a: unkno
 import { askAssistant, historyFor, MAX_HISTORY } from './api';
 import { assistantDisplayText, decisionReason } from './logic';
 import type { ChatMessage } from './types';
+import { bytesToBase64, encodeWav, micErrorMessage, WAV_SAMPLE_RATE } from './voice';
 
 describe('assistant', () => {
   it('sends only the last text messages, without errors or attachments', () => {
@@ -46,5 +47,38 @@ describe('assistant decision cards', () => {
     expect(decisionReason(false, 'أول تأخير بالشهر', true)).toBe('بدون عذر');
     expect(decisionReason(true, 'متكرر', false)).toBe('عذر مقبول من الإدارة');
     expect(decisionReason(true, '  ', true)).toBe('بدون عذر');
+  });
+});
+
+describe('assistant voice', () => {
+  it('encodes mono 16kHz PCM WAV with a correct header and clipped samples', () => {
+    const wav = encodeWav(new Float32Array([0, 1, -1, 2]));
+    const v = new DataView(wav.buffer);
+    expect(String.fromCharCode(...wav.subarray(0, 4))).toBe('RIFF');
+    expect(String.fromCharCode(...wav.subarray(8, 12))).toBe('WAVE');
+    expect(v.getUint16(22, true)).toBe(1);
+    expect(v.getUint32(24, true)).toBe(WAV_SAMPLE_RATE);
+    expect(v.getUint32(40, true)).toBe(8);
+    expect(wav.length).toBe(52);
+    expect([v.getInt16(44, true), v.getInt16(46, true), v.getInt16(48, true), v.getInt16(50, true)]).toEqual([0, 32767, -32768, 32767]);
+  });
+
+  it('base64 matches the standard encoding, also for large recordings', () => {
+    expect(bytesToBase64(new Uint8Array([82, 73, 70, 70]))).toBe('UklGRg==');
+    const big = new Uint8Array(100_000).map((_, i) => i % 256);
+    expect(bytesToBase64(big)).toBe(Buffer.from(big).toString('base64'));
+  });
+
+  it('sends the recording with the conversation and returns what was understood', async () => {
+    invoke.mockResolvedValueOnce({ data: { text: 'علي تأخر مرتين', transcript: ' شكد تأخر علي؟ ', attachments: [] }, error: null });
+    const r = await askAssistant([], new Uint8Array([1, 2, 3]));
+    expect(invoke).toHaveBeenLastCalledWith('hr-assistant', { body: { messages: [], audio: { mime: 'audio/wav', base64: 'AQID' } } });
+    expect(r.transcript).toBe('شكد تأخر علي؟');
+  });
+
+  it('mic errors are explained in plain Arabic', () => {
+    expect(micErrorMessage(new DOMException('x', 'NotAllowedError'))).toContain('فعّل المايكروفون');
+    expect(micErrorMessage(new DOMException('x', 'NotFoundError'))).toBe('ماكو مايك متصل بالجهاز.');
+    expect(micErrorMessage(new Error('x'))).toBe('ما اشتغل المايك. جرّب مرة ثانية.');
   });
 });

@@ -3,6 +3,7 @@
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import type { AssistantReply, ChatMessage } from './types';
+import { bytesToBase64 } from './voice';
 
 /** آخر 10 رسائل نصية تكفي للسياق (نفس حد السيرفر). */
 export const MAX_HISTORY = 10;
@@ -15,8 +16,11 @@ export function historyFor(conversation: ChatMessage[]): Array<{ role: ChatMessa
     .map(({ role, text }) => ({ role, text }));
 }
 
-export async function askAssistant(conversation: ChatMessage[]): Promise<AssistantReply> {
-  const { data, error } = await supabase.functions.invoke('hr-assistant', { body: { messages: historyFor(conversation) } });
+/** يسأل المساعد. مع [wav]: السيرفر يكتب التسجيل نص (يرجع بـ transcript) ويجاوب عليه. */
+export async function askAssistant(conversation: ChatMessage[], wav?: Uint8Array): Promise<AssistantReply> {
+  const body: Record<string, unknown> = { messages: historyFor(conversation) };
+  if (wav) body.audio = { mime: 'audio/wav', base64: bytesToBase64(wav) };
+  const { data, error } = await supabase.functions.invoke('hr-assistant', { body });
   if (error) {
     let message = 'تعذّر الوصول للمساعد. تأكد من الإنترنت وجرّب مرة ثانية.';
     if (error instanceof FunctionsHttpError) {
@@ -25,7 +29,8 @@ export async function askAssistant(conversation: ChatMessage[]): Promise<Assista
     }
     throw new Error(message);
   }
-  return { text: String(data?.text ?? ''), attachments: Array.isArray(data?.attachments) ? data.attachments : [] };
+  const transcript = typeof data?.transcript === 'string' && data.transcript.trim() ? data.transcript.trim() : undefined;
+  return { text: String(data?.text ?? ''), transcript, attachments: Array.isArray(data?.attachments) ? data.attachments : [] };
 }
 
 /** ينزّل ملف base64 من الرد (Excel) بنفس اسمه. */

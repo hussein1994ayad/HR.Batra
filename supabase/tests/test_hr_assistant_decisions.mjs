@@ -39,4 +39,10 @@ check('proposal check: only still-pending events come back', pending.length === 
 const before = await one(`SELECT status FROM payroll_events WHERE id=$1`, [ev.id]);
 check('reading context changes nothing', before.status === 'pending');
 
+// ---------------- الصوت: أسماء للنسخ ----------------
+await expectError('name hints are admin-only', as(db, 'emp', `SELECT assistant_name_hints()`), 'غير مصرح');
+const hints = await admin(`SELECT assistant_name_hints() r`);
+check('name hints: active employees and branches, names only', hints.employees.includes('موظف القرارات') && hints.branches.length >= 1
+  && !JSON.stringify(hints).includes('@'), JSON.stringify(hints));
+
 done();

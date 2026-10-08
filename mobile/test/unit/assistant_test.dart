@@ -1,5 +1,7 @@
 // المساعد الذكي: قراءة الرد، تنظيف النص، والشاشة (أدمن فقط، رسالة ← رد + ملف + وثائق، والخطأ).
 
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hr_pro/core/models/models.dart';
@@ -8,21 +10,41 @@ import 'package:hr_pro/core/theme/app_theme.dart';
 import 'package:hr_pro/data/repositories/assistant_repository.dart';
 import 'package:hr_pro/presentation/admin/assistant/assistant_logic.dart';
 import 'package:hr_pro/presentation/admin/assistant/assistant_screen.dart';
+import 'package:hr_pro/presentation/admin/assistant/assistant_voice.dart';
 
 class _FakeRepo implements AssistantRepository {
   _FakeRepo(this.answer);
   final Future<AssistantReply> Function(List<AssistantMessage>) answer;
   final sent = <List<Map<String, String>>>[];
+  final audios = <AssistantAudio?>[];
 
   @override
-  Future<AssistantReply> ask(List<AssistantMessage> conversation) {
+  Future<AssistantReply> ask(List<AssistantMessage> conversation, {AssistantAudio? audio}) {
     sent.add([for (final m in conversation) m.toHistory()]);
+    audios.add(audio);
     return answer(conversation);
   }
 }
 
-Widget _host(AssistantRepository repo) =>
-    MaterialApp(theme: AppTheme.darkTheme, home: AssistantScreen(repository: repo));
+Widget _host(AssistantRepository repo, {AssistantRecorder? recorder}) =>
+    MaterialApp(theme: AppTheme.darkTheme, home: AssistantScreen(repository: repo, recorder: recorder));
+
+class _FakeRecorder implements AssistantRecorder {
+  _FakeRecorder({this.allowed = true});
+  final bool allowed;
+  int started = 0, cancelled = 0;
+
+  @override
+  Future<bool> requestPermission() async => allowed;
+  @override
+  Future<void> start() async => started++;
+  @override
+  Future<Uint8List?> stop() async => Uint8List.fromList([82, 73, 70, 70]);
+  @override
+  Future<void> cancel() async => cancelled++;
+  @override
+  void dispose() {}
+}
 
 void main() {
   test('reply: text, Excel file and documents', () {
@@ -143,5 +165,55 @@ void main() {
     expect(find.text('تمام'), findsOneWidget);
     // الرسالة الأخيرة المرسلة: السؤالين بدون رسالة الخطأ (الريبو يصفّي الأخطاء؛ هنا نتأكد إن الشاشة ترسل المحادثة كاملة)
     expect(repo.sent.last.where((m) => m['role'] == 'user').map((m) => m['text']), ['سؤال أول', 'سؤال ثاني']);
+  });
+
+  testWidgets('voice: record, send, the transcript shows as the admin message, then the answer', (tester) async {
+    AuthService.currentUserRole = 'admin';
+    final rec = _FakeRecorder();
+    final repo = _FakeRepo((_) async => const AssistantReply(text: 'علي تأخر 3 مرات', transcript: 'شكد تأخر علي هالشهر؟'));
+    await tester.pumpWidget(_host(repo, recorder: rec));
+    await tester.tap(find.byTooltip('اسأل بالصوت'));
+    await tester.pump();
+    expect(rec.started, 1);
+    expect(find.textContaining('يسمعك'), findsOneWidget);
+
+    await tester.pump(const Duration(seconds: 3));
+    await tester.tap(find.byTooltip('إرسال التسجيل'));
+    await tester.pumpAndSettle();
+    expect(repo.audios.single?.bytes, [82, 73, 70, 70]);
+    expect(repo.audios.single?.mime, 'audio/wav');
+    expect(find.text('شكد تأخر علي هالشهر؟'), findsOneWidget);
+    expect(find.text('سؤال بالصوت · هذا اللي انفهم'), findsOneWidget);
+    expect(find.text('علي تأخر 3 مرات'), findsOneWidget);
+  });
+
+  testWidgets('voice: mic denied shows a settings hint and records nothing', (tester) async {
+    AuthService.currentUserRole = 'admin';
+    final denied = _FakeRecorder(allowed: false);
+    final repo = _FakeRepo((_) async => const AssistantReply(text: 'x'));
+    await tester.pumpWidget(_host(repo, recorder: denied));
+    await tester.tap(find.byTooltip('اسأل بالصوت'));
+    await tester.pump();
+    expect(denied.started, 0);
+    expect(find.textContaining('فعّل المايكروفون'), findsOneWidget);
+    expect(repo.sent, isEmpty);
+  });
+
+  testWidgets('voice: cancelling a recording sends nothing', (tester) async {
+    AuthService.currentUserRole = 'admin';
+    final rec = _FakeRecorder();
+    final repo = _FakeRepo((_) async => const AssistantReply(text: 'x'));
+    await tester.pumpWidget(_host(repo, recorder: rec));
+    await tester.tap(find.byTooltip('اسأل بالصوت'));
+    await tester.pump(const Duration(seconds: 2));
+    await tester.tap(find.byTooltip('إلغاء التسجيل'));
+    await tester.pumpAndSettle();
+    expect(rec.cancelled, 1);
+    expect(repo.sent, isEmpty);
+  });
+
+  test('reply: transcript of a voice question', () {
+    expect(AssistantReply.fromMap({'text': 'x', 'transcript': 'منو غايب اليوم؟'}).transcript, 'منو غايب اليوم؟');
+    expect(AssistantReply.fromMap({'text': 'x'}).transcript, isNull);
   });
 }

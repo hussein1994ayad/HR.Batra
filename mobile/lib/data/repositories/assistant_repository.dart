@@ -3,6 +3,8 @@
 // فالتطبيق يبقى خفيف). السيرفر يتحقق إن المستخدم أدمن.
 // =========================================================================
 
+import 'dart:convert';
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/models/assistant_models.dart';
@@ -16,10 +18,14 @@ class AssistantRepository {
   /// آخر 10 رسائل نصية تكفي للسياق (نفس حد السيرفر).
   static const maxHistory = 10;
 
-  /// يرسل المحادثة ويرجع الرد. يرمي [AssistantException] برسالة عربية مفهومة.
-  Future<AssistantReply> ask(List<AssistantMessage> conversation) async {
+  /// يرسل المحادثة ويرجع الرد. مع [audio]: السيرفر يكتب التسجيل نص (يرجع بـ transcript) ويجاوب عليه.
+  /// يرمي [AssistantException] برسالة عربية مفهومة.
+  Future<AssistantReply> ask(List<AssistantMessage> conversation, {AssistantAudio? audio}) async {
     try {
-      final res = await _db.functions.invoke('hr-assistant', body: {'messages': historyFor(conversation)});
+      final res = await _db.functions.invoke('hr-assistant', body: {
+        'messages': historyFor(conversation),
+        if (audio != null) 'audio': {'mime': audio.mime, 'base64': base64Encode(audio.bytes)},
+      });
       final data = rowOf(res.data);
       if (data == null) throw const AssistantException('رد غير متوقع من المساعد.');
       return AssistantReply.fromMap(data);

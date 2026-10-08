@@ -74,6 +74,8 @@
 	<!-- Camera + Photos -->
 	<key>NSCameraUsageDescription</key>
 	<string>يحتاج التطبيق للوصول إلى الكاميرا لالتقاط صورة شخصية وإرفاق تعهدات السلف والمستندات الرسمية.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>يستخدم المساعد الذكي المايك حتى يسمع سؤالك بالصوت (للأدمن فقط). التسجيل ما ينحفظ.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>يحتاج التطبيق للوصول إلى معرض الصور لاختيار صور المستندات والوثائق الرسمية والمرفقات.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>

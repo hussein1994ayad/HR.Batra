@@ -56,3 +56,31 @@ export function geminiGenerate(apiKey: string, model: string, fetchImpl: typeof 
     return { role: "model", parts: content.parts };
   };
 }
+
+/** صوت مسجّل (base64) بنوع يقبله Gemini. */
+export interface AudioInput {
+  mime: string;
+  base64: string;
+}
+
+export type Transcribe = (audio: AudioInput, instruction: string) => Promise<string>;
+
+/** نسخ الصوت لنص (Gemini يفهم الصوت مباشرة، ومنها اللهجة العراقية). */
+export function geminiTranscribe(apiKey: string, model: string, fetchImpl: typeof fetch = fetch): Transcribe {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
+  return async (audio, instruction) => {
+    const res = await fetchImpl(url, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-goog-api-key": apiKey },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: [{ text: instruction }, { inlineData: { mimeType: audio.mime, data: audio.base64 } }] }],
+        generationConfig: { temperature: 0 },
+      }),
+    });
+    if (res.status === 429) throw new QuotaError("quota");
+    if (!res.ok) throw new Error(`Gemini ${res.status}: ${(await res.text()).slice(0, 300)}`);
+    const data = await res.json();
+    const parts = (data?.candidates?.[0]?.content?.parts ?? []) as Array<{ text?: string; thought?: boolean }>;
+    return parts.filter((p) => p.text && !p.thought).map((p) => p.text).join("").trim();
+  };
+}

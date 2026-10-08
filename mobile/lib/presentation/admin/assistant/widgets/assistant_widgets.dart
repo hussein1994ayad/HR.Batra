@@ -42,6 +42,15 @@ class AssistantBubble extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              if (message.voice)
+                const Padding(
+                  padding: EdgeInsets.only(bottom: AppSpace.xs),
+                  child: Row(children: [
+                    Icon(Icons.mic_rounded, size: 14, color: AppColors.textSecondary),
+                    SizedBox(width: AppSpace.xs),
+                    Text('سؤال بالصوت · هذا اللي انفهم', style: AppText.caption),
+                  ]),
+                ),
               SelectableText(user ? message.text : assistantDisplayText(message.text),
                   style: AppText.body.copyWith(color: AppColors.textPrimary, height: 1.6)),
               for (final f in message.files) ...[const SizedBox(height: AppSpace.sm), AssistantFileCard(file: f)],
