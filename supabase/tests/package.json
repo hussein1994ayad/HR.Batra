@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node test_security.mjs && node test_attendance.mjs && node test_leave_payroll.mjs && node test_deletion.mjs && node test_loans.mjs && node test_reminders.mjs && node test_hardening.mjs && node test_announcements.mjs && node test_payroll_engine.mjs && node test_user_flows.mjs && node test_qa_fixes.mjs && node test_schedule_history.mjs"
+    "test": "node test_security.mjs && node test_attendance.mjs && node test_leave_payroll.mjs && node test_deletion.mjs && node test_loans.mjs && node test_reminders.mjs && node test_hardening.mjs && node test_announcements.mjs && node test_payroll_engine.mjs && node test_user_flows.mjs && node test_qa_fixes.mjs && node test_schedule_history.mjs && node test_hr_assistant.mjs"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.3.0"

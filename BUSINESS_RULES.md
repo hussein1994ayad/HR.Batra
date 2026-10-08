@@ -75,6 +75,16 @@
 4. التطبيق: `kPayrollEventLabels` في `mobile/lib/core/models/salary_slip_model.dart` (قائمة واحدة لكل التطبيق).
 5. اختبار بـ `supabase/tests/test_payroll_engine.mjs`.
 
+## المساعد الذكي للأدمن (HR Assistant)
+- **للأدمن فقط، وللقراءة فقط.** ما يگدر يخصم أو يعفي أو يعدّل أي شي. كل دالة بالقاعدة تبدي بـ `require_admin()`، والـ Edge Function
+  تتأكد من الدور قبل ما تنادي الذكاء.
+- **الأرقام من القاعدة مو من الذكاء:** الذكاء يطلب "أدوات" (دوال `assistant_*` بـ `20261008000000_hr_assistant.sql`)، وملفات Excel
+  تنبني بالسيرفر من نفس نتيجة الدالة (`supabase/functions/hr-assistant/excel.ts`). القرار (مخصوم/معفى/بانتظار) يُقرأ من `payroll_events`.
+- **الخصوصية:** للذكاء تروح أسماء وأرقام دوام/خصم/سلف بس لما تنسأل؛ ماكو هواتف/إيميلات/مواقع، وروابط الوثائق تروح للشاشة بس.
+  المزوّد Gemini (مجاني؛ Google ممكن تستعمل المحادثات). تبديل المزوّد = ملف واحد `gemini.ts`.
+- **إضافة قدرة جديدة:** دالة `assistant_*` جديدة بالقاعدة (`require_admin`) ← أداة بـ `tools.ts` ← فحص بـ `test_hr_assistant.mjs`
+  و`hr_assistant_test.ts`. التطبيق والموقع ما يحتاجون تغيير (يعرضون النص والملفات والوثائق تلقائياً).
+
 ## قرارات تقنية غير واضحة
 - **الآيفون لا يستعمل خدمة الخلفية من `flutter_background_service`:** iOS يرفض تسجيل مهمتها
   ("Registration rejected … not advertised in Info.plist") والتطبيق يكمل عادي. التتبع بالخلفية على الآيفون

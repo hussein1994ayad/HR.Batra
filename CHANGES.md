@@ -593,3 +593,14 @@
 - **تجربة على القاعدة الحية داخل معاملة متراجَع عنها:** 78 حركة بدون أي تغيير، وانشالت حركتين (يوم العطلة) فقط.
 - **فحوص:** `supabase/tests/test_schedule_history.mjs` (20 فحص) + تحديث فحصين قدام للقاعدة الجديدة؛ كل فحوص القاعدة ✓ (12 ملف).
   الويب: `decision.test.ts` (+2)، `tsc` ✓ `lint` ✓ `vitest` 98 ✓. التطبيق: `decision_card_test.dart`، `flutter test` ✓ `dart analyze` ✓.
+
+## Step 57 — المساعد الذكي للأدمن (التطبيق + الموقع)
+- **القاعدة** `20261008000000_hr_assistant.sql`: دوال قراءة فقط للأدمن (`assistant_find_employees` ببحث عربي، `assistant_attendance_log`
+  يوم بيوم مع قرار الخصم من `payroll_events`، `assistant_payroll`، `assistant_loans`، `assistant_leaves`، `assistant_documents`،
+  `assistant_day_overview`، `assistant_pending_decisions`، `assistant_top_late`، `assistant_branches`). بدون هواتف/إيميلات/مواقع.
+- **السيرفر** `supabase/functions/hr-assistant/`: Gemini (مجاني) مع أدوات، حد 6 جولات وآخر 10 رسائل، ملفات Excel بنفس ألوان تقارير النظام
+  (سجل الدوام يوم بيوم + ملخص؛ تفاصيل راتب الشهر)، أخطاء عربية (مثل انتهاء الحد المجاني).
+- **التطبيق:** شاشة «المساعد الذكي» (لوحة الإدارة + الإعدادات، أدمن فقط)، فتح/مشاركة الإكسل، الوثائق بمعاينة. ماكو مكتبة جديدة.
+- **الموقع:** صفحة `/dashboard/assistant` (أدمن فقط) + رابط بالقائمة.
+- **فحوص:** القاعدة `test_hr_assistant.mjs` (20)، السيرفر `hr_assistant_test.ts` (9، Deno)، التطبيق `assistant_test.dart` (6)،
+  الموقع `assistant.test.ts` (4). تجربة على القاعدة الحية داخل معاملة متراجَع عنها ✓. كل الفحوص الأخرى ✓.

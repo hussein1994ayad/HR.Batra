@@ -9,6 +9,7 @@ import '../../core/design/design.dart';
 import '../../presentation/admin/admin_dashboard/admin_dashboard_screen.dart';
 import '../../presentation/admin/admin_loans/admin_loans_screen.dart';
 import '../../presentation/admin/announcements/announcement_screen.dart';
+import '../../presentation/admin/assistant/assistant_screen.dart';
 import '../../presentation/admin/attendance_report/attendance_report_screen.dart';
 import '../../presentation/admin/branches/branch_management_screen.dart';
 import '../../presentation/admin/branches/branch_schedule_screen.dart';
@@ -47,6 +48,7 @@ class AppRoutes {
   static const String adminTracking = '/admin/tracking';
   static const String adminTrash = '/admin/trash';
   static const String adminStorage = '/admin/storage';
+  static const String adminAssistant = '/admin/assistant';
   static const String adminBranchSchedule = '/admin/branch-schedule';
   static const String adminEmployeeManagement = '/admin/employee-management';
   static const String adminBranchManagement = '/admin/branch-management';
@@ -190,6 +192,12 @@ final GoRouter appRouter = GoRouter(
       builder: (BuildContext context, GoRouterState state) {
         return const StorageStatsScreen();
       },
+    ),
+
+    // المساعد الذكي (الشاشة نفسها تتأكد إنه أدمن، والسيرفر هم)
+    GoRoute(
+      path: AppRoutes.adminAssistant,
+      builder: (BuildContext context, GoRouterState state) => const AssistantScreen(),
     ),
     
     GoRoute(

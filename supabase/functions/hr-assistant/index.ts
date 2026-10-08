@@ -1,0 +1,67 @@
+// المساعد الذكي للأدمن — نقطة الدخول (HTTP). التحقق من الجلسة ودور الأدمن هنا، والباقي:
+//   agent.ts (الحلقة) · tools.ts (أدوات القراءة) · excel.ts (الملفات) · gemini.ts (مزوّد الذكاء) · prompt.ts (التعليمات)
+// الأسرار: GEMINI_API_KEY (إلزامي)، GEMINI_MODEL (اختياري). النشر: supabase functions deploy hr-assistant
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "npm:@supabase/supabase-js@2";
+import { runAgent, type ChatMessage } from "./agent.ts";
+import { geminiGenerate, QuotaError } from "./gemini.ts";
+import { systemPrompt } from "./prompt.ts";
+
+const CORS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), { status, headers: { ...CORS, "content-type": "application/json; charset=utf-8" } });
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
+  if (req.method !== "POST") return json({ error: "POST فقط." }, 405);
+
+  const apiKey = Deno.env.get("GEMINI_API_KEY");
+  if (!apiKey) return json({ error: "المساعد غير مفعّل بعد: مفتاح Gemini غير مضاف للسيرفر." }, 503);
+
+  // عميل بتوكن المستخدم نفسه: كل الدوال تنطبق عليها صلاحياته
+  const auth = req.headers.get("Authorization") ?? "";
+  const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
+    global: { headers: { Authorization: auth } },
+    auth: { persistSession: false },
+  });
+  const { data: user } = await db.auth.getUser();
+  if (!user?.user) return json({ error: "سجّل الدخول من جديد." }, 401);
+  const { data: isAdmin } = await db.rpc("is_admin");
+  if (isAdmin !== true) return json({ error: "المساعد الذكي لمسؤول النظام (الأدمن) فقط." }, 403);
+
+  let history: ChatMessage[];
+  try {
+    const body = await req.json();
+    history = Array.isArray(body?.messages) ? body.messages : [];
+  } catch {
+    return json({ error: "طلب غير صالح." }, 400);
+  }
+  if (!history.length) return json({ error: "اكتب سؤالك." }, 400);
+
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Baghdad" });
+  try {
+    const reply = await runAgent({
+      generate: geminiGenerate(apiKey, Deno.env.get("GEMINI_MODEL") ?? "gemini-2.5-flash"),
+      system: systemPrompt(today),
+      history,
+      ctx: {
+        rpc: async (fn, args) => {
+          const { data, error } = await db.rpc(fn, args);
+          if (error) throw new Error(error.message);
+          return data;
+        },
+      },
+    });
+    return json(reply);
+  } catch (e) {
+    if (e instanceof QuotaError) {
+      return json({ error: "خلص الحد المجاني للمساعد هسه. جرّب بعد شوية (الحد يتجدد كل دقيقة وكل يوم)." }, 429);
+    }
+    console.error("hr-assistant", e);
+    return json({ error: "صار خطأ بالمساعد. جرّب مرة ثانية." }, 500);
+  }
+});

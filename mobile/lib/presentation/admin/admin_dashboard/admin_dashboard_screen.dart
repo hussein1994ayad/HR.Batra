@@ -144,9 +144,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Ticker
 
 
   /// أدوات الأدمن فقط (مثل الموقع: السلف، المحذوفات، التخزين)
-  static const _adminOnlyTools = {AppRoutes.adminLoans, AppRoutes.adminTrash, AppRoutes.adminStorage};
+  static const _adminOnlyTools = {AppRoutes.adminLoans, AppRoutes.adminTrash, AppRoutes.adminStorage, AppRoutes.adminAssistant};
 
   static const _tools = <(IconData, String, String, AppTone)>[
+    (Icons.auto_awesome_rounded, 'المساعد الذكي', AppRoutes.adminAssistant, AppTone.accent),
     (Icons.location_searching_rounded, 'التتبع الحي', AppRoutes.adminTracking, AppTone.brand),
     (Icons.bar_chart_rounded, 'تقارير الحضور', AppRoutes.adminAttendanceReport, AppTone.info),
     (Icons.account_balance_wallet_rounded, 'السلف و Excel', AppRoutes.adminLoans, AppTone.warning),

@@ -6,6 +6,7 @@
 export '../utils/json_map.dart';
 export 'admin_models.dart';
 export 'announcement_model.dart';
+export 'assistant_models.dart';
 export 'attendance_model.dart';
 export 'branch_model.dart';
 export 'branch_schedule_model.dart';

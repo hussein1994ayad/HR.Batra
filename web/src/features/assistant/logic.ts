@@ -1,0 +1,28 @@
+// منطق المساعد بدون واجهة (نفس التطبيق: mobile/lib/presentation/admin/assistant/assistant_logic.dart).
+
+export const ASSISTANT_SUGGESTIONS = [
+  'منو غايب ومنو متأخر اليوم بكل فرع؟',
+  'سويلي إكسل سجل دوام موظف من أول الشهر لليوم',
+  'شكد انخصم من موظف هالشهر وشنو التفاصيل؟',
+  'شنو القرارات المعلّقة اللي تنتظرني؟',
+  'منو أكثر الموظفين تأخيراً هالشهر؟',
+  'وثائق موظف',
+  'شكد باقي على سلفة موظف؟',
+];
+
+/** الذكاء يكتب Markdown بسيط؛ نعرضه نص مرتب: بدون رموز، والنقاط «•». */
+export function assistantDisplayText(raw: string): string {
+  return raw
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .map((line) =>
+      line
+        .replace(/\*\*|__|`/g, '')
+        .replace(/^(\s*)#{1,6}\s+/, '$1')
+        .replace(/^(\s*)[*\-+]\s+/, '$1• ')
+        .trimEnd(),
+    )
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
