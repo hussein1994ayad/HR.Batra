@@ -368,12 +368,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       onTap: () => context.push(AppRoutes.adminTracking),
                     ),
                     // السلف للأدمن فقط (مدير الفرع ما يعتمد سلف — نفس الموقع)
-                    if (Roles.isAdmin(AuthService.currentUserRole))
+                    if (Roles.isAdmin(AuthService.currentUserRole)) ...[
                       AppListTile(
                         leading: const ToneIcon(Icons.table_chart_rounded, tone: AppTone.accent),
                         title: 'سلف الموظفين وكشوف Excel',
                         onTap: () => context.push(AppRoutes.adminLoans),
                       ),
+                      AppListTile(
+                        leading: const ToneIcon(Icons.auto_awesome_rounded, tone: AppTone.accent),
+                        title: 'المساعد الذكي',
+                        subtitle: 'اسأل عن الدوام والخصومات والسلف، وملفات Excel',
+                        onTap: () => context.push(AppRoutes.adminAssistant),
+                      ),
+                    ],
                   ],
                 ],
               ),

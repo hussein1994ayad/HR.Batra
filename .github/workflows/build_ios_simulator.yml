@@ -1,9 +1,16 @@
 name: Build iOS Simulator App
 
+# نسخة محاكي آيفون للتجربة بالمتصفح (Appetize.io) أو أي منصة تجربة سحابية.
+# Appetize يحتاج: ملف .zip بداخله Runner.app مباشرة (بدون مجلد Payload)، ومبني للمعماريتين
+# (أجهزتهم Intel و Apple Silicon)، وإلا يطلع "Unexpected error occurred" عند التشغيل.
+
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "design-v2" ]
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -27,19 +34,43 @@ jobs:
         working-directory: ./mobile
         run: flutter pub get
 
-      - name: Build iOS Simulator App
+      - name: Build iOS Simulator App (arm64 + x86_64)
         working-directory: ./mobile
-        run: flutter build ios --simulator
-
-      - name: Package Simulator App into IPA for Cloud Testing
-        working-directory: ./mobile/build/ios/iphonesimulator
         run: |
-          mkdir Payload
-          cp -r Runner.app Payload/
-          zip -r HRBatra_Simulator.ipa Payload
+          # يجهّز إعدادات Flutter والـ pods، ثم البناء بـ xcodebuild للمعماريتين
+          flutter build ios --simulator --config-only
+          cd ios
+          xcodebuild -workspace Runner.xcworkspace -scheme Runner -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath ../build/appetize \
+            ARCHS="arm64 x86_64" ONLY_ACTIVE_ARCH=NO CODE_SIGNING_ALLOWED=NO build | tail -20
+          APP=../build/appetize/Build/Products/Debug-iphonesimulator/Runner.app
+          echo "--- architectures:"; lipo -info "$APP/Runner"
+          echo "--- minimum iOS:"; /usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' "$APP/Info.plist"
+
+      - name: Package for Appetize (.zip) and cloud testing (.ipa)
+        working-directory: ./mobile/build/appetize/Build/Products/Debug-iphonesimulator
+        run: |
+          mkdir -p ../../../../../dist
+          zip -qry ../../../../../dist/HRBatra_Appetize.zip Runner.app
+          mkdir Payload && cp -R Runner.app Payload/ && zip -qry ../../../../../dist/HRBatra_Simulator.ipa Payload
+          ls -la ../../../../../dist
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: HRBatra-iOS-Simulator-App
-          path: mobile/build/ios/iphonesimulator/HRBatra_Simulator.ipa
+          path: mobile/dist/*
+          if-no-files-found: error
+
+      # رابط تنزيل عام بدون تسجيل دخول (ملف التطبيق فقط، بدون أسرار):
+      # https://github.com/<repo>/raw/appetize-build/HRBatra_Appetize.zip
+      - name: Publish public download (branch appetize-build)
+        run: |
+          mkdir -p publish && cp mobile/dist/HRBatra_Appetize.zip publish/
+          cd publish
+          echo "# iOS Simulator build — commit ${GITHUB_SHA::7}" > README.md
+          git init -q -b appetize-build
+          git config user.name "ios-build-bot"; git config user.email "ios-build-bot@users.noreply.github.com"
+          git add -A && git commit -qm "iOS simulator build for ${GITHUB_SHA::7}"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" appetize-build

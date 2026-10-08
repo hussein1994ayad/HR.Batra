@@ -12,6 +12,7 @@ import {
   CalendarRange,
   Coins,
   Banknote,
+  Sparkles,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -34,6 +35,7 @@ export const NAV_GROUPS: SidebarGroup[] = [
     label: 'الرئيسية',
     items: [
       { name: 'نظرة عامة', description: 'ملخص فوري لحالة الكادر والحضور والتنبيهات', href: '/dashboard', icon: LayoutDashboard },
+      { name: 'المساعد الذكي', description: 'اسأل عن الدوام والخصومات والسلف والوثائق، وملفات Excel', href: '/dashboard/assistant', icon: Sparkles },
     ],
   },
   {

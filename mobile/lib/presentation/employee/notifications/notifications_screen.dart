@@ -4,8 +4,11 @@
 // =========================================================================
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/models/models.dart';
+import '../../../core/routes/app_router.dart';
+import '../../../core/services/auth_service.dart';
 import '../../../core/services/supabase_service.dart';
 import '../../../core/utils/app_log.dart';
 import '../../../data/repositories/notification_repository.dart';
@@ -103,6 +106,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               body: n.body,
               isRead: n.isRead,
               createdAt: created,
+              // الملخص الصباحي للأدمن: الضغط يفتح المساعد الذكي
+              onTap: n.type == 'assistant_summary' && Roles.isAdmin(AuthService.currentUserRole)
+                  ? () => context.push(AppRoutes.adminAssistant)
+                  : null,
             ),
           ),
         ));
@@ -119,13 +126,14 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 }
 
 class _NotificationCard extends StatelessWidget {
-  const _NotificationCard({required this.type, required this.title, required this.body, required this.isRead, required this.createdAt});
+  const _NotificationCard({required this.type, required this.title, required this.body, required this.isRead, required this.createdAt, this.onTap});
 
   final String type;
   final String title;
   final String body;
   final bool isRead;
   final DateTime? createdAt;
+  final VoidCallback? onTap;
 
   (IconData, AppTone) get _style => switch (type) {
         'leave' => (Icons.event_note_rounded, AppTone.accent),
@@ -134,6 +142,7 @@ class _NotificationCard extends StatelessWidget {
         'salary' => (Icons.receipt_long_rounded, AppTone.brand),
         'device' => (Icons.phonelink_lock_rounded, AppTone.danger),
         'ota' => (Icons.system_update_rounded, AppTone.info),
+        'assistant_summary' => (Icons.auto_awesome_rounded, AppTone.accent),
         _ => (Icons.notifications_rounded, AppTone.neutral),
       };
 
@@ -144,6 +153,7 @@ class _NotificationCard extends StatelessWidget {
       color: isRead ? AppColors.surface1 : AppColors.surface2,
       borderColor: isRead ? AppColors.border : tone.color.withValues(alpha: 0.35),
       semanticLabel: '${isRead ? '' : 'جديد: '}$title',
+      onTap: onTap,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

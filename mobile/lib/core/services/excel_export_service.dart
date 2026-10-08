@@ -29,7 +29,7 @@ class ExcelExportService {
   }) async {
     final bytes = buildAttendanceReportBytes(rows: rows, from: from, to: to, scopeLabel: scopeLabel);
     final fileName = 'تقرير_الحضور_${DateFormat('yyyyMMdd').format(from)}_${DateFormat('yyyyMMdd').format(to)}.xlsx';
-    return _saveExcel(bytes, fileName);
+    return saveExcelBytes(bytes, fileName);
   }
 
   /// محتوى ملف تقرير الحضور (بدون حفظ) — قابل للاختبار. التفاصيل في excel/attendance_report_excel.dart
@@ -41,7 +41,8 @@ class ExcelExportService {
   }) =>
       buildAttendanceReportExcelBytes(rows: rows, from: from, to: to, scopeLabel: scopeLabel);
 
-  static Future<String> _saveExcel(List<int> bytes, String fileName) async {
+  /// يحفظ ملف Excel جاهز (مثل ملفات المساعد الذكي) بمجلد التطبيق، ونسخة بالتنزيلات على أندرويد. يرجّع المسار.
+  static Future<String> saveExcelBytes(List<int> bytes, String fileName) async {
     final appDir = await getApplicationDocumentsDirectory();
     final file = File('${appDir.path}/$fileName');
     await file.writeAsBytes(bytes, flush: true);

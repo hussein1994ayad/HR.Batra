@@ -593,3 +593,33 @@
 - **تجربة على القاعدة الحية داخل معاملة متراجَع عنها:** 78 حركة بدون أي تغيير، وانشالت حركتين (يوم العطلة) فقط.
 - **فحوص:** `supabase/tests/test_schedule_history.mjs` (20 فحص) + تحديث فحصين قدام للقاعدة الجديدة؛ كل فحوص القاعدة ✓ (12 ملف).
   الويب: `decision.test.ts` (+2)، `tsc` ✓ `lint` ✓ `vitest` 98 ✓. التطبيق: `decision_card_test.dart`، `flutter test` ✓ `dart analyze` ✓.
+
+## Step 57 — المساعد الذكي للأدمن (التطبيق + الموقع)
+- **القاعدة** `20261008000000_hr_assistant.sql`: دوال قراءة فقط للأدمن (`assistant_find_employees` ببحث عربي، `assistant_attendance_log`
+  يوم بيوم مع قرار الخصم من `payroll_events`، `assistant_payroll`، `assistant_loans`، `assistant_leaves`، `assistant_documents`،
+  `assistant_day_overview`، `assistant_pending_decisions`، `assistant_top_late`، `assistant_branches`). بدون هواتف/إيميلات/مواقع.
+- **السيرفر** `supabase/functions/hr-assistant/`: Gemini (مجاني) مع أدوات، حد 6 جولات وآخر 10 رسائل، ملفات Excel بنفس ألوان تقارير النظام
+  (سجل الدوام يوم بيوم + ملخص؛ تفاصيل راتب الشهر)، أخطاء عربية (مثل انتهاء الحد المجاني).
+- **التطبيق:** شاشة «المساعد الذكي» (لوحة الإدارة + الإعدادات، أدمن فقط)، فتح/مشاركة الإكسل، الوثائق بمعاينة. ماكو مكتبة جديدة.
+- **الموقع:** صفحة `/dashboard/assistant` (أدمن فقط) + رابط بالقائمة.
+- **فحوص:** القاعدة `test_hr_assistant.mjs` (20)، السيرفر `hr_assistant_test.ts` (9، Deno)، التطبيق `assistant_test.dart` (6)،
+  الموقع `assistant.test.ts` (4). تجربة على القاعدة الحية داخل معاملة متراجَع عنها ✓. كل الفحوص الأخرى ✓.
+
+## Step 58 — توسيع المساعد الذكي (المراحل A–D)
+- **A تقارير** `20261008000100_hr_assistant_reports.sql`: إكسل فرع/كل الشركة، رواتب كل الموظفين، جاهزية الرواتب، تنبيهات وأنماط،
+  مقارنة شهرين، ترتيب الفروع والأكثر انضباطاً، ملف شامل لموظف (`employee_profile_excel`).
+- **B قرارات بتأكيد** `20261008000200_hr_assistant_decisions.sql`: `decision_context` ← `propose_decisions` = بطاقات «تأكيد/العكس».
+  التنفيذ بس من ضغطة الأدمن عبر `decide_payroll_event` الموجودة (نفس باب صفحة الرواتب). الذكاء ما ينفذ شي.
+- **C الصوت** `20261008000300_hr_assistant_voice.sql` (`assistant_name_hints`) + `voice.ts`: التسجيل (WAV أحادي 16kHz، أقصاه دقيقة)
+  يتحول لنص بالعراقي حرفياً والأسماء بإملاء النظام، ويرجع النص يظهر كرسالة الأدمن. الصوت ما ينحفظ. التطبيق: مكتبة `record` +
+  صلاحية المايك (`NSMicrophoneUsageDescription`، `RECORD_AUDIO`، `PERMISSION_MICROPHONE`). الموقع: MediaRecorder ← WAV.
+- **D** `20261008000400_hr_assistant_summary_and_history.sql`:
+  - **ملخص صباحي** 10:00 بغداد (pg_cron `assistant_morning_summary`، بدون ذكاء) ← إشعار `assistant_summary` لكل أدمن مرة باليوم؛
+    يتطفى من قائمة المساعد (`system_settings.assistant_policy`). الضغط عليه بالإشعارات يفتح المساعد. أداة `morning_summary` بنفس الأرقام.
+  - **مسودات تعاميم** `draft_message` ← بطاقة «نسخ» و«فتح كتعميم» (التطبيق: شاشة التعاميم بالنص جاهز؛ الموقع: نافذة «بث تعميم» بالرئيسية).
+    النشر بيد الأدمن.
+  - **حفظ المحادثات** `assistant_conversations`/`assistant_messages`: نص فقط، الأدمن صاحبها فقط (RLS)، الإضافة عبر
+    `assistant_save_messages`، وتنحذف بعد 90 يوم (pg_cron `assistant_conversations_cleanup`). «المحادثات السابقة» بالتطبيق والموقع.
+- **فحوص:** القاعدة `test_hr_assistant_reports/decisions/history.mjs`، السيرفر Deno (19)، التطبيق `assistant_test.dart` (16)،
+  الموقع `assistant.test.ts` (12). تجربة الأجزاء الجديدة على القاعدة الحية داخل معاملة متراجَع عنها ✓.
+- **على المستخدم:** `npx.cmd supabase db push` · `npx.cmd supabase functions deploy hr-assistant` · دمج PR · بناء APK جديد (صلاحية المايك).

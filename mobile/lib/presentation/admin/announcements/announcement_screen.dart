@@ -15,7 +15,11 @@ import '../../../data/repositories/announcement_repository.dart';
 import '../../shared/ui/ui.dart';
 
 class AnnouncementScreen extends StatefulWidget {
-  const AnnouncementScreen({super.key});
+  const AnnouncementScreen({super.key, this.initialTitle, this.initialBody});
+
+  /// نص جاهز (مثلاً مسودة من المساعد الذكي)؛ الأدمن يراجعه ويختار الجمهور وينشر.
+  final String? initialTitle;
+  final String? initialBody;
 
   @override
   State<AnnouncementScreen> createState() => _AnnouncementScreenState();
@@ -26,8 +30,8 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
   bool _loadingData = true;
-  final _titleController = TextEditingController();
-  final _bodyController = TextEditingController();
+  late final _titleController = TextEditingController(text: widget.initialTitle);
+  late final _bodyController = TextEditingController(text: widget.initialBody);
 
   String _selectedTarget = 'all'; // 'all', 'branch', 'employees'
   String? _selectedBranchId;

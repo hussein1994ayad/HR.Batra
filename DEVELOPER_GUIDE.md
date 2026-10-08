@@ -486,6 +486,14 @@ cd supabase/tests && npm test
 
 ---
 
+## المساعد الذكي (Edge Function `hr-assistant`)
+- الملفات: `supabase/functions/hr-assistant/` — `index.ts` (HTTP + التحقق من الأدمن)، `agent.ts` (الحلقة)، `tools.ts` (الأدوات)،
+  `excel.ts` (ملفات Excel)، `gemini.ts` (المزوّد)، `prompt.ts` (التعليمات). الشاشات: `mobile/lib/presentation/admin/assistant/`
+  و`web/src/features/assistant/`.
+- التفعيل (مرة وحدة): مفتاح مجاني من https://aistudio.google.com/apikey ثم
+  `npx.cmd supabase secrets set GEMINI_API_KEY=...` و `npx.cmd supabase functions deploy hr-assistant`. موديل ثاني: `GEMINI_MODEL`.
+- الفحص: `npx deno test --allow-env --allow-read --allow-net=registry.npmjs.org,jsr.io supabase/functions/hr-assistant/`.
+
 ## ملاحظات مهمة للمطور
 
 ### التصميم: داكن فقط، ومن نظام التصميم فقط

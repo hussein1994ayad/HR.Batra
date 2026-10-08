@@ -21,6 +21,12 @@ class AdminActionsRepository {
     return id;
   }
 
+  /// قرار على حركة رواتب موجودة (نفس باب صفحة الرواتب بالموقع): السيرفر يحدّث الحضور، يتحقق من الصلاحية،
+  /// ويشعر الموظف بالخصم فقط. تستعمله لوحة الإدارة وبطاقات اقتراح المساعد الذكي.
+  Future<void> decidePayrollEvent(String eventId, {required bool deduct, required String reason}) async {
+    await _db.rpc<Object?>('decide_payroll_event', params: {'p_event_id': eventId, 'p_approve': deduct, 'p_reason': reason});
+  }
+
   /// قرار خصم أو إعفاء لغياب/تأخير/خروج مبكر/بصمة ناقصة.
   ///
   /// المبلغ لا يُكتب من التطبيق: محرّك الرواتب يحسبه (أجر اليوم = الراتب ÷ 30، والدقائق
@@ -36,11 +42,7 @@ class AdminActionsRepository {
     }
 
     if (item.eventId != null) {
-      await _db.rpc<Object?>('decide_payroll_event', params: {
-        'p_event_id': item.eventId,
-        'p_approve': deduct,
-        'p_reason': reason,
-      });
+      await decidePayrollEvent(item.eventId!, deduct: deduct, reason: reason);
       return;
     }
 

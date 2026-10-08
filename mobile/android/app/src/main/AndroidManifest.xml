@@ -21,6 +21,9 @@
     <!-- الكاميرا (تُطلب عند الاستخدام فقط) -->
     <uses-permission android:name="android.permission.CAMERA" />
 
+    <!-- المايك: السؤال بالصوت للمساعد الذكي (أدمن فقط، يُطلب عند الاستخدام، التسجيل ما ينحفظ) -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
     <!-- الإشعارات — Android 13+ يطلب POST_NOTIFICATIONS صراحة -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.VIBRATE"/>
