@@ -254,7 +254,7 @@ Deno.test("gemini errors: Google's reason reaches the admin in Arabic, key never
   let err: unknown;
   try { await gen({ system: "s", contents: [], tools: [] }); } catch (e) { err = e; }
   assert(err instanceof GeminiError);
-  assert(err.arabic.includes("مفتاح Gemini غلط") && err.arabic.includes("رمز 400"));
+  assert(err.arabic.includes("مفتاح Gemini غلط") && err.arabic.includes("رمز 400") && err.arabic.includes("Please pass a valid"));
   assert(!err.arabic.includes("SECRET-KEY"));
   assert(new GeminiError(403, "User location is not supported for the API use.").arabic.includes("موقع السيرفر"));
   assert(new GeminiError(404, "models/x is not found").arabic.includes("غير موجود"));

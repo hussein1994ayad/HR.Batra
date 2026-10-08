@@ -46,7 +46,8 @@ Deno.serve(async (req) => {
   }
   if (!history.length && !audioRaw) return json({ error: "اكتب سؤالك." }, 400);
 
-  const model = Deno.env.get("GEMINI_MODEL") ?? "gemini-2.5-flash";
+  // اسم ثابت من Google يأشّر دائماً على أحدث Flash (الموديلات القديمة تتوقف للمستخدمين الجدد). للتثبيت: سر GEMINI_MODEL.
+  const model = Deno.env.get("GEMINI_MODEL") ?? "gemini-flash-latest";
   const rpc = async (fn: string, args: Record<string, unknown>) => {
     const { data, error } = await db.rpc(fn, args);
     if (error) throw new Error(error.message);

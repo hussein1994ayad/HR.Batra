@@ -63,7 +63,7 @@ async function failure(res: Response): Promise<GeminiError> {
   try {
     detail = JSON.parse(raw)?.error?.message ?? raw;
   } catch { /* نص عادي */ }
-  return new GeminiError(res.status, String(detail).replace(/s+/g, " ").trim().slice(0, 300));
+  return new GeminiError(res.status, String(detail).replace(/\s+/g, " ").trim().slice(0, 300));
 }
 
 export function geminiGenerate(apiKey: string, model: string, fetchImpl: typeof fetch = fetch): Generate {
