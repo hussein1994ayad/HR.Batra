@@ -5,7 +5,9 @@ export type AssistantAttachment =
   | { kind: 'documents'; employee: string; urls: string[] }
   /** اقتراح قرار: ما ينفذ إلا بزر «تأكيد» (decide_payroll_event). البيانات من القاعدة. */
   | { kind: 'decision'; event_id: string; employee: string; date: string; type: string; minutes: number; amount: number;
-      suggest: 'deduct' | 'excuse'; reason: string };
+      suggest: 'deduct' | 'excuse'; reason: string }
+  /** مسودة تعميم/رسالة: تُراجع وتُنشر يدوياً من نافذة التعاميم. */
+  | { kind: 'draft'; draft_kind: 'announcement' | 'message'; title: string; body: string };
 
 export interface AssistantReply {
   text: string;
@@ -22,4 +24,11 @@ export interface ChatMessage {
   error?: boolean;
   /** سؤال بالصوت (النص هو اللي انفهم من التسجيل). */
   voice?: boolean;
+}
+
+/** محادثة محفوظة (نص فقط، تنحذف بعد 90 يوم). */
+export interface SavedConversation {
+  id: string;
+  title: string;
+  updated_at: string;
 }

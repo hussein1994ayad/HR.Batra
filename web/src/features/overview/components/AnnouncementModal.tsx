@@ -16,14 +16,19 @@ import type { DirectoryEmployee } from '../logic';
 export function AnnouncementModal({
   branches,
   employees,
+  initialTitle,
+  initialText,
   onClose,
 }: {
   branches: DashboardData['branches'];
   employees: DirectoryEmployee[];
+  /** نص جاهز (مسودة من المساعد الذكي)؛ الأدمن يراجعه ويختار الجمهور. */
+  initialTitle?: string;
+  initialText?: string;
   onClose: () => void;
 }) {
-  const [title, setTitle] = useState('');
-  const [text, setText] = useState('');
+  const [title, setTitle] = useState(initialTitle ?? '');
+  const [text, setText] = useState(initialText ?? '');
   const today = getLocalDateStr();
   // مدة ظهور التعميم في التطبيق: من تاريخ إلى تاريخ (فارغ = بدون نهاية)
   const [startDate, setStartDate] = useState(today);

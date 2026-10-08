@@ -41,6 +41,34 @@ class AssistantRepository {
     return [for (final m in recent) m.toHistory()];
   }
 
+  // ---------------- المحادثات المحفوظة (نص فقط، تنحذف بعد 90 يوم) ----------------
+
+  /// يحفظ رسائل جديدة؛ بدون [conversationId] تنفتح محادثة جديدة. يرجع رقم المحادثة.
+  Future<String> saveMessages(String? conversationId, List<AssistantMessage> messages) async {
+    final saved = [for (final m in messages) if (!m.isError && m.text.trim().isNotEmpty) m.toSaved()];
+    if (saved.isEmpty && conversationId != null) return conversationId;
+    final id = await _db.rpc<Object?>('assistant_save_messages', params: {'p_conversation_id': conversationId, 'p_messages': saved});
+    return id as String;
+  }
+
+  Future<List<AssistantConversation>> conversations() async {
+    final rows = await _db.from('assistant_conversations').select('id, title, updated_at').order('updated_at', ascending: false).limit(50);
+    return [for (final r in rowsOf(rows)) ?AssistantConversation.fromMap(r)];
+  }
+
+  Future<List<AssistantMessage>> messagesOf(String conversationId) async {
+    final rows = await _db.from('assistant_messages').select('role, text, voice').eq('conversation_id', conversationId).order('id');
+    return [for (final r in rowsOf(rows)) AssistantMessage.fromSaved(r)];
+  }
+
+  Future<void> deleteConversation(String conversationId) => _db.from('assistant_conversations').delete().eq('id', conversationId);
+
+  // ---------------- الملخص الصباحي (إشعار 10:00) ----------------
+
+  Future<bool> morningSummaryEnabled() async => rowOf(await _db.rpc('assistant_settings'))?['morning_summary'] != false;
+
+  Future<void> setMorningSummary(bool enabled) => _db.rpc('assistant_set_morning_summary', params: {'p_enabled': enabled});
+
   static String? _serverMessage(Object? details) => rowOf(details)?.str('error');
 }
 

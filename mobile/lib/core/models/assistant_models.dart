@@ -7,10 +7,12 @@ import '../utils/json_map.dart';
 /// رسالة بالمحادثة. المرفقات (ملفات/وثائق) تبقى بالشاشة وما ترجع للسيرفر.
 class AssistantMessage {
   const AssistantMessage.user(this.text, {this.voice = false})
-      : fromUser = true, files = const [], documents = const [], decisions = const [], isError = false;
-  const AssistantMessage.assistant(this.text, {this.files = const [], this.documents = const [], this.decisions = const []})
+      : fromUser = true, files = const [], documents = const [], decisions = const [], drafts = const [], isError = false;
+  const AssistantMessage.assistant(this.text,
+      {this.files = const [], this.documents = const [], this.decisions = const [], this.drafts = const []})
       : fromUser = false, isError = false, voice = false;
-  const AssistantMessage.error(this.text) : fromUser = false, files = const [], documents = const [], decisions = const [], isError = true, voice = false;
+  const AssistantMessage.error(this.text)
+      : fromUser = false, files = const [], documents = const [], decisions = const [], drafts = const [], isError = true, voice = false;
 
   final bool fromUser;
   final String text;
@@ -20,6 +22,9 @@ class AssistantMessage {
   /// اقتراحات قرارات (ما تنفذ إلا بتأكيد الأدمن).
   final List<AssistantDecision> decisions;
 
+  /// مسودات تعاميم/رسائل (تُراجع وتُنشر يدوياً).
+  final List<AssistantDraft> drafts;
+
   /// رسالة خطأ (ما تنرسل للذكاء كجزء من المحادثة).
   final bool isError;
 
@@ -28,6 +33,13 @@ class AssistantMessage {
 
   /// الشكل اللي يرسله التطبيق للسيرفر.
   Map<String, String> toHistory() => {'role': fromUser ? 'user' : 'assistant', 'text': text};
+
+  /// الشكل المحفوظ (نص فقط؛ الملفات والبطاقات ما تنحفظ).
+  Map<String, Object> toSaved() => {'role': fromUser ? 'user' : 'assistant', 'text': text, 'voice': voice};
+
+  static AssistantMessage fromSaved(JsonRow m) => m.str('role') == 'user'
+      ? AssistantMessage.user(m.str('text') ?? '', voice: m['voice'] == true)
+      : AssistantMessage.assistant(m.str('text') ?? '');
 }
 
 /// ملف جاهز (Excel) مبني بالسيرفر.
@@ -84,6 +96,28 @@ class AssistantDecision {
   }
 }
 
+/// مسودة تعميم أو رسالة كتبها المساعد. ما تنتشر إلا من شاشة التعاميم بيد الأدمن.
+class AssistantDraft {
+  const AssistantDraft({required this.title, required this.body, this.isAnnouncement = true});
+  final String title;
+  final String body;
+  final bool isAnnouncement;
+}
+
+/// محادثة محفوظة (القائمة).
+class AssistantConversation {
+  const AssistantConversation({required this.id, required this.title, required this.updatedAt});
+  final String id;
+  final String title;
+  final DateTime? updatedAt;
+
+  static AssistantConversation? fromMap(JsonRow m) {
+    final id = m.str('id');
+    if (id == null) return null;
+    return AssistantConversation(id: id, title: m.str('title') ?? 'محادثة', updatedAt: DateTime.tryParse(m.str('updated_at') ?? '')?.toLocal());
+  }
+}
+
 /// تسجيل صوتي (WAV) للسؤال بالصوت. ما ينحفظ بأي مكان.
 class AssistantAudio {
   const AssistantAudio({required this.bytes, this.mime = 'audio/wav'});
@@ -93,7 +127,8 @@ class AssistantAudio {
 
 /// رد المساعد: نص + مرفقات.
 class AssistantReply {
-  const AssistantReply({required this.text, this.transcript, this.files = const [], this.documents = const [], this.decisions = const []});
+  const AssistantReply(
+      {required this.text, this.transcript, this.files = const [], this.documents = const [], this.decisions = const [], this.drafts = const []});
 
   final String text;
 
@@ -102,17 +137,21 @@ class AssistantReply {
   final List<AssistantFile> files;
   final List<AssistantDocuments> documents;
   final List<AssistantDecision> decisions;
+  final List<AssistantDraft> drafts;
 
   factory AssistantReply.fromMap(JsonRow map) {
     final files = <AssistantFile>[];
     final docs = <AssistantDocuments>[];
     final decisions = <AssistantDecision>[];
+    final drafts = <AssistantDraft>[];
     for (final a in map.list('attachments')) {
       if (a.str('kind') == 'file' && a.str('name') != null && a.str('base64') != null) {
         files.add(AssistantFile(name: a.str('name')!, base64: a.str('base64')!));
       } else if (a.str('kind') == 'decision') {
         final d = AssistantDecision.fromMap(a);
         if (d != null) decisions.add(d);
+      } else if (a.str('kind') == 'draft' && (a.str('body') ?? '').trim().isNotEmpty) {
+        drafts.add(AssistantDraft(title: a.str('title') ?? '', body: a.str('body')!, isAnnouncement: a.str('draft_kind') != 'message'));
       } else if (a.str('kind') == 'documents') {
         final urls = a['urls'];
         docs.add(AssistantDocuments(
@@ -121,8 +160,8 @@ class AssistantReply {
         ));
       }
     }
-    return AssistantReply(text: map.str('text') ?? '', transcript: map.str('transcript'), files: files, documents: docs, decisions: decisions);
+    return AssistantReply(text: map.str('text') ?? '', transcript: map.str('transcript'), files: files, documents: docs, decisions: decisions, drafts: drafts);
   }
 
-  AssistantMessage toMessage() => AssistantMessage.assistant(text, files: files, documents: documents, decisions: decisions);
+  AssistantMessage toMessage() => AssistantMessage.assistant(text, files: files, documents: documents, decisions: decisions, drafts: drafts);
 }

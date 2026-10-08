@@ -3,8 +3,11 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../core/models/models.dart';
+import '../../../../core/routes/app_router.dart';
 import '../../../../core/services/excel_export_service.dart';
 import '../../../../core/utils/app_log.dart';
 import '../../../shared/ui/ui.dart';
@@ -56,6 +59,7 @@ class AssistantBubble extends StatelessWidget {
               for (final f in message.files) ...[const SizedBox(height: AppSpace.sm), AssistantFileCard(file: f)],
               for (final d in message.documents) ...[const SizedBox(height: AppSpace.sm), AssistantDocumentsCard(docs: d)],
               for (final d in message.decisions) ...[const SizedBox(height: AppSpace.sm), AssistantDecisionCard(decision: d, decide: decide)],
+              for (final d in message.drafts) ...[const SizedBox(height: AppSpace.sm), AssistantDraftCard(draft: d)],
             ],
           ),
         ),
@@ -220,6 +224,58 @@ class _AssistantDecisionCardState extends State<AssistantDecisionCard> {
                 onPressed: _busy ? null : () => _apply(!d.suggestDeduct),
               ),
             ]),
+        ],
+      ),
+    );
+  }
+}
+
+/// مسودة تعميم/رسالة: نسخ، أو فتح شاشة التعاميم والنص جاهز (النشر بيد الأدمن من هناك).
+class AssistantDraftCard extends StatelessWidget {
+  const AssistantDraftCard({super.key, required this.draft});
+  final AssistantDraft draft;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      padding: const EdgeInsets.all(AppSpace.md),
+      color: AppColors.surface2,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(children: [
+            const ToneIcon(Icons.campaign_rounded, tone: AppTone.accent),
+            const SizedBox(width: AppSpace.md),
+            Expanded(
+              child: Text(draft.isAnnouncement ? 'مسودة تعميم' : 'مسودة رسالة',
+                  style: AppText.caption),
+            ),
+          ]),
+          if (draft.title.isNotEmpty) ...[
+            const SizedBox(height: AppSpace.sm),
+            Text(draft.title, style: AppText.subtitle.copyWith(color: AppColors.textPrimary)),
+          ],
+          const SizedBox(height: AppSpace.xs),
+          SelectableText(draft.body, style: AppText.bodySm.copyWith(color: AppColors.textPrimary, height: 1.6)),
+          const SizedBox(height: AppSpace.sm),
+          Wrap(spacing: AppSpace.sm, runSpacing: AppSpace.sm, children: [
+            AppButton.secondary(
+              label: 'نسخ',
+              icon: Icons.copy_rounded,
+              size: AppButtonSize.small,
+              onPressed: () async {
+                await Clipboard.setData(ClipboardData(text: [draft.title, draft.body].where((s) => s.isNotEmpty).join('\n\n')));
+                if (context.mounted) AppSnack.success(context, 'انتسخت المسودة');
+              },
+            ),
+            if (draft.isAnnouncement)
+              AppButton(
+                label: 'فتح كتعميم',
+                icon: Icons.campaign_outlined,
+                size: AppButtonSize.small,
+                onPressed: () => context.push(AppRoutes.adminAnnouncement, extra: draft),
+              ),
+          ]),
         ],
       ),
     );

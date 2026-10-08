@@ -1,5 +1,5 @@
 // أدوات المساعد: كل أداة = دالة قراءة بالقاعدة (supabase/migrations/20261008000000_hr_assistant.sql) تُنادى بتوكن الأدمن
-// نفسه، فصلاحيات القاعدة تنطبق. ماكو أي أداة كتابة. أدوات الملفات ترجّع مرفقاً للشاشة، والذكاء يشوف ملخصاً فقط.
+// نفسه، فصلاحيات القاعدة تنطبق. ماكو أي أداة كتابة (القرارات والمسودات بطاقات يأكدها الأدمن بنفسه). أدوات الملفات ترجّع مرفقاً للشاشة، والذكاء يشوف ملخصاً فقط.
 
 import {
   buildAttendanceWorkbook, buildBranchAttendanceWorkbook, buildEmployeeProfileWorkbook, buildPayrollRunWorkbook, buildPayrollWorkbook,
@@ -12,7 +12,9 @@ export type Attachment =
   | { kind: "documents"; employee: string; urls: string[] }
   /** اقتراح قرار: ما ينفذ إلا لما الأدمن يضغط «تأكيد» بالشاشة (decide_payroll_event). البيانات من القاعدة. */
   | { kind: "decision"; event_id: string; employee: string; date: string; type: string; minutes: number; amount: number;
-      suggest: "deduct" | "excuse"; reason: string };
+      suggest: "deduct" | "excuse"; reason: string }
+  /** مسودة تعميم أو رسالة: تُراجع وتُنشر يدوياً من شاشة التعاميم (المساعد ما ينشر شي). */
+  | { kind: "draft"; draft_kind: "announcement" | "message"; title: string; body: string };
 
 export interface ToolContext {
   rpc: (fn: string, args: Record<string, unknown>) => Promise<unknown>;
@@ -159,6 +161,14 @@ export const TOOLS: Tool[] = [
       parameters: { type: "OBJECT", properties: { date: DATE("اليوم (اختياري)"), branch: p("اسم الفرع (اختياري)") } },
     },
     run: async (a, ctx) => ({ forModel: await ctx.rpc("assistant_day_overview", { p_date: str(a.date) ?? null, p_branch: str(a.branch) ?? null }) as Record<string, unknown> }),
+  },
+  {
+    decl: {
+      name: "morning_summary",
+      description: "ملخص سريع لليوم (نفس إشعار الصباح): كم بصم من المجدولين، المتأخرين، المجازين، منو ما بصم بعد، القرارات المعلّقة، وكم باقي على قطع الرواتب.",
+      parameters: { type: "OBJECT", properties: { date: DATE("اليوم (اختياري)") } },
+    },
+    run: async (a, ctx) => ({ forModel: await ctx.rpc("assistant_morning_summary", { p_date: str(a.date) ?? null }) as Record<string, unknown> }),
   },
   {
     decl: {
@@ -322,6 +332,30 @@ export const TOOLS: Tool[] = [
         forModel: { cards_shown: attachments.length, skipped_not_pending: skipped.length,
           note: "البطاقات ظهرت للأدمن؛ القرار ما ينفذ إلا لما هو يأكد." },
         attachments,
+      };
+    },
+  },
+  {
+    decl: {
+      name: "draft_message",
+      description: "يعرض للأدمن مسودة تعميم أو رسالة كتبتها انت (عنوان + نص) ببطاقة فيها «نسخ» و«فتح كتعميم». ما ينشر ولا يرسل شي.",
+      parameters: {
+        type: "OBJECT",
+        properties: {
+          kind: { type: "STRING", enum: ["announcement", "message"], description: "announcement = تعميم لكل/بعض الموظفين، message = رسالة لموظف" },
+          title: p("عنوان قصير"),
+          body: p("نص المسودة كامل"),
+        },
+        required: ["kind", "title", "body"],
+      },
+    },
+    run: async (a) => {
+      const title = String(a.title ?? "").trim().slice(0, 120);
+      const body = String(a.body ?? "").trim().slice(0, 2000);
+      if (!title || !body) return { forModel: { error: "المسودة تحتاج عنوان ونص." } };
+      return {
+        forModel: { draft_shown: true, note: "المسودة ظهرت للأدمن؛ هو يراجعها وينشرها بنفسه من شاشة التعاميم." },
+        attachment: { kind: "draft", draft_kind: a.kind === "message" ? "message" : "announcement", title, body },
       };
     },
   },

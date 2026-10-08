@@ -224,7 +224,9 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: AppRoutes.adminAnnouncement,
       builder: (BuildContext context, GoRouterState state) {
-        return const AnnouncementScreen();
+        // من المساعد الذكي: مسودة جاهزة (تُراجع وتُنشر بيد الأدمن)
+        final draft = state.extra;
+        return draft is AssistantDraft ? AnnouncementScreen(initialTitle: draft.title, initialBody: draft.body) : const AnnouncementScreen();
       },
     ),
     

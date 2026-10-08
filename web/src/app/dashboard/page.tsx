@@ -27,6 +27,7 @@ import { errorMessage, formatBytes, timeAgo } from '@/lib/format';
 import { Card, CardHeader, EmptyState, TONE_CHIP, cn, type Tone } from '@/components/ui';
 import { DASHBOARD_CACHE_KEY, fetchDashboard, isDashboardData, type DashboardData } from '@/features/overview/api';
 import { AnnouncementModal } from '@/features/overview/components/AnnouncementModal';
+import { clearAnnouncementDraft, peekAnnouncementDraft } from '@/features/assistant/draft';
 import { AbsentTodayCard } from '@/features/overview/components/AbsentTodayCard';
 import { SecurityCenter } from '@/features/overview/components/SecurityCenter';
 import {
@@ -44,7 +45,9 @@ export default function DashboardPage() {
   });
   const [adminName] = useState(() => readCache<{ name?: string }>('batra_cache_admin')?.name ?? '');
   const query = useQuery('dashboard', fetchDashboard, cached);
-  const [showAnnounceModal, setShowAnnounceModal] = useState(false);
+  // مسودة من المساعد الذكي («فتح كتعميم»): النافذة تنفتح والنص جاهز، والنشر بيد الأدمن
+  const [draft, setDraft] = useState(() => (typeof window === 'undefined' ? null : peekAnnouncementDraft()));
+  const [showAnnounceModal, setShowAnnounceModal] = useState(() => typeof window !== 'undefined' && peekAnnouncementDraft() !== null);
   const [now, setNow] = useState(() => Date.now());
 
   // Keep the "last synced" label fresh.
@@ -217,7 +220,13 @@ export default function DashboardPage() {
         <AnnouncementModal
           branches={data.branches}
           employees={data.employeesList}
-          onClose={() => setShowAnnounceModal(false)}
+          initialTitle={draft?.title}
+          initialText={draft?.body}
+          onClose={() => {
+            setShowAnnounceModal(false);
+            setDraft(null);
+            clearAnnouncementDraft();
+          }}
         />
       )}
     </div>

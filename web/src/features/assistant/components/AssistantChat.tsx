@@ -3,13 +3,16 @@
 // واجهة المحادثة: الرسائل، الملفات (تنزيل)، الوثائق (فتح برابط موقّع)، الأسئلة الجاهزة، والسؤال بالصوت.
 
 import { useEffect, useRef, useState } from 'react';
-import { FileSpreadsheet, FileText, Download, Send, Sparkles, MessageSquarePlus, Gavel, Mic, Trash2 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import toast from 'react-hot-toast';
+import { FileSpreadsheet, FileText, Download, Send, Sparkles, MessageSquarePlus, Gavel, Mic, Trash2, Megaphone, Copy } from 'lucide-react';
 import { Button, Card, Textarea, cn } from '@/components/ui';
 import { openStorageUrl } from '@/lib/signed-urls';
 import { decidePayrollEvent } from '@/features/payroll/api';
 import { EVENT_LABELS } from '@/features/payroll/calc';
 import type { PayrollEventType } from '@/features/payroll/calc';
 import { downloadBase64File } from '../api';
+import { stashAnnouncementDraft } from '../draft';
 import { ASSISTANT_SUGGESTIONS, assistantDisplayText, decisionReason } from '../logic';
 import type { AssistantAttachment, ChatMessage } from '../types';
 import { useVoiceRecorder } from '../useVoiceRecorder';
@@ -60,8 +63,40 @@ function DecisionCard({ d }: { d: Extract<AssistantAttachment, { kind: 'decision
   );
 }
 
+/** مسودة تعميم/رسالة: نسخ، أو فتح «بث تعميم» بالرئيسية والنص جاهز (النشر بيد الأدمن). */
+function DraftCard({ d }: { d: Extract<AssistantAttachment, { kind: 'draft' }> }) {
+  const router = useRouter();
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText([d.title, d.body].filter(Boolean).join('\n\n'));
+      toast.success('انتسخت المسودة');
+    } catch {
+      toast.error('ما انتسخت. حدد النص وانسخه يدوياً.');
+    }
+  };
+  return (
+    <div className="mt-3 rounded-2xl border border-slate-700 bg-slate-900/60 p-3 space-y-2 text-xs">
+      <div className="flex items-center gap-2 text-slate-400">
+        <Megaphone className="w-5 h-5 text-violet-300" />
+        <span>{d.draft_kind === 'message' ? 'مسودة رسالة' : 'مسودة تعميم'}</span>
+      </div>
+      {d.title && <p className="text-sm font-bold text-slate-100">{d.title}</p>}
+      <p className="text-slate-200 whitespace-pre-line leading-6">{d.body}</p>
+      <div className="flex flex-wrap gap-2">
+        <Button size="xs" variant="secondary" icon={Copy} onClick={copy}>نسخ</Button>
+        {d.draft_kind !== 'message' && (
+          <Button size="xs" icon={Megaphone} onClick={() => { stashAnnouncementDraft({ title: d.title, body: d.body }); router.push('/dashboard?announce=draft'); }}>
+            فتح كتعميم
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function Attachment({ a }: { a: AssistantAttachment }) {
   if (a.kind === 'decision') return <DecisionCard d={a} />;
+  if (a.kind === 'draft') return <DraftCard d={a} />;
   if (a.kind === 'file') {
     return (
       <div className="mt-3 flex items-center gap-3 rounded-2xl border border-slate-700 bg-slate-900/60 p-3">

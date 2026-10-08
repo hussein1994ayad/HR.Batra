@@ -224,3 +224,22 @@ Deno.test("voice: unclear or empty transcripts are rejected, quotes trimmed", ()
   assertEquals(cleanTranscript("   "), null);
   assertEquals(cleanTranscript("«شكد انخصم من علي هالشهر؟»"), "شكد انخصم من علي هالشهر؟");
 });
+
+// ---------------- المرحلة D: الملخص والمسودات ----------------
+Deno.test("draft_message: shows a draft card, publishes nothing, rejects empty drafts", async () => {
+  const calls: string[] = [];
+  const ctx = { rpc: (fn: string) => { calls.push(fn); return Promise.resolve(null); } };
+  const r = await runTool("draft_message", { kind: "announcement", title: " دوام العيد ", body: "يكون الدوام يوم الخميس من 9 إلى 1." }, ctx);
+  assertEquals(r.attachment, { kind: "draft", draft_kind: "announcement", title: "دوام العيد", body: "يكون الدوام يوم الخميس من 9 إلى 1." });
+  assertEquals(calls, []); // ما ينادي القاعدة ولا ينشر
+  const empty = await runTool("draft_message", { kind: "message", title: "x", body: "  " }, ctx);
+  assertEquals(empty.attachment, undefined);
+  assert(String(empty.forModel.error).includes("عنوان ونص"));
+});
+
+Deno.test("morning_summary: reads the database summary", async () => {
+  const r = await runTool("morning_summary", {}, {
+    rpc: (fn, args) => Promise.resolve(fn === "assistant_morning_summary" && args.p_date === null ? { body: "بصموا 5 من 9" } : null),
+  });
+  assertEquals(r.forModel, { body: "بصموا 5 من 9" });
+});

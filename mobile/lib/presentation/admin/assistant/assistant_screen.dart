@@ -1,7 +1,7 @@
 // =========================================================================
 // HR Pro — المساعد الذكي (للأدمن فقط)
 // الذكاء والأدوات وملفات Excel كلها بالسيرفر (supabase/functions/hr-assistant)؛ الشاشة ترسل المحادثة وتعرض الرد.
-// المحادثة بالذاكرة بس (ما تنحفظ)، وتنمسح لما تطلع من الشاشة.
+// المحادثة تنحفظ نص فقط (بدون ملفات/صوت/بطاقات) وتنحذف بعد 90 يوم؛ «المحادثات السابقة» تفتحها من جديد.
 // السؤال بالصوت: تسجيل ← السيرفر يكتبه بالعراقي (يرجع نصه كرسالة الأدمن) ويجاوب. التسجيل ما ينحفظ.
 // =========================================================================
 
@@ -12,6 +12,7 @@ import 'package:permission_handler/permission_handler.dart' show openAppSettings
 
 import '../../../core/models/models.dart';
 import '../../../core/services/auth_service.dart';
+import '../../../core/utils/app_log.dart';
 import '../../../data/repositories/admin_actions_repository.dart';
 import '../../../data/repositories/assistant_repository.dart';
 import '../../shared/ui/ui.dart';
@@ -50,7 +51,32 @@ class _AssistantScreenState extends State<AssistantScreen> {
   Duration _elapsed = Duration.zero;
   Timer? _ticker;
 
+  // الحفظ بالتسلسل (حتى ما تنفتح محادثتين). كل «جديدة»/فتح محادثة = جيل جديد، وكل جيل يحفظ بمحادثته
+  // حتى لو الأدمن بدّل قبل ما يخلص الحفظ.
+  Future<void> _saving = Future.value();
+  int _generation = 0;
+  final Map<int, String> _ids = {};
+  String? get _conversationId => _ids[_generation];
+
+  /// الملخص الصباحي (إشعار 10:00): null = بعده ما انقرا.
+  bool? _summaryOn;
+
   bool get _busy => _thinking || _recording;
+
+  @override
+  void initState() {
+    super.initState();
+    if (Roles.isAdmin(AuthService.currentUserRole)) _loadSettings();
+  }
+
+  Future<void> _loadSettings() async {
+    try {
+      final on = await _repo.morningSummaryEnabled();
+      if (mounted) setState(() => _summaryOn = on);
+    } catch (e) {
+      appLog('assistant settings: $e');
+    }
+  }
 
   @override
   void dispose() {
@@ -74,6 +100,7 @@ class _AssistantScreenState extends State<AssistantScreen> {
   Future<void> _ask({AssistantAudio? audio}) async {
     setState(() => _thinking = true);
     _scrollToEnd();
+    final question = audio == null && _messages.isNotEmpty ? _messages.last : null;
     final added = <AssistantMessage>[];
     try {
       final reply = await _repo.ask(List.of(_messages), audio: audio);
@@ -91,6 +118,63 @@ class _AssistantScreenState extends State<AssistantScreen> {
       _thinking = false;
     });
     _scrollToEnd();
+    if (!added.last.isError) _save([?question, ...added]);
+  }
+
+  /// يحفظ نص السؤال والجواب بالخلفية؛ فشل الحفظ ما يوقف المحادثة.
+  void _save(List<AssistantMessage> messages) {
+    final gen = _generation;
+    _saving = _saving.then((_) async {
+      try {
+        _ids[gen] = await _repo.saveMessages(_ids[gen], messages);
+      } catch (e) {
+        appLog('assistant save: $e');
+      }
+    });
+  }
+
+  void _newConversation() => setState(() {
+        _messages.clear();
+        _generation++;
+      });
+
+  Future<void> _openHistory() async {
+    final picked = await showAppSheet<AssistantConversation>(
+      context,
+      title: 'المحادثات السابقة',
+      builder: (_) => _HistoryList(repo: _repo, currentId: _conversationId),
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _thinking = true);
+    try {
+      final messages = await _repo.messagesOf(picked.id);
+      if (!mounted) return;
+      setState(() {
+        _messages
+          ..clear()
+          ..addAll(messages);
+        _ids[++_generation] = picked.id;
+      });
+      _scrollToEnd();
+    } catch (e) {
+      appLog('assistant history: $e');
+      if (mounted) AppSnack.error(context, 'ما انفتحت المحادثة. تأكد من الإنترنت.');
+    } finally {
+      if (mounted) setState(() => _thinking = false);
+    }
+  }
+
+  Future<void> _toggleSummary() async {
+    final next = !(_summaryOn ?? true);
+    try {
+      await _repo.setMorningSummary(next);
+      if (!mounted) return;
+      setState(() => _summaryOn = next);
+      AppSnack.success(context, next ? 'الملخص الصباحي يوصلك كل يوم الساعة 10:00' : 'انطفى الملخص الصباحي');
+    } catch (e) {
+      appLog('assistant summary toggle: $e');
+      if (mounted) AppSnack.error(context, 'ما تغيّر الإعداد. جرّب مرة ثانية.');
+    }
   }
 
   Future<void> _startRecording() async {
@@ -166,8 +250,25 @@ class _AssistantScreenState extends State<AssistantScreen> {
             IconButton(
               tooltip: 'محادثة جديدة',
               icon: const Icon(Icons.add_comment_outlined),
-              onPressed: _busy ? null : () => setState(_messages.clear),
+              onPressed: _busy ? null : _newConversation,
             ),
+          IconButton(
+            tooltip: 'المحادثات السابقة',
+            icon: const Icon(Icons.history_rounded),
+            onPressed: _busy ? null : _openHistory,
+          ),
+          PopupMenuButton<String>(
+            tooltip: 'إعدادات المساعد',
+            onSelected: (_) => _toggleSummary(),
+            itemBuilder: (_) => [
+              CheckedPopupMenuItem(
+                value: 'summary',
+                checked: _summaryOn ?? true,
+                enabled: _summaryOn != null,
+                child: const Text('الملخص الصباحي (10:00)'),
+              ),
+            ],
+          ),
         ],
       ),
       body: Column(
@@ -290,6 +391,63 @@ class _RecordingBar extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// قائمة المحادثات المحفوظة: فتح أو حذف.
+class _HistoryList extends StatefulWidget {
+  const _HistoryList({required this.repo, required this.currentId});
+  final AssistantRepository repo;
+  final String? currentId;
+
+  @override
+  State<_HistoryList> createState() => _HistoryListState();
+}
+
+class _HistoryListState extends State<_HistoryList> {
+  late Future<List<AssistantConversation>> _items = widget.repo.conversations();
+
+  Future<void> _delete(AssistantConversation c) async {
+    final ok = await showAppConfirm(context, title: 'حذف المحادثة؟', message: c.title, confirmLabel: 'حذف', destructive: true);
+    if (!ok) return;
+    try {
+      await widget.repo.deleteConversation(c.id);
+      if (mounted) setState(() => _items = widget.repo.conversations());
+    } catch (e) {
+      appLog('assistant delete: $e');
+      if (mounted) AppSnack.error(context, 'ما انحذفت. جرّب مرة ثانية.');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<AssistantConversation>>(
+      future: _items,
+      builder: (context, snap) {
+        if (snap.connectionState != ConnectionState.done) {
+          return const Padding(padding: EdgeInsets.all(AppSpace.xl), child: Center(child: CircularProgressIndicator()));
+        }
+        if (snap.hasError) return const Text('ما انقرت المحادثات. تأكد من الإنترنت.', style: AppText.bodySm);
+        final items = snap.data ?? const [];
+        if (items.isEmpty) return const Text('ماكو محادثات محفوظة بعد. المحادثات تنحفظ 90 يوم.', style: AppText.bodySm);
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final c in items)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(c.id == widget.currentId ? Icons.chat_rounded : Icons.chat_outlined, color: AppColors.textSecondary),
+                title: Text(c.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: AppText.body.copyWith(color: AppColors.textPrimary)),
+                subtitle: Text(Fmt.relative(c.updatedAt), style: AppText.caption),
+                trailing: IconButton(tooltip: 'حذف', icon: const Icon(Icons.delete_outline_rounded), onPressed: () => _delete(c)),
+                onTap: () => Navigator.pop(context, c),
+              ),
+            const SizedBox(height: AppSpace.sm),
+            const Text('تنحفظ نصوص المحادثات بس (بدون الملفات والصوت) وتنحذف تلقائياً بعد 90 يوم.', style: AppText.caption),
+          ],
+        );
+      },
     );
   }
 }

@@ -24,6 +24,35 @@ class _FakeRepo implements AssistantRepository {
     audios.add(audio);
     return answer(conversation);
   }
+
+  // المحادثات المحفوظة والإعدادات (بالذاكرة)
+  final saves = <(String?, List<Map<String, Object>>)>[];
+  final stored = <String, List<AssistantMessage>>{};
+  bool summary = true;
+
+  @override
+  Future<String> saveMessages(String? conversationId, List<AssistantMessage> messages) async {
+    saves.add((conversationId, [for (final m in messages) m.toSaved()]));
+    final id = conversationId ?? 'c${stored.length + 1}';
+    (stored[id] ??= []).addAll(messages);
+    return id;
+  }
+
+  @override
+  Future<List<AssistantConversation>> conversations() async =>
+      [for (final e in stored.entries) AssistantConversation(id: e.key, title: e.value.first.text, updatedAt: DateTime(2026, 10, 8))];
+
+  @override
+  Future<List<AssistantMessage>> messagesOf(String conversationId) async => stored[conversationId] ?? const [];
+
+  @override
+  Future<void> deleteConversation(String conversationId) async => stored.remove(conversationId);
+
+  @override
+  Future<bool> morningSummaryEnabled() async => summary;
+
+  @override
+  Future<void> setMorningSummary(bool enabled) async => summary = enabled;
 }
 
 Widget _host(AssistantRepository repo, {AssistantRecorder? recorder}) =>
@@ -215,5 +244,77 @@ void main() {
   test('reply: transcript of a voice question', () {
     expect(AssistantReply.fromMap({'text': 'x', 'transcript': 'منو غايب اليوم؟'}).transcript, 'منو غايب اليوم؟');
     expect(AssistantReply.fromMap({'text': 'x'}).transcript, isNull);
+  });
+
+  test('reply parses announcement drafts; empty drafts are dropped', () {
+    final r = AssistantReply.fromMap({
+      'text': 'جهزتلك المسودة',
+      'attachments': [
+        {'kind': 'draft', 'draft_kind': 'announcement', 'title': 'دوام العيد', 'body': 'الدوام يوم الخميس من 9 إلى 1.'},
+        {'kind': 'draft', 'draft_kind': 'message', 'title': 'x', 'body': '  '},
+      ],
+    });
+    expect(r.drafts.single.title, 'دوام العيد');
+    expect(r.drafts.single.isAnnouncement, isTrue);
+  });
+
+  testWidgets('draft card shows the text with copy and open-as-announcement', (tester) async {
+    AuthService.currentUserRole = 'admin';
+    final repo = _FakeRepo((_) async => const AssistantReply(
+          text: 'جهزتلك المسودة، راجعها وانشرها انت',
+          drafts: [AssistantDraft(title: 'دوام العيد', body: 'الدوام يوم الخميس من 9 إلى 1.')],
+        ));
+    await tester.pumpWidget(_host(repo));
+    await tester.enterText(find.byType(TextField), 'اكتبلي تعميم دوام العيد');
+    await tester.tap(find.byTooltip('إرسال'));
+    await tester.pumpAndSettle();
+    expect(find.text('مسودة تعميم'), findsOneWidget);
+    expect(find.text('الدوام يوم الخميس من 9 إلى 1.'), findsOneWidget);
+    expect(find.text('نسخ'), findsOneWidget);
+    expect(find.text('فتح كتعميم'), findsOneWidget);
+  });
+
+  testWidgets('each exchange is saved as text into the same conversation; history reopens it', (tester) async {
+    AuthService.currentUserRole = 'admin';
+    final repo = _FakeRepo((c) async => AssistantReply(text: 'جواب ${c.length}'));
+    await tester.pumpWidget(_host(repo));
+    await tester.enterText(find.byType(TextField), 'سؤال أول');
+    await tester.tap(find.byTooltip('إرسال'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'سؤال ثاني');
+    await tester.tap(find.byTooltip('إرسال'));
+    await tester.pumpAndSettle();
+
+    expect(repo.saves.length, 2);
+    expect(repo.saves.first.$1, isNull); // أول مرة: محادثة جديدة
+    expect(repo.saves.first.$2, [
+      {'role': 'user', 'text': 'سؤال أول', 'voice': false},
+      {'role': 'assistant', 'text': 'جواب 1', 'voice': false},
+    ]);
+    expect(repo.saves.last.$1, 'c1'); // نفس المحادثة
+
+    await tester.tap(find.byTooltip('محادثة جديدة'));
+    await tester.pumpAndSettle();
+    expect(find.text('سؤال أول'), findsNothing);
+
+    await tester.tap(find.byTooltip('المحادثات السابقة'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ListTile, 'سؤال أول'));
+    await tester.pumpAndSettle();
+    expect(find.text('سؤال أول'), findsOneWidget);
+    expect(find.text('جواب 3'), findsOneWidget);
+  });
+
+  testWidgets('morning summary can be turned off from the menu', (tester) async {
+    AuthService.currentUserRole = 'admin';
+    final repo = _FakeRepo((_) async => const AssistantReply(text: 'x'));
+    await tester.pumpWidget(_host(repo));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('إعدادات المساعد'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('الملخص الصباحي (10:00)'));
+    await tester.pumpAndSettle();
+    expect(repo.summary, isFalse);
+    expect(find.text('انطفى الملخص الصباحي'), findsOneWidget);
   });
 }

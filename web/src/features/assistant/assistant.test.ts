@@ -1,9 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 
 const invoke = vi.fn();
-vi.mock('@/lib/supabase', () => ({ supabase: { functions: { invoke: (...a: unknown[]) => invoke(...a) } } }));
+const rpc = vi.fn();
+vi.mock('@/lib/supabase', () => ({
+  supabase: { functions: { invoke: (...a: unknown[]) => invoke(...a) }, rpc: (...a: unknown[]) => rpc(...a) },
+}));
 
-import { askAssistant, historyFor, MAX_HISTORY } from './api';
+import { askAssistant, historyFor, MAX_HISTORY, saveMessages } from './api';
+import { clearAnnouncementDraft, peekAnnouncementDraft, stashAnnouncementDraft } from './draft';
 import { assistantDisplayText, decisionReason } from './logic';
 import type { ChatMessage } from './types';
 import { bytesToBase64, encodeWav, micErrorMessage, WAV_SAMPLE_RATE } from './voice';
@@ -80,5 +84,42 @@ describe('assistant voice', () => {
     expect(micErrorMessage(new DOMException('x', 'NotAllowedError'))).toContain('فعّل المايكروفون');
     expect(micErrorMessage(new DOMException('x', 'NotFoundError'))).toBe('ماكو مايك متصل بالجهاز.');
     expect(micErrorMessage(new Error('x'))).toBe('ما اشتغل المايك. جرّب مرة ثانية.');
+  });
+});
+
+describe('assistant history and drafts', () => {
+  it('saves only text messages (no errors, no attachments) and keeps the voice flag', async () => {
+    rpc.mockResolvedValueOnce({ data: 'c1', error: null });
+    const id = await saveMessages(null, [
+      { role: 'user', text: 'منو غايب؟', voice: true },
+      { role: 'assistant', text: 'علي', attachments: [{ kind: 'file', name: 'a.xlsx', mime: 'x', base64: 'UEs=' }] },
+      { role: 'assistant', text: 'خطأ', error: true },
+    ]);
+    expect(id).toBe('c1');
+    expect(rpc).toHaveBeenCalledWith('assistant_save_messages', { p_conversation_id: null, p_messages: [
+      { role: 'user', text: 'منو غايب؟', voice: true },
+      { role: 'assistant', text: 'علي', voice: false },
+    ] });
+  });
+
+  it('nothing to save: no request, same conversation', async () => {
+    rpc.mockClear();
+    expect(await saveMessages('c9', [{ role: 'assistant', text: 'x', error: true }])).toBe('c9');
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it('announcement drafts are handed to the dashboard and cleared after', () => {
+    const store = new Map<string, string>();
+    vi.stubGlobal('sessionStorage', {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => void store.set(k, v),
+      removeItem: (k: string) => void store.delete(k),
+    });
+    expect(peekAnnouncementDraft()).toBeNull();
+    stashAnnouncementDraft({ title: 'دوام العيد', body: 'الدوام الخميس.' });
+    expect(peekAnnouncementDraft()).toEqual({ title: 'دوام العيد', body: 'الدوام الخميس.' });
+    clearAnnouncementDraft();
+    expect(peekAnnouncementDraft()).toBeNull();
+    vi.unstubAllGlobals();
   });
 });
