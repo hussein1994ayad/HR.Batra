@@ -5,7 +5,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { runAgent, type ChatMessage } from "./agent.ts";
-import { geminiGenerate, geminiTranscribe, QuotaError } from "./gemini.ts";
+import { GeminiError, geminiGenerate, geminiTranscribe, QuotaError } from "./gemini.ts";
 import { systemPrompt } from "./prompt.ts";
 import { cleanTranscript, transcriptionInstruction, validateAudio } from "./voice.ts";
 
@@ -75,6 +75,10 @@ Deno.serve(async (req) => {
   } catch (e) {
     if (e instanceof QuotaError) {
       return json({ error: "خلص الحد المجاني للمساعد هسه. جرّب بعد شوية (الحد يتجدد كل دقيقة وكل يوم)." }, 429);
+    }
+    if (e instanceof GeminiError) {
+      console.error("hr-assistant", e.message);
+      return json({ error: e.arabic }, 502);
     }
     console.error("hr-assistant", e);
     return json({ error: "صار خطأ بالمساعد. جرّب مرة ثانية." }, 500);

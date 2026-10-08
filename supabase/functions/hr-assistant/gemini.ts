@@ -32,6 +32,40 @@ export type Generate = (req: { system: string; contents: Content[]; tools: Funct
 /** الحد المجاني انتهى (429) — رسالة واضحة للأدمن بدل خطأ عام. */
 export class QuotaError extends Error {}
 
+/** رفض من Google (مفتاح، صلاحية، منطقة، موديل…): الحالة ورسالة Google المختصرة. */
+export class GeminiError extends Error {
+  constructor(readonly status: number, readonly detail: string) {
+    super(`Gemini ${status}: ${detail}`);
+  }
+
+  /** رسالة عربية للأدمن + سبب Google المختصر (ما بيه المفتاح). */
+  get arabic(): string {
+    const d = this.detail.toLowerCase();
+    const why = d.includes("api key") || d.includes("api_key")
+      ? "مفتاح Gemini غلط أو منتهي. اعمل مفتاح جديد من aistudio.google.com/apikey وحطه بالسيرفر."
+      : d.includes("location") || d.includes("region")
+        ? "Google ما تسمح بالخدمة من موقع السيرفر."
+        : this.status === 403
+          ? "Google رافضة الطلب: المفتاح ما عنده صلاحية على Gemini API."
+          : this.status === 404
+            ? "موديل Gemini المحدد غير موجود."
+            : this.status >= 500
+              ? "خدمة Gemini بيها عطل مؤقت. جرّب بعد شوية."
+              : "Google رفضت الطلب.";
+    return `${why} (رمز ${this.status}: ${this.detail.slice(0, 160)})`;
+  }
+}
+
+/** يقرأ رسالة الخطأ من رد Google. */
+async function failure(res: Response): Promise<GeminiError> {
+  const raw = await res.text();
+  let detail = raw;
+  try {
+    detail = JSON.parse(raw)?.error?.message ?? raw;
+  } catch { /* نص عادي */ }
+  return new GeminiError(res.status, String(detail).replace(/s+/g, " ").trim().slice(0, 300));
+}
+
 export function geminiGenerate(apiKey: string, model: string, fetchImpl: typeof fetch = fetch): Generate {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
   return async ({ system, contents, tools }) => {
@@ -46,7 +80,7 @@ export function geminiGenerate(apiKey: string, model: string, fetchImpl: typeof 
       }),
     });
     if (res.status === 429) throw new QuotaError("quota");
-    if (!res.ok) throw new Error(`Gemini ${res.status}: ${(await res.text()).slice(0, 300)}`);
+    if (!res.ok) throw await failure(res);
     const data = await res.json();
     const content = data?.candidates?.[0]?.content as Content | undefined;
     if (!content?.parts?.length) {
@@ -78,7 +112,7 @@ export function geminiTranscribe(apiKey: string, model: string, fetchImpl: typeo
       }),
     });
     if (res.status === 429) throw new QuotaError("quota");
-    if (!res.ok) throw new Error(`Gemini ${res.status}: ${(await res.text()).slice(0, 300)}`);
+    if (!res.ok) throw await failure(res);
     const data = await res.json();
     const parts = (data?.candidates?.[0]?.content?.parts ?? []) as Array<{ text?: string; thought?: boolean }>;
     return parts.filter((p) => p.text && !p.thought).map((p) => p.text).join("").trim();

@@ -243,3 +243,19 @@ Deno.test("morning_summary: reads the database summary", async () => {
   });
   assertEquals(r.forModel, { body: "بصموا 5 من 9" });
 });
+
+// ---------------- أخطاء Google بالعربي ----------------
+import { GeminiError, geminiGenerate } from "./gemini.ts";
+
+Deno.test("gemini errors: Google's reason reaches the admin in Arabic, key never shown", async () => {
+  const fake = (status: number, body: unknown) => () => Promise.resolve(new Response(JSON.stringify(body), { status }));
+  const gen = geminiGenerate("SECRET-KEY", "gemini-2.5-flash",
+    fake(400, { error: { message: "API key not valid. Please pass a valid API key." } }) as unknown as typeof fetch);
+  let err: unknown;
+  try { await gen({ system: "s", contents: [], tools: [] }); } catch (e) { err = e; }
+  assert(err instanceof GeminiError);
+  assert(err.arabic.includes("مفتاح Gemini غلط") && err.arabic.includes("رمز 400"));
+  assert(!err.arabic.includes("SECRET-KEY"));
+  assert(new GeminiError(403, "User location is not supported for the API use.").arabic.includes("موقع السيرفر"));
+  assert(new GeminiError(404, "models/x is not found").arabic.includes("غير موجود"));
+});
