@@ -1,7 +1,10 @@
 // أدوات المساعد: كل أداة = دالة قراءة بالقاعدة (supabase/migrations/20261008000000_hr_assistant.sql) تُنادى بتوكن الأدمن
 // نفسه، فصلاحيات القاعدة تنطبق. ماكو أي أداة كتابة. أدوات الملفات ترجّع مرفقاً للشاشة، والذكاء يشوف ملخصاً فقط.
 
-import { buildAttendanceWorkbook, buildPayrollWorkbook, safeFileName, type AttendanceLog, type PayrollDetails } from "./excel.ts";
+import {
+  buildAttendanceWorkbook, buildBranchAttendanceWorkbook, buildEmployeeProfileWorkbook, buildPayrollRunWorkbook, buildPayrollWorkbook,
+  safeFileName, type AttendanceLog, type BranchAttendance, type EmployeeProfile, type PayrollDetails, type PayrollRun,
+} from "./excel.ts";
 import type { FunctionDecl } from "./gemini.ts";
 
 export type Attachment =
@@ -167,6 +170,103 @@ export const TOOLS: Tool[] = [
       parameters: { type: "OBJECT", properties: { from: DATE("من"), to: DATE("إلى"), branch: p("اسم الفرع (اختياري)") }, required: ["from", "to"] },
     },
     run: async (a, ctx) => ({ forModel: { ranking: await ctx.rpc("assistant_top_late", { p_from: a.from, p_to: a.to, p_branch: str(a.branch) ?? null }) } }),
+  },
+  // ---------------- تقارير وتحليلات ----------------
+  {
+    decl: {
+      name: "branch_attendance_excel",
+      description: "ملف Excel لسجل دوام فرع كامل أو كل الشركة (بدون فرع): ورقة ملخص بصف لكل موظف + ورقة لكل موظف. الفترة أقصاها 31 يوم.",
+      parameters: { type: "OBJECT", properties: { branch: p("اسم الفرع (فارغ = كل الشركة)"), from: DATE("بداية الفترة"), to: DATE("نهاية الفترة") }, required: ["from", "to"] },
+    },
+    run: async (a, ctx) => {
+      const r = await ctx.rpc("assistant_branch_attendance", { p_branch: str(a.branch) ?? null, p_from: a.from, p_to: a.to }) as BranchAttendance;
+      const name = safeFileName(["سجل_دوام", r.scope, r.from, r.to]);
+      return {
+        forModel: { file_ready: name, scope: r.scope, employees: r.employees.map((l) => ({ name: l.employee.name, summary: l.summary })) },
+        attachment: { kind: "file", name, mime: XLSX, base64: toBase64(await buildBranchAttendanceWorkbook(r)) },
+      };
+    },
+  },
+  {
+    decl: {
+      name: "payroll_run",
+      description: "رواتب كل الموظفين لشهر مسير (YYYY-MM): الأساسي، الإضافات، الخصومات، السلف، الصافي، وهل صدر الكشف + المجاميع.",
+      parameters: { type: "OBJECT", properties: { month: p("شهر المسير YYYY-MM") }, required: ["month"] },
+    },
+    run: async (a, ctx) => ({ forModel: await ctx.rpc("assistant_payroll_run", { p_month: a.month }) as Record<string, unknown> }),
+  },
+  {
+    decl: {
+      name: "payroll_run_excel",
+      description: "ملف Excel لرواتب كل الموظفين لشهر مسير (YYYY-MM) مع المجموع.",
+      parameters: { type: "OBJECT", properties: { month: p("شهر المسير YYYY-MM") }, required: ["month"] },
+    },
+    run: async (a, ctx) => {
+      const run = await ctx.rpc("assistant_payroll_run", { p_month: a.month }) as PayrollRun & { totals?: unknown };
+      const name = safeFileName(["رواتب", run.month]);
+      return {
+        forModel: { file_ready: name, totals: run.totals ?? run.message },
+        attachment: { kind: "file", name, mime: XLSX, base64: toBase64(await buildPayrollRunWorkbook({ ...run, rows: run.rows ?? [] })) },
+      };
+    },
+  },
+  {
+    decl: {
+      name: "payroll_readiness",
+      description: "شنو باقي قبل اعتماد رواتب شهر (YYYY-MM): القرارات المعلّقة، الموظفين بلا كشف، الصافي بالسالب، البيانات الناقصة، السلف المستحقة، وهل خلصت الفترة.",
+      parameters: { type: "OBJECT", properties: { month: p("شهر المسير YYYY-MM") }, required: ["month"] },
+    },
+    run: async (a, ctx) => ({ forModel: await ctx.rpc("assistant_payroll_readiness", { p_month: a.month }) as Record<string, unknown> }),
+  },
+  {
+    decl: {
+      name: "alerts",
+      description: "تنبيهات وأنماط بفترة (أقصاها 3 أشهر): تأخير متكرر بنفس يوم الأسبوع، بصمات ناقصة متكررة، بصمات بدون إنترنت كثيرة، رصيد إجازات قارب يخلص، بيانات ناقصة.",
+      parameters: { type: "OBJECT", properties: { from: DATE("من"), to: DATE("إلى") }, required: ["from", "to"] },
+    },
+    run: async (a, ctx) => ({ forModel: await ctx.rpc("assistant_alerts", { p_from: a.from, p_to: a.to }) as Record<string, unknown> }),
+  },
+  {
+    decl: {
+      name: "compare_months",
+      description: "مقارنة شهرين مسير (YYYY-MM) لموظف (employee_id) أو لفرع (branch) أو لكل الشركة: الحضور، التأخير، الغياب، الخروج المبكر، المخصوم.",
+      parameters: { type: "OBJECT", properties: { employee_id: p("معرّف الموظف (اختياري)"), branch: p("اسم الفرع (اختياري)"),
+        month_a: p("الشهر الأول YYYY-MM"), month_b: p("الشهر الثاني YYYY-MM") }, required: ["month_a", "month_b"] },
+    },
+    run: async (a, ctx) => ({
+      forModel: await ctx.rpc("assistant_compare", { p_employee_id: str(a.employee_id) ?? null, p_branch: str(a.branch) ?? null,
+        p_month_a: a.month_a, p_month_b: a.month_b }) as Record<string, unknown>,
+    }),
+  },
+  {
+    decl: {
+      name: "branch_ranking",
+      description: "ترتيب الفروع بالانضباط بفترة (نسبة الحضور، دقائق التأخير لكل موظف، الغياب) + الموظفين الأكثر انضباطاً للتكريم.",
+      parameters: { type: "OBJECT", properties: { from: DATE("من"), to: DATE("إلى") }, required: ["from", "to"] },
+    },
+    run: async (a, ctx) => ({ forModel: await ctx.rpc("assistant_branch_ranking", { p_from: a.from, p_to: a.to }) as Record<string, unknown> }),
+  },
+  {
+    decl: {
+      name: "employee_profile_excel",
+      description: "ملف Excel شامل لموظف لشهر مسير (YYYY-MM): ملخص الدوام، سجل الدوام يوم بيوم، الراتب بالتفصيل، السلف، والإجازات.",
+      parameters: { type: "OBJECT", properties: { employee_id: EMP, month: p("شهر المسير YYYY-MM") }, required: ["employee_id", "month"] },
+    },
+    run: async (a, ctx) => {
+      const payroll = await ctx.rpc("assistant_payroll", { p_employee_id: a.employee_id, p_month: a.month }) as PayrollDetails;
+      if (!payroll.period) return { forModel: { error: payroll.message ?? "هذا الشهر ما بيه مسير." } };
+      const [log, loans, leaves] = await Promise.all([
+        ctx.rpc("assistant_attendance_log", { p_employee_id: a.employee_id, p_from: payroll.period.from, p_to: payroll.period.to }),
+        ctx.rpc("assistant_loans", { p_employee_id: a.employee_id }),
+        ctx.rpc("assistant_leaves", { p_employee_id: a.employee_id, p_from: null, p_to: null }),
+      ]) as [AttendanceLog, EmployeeProfile["loans"], EmployeeProfile["leaves"]];
+      const name = safeFileName(["ملف_شامل", log.employee.name, payroll.month]);
+      const bytes = await buildEmployeeProfileWorkbook({ log, payroll: { ...payroll, events: payroll.events ?? [] }, loans, leaves });
+      return {
+        forModel: { file_ready: name, attendance: log.summary, payroll: payroll.summary },
+        attachment: { kind: "file", name, mime: XLSX, base64: toBase64(bytes) },
+      };
+    },
   },
 ];
 

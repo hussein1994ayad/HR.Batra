@@ -131,3 +131,54 @@ Deno.test("history: last messages only, text only", () => {
   assertEquals(c.length, MAX_HISTORY);
   assertEquals(c.at(-1)!.parts, [{ text: "m29" }]);
 });
+
+// ---------------- المرحلة A: تقارير ----------------
+import { buildBranchAttendanceWorkbook, buildEmployeeProfileWorkbook, buildPayrollRunWorkbook } from "./excel.ts";
+
+Deno.test("branch Excel: summary row per employee + a sheet per employee (same names get unique sheets)", async () => {
+  const twin = { ...LOG, employee: { ...LOG.employee } };
+  const wb = await readWorkbook(await buildBranchAttendanceWorkbook({ scope: "كمب سارة", from: LOG.from, to: LOG.to, employees: [LOG, twin] }));
+  const names = wb.worksheets.map((w) => w.name);
+  assertEquals(names.length, 3);
+  assertEquals(names[0], "الملخص");
+  assert(names[1] !== names[2], names.join("|"));
+  const sum = wb.getWorksheet("الملخص")!;
+  assertEquals(sum.getCell("B5").value, "علي محمد سعيد");
+  assertEquals(sum.getCell("L7").value, 2500); // مجموع المخصوم للموظفين
+});
+
+Deno.test("payroll run Excel: one row per employee and totals", async () => {
+  const wb = await readWorkbook(await buildPayrollRunWorkbook({ month: "2026-10", period: { from: "2026-09-27", to: "2026-10-26", status: "open" },
+    rows: [{ employee: "أ", branch: "ف", basic: 600000, earnings: 0, deductions: 1250, loans: 50000, net: 548750, issued: false },
+      { employee: "ب", branch: "ف", basic: 900000, earnings: 25000, deductions: 0, loans: 0, net: 925000, issued: true }] }));
+  const ws = wb.getWorksheet("رواتب الشهر")!;
+  assertEquals(ws.getCell("H7").value, 548750 + 925000);
+  assertEquals(ws.getCell("L6").value, "صدر الكشف");
+});
+
+Deno.test("employee profile Excel: attendance, payroll, loans, leaves sheets", async () => {
+  const payroll = await rpc("assistant_payroll", {}) as never;
+  const wb = await readWorkbook(await buildEmployeeProfileWorkbook({
+    log: LOG, payroll,
+    loans: [{ status: "approved", amount: 300000, remaining: 250000, installment: 50000, installments_count: 6,
+      installments: [{ due_date: "2026-09-01", amount: 50000, paid: true }, { due_date: "2026-10-01", amount: 50000, paid: false }] }],
+    leaves: { balance: { annual: { left: 10 } }, requests: [{ type: "اعتيادية", status: "approved", paid: true, hourly: false, from: "2026-09-10", to: "2026-09-11" }] },
+  }));
+  assertEquals(wb.worksheets.map((w) => w.name), ["ملخص الدوام", "سجل الدوام", "الراتب", "السلف", "الإجازات"]);
+  assertEquals(wb.getWorksheet("السلف")!.getCell("C5").value, 250000);
+});
+
+Deno.test("employee_profile_excel tool: reads the month period then builds one file", async () => {
+  const calls: string[] = [];
+  const r = await runTool("employee_profile_excel", { employee_id: "e1", month: "2026-10" }, {
+    rpc: async (fn, args) => {
+      calls.push(fn);
+      if (fn === "assistant_loans") return [];
+      if (fn === "assistant_leaves") return { balance: {}, requests: [] };
+      return rpc(fn, args);
+    },
+  });
+  assertEquals(calls[0], "assistant_payroll");
+  assert(calls.includes("assistant_attendance_log"));
+  assert(r.attachment?.kind === "file" && r.attachment.name.startsWith("ملف_شامل"));
+});
