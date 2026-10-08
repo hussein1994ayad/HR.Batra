@@ -3,14 +3,63 @@
 // واجهة المحادثة: الرسائل، الملفات (تنزيل)، الوثائق (فتح برابط موقّع)، والأسئلة الجاهزة.
 
 import { useEffect, useRef, useState } from 'react';
-import { FileSpreadsheet, FileText, Download, Send, Sparkles, MessageSquarePlus } from 'lucide-react';
+import { FileSpreadsheet, FileText, Download, Send, Sparkles, MessageSquarePlus, Gavel } from 'lucide-react';
 import { Button, Card, Textarea, cn } from '@/components/ui';
 import { openStorageUrl } from '@/lib/signed-urls';
+import { decidePayrollEvent } from '@/features/payroll/api';
+import { EVENT_LABELS } from '@/features/payroll/calc';
+import type { PayrollEventType } from '@/features/payroll/calc';
 import { downloadBase64File } from '../api';
-import { ASSISTANT_SUGGESTIONS, assistantDisplayText } from '../logic';
+import { ASSISTANT_SUGGESTIONS, assistantDisplayText, decisionReason } from '../logic';
 import type { AssistantAttachment, ChatMessage } from '../types';
 
+/** بطاقة اقتراح قرار: ما ينفذ شي إلا لما الأدمن يضغط «تأكيد» (أو العكس)، وبعدها تنقفل. */
+function DecisionCard({ d }: { d: Extract<AssistantAttachment, { kind: 'decision' }> }) {
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState<boolean | null>(null);
+  const [error, setError] = useState('');
+  const suggestDeduct = d.suggest === 'deduct';
+  const label = EVENT_LABELS[d.type as PayrollEventType] ?? d.type;
+  const apply = async (deduct: boolean) => {
+    setBusy(true);
+    setError('');
+    try {
+      await decidePayrollEvent(d.event_id, deduct, decisionReason(suggestDeduct, d.reason, deduct));
+      setDone(deduct);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'ما تنفذ القرار.');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="mt-3 rounded-2xl border border-slate-700 bg-slate-900/60 p-3 space-y-2 text-xs">
+      <div className="flex items-center gap-2 text-slate-100">
+        <Gavel className={cn('w-5 h-5', suggestDeduct ? 'text-rose-300' : 'text-emerald-300')} />
+        <span className="font-bold">{d.employee} · {label} · {d.date}</span>
+      </div>
+      <p className="text-slate-400">{[d.minutes > 0 ? `${Math.round(d.minutes)} دقيقة` : '', d.amount > 0 ? `${Math.round(d.amount).toLocaleString('en-US')} د.ع` : '']
+        .filter(Boolean).join(' · ')}</p>
+      <p className="text-slate-200">الاقتراح: {suggestDeduct ? 'خصم' : 'إعفاء'} — {d.reason}</p>
+      {done !== null ? (
+        <p className={cn('font-bold', done ? 'text-rose-300' : 'text-emerald-300')}>{done ? '✓ تم الخصم' : '✓ تم الإعفاء'}</p>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          <Button size="xs" variant={suggestDeduct ? 'danger' : 'primary'} loading={busy} onClick={() => apply(suggestDeduct)}>
+            تأكيد {suggestDeduct ? 'خصم' : 'إعفاء'}
+          </Button>
+          <Button size="xs" variant="secondary" disabled={busy} onClick={() => apply(!suggestDeduct)}>
+            {suggestDeduct ? 'إعفاء بدلاً منه' : 'خصم بدلاً منه'}
+          </Button>
+        </div>
+      )}
+      {error && <p className="text-rose-300">{error}</p>}
+    </div>
+  );
+}
+
 function Attachment({ a }: { a: AssistantAttachment }) {
+  if (a.kind === 'decision') return <DecisionCard d={a} />;
   if (a.kind === 'file') {
     return (
       <div className="mt-3 flex items-center gap-3 rounded-2xl border border-slate-700 bg-slate-900/60 p-3">

@@ -4,7 +4,7 @@ const invoke = vi.fn();
 vi.mock('@/lib/supabase', () => ({ supabase: { functions: { invoke: (...a: unknown[]) => invoke(...a) } } }));
 
 import { askAssistant, historyFor, MAX_HISTORY } from './api';
-import { assistantDisplayText } from './logic';
+import { assistantDisplayText, decisionReason } from './logic';
 import type { ChatMessage } from './types';
 
 describe('assistant', () => {
@@ -37,5 +37,14 @@ describe('assistant', () => {
 
   it('assistant text is cleaned for display', () => {
     expect(assistantDisplayText('## الملخص\n**الغياب:** 2\n- تأخير 30 د\n\n\n\nانتهى')).toBe('الملخص\nالغياب: 2\n• تأخير 30 د\n\nانتهى');
+  });
+});
+
+describe('assistant decision cards', () => {
+  it('confirming the suggestion keeps its reason; choosing the opposite uses a plain reason', () => {
+    expect(decisionReason(false, 'أول تأخير بالشهر', false)).toBe('أول تأخير بالشهر');
+    expect(decisionReason(false, 'أول تأخير بالشهر', true)).toBe('بدون عذر');
+    expect(decisionReason(true, 'متكرر', false)).toBe('عذر مقبول من الإدارة');
+    expect(decisionReason(true, '  ', true)).toBe('بدون عذر');
   });
 });

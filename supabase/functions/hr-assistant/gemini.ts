@@ -11,10 +11,20 @@ export interface Content {
   parts: Part[];
 }
 
+/** مخطط مدخلات الأداة (نفس OpenAPI المختصر اللي يفهمه Gemini). */
+export interface Schema {
+  type: string;
+  description?: string;
+  enum?: string[];
+  items?: Schema;
+  properties?: Record<string, Schema>;
+  required?: string[];
+}
+
 export interface FunctionDecl {
   name: string;
   description: string;
-  parameters?: { type: "OBJECT"; properties: Record<string, { type: string; description: string }>; required?: string[] };
+  parameters?: Schema & { type: "OBJECT" };
 }
 
 export type Generate = (req: { system: string; contents: Content[]; tools: FunctionDecl[] }) => Promise<Content>;

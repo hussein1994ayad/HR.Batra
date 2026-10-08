@@ -80,6 +80,49 @@ void main() {
     expect(find.text('وثيقة 1 — علي'), findsOneWidget);
   });
 
+  testWidgets('decision card: nothing runs until confirmed; confirm runs it once with the reason', (tester) async {
+    AuthService.currentUserRole = 'admin';
+    final decided = <(String, bool, String)>[];
+    final repo = _FakeRepo((_) async => const AssistantReply(
+          text: 'جهزتلك البطاقات، أكدها انت',
+          decisions: [
+            AssistantDecision(eventId: 'ev1', employee: 'علي', date: '2026-10-01', type: 'late', minutes: 25, amount: 1042,
+                suggestDeduct: false, reason: 'أول تأخير بالشهر'),
+          ],
+        ));
+    await tester.pumpWidget(MaterialApp(
+      theme: AppTheme.darkTheme,
+      home: AssistantScreen(
+        repository: repo,
+        decide: (id, {required deduct, required reason}) async => decided.add((id, deduct, reason)),
+      ),
+    ));
+    await tester.tap(find.text('شنو القرارات المعلّقة اللي تنتظرني؟'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('علي · تأخير · 2026-10-01'), findsOneWidget);
+    expect(find.text('الاقتراح: إعفاء — أول تأخير بالشهر'), findsOneWidget);
+    expect(decided, isEmpty); // الاقتراح وحده ما ينفذ شي
+
+    await tester.tap(find.text('تأكيد إعفاء'));
+    await tester.pumpAndSettle();
+    expect(decided, [('ev1', false, 'أول تأخير بالشهر')]);
+    expect(find.text('✓ تم الإعفاء'), findsOneWidget);
+    expect(find.text('تأكيد إعفاء'), findsNothing); // ما ينضغط مرتين
+  });
+
+  test('reply parses decision cards', () {
+    final r = AssistantReply.fromMap({
+      'text': 'x',
+      'attachments': [
+        {'kind': 'decision', 'event_id': 'e9', 'employee': 'باسم', 'date': '2026-10-02', 'type': 'absence', 'minutes': 0,
+          'amount': 20000, 'suggest': 'deduct', 'reason': 'متكرر'},
+      ],
+    });
+    expect(r.decisions.single.suggestDeduct, isTrue);
+    expect(r.decisions.single.amount, 20000);
+  });
+
   testWidgets('admin: a server error shows as a message and is not sent back as history', (tester) async {
     AuthService.currentUserRole = 'admin';
     var calls = 0;

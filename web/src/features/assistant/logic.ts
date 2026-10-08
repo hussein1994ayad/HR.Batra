@@ -14,6 +14,12 @@ export const ASSISTANT_SUGGESTIONS = [
   'أكو تنبيهات أو أنماط غريبة بالدوام هالشهر؟',
 ];
 
+/** سبب القرار المُرسل: سبب الاقتراح إذا الأدمن وافقه، وإلا سبب عام للعكس. */
+export function decisionReason(suggestDeduct: boolean, suggestedReason: string, deduct: boolean): string {
+  if (deduct === suggestDeduct && suggestedReason.trim()) return suggestedReason.trim();
+  return deduct ? 'بدون عذر' : 'عذر مقبول من الإدارة';
+}
+
 /** الذكاء يكتب Markdown بسيط؛ نعرضه نص مرتب: بدون رموز، والنقاط «•». */
 export function assistantDisplayText(raw: string): string {
   return raw

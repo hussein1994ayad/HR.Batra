@@ -182,3 +182,24 @@ Deno.test("employee_profile_excel tool: reads the month period then builds one f
   assert(calls.includes("assistant_attendance_log"));
   assert(r.attachment?.kind === "file" && r.attachment.name.startsWith("ملف_شامل"));
 });
+
+// ---------------- المرحلة B: اقتراح القرارات ----------------
+Deno.test("propose_decisions: cards only for events still pending (data from the DB), nothing executed", async () => {
+  const called: string[] = [];
+  const r = await runTool("propose_decisions", {
+    items: [
+      { event_id: "ev1", suggest: "excuse", reason: "أول تأخير بالشهر" },
+      { event_id: "gone", suggest: "deduct", reason: "متكرر" },
+    ],
+  }, {
+    rpc: (fn, args) => {
+      called.push(fn);
+      assertEquals(args, { p_ids: ["ev1", "gone"] });
+      return Promise.resolve([{ event_id: "ev1", employee: "علي", date: "2026-10-01", type: "late", minutes: 25, amount: 1042 }]);
+    },
+  });
+  assertEquals(called, ["assistant_pending_events"]); // قراءة فقط، ماكو decide
+  assertEquals(r.attachments, [{ kind: "decision", event_id: "ev1", employee: "علي", date: "2026-10-01", type: "late", minutes: 25,
+    amount: 1042, suggest: "excuse", reason: "أول تأخير بالشهر" }]);
+  assertEquals(r.forModel.skipped_not_pending, 1);
+});

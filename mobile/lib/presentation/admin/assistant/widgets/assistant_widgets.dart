@@ -4,16 +4,20 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 
-import '../../../../core/models/assistant_models.dart';
+import '../../../../core/models/models.dart';
 import '../../../../core/services/excel_export_service.dart';
 import '../../../../core/utils/app_log.dart';
 import '../../../shared/ui/ui.dart';
 import '../../employee_management/employee_documents.dart';
 import '../assistant_logic.dart';
 
+/// تنفيذ قرار على حركة رواتب (الافتراضي: AdminActionsRepository.decidePayrollEvent).
+typedef AssistantDecide = Future<void> Function(String eventId, {required bool deduct, required String reason});
+
 class AssistantBubble extends StatelessWidget {
-  const AssistantBubble({super.key, required this.message});
+  const AssistantBubble({super.key, required this.message, required this.decide});
   final AssistantMessage message;
+  final AssistantDecide decide;
 
   @override
   Widget build(BuildContext context) {
@@ -42,6 +46,7 @@ class AssistantBubble extends StatelessWidget {
                   style: AppText.body.copyWith(color: AppColors.textPrimary, height: 1.6)),
               for (final f in message.files) ...[const SizedBox(height: AppSpace.sm), AssistantFileCard(file: f)],
               for (final d in message.documents) ...[const SizedBox(height: AppSpace.sm), AssistantDocumentsCard(docs: d)],
+              for (final d in message.decisions) ...[const SizedBox(height: AppSpace.sm), AssistantDecisionCard(decision: d, decide: decide)],
             ],
           ),
         ),
@@ -129,6 +134,83 @@ class AssistantDocumentsCard extends StatelessWidget {
               title: 'وثيقة ${i + 1} — ${docs.employee}',
               onTap: () => previewEmployeeDocument(context, docs.urls[i], 'وثيقة ${i + 1} — ${docs.employee}'),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+/// بطاقة اقتراح قرار: ما ينفذ شي إلا لما الأدمن يضغط «تأكيد» (أو يختار العكس). بعد التنفيذ تنقفل.
+class AssistantDecisionCard extends StatefulWidget {
+  const AssistantDecisionCard({super.key, required this.decision, required this.decide});
+  final AssistantDecision decision;
+  final AssistantDecide decide;
+
+  @override
+  State<AssistantDecisionCard> createState() => _AssistantDecisionCardState();
+}
+
+class _AssistantDecisionCardState extends State<AssistantDecisionCard> {
+  bool _busy = false;
+  bool? _doneDeduct;
+
+  Future<void> _apply(bool deduct) async {
+    setState(() => _busy = true);
+    try {
+      final d = widget.decision;
+      final reason = deduct == d.suggestDeduct && d.reason.trim().isNotEmpty ? d.reason : (deduct ? 'بدون عذر' : 'عذر مقبول من الإدارة');
+      await widget.decide(d.eventId, deduct: deduct, reason: reason);
+      if (mounted) setState(() => _doneDeduct = deduct);
+    } catch (e) {
+      appLog('assistant decision: $e');
+      if (mounted) AppSnack.error(context, 'ما تنفذ القرار: ${e.toString().replaceFirst('Exception: ', '')}');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final d = widget.decision;
+    final label = kPayrollEventLabels[d.type] ?? d.type;
+    final detail = [
+      if (d.minutes > 0) '${d.minutes.round()} دقيقة',
+      if (d.amount > 0) Fmt.iqd(d.amount),
+    ].join(' · ');
+    final suggestion = d.suggestDeduct ? 'خصم' : 'إعفاء';
+    return AppCard(
+      padding: const EdgeInsets.all(AppSpace.md),
+      color: AppColors.surface2,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(children: [
+            ToneIcon(Icons.gavel_rounded, tone: d.suggestDeduct ? AppTone.danger : AppTone.success),
+            const SizedBox(width: AppSpace.md),
+            Expanded(child: Text('${d.employee} · $label · ${d.date}', style: AppText.bodySm.copyWith(color: AppColors.textPrimary))),
+          ]),
+          if (detail.isNotEmpty) Padding(padding: const EdgeInsets.only(top: AppSpace.xs), child: Text(detail, style: AppText.caption)),
+          const SizedBox(height: AppSpace.xs),
+          Text('الاقتراح: $suggestion — ${d.reason}', style: AppText.bodySm),
+          const SizedBox(height: AppSpace.sm),
+          if (_doneDeduct != null)
+            Text(_doneDeduct! ? '✓ تم الخصم' : '✓ تم الإعفاء',
+                style: AppText.bodySm.copyWith(color: _doneDeduct! ? AppTone.danger.color : AppTone.success.color, fontWeight: FontWeight.w700))
+          else
+            Wrap(spacing: AppSpace.sm, runSpacing: AppSpace.sm, children: [
+              AppButton(
+                label: 'تأكيد $suggestion',
+                size: AppButtonSize.small,
+                variant: d.suggestDeduct ? AppButtonVariant.danger : AppButtonVariant.primary,
+                loading: _busy,
+                onPressed: () => _apply(d.suggestDeduct),
+              ),
+              AppButton.secondary(
+                label: d.suggestDeduct ? 'إعفاء بدلاً منه' : 'خصم بدلاً منه',
+                size: AppButtonSize.small,
+                onPressed: _busy ? null : () => _apply(!d.suggestDeduct),
+              ),
+            ]),
         ],
       ),
     );

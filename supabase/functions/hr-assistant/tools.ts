@@ -9,7 +9,10 @@ import type { FunctionDecl } from "./gemini.ts";
 
 export type Attachment =
   | { kind: "file"; name: string; mime: string; base64: string }
-  | { kind: "documents"; employee: string; urls: string[] };
+  | { kind: "documents"; employee: string; urls: string[] }
+  /** اقتراح قرار: ما ينفذ إلا لما الأدمن يضغط «تأكيد» بالشاشة (decide_payroll_event). البيانات من القاعدة. */
+  | { kind: "decision"; event_id: string; employee: string; date: string; type: string; minutes: number; amount: number;
+      suggest: "deduct" | "excuse"; reason: string };
 
 export interface ToolContext {
   rpc: (fn: string, args: Record<string, unknown>) => Promise<unknown>;
@@ -19,6 +22,8 @@ export interface ToolResult {
   /** ما يشوفه الذكاء (مختصر، بدون روابط). */
   forModel: Record<string, unknown>;
   attachment?: Attachment;
+  /** أكثر من مرفق (مثل بطاقات القرارات). */
+  attachments?: Attachment[];
 }
 
 interface Tool {
@@ -265,6 +270,58 @@ export const TOOLS: Tool[] = [
       return {
         forModel: { file_ready: name, attendance: log.summary, payroll: payroll.summary },
         attachment: { kind: "file", name, mime: XLSX, base64: toBase64(bytes) },
+      };
+    },
+  },
+  // ---------------- اقتراح القرارات (التنفيذ بيد الأدمن) ----------------
+  {
+    decl: {
+      name: "decision_context",
+      description: "القرارات المعلّقة (غياب/تأخير/خروج مبكر/بصمة ناقصة) مع سياق كل موظف: كم مرة تكرر بالشهر، كم مرة انخصم أو انعفى خلال 90 يوم، وهل قدّم طلب إجازة لذاك اليوم. استعمله قبل propose_decisions.",
+      parameters: { type: "OBJECT", properties: { branch: p("اسم الفرع (اختياري)") } },
+    },
+    run: async (a, ctx) => ({ forModel: { pending: await ctx.rpc("assistant_decision_context", { p_branch: str(a.branch) ?? null }) } }),
+  },
+  {
+    decl: {
+      name: "propose_decisions",
+      description: "يعرض للأدمن بطاقات اقتراح (خصم أو إعفاء) لقرارات معلّقة مع سبب قصير. ما ينفذ أي شي: الأدمن يأكد بنفسه من البطاقة.",
+      parameters: {
+        type: "OBJECT",
+        properties: {
+          items: {
+            type: "ARRAY",
+            description: "الاقتراحات",
+            items: {
+              type: "OBJECT",
+              properties: {
+                event_id: p("معرّف الحركة من decision_context"),
+                suggest: { type: "STRING", enum: ["deduct", "excuse"], description: "deduct = خصم، excuse = إعفاء" },
+                reason: p("سبب الاقتراح بجملة قصيرة بالعراقي"),
+              },
+              required: ["event_id", "suggest", "reason"],
+            },
+          },
+        },
+        required: ["items"],
+      },
+    },
+    run: async (a, ctx) => {
+      const items = (Array.isArray(a.items) ? a.items : []) as Array<{ event_id?: string; suggest?: string; reason?: string }>;
+      const ids = items.map((i) => String(i.event_id ?? "")).filter(Boolean).slice(0, 20);
+      const events = (ids.length ? await ctx.rpc("assistant_pending_events", { p_ids: ids }) : []) as Array<
+        { event_id: string; employee: string; date: string; type: string; minutes: number; amount: number }>;
+      const attachments: Attachment[] = [];
+      for (const ev of events) {
+        const it = items.find((i) => i.event_id === ev.event_id)!;
+        attachments.push({ kind: "decision", ...ev, minutes: Number(ev.minutes ?? 0), amount: Number(ev.amount ?? 0),
+          suggest: it.suggest === "deduct" ? "deduct" : "excuse", reason: String(it.reason ?? "").slice(0, 200) });
+      }
+      const skipped = ids.filter((id) => !events.some((e) => e.event_id === id));
+      return {
+        forModel: { cards_shown: attachments.length, skipped_not_pending: skipped.length,
+          note: "البطاقات ظهرت للأدمن؛ القرار ما ينفذ إلا لما هو يأكد." },
+        attachments,
       };
     },
   },

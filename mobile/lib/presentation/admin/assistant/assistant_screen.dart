@@ -8,15 +8,19 @@ import 'package:flutter/material.dart';
 
 import '../../../core/models/models.dart';
 import '../../../core/services/auth_service.dart';
+import '../../../data/repositories/admin_actions_repository.dart';
 import '../../../data/repositories/assistant_repository.dart';
 import '../../shared/ui/ui.dart';
 import 'widgets/assistant_widgets.dart';
 
 class AssistantScreen extends StatefulWidget {
-  const AssistantScreen({super.key, this.repository});
+  const AssistantScreen({super.key, this.repository, this.decide});
 
   /// للاختبار؛ الافتراضي يتصل بالسيرفر.
   final AssistantRepository? repository;
+
+  /// تنفيذ بطاقات اقتراح القرارات (الافتراضي: decide_payroll_event عبر AdminActionsRepository).
+  final AssistantDecide? decide;
 
   @override
   State<AssistantScreen> createState() => _AssistantScreenState();
@@ -24,6 +28,9 @@ class AssistantScreen extends StatefulWidget {
 
 class _AssistantScreenState extends State<AssistantScreen> {
   late final AssistantRepository _repo = widget.repository ?? AssistantRepository();
+  // الريبو ينبني بس لما الأدمن يأكد قرار (مو مع فتح الشاشة)
+  late final AssistantDecide _decide = widget.decide ??
+      (id, {required deduct, required reason}) => AdminActionsRepository().decidePayrollEvent(id, deduct: deduct, reason: reason);
   final _input = TextEditingController();
   final _scroll = ScrollController();
   final List<AssistantMessage> _messages = [];
@@ -99,7 +106,7 @@ class _AssistantScreenState extends State<AssistantScreen> {
               padding: const EdgeInsets.all(AppSpace.page),
               children: [
                 if (_messages.isEmpty) AssistantWelcome(onPick: _send),
-                for (final m in _messages) AssistantBubble(message: m),
+                for (final m in _messages) AssistantBubble(message: m, decide: _decide),
                 if (_thinking)
                   const Padding(
                     padding: EdgeInsets.symmetric(vertical: AppSpace.md),

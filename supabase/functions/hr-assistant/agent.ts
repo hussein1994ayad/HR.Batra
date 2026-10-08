@@ -48,6 +48,7 @@ export async function runAgent(opts: {
     const responses = await Promise.all(calls.map(async ({ functionCall }) => {
       const result = await runTool(functionCall.name, functionCall.args ?? {}, opts.ctx);
       if (result.attachment) attachments.push(result.attachment);
+      if (result.attachments) attachments.push(...result.attachments);
       return { functionResponse: { name: functionCall.name, response: result.forModel } };
     }));
     contents.push({ role: "user", parts: responses });
