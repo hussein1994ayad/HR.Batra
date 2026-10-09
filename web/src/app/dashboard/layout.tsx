@@ -4,6 +4,8 @@
 // التاريخ، الإشعارات)، ومنطقة الصفحة. الجلسة والعدّادات في features/shell/useAdminSession،
 // وعناصر القائمة في features/shell/nav.
 
+import { arabicDate } from '@/lib/dates';
+import { baghdadToday } from '@/features/payroll/period';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { Toaster } from 'react-hot-toast';
@@ -86,7 +88,7 @@ export default function DashboardLayout({
   const todayLabel = useMemo(() => {
     if (!isClient) return '';
     try {
-      return new Date().toLocaleDateString('ar-IQ-u-nu-latn', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+      return arabicDate(baghdadToday(), true);
     } catch {
       return new Date().toDateString();
     }

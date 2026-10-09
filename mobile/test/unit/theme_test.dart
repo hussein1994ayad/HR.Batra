@@ -100,13 +100,13 @@ void main() {
       expect(Fmt.relative(now.subtract(const Duration(minutes: 5)), now: now), 'قبل 5 دقائق');
       expect(Fmt.relative(now.subtract(const Duration(hours: 2)), now: now), 'قبل ساعتين');
       expect(Fmt.relative(now.subtract(const Duration(days: 1)), now: now), 'أمس');
-      expect(Fmt.relative(now.subtract(const Duration(days: 30)), now: now), startsWith('27 آب'));
+      expect(Fmt.relative(now.subtract(const Duration(days: 30)), now: now), startsWith('27/8'));
     });
 
     test('time, dates and greeting', () {
       expect(Fmt.timeOfDay('08:05:00'), '8:05 ص');
       expect(Fmt.timeOfDay('16:30:00'), '4:30 م');
-      expect(Fmt.date(DateTime(2026, 9, 26)), '26 أيلول');
+      expect(Fmt.date(DateTime(2026, 9, 26), withYear: true), '26/9/2026');
       expect(Fmt.days(1), 'يوم واحد');
       expect(Fmt.days(2), 'يومين');
       expect(Fmt.days(3), '3 أيام');

@@ -16,14 +16,14 @@ export function MonthAmountModal({ s }: { s: LoansState }) {
   const month = monthLabel(monthPrompt.installment.due_date);
   return (
     <Modal
-      title={`قسط شهر ${month} أقل`}
+      title={`قسط ${month} أقل`}
       subtitle={`القسط المجدول: ${formatIQD(monthPrompt.installment.amount)} · الرواتب تخصم المبلغ الجديد، والباقي يصير شهر بالأخير`}
       icon={TrendingDown}
       tone="amber"
       onClose={() => setMonthPrompt(null)}
     >
       <form onSubmit={recordMonthAmount} className="space-y-4">
-        <Field label={`المبلغ اللي يكدر يدفعه بشهر ${month} (د.ع)`} hint="إذا ما يكدر يدفع شي هالشهر، استعمل زر التأجيل.">
+        <Field label={`المبلغ اللي يكدر يدفعه برواتب ${month} (د.ع)`} hint="إذا ما يكدر يدفع شي هالشهر، استعمل زر التأجيل.">
           <AmountInput required autoFocus value={monthPrompt.amount} onValueChange={(v) => setMonthPrompt({ ...monthPrompt, amount: v })} />
         </Field>
         <Field label="ملاحظة (اختياري)">

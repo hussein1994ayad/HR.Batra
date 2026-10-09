@@ -4,7 +4,7 @@
 
 import type { Loan, LoanInstallment } from '@/lib/db-types';
 import { getLocalDateStr } from '@/lib/dates';
-import { baghdadToday, payrollMonthOfDate } from '@/features/payroll/period';
+import { baghdadToday, payrollMonthName, payrollMonthOfDate } from '@/features/payroll/period';
 
 /**
  * يضيف أشهراً لتاريخ YYYY-MM-DD مع تثبيت اليوم على آخر الشهر عند الحاجة
@@ -93,17 +93,16 @@ export interface PaymentPreview {
   error: string | null;
 }
 
-/** 2026-10-01 ← «10/2026». */
+/** 2026-10-01 ← «الشهر العاشر 2026». */
 export function monthLabel(date: string | null | undefined): string {
   if (!date) return '';
-  // شهر الرواتب اللي يتبعه التاريخ (قسط 28/10 = رواتب 11/2026)
-  const [y, m] = payrollMonthOfDate(date).split('-');
-  return `${m}/${y}`;
+  // شهر الرواتب اللي يتبعه التاريخ (قسط 28/10 = رواتب الشهر الحادي عشر)
+  return payrollMonthName(payrollMonthOfDate(date));
 }
 
 /** وصف القسط: باقي شهر / مؤجّل / مبلغ هالشهر مخفّض (نفس أعمدة origin_kind و origin_month و amount_locked). */
 export function installmentOrigin(inst: Pick<LoanInstallment, 'origin_kind' | 'origin_month' | 'amount_locked' | 'is_paid'>): string | null {
-  if (inst.origin_kind === 'shortfall') return inst.origin_month ? `باقي شهر ${monthLabel(inst.origin_month)}` : 'باقي شهر سابق';
+  if (inst.origin_kind === 'shortfall') return inst.origin_month ? `باقي ${monthLabel(inst.origin_month)}` : 'باقي شهر سابق';
   if (inst.origin_kind === 'postponed') return inst.origin_month ? `مؤجّل من ${monthLabel(inst.origin_month)}` : 'مؤجّل';
   if (inst.amount_locked && !inst.is_paid) return 'مبلغ هالشهر مخفّض';
   return null;
@@ -133,7 +132,7 @@ function rebalance(
   while (left > 0) {
     last = addMonths(last, 1);
     const amount = Math.min(base > 0 ? base : left, left);
-    rows.push({ due_date: last, amount, is_paid: false, added: true, label: origin ? `باقي شهر ${monthLabel(origin)}` : undefined });
+    rows.push({ due_date: last, amount, is_paid: false, added: true, label: origin ? `باقي ${monthLabel(origin)}` : undefined });
     left -= amount;
   }
   return rows;

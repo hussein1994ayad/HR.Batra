@@ -12,6 +12,6 @@ describe('purgeSummary', () => {
 
   it('has twelve Iraqi month names', () => {
     expect(ARABIC_MONTH_NAMES).toHaveLength(12);
-    expect(ARABIC_MONTH_NAMES[8]).toBe('أيلول');
+    expect(ARABIC_MONTH_NAMES[8]).toBe('الشهر التاسع');
   });
 });

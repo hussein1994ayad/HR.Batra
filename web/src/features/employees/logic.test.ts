@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Employee } from '@/lib/db-types';
-import { daysUntil, documentPathFromUrl, employeeToFormValues, filterEmployees, normalizeArabic } from './logic';
+import { daysUntil, documentPathFromUrl, employeeToFormValues, salaryChangeMonth, salaryUpdateFields, filterEmployees, normalizeArabic } from './logic';
 
 const emp = (over: Partial<Employee>): Employee => ({
   id: 'e', employee_code: 'EMP-100', full_name: '', is_active: true, role: 'employee', ...over,
@@ -54,6 +54,27 @@ describe('employeeToFormValues', () => {
     expect(employeeToFormValues(emp({ full_name: 'y', join_date: '2025-01-05' })).joinDate).toBe('2025-01-05');
     expect(values.monthlySalary).toBe(0);
     expect(values.email).toBe('');
+  });
+});
+
+describe('salary change month', () => {
+  it('reads the scheduled month from any saved format', () => {
+    expect(salaryChangeMonth('2026/06/01')).toBe('2026-06');
+    expect(salaryChangeMonth('2026-10-27')).toBe('2026-11');
+    expect(salaryChangeMonth('2026-11')).toBe('2026-11');
+    expect(salaryChangeMonth('2026-1')).toBe('2026-01');
+    expect(salaryChangeMonth(null)).toBe('');
+    expect(employeeToFormValues(emp({ full_name: 'z', future_salary_month: '2026/06/01', future_salary_iqd: 800000 })).futureSalaryMonth).toBe('2026-06');
+  });
+
+  it('changes the salary now for this month and schedules it for a later month', () => {
+    const base = { monthlySalary: 600000, futureSalary: 800000 };
+    expect(salaryUpdateFields({ ...base, futureSalaryMonth: '2026-10' }, '2026-10'))
+      .toEqual({ monthly_salary_iqd: 800000, future_salary_iqd: null, future_salary_month: null });
+    expect(salaryUpdateFields({ ...base, futureSalaryMonth: '2026-11' }, '2026-10'))
+      .toEqual({ monthly_salary_iqd: 600000, future_salary_iqd: 800000, future_salary_month: '2026-11' });
+    expect(salaryUpdateFields({ ...base, futureSalary: 0, futureSalaryMonth: '2026-11' }, '2026-10'))
+      .toEqual({ monthly_salary_iqd: 600000, future_salary_iqd: null, future_salary_month: null });
   });
 });
 

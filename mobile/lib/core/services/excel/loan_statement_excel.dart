@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:syncfusion_flutter_xlsio/xlsio.dart' as xlsio;
 
 import '../../constants/constants.dart';
+import '../../design/formatters.dart';
 import '../../models/loan_model.dart';
 import '../../utils/app_log.dart';
 
@@ -217,7 +218,7 @@ Future<String> buildAndSaveLoanStatementExcel(LoanRecord record) async {
 
     // تاريخ الاستحقاق
     final cellDue = sheet.getRangeByIndex(startRow, 2);
-    cellDue.setText('شهر ${inst.dueDate.month} سنة ${inst.dueDate.year} · $dueDate');
+    cellDue.setText('رواتب ${Fmt.monthOf(inst.payrollMonth)} · $dueDate');
     cellDue.cellStyle.hAlign = xlsio.HAlignType.center;
 
     // مبلغ القسط

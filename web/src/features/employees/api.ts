@@ -3,7 +3,8 @@
 import { imageCompression } from '@/lib/lazy';
 import { supabase } from '@/lib/supabase';
 import type { ArchivedEmployee, Department, Employee, EmployeeDevice } from '@/lib/db-types';
-import { documentPathFromUrl } from './logic';
+import { documentPathFromUrl, salaryUpdateFields } from './logic';
+import { currentPayrollMonth } from '@/features/payroll/period';
 import type { BranchOption, DeleteType, EmployeeFormValues } from './types';
 
 const DOCS_BUCKET = 'employee-documents';
@@ -184,9 +185,7 @@ export async function updateEmployee(
       role: values.role,
       branch_id: values.branchId || null,
       department_id: values.departmentId || null,
-      monthly_salary_iqd: values.monthlySalary || 0,
-      future_salary_iqd: values.futureSalary || null,
-      future_salary_month: values.futureSalaryMonth || null,
+      ...salaryUpdateFields(values, currentPayrollMonth()),
       document_urls: [...keptDocuments, ...urls],
       join_date: values.joinDate,
     })

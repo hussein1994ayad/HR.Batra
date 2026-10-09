@@ -7,6 +7,8 @@ import { Clock, Eye, EyeOff, Pencil, Save, Upload, UserPlus, X } from 'lucide-re
 import type { Employee } from '@/lib/db-types';
 import { AmountInput, Field, Input, Modal, ModalFooter, Select, cn } from '@/components/ui';
 import { emptyEmployeeForm, employeeToFormValues } from '../logic';
+import { currentPayrollMonth, payrollMonthName, shiftPayrollMonth } from '@/features/payroll/period';
+import { formatIQD } from '@/lib/format';
 import type { BranchOption, EmployeeFormValues } from '../types';
 import { useSignedUrl } from '@/lib/signed-urls';
 
@@ -58,6 +60,16 @@ export function EmployeeFormModal({ employee, branches, departments, saving, onC
   const [showPassword, setShowPassword] = useState(false);
   const [existingDocs, setExistingDocs] = useState<string[]>(employee?.document_urls ?? []);
   const [newDocs, setNewDocs] = useState<File[]>([]);
+
+  // تغيير الراتب: من راتب هذا الشهر لحد 11 شهر قدّام (والشهر المحفوظ إذا قديم)
+  const thisMonth = currentPayrollMonth();
+  const changeMonths = Array.from({ length: 12 }, (_, i) => shiftPayrollMonth(thisMonth, i));
+  if (form.futureSalaryMonth && !changeMonths.includes(form.futureSalaryMonth)) changeMonths.unshift(form.futureSalaryMonth);
+  const changeHint = form.futureSalary > 0 && form.futureSalaryMonth
+    ? (form.futureSalaryMonth <= thisMonth
+      ? `الراتب يصير ${formatIQD(form.futureSalary)} من رواتب ${payrollMonthName(form.futureSalaryMonth)}، والأشهر اللي قبله تبقى بالراتب القديم.`
+      : `الراتب يبقى ${formatIQD(form.monthlySalary)} لحد ما يجي راتب ${payrollMonthName(form.futureSalaryMonth)}، وبعدها يصير ${formatIQD(form.futureSalary)} وحده.`)
+    : 'الزيادة تنحسب من راتب الشهر اللي تختاره، والأشهر اللي قبله ما تتغير.';
   const set = <K extends keyof EmployeeFormValues>(key: K, value: EmployeeFormValues[K]) => setForm((f) => ({ ...f, [key]: value }));
 
   const submit = (e: React.FormEvent) => {
@@ -129,8 +141,8 @@ export function EmployeeFormModal({ employee, branches, departments, saving, onC
               <option value="admin">مدير عام</option>
             </Select>
           </Field>
-          <Field label="الراتب الأساسي الشهري (د.ع)">
-            <AmountInput required value={form.monthlySalary} onValueChange={(v) => set('monthlySalary', v)} placeholder="1,500,000" />
+          <Field label={isEdit ? 'الراتب الحالي (د.ع)' : 'الراتب الأساسي الشهري (د.ع)'} hint={isEdit ? 'للزيادة أو التخفيض: اكتب الراتب الجديد وشهره بـ«تغيير الراتب» تحت.' : undefined}>
+            <AmountInput required value={form.monthlySalary} onValueChange={(v) => set('monthlySalary', v)} placeholder="1,500,000" disabled={isEdit} className={isEdit ? 'opacity-70 cursor-not-allowed' : undefined} />
           </Field>
           <Field label="تاريخ المباشرة بالعمل">
             <Input type="date" required value={form.joinDate} onChange={(e) => set('joinDate', e.target.value)} dir="ltr" />
@@ -140,14 +152,19 @@ export function EmployeeFormModal({ employee, branches, departments, saving, onC
         {isEdit && (
           <div className="rounded-2xl border border-indigo-500/20 bg-indigo-500/5 p-4">
             <p className="text-xs font-bold text-indigo-200 mb-3 flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5" /> تغيير راتب مجدول (اختياري)
+              <Clock className="w-3.5 h-3.5" /> تغيير الراتب — زيادة أو تخفيض (اختياري)
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="الراتب الجديد (د.ع)">
+              <Field label="الراتب الجديد (د.ع)" hint="تريد تلغي تغيير مجدول؟ امسح المبلغ.">
                 <AmountInput value={form.futureSalary} onValueChange={(v) => set('futureSalary', v)} placeholder="مبلغ الراتب" />
               </Field>
-              <Field label="يبدأ من تاريخ" hint="ينطبق من رواتب الشهر اللي يقع بيه هذا التاريخ (بعد يوم 26 = الشهر الجاي).">
-                <Input type="date" value={form.futureSalaryMonth} onChange={(e) => set('futureSalaryMonth', e.target.value)} dir="ltr" />
+              <Field label="من راتب يا شهر؟" hint={changeHint}>
+                <Select value={form.futureSalaryMonth} required={form.futureSalary > 0} onChange={(e) => set('futureSalaryMonth', e.target.value)}>
+                  <option value="">اختار الشهر</option>
+                  {changeMonths.map((m) => (
+                    <option key={m} value={m}>رواتب {payrollMonthName(m)}{m === thisMonth ? ' (هذا الشهر)' : ''}</option>
+                  ))}
+                </Select>
               </Field>
             </div>
           </div>

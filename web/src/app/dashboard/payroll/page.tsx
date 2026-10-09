@@ -1,16 +1,17 @@
 'use client';
 
+import { monthOrdinal } from '@/lib/dates';
 import { useMemo, useState } from 'react';
 import { Card, PageSkeleton } from '@/components/ui';
 import { useConfirmNote } from '@/components/confirm';
 import { DEDUCT_REASONS, EXCUSE_REASONS } from '@/features/payroll/decisionReasons';
-import { ARABIC_MONTHS } from '@/lib/dates';
 import { usePayroll } from '@/features/payroll/usePayroll';
 import toast from 'react-hot-toast';
 import { attentionReasons, sumPayroll, type PayrollRow } from '@/features/payroll/calc';
 import { AddAdjustmentModal } from '@/features/payroll/components/AddAdjustmentModal';
 import { AttendanceBreakdownModal } from '@/features/payroll/components/AttendanceBreakdownModal';
 import { BulkApproveModal } from '@/features/payroll/components/BulkApproveModal';
+import { CalcResultModal } from '@/features/payroll/components/CalcResultModal';
 import { PayrollHeader } from '@/features/payroll/components/PayrollHeader';
 import { PayrollPrintHeader } from '@/features/payroll/components/PayrollPrintHeader';
 import { PayrollPrintSignatures } from '@/features/payroll/components/PayrollPrintSignatures';
@@ -74,7 +75,7 @@ export default function PayrollPage() {
   return (
     <div className="space-y-6 pb-12">
       <PayrollPrintHeader
-        currentMonthName={ARABIC_MONTHS[currentMonthVal] || currentMonthVal}
+        currentMonthName={monthOrdinal(Number(currentMonthVal))}
         currentYearVal={currentYearVal}
         startDate={p.startDate}
         endDate={p.endDate}
@@ -192,6 +193,19 @@ export default function PayrollPage() {
               note: { presets: approve ? DEDUCT_REASONS : EXCUSE_REASONS, placeholder: 'ملاحظة (اختياري)' },
             });
             if (note !== null) await p.decideEvent(id, approve, note || undefined);
+          }}
+        />
+      )}
+
+      {p.calcResultOpen && (
+        <CalcResultModal
+          selectedMonth={p.selectedMonth}
+          endDate={p.endDate}
+          rows={p.filteredRows}
+          onClose={() => p.setCalcResultOpen(false)}
+          onShowDecisions={() => {
+            p.setCalcResultOpen(false);
+            setStatusFilter('decisions');
           }}
         />
       )}

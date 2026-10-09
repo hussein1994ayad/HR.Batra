@@ -1,16 +1,17 @@
 // =========================================================================
 // HR Pro — تنسيق موحّد للمال والتواريخ والأوقات بالعربي (العراق)
 // =========================================================================
-// المال: "1,500,000 د.ع" — التاريخ: "الخميس 26 أيلول" — الوقت: "8:05 ص"
+// المال: "1,500,000 د.ع" — التاريخ: "الخميس 26/9" — الشهر: "الشهر التاسع 2026" — الوقت: "8:05 ص"
 // الوقت النسبي: "قبل 5 دقائق". الأرقام لاتينية (0-9) كما هو شائع بالعراق.
 // =========================================================================
 
 import '../utils/arabic_format.dart';
 
 abstract final class Fmt {
-  static const List<String> months = [
-    'كانون الثاني', 'شباط', 'آذار', 'نيسان', 'أيار', 'حزيران',
-    'تموز', 'آب', 'أيلول', 'تشرين الأول', 'تشرين الثاني', 'كانون الأول',
+  /// ترتيب الأشهر: نكتب «الشهر العاشر» بدل «تشرين الأول» (نفس الموقع).
+  static const List<String> monthOrdinals = [
+    'الأول', 'الثاني', 'الثالث', 'الرابع', 'الخامس', 'السادس',
+    'السابع', 'الثامن', 'التاسع', 'العاشر', 'الحادي عشر', 'الثاني عشر',
   ];
 
   /// DateTime.weekday: 1 = الاثنين ... 7 = الأحد
@@ -40,19 +41,16 @@ abstract final class Fmt {
     return time(DateTime(2000, 1, 1, h, m));
   }
 
-  /// "26 أيلول" أو "26 أيلول 2026" إذا ليست السنة الحالية
+  /// "26/9" أو "26/9/2026" إذا ليست السنة الحالية (بالأرقام، بدون أسماء الأشهر)
   static String date(DateTime? d, {bool withYear = false}) {
     if (d == null) return '—';
     final l = d.toLocal();
-    final y = withYear || l.year != DateTime.now().year ? ' ${l.year}' : '';
-    return '${l.day} ${months[l.month - 1]}$y';
+    final y = withYear || l.year != DateTime.now().year ? '/${l.year}' : '';
+    return '${l.day}/${l.month}$y';
   }
 
-  /// "الخميس 26 أيلول"
+  /// "الخميس 26/9"
   static String dateWithDay(DateTime? d) => d == null ? '—' : '${weekdays[d.toLocal().weekday - 1]} ${date(d)}';
-
-  /// "أيلول 2026"
-  static String monthYear(int month, int year) => '${months[month - 1]} $year';
 
   /// مدة بالدقائق: "45 د" / "2 س" / "2 س 45 د"
   static String minutesLabel(int m) {
@@ -62,10 +60,11 @@ abstract final class Fmt {
     return r == 0 ? '$h س' : '$h س $r د';
   }
 
-  /// "شهر 5 سنة 2026" — رقم الشهر (كما يُكتب بكشوف الرواتب والسلف)
-  static String monthNumber(int month, int year) => 'شهر $month سنة $year';
+  /// "الشهر الخامس 2026" — ترتيب الشهر (كما يُكتب بكشوف الرواتب والسلف والإشعارات)
+  static String monthNumber(int month, int year) =>
+      'الشهر ${month >= 1 && month <= 12 ? monthOrdinals[month - 1] : month} $year';
 
-  /// "شهر 11 سنة 2026" لتاريخ
+  /// "الشهر الحادي عشر 2026" لتاريخ
   static String monthOf(DateTime? d) => d == null ? '—' : monthNumber(d.month, d.year);
 
   /// "قبل 5 دقائق"، "قبل ساعتين"، "أمس"، أو التاريخ.

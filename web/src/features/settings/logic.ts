@@ -2,11 +2,10 @@
 
 import type { LeaveTypeOption } from '@/lib/db-types';
 import type { PurgeOptions, PurgeResult } from './types';
+import { MONTH_ORDINALS } from '@/lib/dates';
 
-export const ARABIC_MONTH_NAMES = [
-  'كانون الثاني', 'شباط', 'آذار', 'نيسان', 'أيار', 'حزيران',
-  'تموز', 'آب', 'أيلول', 'تشرين الأول', 'تشرين الثاني', 'كانون الأول',
-];
+/** "الشهر الأول" … "الشهر الثاني عشر" (بالترتيب بدل الأسماء). */
+export const ARABIC_MONTH_NAMES = MONTH_ORDINALS.map((o) => `الشهر ${o}`);
 
 /** رسالة نجاح التنظيف بعدد السجلات المحذوفة لكل فئة مختارة. */
 export function purgeSummary(options: PurgeOptions, result: PurgeResult | null | undefined): string {

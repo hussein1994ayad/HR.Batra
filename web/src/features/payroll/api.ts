@@ -2,7 +2,7 @@
 // الحساب كله في السيرفر (محرّك الرواتب)؛ الموقع يعرض النتيجة ويرسل القرارات.
 
 import { supabase } from '@/lib/supabase';
-import { monthLabel } from './period';
+import { legacyMonthLabel, monthLabel } from './period';
 import type { Branch } from '@/lib/db-types';
 import type { PayrollEvent, PayrollRun } from './calc';
 import type { SlipAdjustment } from './types';
@@ -147,7 +147,7 @@ export async function notifyBranchPayslips(branchId: string, month: string): Pro
   const { error: notifErr } = await supabase.from('notifications').insert(toSend.map(slip => ({
     employee_id: slip.employee_id,
     title: 'اعتماد ونشر كشف الراتب 💸',
-    body: `تم اعتماد وصرف كشف راتبك لـ${label} بصافي مستلم قدره (${Number(slip.net_salary).toLocaleString('en-US')} د.ع). يمكنك الاطلاع عليه من التطبيق.`,
+    body: `تم اعتماد وصرف كشف راتب ${label} بصافي مستلم قدره (${Number(slip.net_salary).toLocaleString('en-US')} د.ع). يمكنك الاطلاع عليه من التطبيق.`,
     type: 'salary',
     is_read: false,
   })));
@@ -163,7 +163,7 @@ async function salaryNotifiedEmployees(employeeIds: string[], month: string): Pr
     .in('employee_id', employeeIds)
     .eq('type', 'salary')
     // القيم بين علامتي تنصيص لأن "(" و"," لها معنى بصيغة or
-    .or(`body.ilike."%${monthLabel(month)}%",body.ilike."%(${month})%"`)
+    .or(`body.ilike."%${monthLabel(month)}%",body.ilike."%${legacyMonthLabel(month)}%",body.ilike."%(${month})%"`)
     .order('created_at', { ascending: true });
   if (error) throw error;
   const last = new Map<string, string>();
@@ -185,7 +185,7 @@ export async function notifySlipReverted(employeeId: string, month: string, slip
   const { error } = await supabase.from('notifications').insert({
     employee_id: employeeId,
     title: 'إلغاء اعتماد كشف الراتب',
-    body: `تم إلغاء اعتماد كشف راتبك لـ${monthLabel(month)} للمراجعة، وراح يوصلك إشعار عند اعتماده من جديد.`,
+    body: `تم إلغاء اعتماد كشف راتب ${monthLabel(month)} للمراجعة، وراح يوصلك إشعار عند اعتماده من جديد.`,
     type: 'salary',
     is_read: false,
   });
