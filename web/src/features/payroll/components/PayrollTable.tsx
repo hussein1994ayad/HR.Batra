@@ -89,15 +89,15 @@ export function PayrollTable({
                         : row.scheduledDays > 0 && !row.isIssued ? ` · داوم ${row.attendedDays} من ${row.scheduledDays} يوم` : ''}
                     </p>
                     {(() => {
-                      const reasons = attentionReasons(row);
-                      if (reasons.length === 0) return null;
+                      // القرارات المعلّقة بشارتها، وباقي الأسباب بشارة «يحتاج انتباه» + أول سبب بكلام واضح
+                      const others = attentionReasons(row).filter((r) => r.kind !== 'decisions');
+                      if (row.pendingCount === 0 && others.length === 0) return null;
                       return (
-                        <div className="mt-1 print:hidden">
-                          <Badge tone={reasons.some((r) => r.kind !== 'decisions') ? 'amber' : 'orange'}>
-                            {reasons.length === 1 && reasons[0].kind === 'decisions' ? `${row.pendingCount} بانتظار قرارك` : `يحتاج انتباه (${reasons.length})`}
-                          </Badge>
-                          {reasons.filter((r) => r.kind !== 'decisions').slice(0, 1).map((r) => (
-                            <p key={r.kind} className="text-[10px] text-amber-200/80 mt-0.5 max-w-[260px]">{r.text}</p>
+                        <div className="mt-1 flex flex-wrap gap-1 print:hidden">
+                          {row.pendingCount > 0 && !row.isIssued && <Badge tone="orange">{row.pendingCount} بانتظار قرارك</Badge>}
+                          {others.length > 0 && <Badge tone="amber">يحتاج انتباه{others.length > 1 ? ` (${others.length})` : ''}</Badge>}
+                          {others.slice(0, 1).map((r) => (
+                            <p key={r.kind} className="basis-full text-[10px] text-amber-200/80 max-w-[260px]">{r.text}</p>
                           ))}
                         </div>
                       );

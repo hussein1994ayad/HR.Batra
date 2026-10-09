@@ -44,13 +44,13 @@ export function PayrollHeader({
         <div className="space-y-2">
           <div className="flex items-center gap-3">
             <span className="w-11 h-11 rounded-2xl bg-emerald-500/15 text-emerald-300 flex items-center justify-center"><Banknote className="w-6 h-6" /></span>
-            <h1 className="text-2xl font-black text-white">رواتب {payrollMonthName(selectedMonth)}</h1>
+            <h2 className="text-2xl font-black text-white">رواتب {payrollMonthName(selectedMonth)}</h2>
             {isMonthArchived ? (
               <Badge tone="violet"><Archive className="w-3 h-3" /> مؤرشف</Badge>
             ) : periodStatus === 'closed' ? (
-              <Badge tone="slate"><Lock className="w-3 h-3" /> مغلق</Badge>
+              <Badge tone="slate"><Lock className="w-3 h-3" /> المسير مغلق</Badge>
             ) : periodStatus === 'open' ? (
-              <Badge tone="emerald" dot>مفتوح</Badge>
+              <Badge tone="emerald" dot>المسير مفتوح</Badge>
             ) : null}
           </div>
           <p className="text-sm text-slate-300">
