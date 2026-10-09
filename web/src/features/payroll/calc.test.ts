@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { attentionReasons, buildPayrollRows, buildSlipAdjustments, describeEvent, sumPayroll, type PayrollEvent, type PayrollRun, type RunRow } from './calc';
+import { attentionReasons, buildPayrollRows, canApproveNow, buildSlipAdjustments, describeEvent, sumPayroll, type PayrollEvent, type PayrollRun, type RunRow } from './calc';
 
 // مسير أيلول 2026: 1 → 26. راتب 600,000 → أجر اليوم 20,000، دوام 480 دقيقة.
 const baseRow: RunRow = {
@@ -115,6 +115,17 @@ describe('attention before approving', () => {
   it('this month loan installments come through for the details', () => {
     const r = rowOf({ loan_items: [{ installment_id: 'i', loan_id: 'l', loan_amount: 500000, due_date: '2026-09-26', amount: 50000 }] });
     expect(r.loanItems).toHaveLength(1);
+  });
+});
+
+describe('approval after the payroll period ends', () => {
+  const row = (terminationDate: string | null = null, isIssued = false) => ({ terminationDate, isIssued });
+  it('waits for the cutoff, except the last salary of someone who already left', () => {
+    expect(canApproveNow(row(), '2026-09-27', '2026-10-26', '2026-10-09')).toBe(false);
+    expect(canApproveNow(row(), '2026-09-27', '2026-10-26', '2026-10-27')).toBe(true);
+    expect(canApproveNow(row('2026-10-05'), '2026-09-27', '2026-10-26', '2026-10-09')).toBe(true);
+    expect(canApproveNow(row('2026-10-12'), '2026-09-27', '2026-10-26', '2026-10-09')).toBe(false);
+    expect(canApproveNow(row(null, true), '2026-09-27', '2026-10-26', '2026-10-30')).toBe(false);
   });
 });
 

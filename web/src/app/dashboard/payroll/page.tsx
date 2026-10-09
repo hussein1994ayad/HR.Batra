@@ -109,6 +109,8 @@ export default function PayrollPage() {
           locked={p.isLocked}
           closing={p.actionLoading === 'close_period'}
           onFilter={setStatusFilter}
+          approvableCount={p.approvableRows.length}
+          approveFrom={p.endDate}
           onOpenBulk={() => setShowBulkModal(true)}
           onClosePeriod={p.closePeriod}
         />
@@ -123,7 +125,7 @@ export default function PayrollPage() {
           branches={p.branches}
           statusFilter={statusFilter}
           onStatusFilterChange={setStatusFilter}
-          pendingCount={p.pendingRows.length}
+          pendingCount={p.approvableRows.length}
           isMonthArchived={p.isMonthArchived}
           locked={p.isLocked}
           canArchive={p.isPeriodClosed || !!p.period?.legacy}
@@ -146,6 +148,8 @@ export default function PayrollPage() {
           onShowBreakdown={setBreakdownEmployeeId}
           onAddAdjustment={(row) => setAdjustmentFor({ row, type: 'bonus' })}
           onGenerateSlip={p.generateSlip}
+          canApprove={p.canApprove}
+          approveFrom={p.endDate}
           onRevertSlip={p.revertSlip}
         />
 
@@ -195,11 +199,11 @@ export default function PayrollPage() {
           selectedMonth={p.selectedMonth}
           startDate={p.startDate}
           endDate={p.endDate}
-          pendingRows={p.pendingRows}
+          pendingRows={p.approvableRows}
           approving={p.actionLoading === 'bulk_generate'}
           onClose={() => setShowBulkModal(false)}
           onConfirm={async () => {
-            await p.bulkGenerateSlips(p.pendingRows);
+            await p.bulkGenerateSlips(p.approvableRows);
             setShowBulkModal(false);
           }}
         />

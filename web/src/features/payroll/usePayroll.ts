@@ -9,7 +9,7 @@ import {
   insertBonusDeduction, notifyBranchPayslips, notifySlipReverted, reopenPayrollPeriod, revertPayrollSlip, settleLoanOnExit,
   type PayrollDataset,
 } from './api';
-import { buildPayrollRows, buildSlipAdjustments, sumPayroll, type PayrollRow } from './calc';
+import { buildPayrollRows, buildSlipAdjustments, canApproveNow, sumPayroll, type PayrollRow } from './calc';
 import { baghdadToday, currentPayrollMonth, monthLabel } from './period';
 import { useConfirm } from '@/components/confirm';
 import type { OverrideField, PayrollOverrides } from './types';
@@ -78,6 +78,9 @@ export function usePayroll() {
 
   const totals = useMemo(() => sumPayroll(filteredRows), [filteredRows]);
   const pendingRows = useMemo(() => filteredRows.filter(r => !r.isIssued), [filteredRows]);
+  // الاعتماد بعد نهاية فترة الدوام (إلا آخر راتب لمن ترك العمل)
+  const canApprove = useCallback((r: PayrollRow) => canApproveNow(r, startDate, endDate, baghdadToday()), [startDate, endDate]);
+  const approvableRows = useMemo(() => pendingRows.filter(canApprove), [pendingRows, canApprove]);
   const isMonthArchived = !!period?.archived;
   const isPeriodClosed = period?.status === 'closed';
   /** لا اعتماد ولا تعديل: الشهر مؤرشف أو المسير مغلق. */
@@ -165,18 +168,15 @@ export function usePayroll() {
       toast.error('تم صرف الراتب مسبقاً لهذا الموظف في هذا الشهر.');
       return;
     }
-    // اعتماد راتب = قرار مالي: تأكيد، وتنبيه إذا المسير ما خلص بعد
-    const midPeriod = !!endDate && baghdadToday() < endDate;
+    if (!canApprove(row)) {
+      toast.error(`رواتب هالشهر تنعتمد بعد نهاية الدوام المحسوب (${endDate}). قبلها بس آخر راتب لموظف ترك العمل.`);
+      return;
+    }
+    // اعتماد راتب = قرار مالي: تأكيد بالصافي
     const confirmed = await confirm({
       title: `اعتماد راتب ${row.full_name}؟`,
-      message: (
-        `الصافي: ${Math.round(row.netSalary).toLocaleString('en-US')} د.ع لـ${monthLabel(selectedMonth)}.` +
-        (midPeriod ? `
-
-تنبيه: المسير ما خلص بعد (ينتهي ${endDate}). أي غياب أو تأخير أو خصم بعد اليوم ينحسب بمسير الشهر الجاي.` : '')
-      ),
+      message: `الصافي: ${Math.round(row.netSalary).toLocaleString('en-US')} د.ع لـ${monthLabel(selectedMonth)}.`,
       confirmLabel: 'اعتماد الراتب',
-      tone: midPeriod ? 'warning' : 'primary',
     });
     if (!confirmed) return;
     const ok = await run(`slip_${row.id}`, async () => {
@@ -346,7 +346,7 @@ export function usePayroll() {
     branches: data.branches,
     period, selectedMonth, startDate, endDate, changeMonth,
     searchTerm, setSearchTerm, selectedBranch, setSelectedBranch,
-    rows, filteredRows, pendingRows, totals, pendingDecisions,
+    rows, filteredRows, pendingRows, approvableRows, canApprove, totals, pendingDecisions,
     isMonthArchived, isPeriodClosed, isLocked,
     payrollOverrides, saveOverride, clearOverride,
     addBonusDeduction, decideEvent, generateSlip, bulkGenerateSlips, revertSlip, settleExit,

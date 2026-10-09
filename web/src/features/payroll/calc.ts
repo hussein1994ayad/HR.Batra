@@ -278,6 +278,17 @@ export function buildPayrollRows({ run, events, overrides, pendingLeaveEmployeeI
 
 export type PayrollRow = ReturnType<typeof buildPayrollRows>[number];
 
+/**
+ * الراتب ينعتمد بعد نهاية فترة الدوام، إلا آخر راتب لموظف ترك العمل وآخر يوم دوامه فات
+ * (نفس شرط approve_payroll_slip بالسيرفر).
+ */
+export function canApproveNow(row: Pick<PayrollRow, 'isIssued' | 'terminationDate'>, startDate: string, endDate: string, today: string): boolean {
+  if (row.isIssued || !endDate) return false;
+  if (today > endDate) return true;
+  const t = row.terminationDate;
+  return !!t && t >= startDate && t <= endDate && t < today;
+}
+
 /** سبب يحتاج انتباه الأدمن قبل الاعتماد (بلغة بسيطة) مع نوعه للون والزر. */
 export interface AttentionReason {
   kind: 'negative' | 'never_attended' | 'left_with_loan' | 'pending_leave' | 'decisions';

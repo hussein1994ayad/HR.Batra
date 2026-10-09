@@ -91,11 +91,6 @@ export async function revertInstallmentPayment(installmentId: string) {
   if (error) throw error;
 }
 
-export async function deleteInstallment(installmentId: string) {
-  const { error } = await supabase.from('loan_installments').delete().eq('id', installmentId);
-  if (error) throw error;
-}
-
 /** تأجيل قسط شهر: ينتقل لشهر جديد بعد آخر قسط بملاحظة، والباقي ما يتغير، والموظف ينشعر (postpone_loan_installment). */
 export async function postponeInstallment(installmentId: string, note: string) {
   const { error } = await supabase.rpc('postpone_loan_installment', { p_installment_id: installmentId, p_note: note.trim() || null });

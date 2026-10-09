@@ -11,7 +11,7 @@ import { errorMessage } from '@/lib/format';
 import { useConfirm, useConfirmNote } from '@/components/confirm';
 import type { Loan, LoanInstallment } from '@/lib/db-types';
 import {
-  approveLoan, deleteCompletedLoan, deleteInstallment, fetchLoans, payInstallment,
+  approveLoan, deleteCompletedLoan, fetchLoans, payInstallment,
   postponeInstallment, rejectLoan as rejectLoanRequest, rescheduleLoan, revertInstallmentPayment, setMonthInstallment,
 } from './api';
 import {
@@ -179,29 +179,6 @@ export function useLoans() {
     );
   };
 
-  const deletePaidInstallment = async (inst: LoanInstallment) => {
-    const ok = await confirm({
-      title: 'حذف القسط المسدد نهائياً؟',
-      message: 'يُحذف السجل من قاعدة البيانات لتوفير المساحة، ولن يؤثر على رصيد السلفة المتبقي. لا يمكن التراجع.',
-      confirmLabel: 'حذف نهائي',
-    });
-    if (!ok) return;
-    await run(
-      `delete_${inst.id}`,
-      async () => {
-        await deleteInstallment(inst.id);
-        query.mutate((d) => ({
-          ...d,
-          approved: d.approved.map((l) =>
-            l.id === inst.loan_id ? { ...l, loan_installments: (l.loan_installments ?? []).filter((i) => i.id !== inst.id) } : l,
-          ),
-        }));
-        toast.success('تم حذف القسط المسدد');
-      },
-      'فشل حذف القسط',
-    );
-  };
-
   /** تأجيل قسط شهر واحد لآخر السلفة (بملاحظة تنحفظ وتوصل للموظف). */
   const postponeFrom = async (inst: LoanInstallment) => {
     const to = scheduleLoan ? postponeTarget(scheduleLoan, inst.id) : null;
@@ -249,7 +226,7 @@ export function useLoans() {
     approval, setApproval, rejecting, setRejecting, editDraft, setEditDraft,
     scheduleLoan, setScheduleLoanId, payPrompt, setPayPrompt, paymentPreview, creating, setCreating,
     monthPrompt, setMonthPrompt, monthPreview, recordMonthAmount,
-    startApproval, rejectLoan, submitApproval, submitEdit, recordPayment, revertPayment, deletePaidInstallment, postponeFrom, deleteLoan,
+    startApproval, rejectLoan, submitApproval, submitEdit, recordPayment, revertPayment, postponeFrom, deleteLoan,
   };
 }
 

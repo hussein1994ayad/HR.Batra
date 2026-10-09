@@ -5,6 +5,7 @@
 
 import { AlertTriangle, CheckCircle2, Gavel, Lock, Stamp } from 'lucide-react';
 import { Button, cn } from '@/components/ui';
+import { arabicDate } from '../period';
 import type { PayrollStatusFilter } from './PayrollToolbar';
 
 type Props = {
@@ -16,6 +17,10 @@ type Props = {
   locked: boolean;
   closing?: boolean;
   onFilter: (f: PayrollStatusFilter) => void;
+  /** رواتب تكدر تنعتمد هسه (بعد نهاية الفترة، أو آخر راتب لمن ترك) */
+  approvableCount: number;
+  /** آخر يوم بفترة الدوام: الاعتماد من اليوم اللي بعده */
+  approveFrom: string;
   onOpenBulk: () => void;
   onClosePeriod: () => void;
 };
@@ -41,8 +46,10 @@ function Step({ n, done, active, icon: Icon, title, detail, action }: {
 }
 
 export function PayrollSteps({
-  pendingDecisions, attentionCount, issuedCount, rowCount, periodStatus, locked, closing, onFilter, onOpenBulk, onClosePeriod,
+  pendingDecisions, attentionCount, issuedCount, rowCount, periodStatus, locked, closing, onFilter, approvableCount, approveFrom,
+  onOpenBulk, onClosePeriod,
 }: Props) {
+  const nextDay = approveFrom ? new Date(Date.parse(approveFrom + 'T00:00:00Z') + 86400000).toISOString().slice(0, 10) : '';
   const decisionsDone = pendingDecisions === 0;
   const attentionDone = attentionCount === 0;
   const approvedDone = rowCount > 0 && issuedCount === rowCount;
@@ -57,9 +64,11 @@ export function PayrollSteps({
         detail={attentionDone ? 'ماكو شي غريب.' : `${attentionCount} موظف يحتاج نظرة (ما داوم، صافي سالب، ترك وعليه سلفة...).`}
         action={!attentionDone && <Button size="xs" variant="soft" onClick={() => onFilter('attention')}>عرضهم</Button>} />
       <Step n={3} done={approvedDone} active={current === 3} icon={Stamp} title="اعتمد الرواتب"
-        detail={`المعتمد ${issuedCount} من ${rowCount}. الاعتماد يثبّت الكشف ويستقطع أقساط السلف.`}
-        action={!approvedDone && !locked && (
-          <Button size="xs" variant="soft-success" icon={CheckCircle2} disabled={issuedCount === rowCount} onClick={onOpenBulk}>اعتماد الباقي</Button>
+        detail={approvableCount === 0 && !approvedDone && nextDay
+          ? `المعتمد ${issuedCount} من ${rowCount}. الاعتماد يتفعّل من ${arabicDate(nextDay)} (بعد نهاية الدوام المحسوب).`
+          : `المعتمد ${issuedCount} من ${rowCount}. الاعتماد يثبّت الكشف ويستقطع أقساط السلف.`}
+        action={!approvedDone && !locked && approvableCount > 0 && (
+          <Button size="xs" variant="soft-success" icon={CheckCircle2} onClick={onOpenBulk}>اعتماد ({approvableCount})</Button>
         )} />
       <Step n={4} done={closedDone} active={current === 4} icon={Lock} title="أغلق المسير"
         detail={closedDone ? 'المسير مغلق، ما يتغير شي بيه.' : 'بعد الاعتماد: الإغلاق يقفل الشهر وأي حركة جديدة تروح للشهر الجاي.'}

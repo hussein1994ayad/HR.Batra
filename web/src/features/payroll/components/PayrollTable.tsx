@@ -23,13 +23,16 @@ type Props = {
   onShowBreakdown: (employeeId: string) => void;
   onAddAdjustment: (row: PayrollRow) => void;
   onGenerateSlip: (row: PayrollRow) => void;
+  /** الاعتماد بعد نهاية الفترة (إلا آخر راتب لمن ترك) */
+  canApprove: (row: PayrollRow) => boolean;
+  approveFrom: string;
   onRevertSlip: (row: PayrollRow) => void;
 };
 
 /** جدول رواتب الموظفين مع المجاميع والإجراءات لكل موظف. */
 export function PayrollTable({
   rows, totals, isMonthArchived, locked, actionLoading, payrollOverrides,
-  onSaveOverride, onClearOverride, onShowBreakdown, onAddAdjustment, onGenerateSlip, onRevertSlip,
+  onSaveOverride, onClearOverride, onShowBreakdown, onAddAdjustment, onGenerateSlip, onRevertSlip, canApprove, approveFrom,
 }: Props) {
   const confirm = useConfirm();
 
@@ -159,7 +162,8 @@ export function PayrollTable({
                         variant="soft-success"
                         icon={Check}
                         loading={actionLoading === `slip_${row.id}`}
-                        disabled={actionLoading === 'bulk_generate'}
+                        disabled={actionLoading === 'bulk_generate' || !canApprove(row)}
+                        title={canApprove(row) ? undefined : `الاعتماد بعد نهاية الدوام المحسوب (${approveFrom})`}
                         onClick={() => onGenerateSlip(row)}
                       >
                         اعتماد
