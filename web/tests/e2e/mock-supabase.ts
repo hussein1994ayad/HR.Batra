@@ -146,7 +146,9 @@ export interface MockOptions {
 export async function mockSupabase(page: Page, options: MockOptions = {}) {
   const fixtures = options.fixtures ?? defaultFixtures();
   const calls: RecordedCall[] = [];
-  const rpc = { get_storage_stats: [{ bucket_name: 'employee-documents', total_size: 52428800 }], perform_daily_cleanup: null, ...payrollRunFixture(), ...options.rpc };
+  const run = payrollRunFixture();
+  const rpc = { get_storage_stats: [{ bucket_name: 'employee-documents', total_size: 52428800 }], perform_daily_cleanup: null, ...run,
+    calculate_payroll: run.get_payroll_run, ...options.rpc };
 
   if (options.loggedIn !== false) {
     const session = sessionFor();

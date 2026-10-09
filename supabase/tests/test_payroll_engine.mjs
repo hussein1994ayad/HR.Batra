@@ -39,7 +39,7 @@ const absent = (emp, date, ded = 'applied') => db.query(
   [emp, IDS.branch, date, ded]);
 const ev = (emp, date, type) => one(
   `SELECT * FROM payroll_events WHERE employee_id=$1 AND event_date=$2 AND event_type=$3 AND status<>'void'`, [emp, date, type]);
-const run = async (month) => (await as(db, 'admin', `SELECT get_payroll_run($1) r`, [month])).rows[0].r;
+const run = async (month) => (await as(db, 'admin', `SELECT calculate_payroll($1) r`, [month])).rows[0].r;
 const row = async (month, emp) => (await run(month)).rows.find((r) => r.employee_id === emp);
 const N = (x) => Number(x);
 const r2 = (x) => Math.round(x * 100) / 100;
@@ -153,8 +153,8 @@ check('   policy keeps legacy cycle keys for old clients (27 → 26)',
 
 // ---------------- 14) إعادة الحساب ----------------
 const before = (await q(`SELECT count(*)::int n FROM payroll_events WHERE status<>'void'`))[0].n;
-await as(db, 'admin', `SELECT get_payroll_run('2026-09')`);
-await as(db, 'admin', `SELECT get_payroll_run('2026-09')`);
+await as(db, 'admin', `SELECT calculate_payroll('2026-09')`);
+await as(db, 'admin', `SELECT calculate_payroll('2026-09')`);
 const lateCount = (await q(`SELECT count(*)::int n FROM payroll_events WHERE employee_id=$1 AND event_type='late' AND status<>'void'`, [E3]))[0].n;
 check('14) re-running the payroll does not duplicate events', lateCount === 2);
 await db.query(`UPDATE attendance SET check_in_time=$2, status='present' WHERE employee_id=$1 AND work_date='2026-09-28'`, [E3, at('2026-09-28', '09:00')]);
@@ -330,7 +330,7 @@ await db.exec(`UPDATE employees SET is_active = true, termination_date = NULL WH
 // QA#13: العطلة الرسمية — لا غياب "بدون بصمة" ولا تذكير
 const pastDay = (await q(`SELECT ((now() AT TIME ZONE 'Asia/Baghdad')::date - 2)::text d`))[0].d;
 const pastMonth = (await q(`SELECT payroll_natural_month($1::date) m`, [pastDay]))[0].m;
-await as(db, 'admin', `SELECT get_payroll_run($1)`, [pastMonth]);
+await as(db, 'admin', `SELECT calculate_payroll($1)`, [pastMonth]);
 const beforeHoliday = (await q(`SELECT count(*)::int n FROM payroll_events WHERE event_date=$1 AND source='no_record' AND status<>'void'`, [pastDay]))[0].n;
 await expectError('employee cannot add official holidays', as(db, 'emp', `INSERT INTO official_holidays (holiday_date, name) VALUES ($1, 'x')`, [pastDay]), 'row-level security');
 await expectOk('admin adds an official holiday', as(db, 'admin', `INSERT INTO official_holidays (holiday_date, name) VALUES ($1, 'عطلة رسمية')`, [pastDay]));
@@ -391,6 +391,7 @@ check('months before the engine show their stored slips (read-only)',
 
 // ---------------- الصلاحيات ----------------
 await expectError('employee cannot run payroll', as(db, 'emp', `SELECT get_payroll_run('2026-09')`), 'غير مصرح');
+await expectError('employee cannot calculate payroll', as(db, 'emp', `SELECT calculate_payroll('2026-09')`), 'غير مصرح');
 await expectError('employee cannot decide events', as(db, 'emp', `SELECT decide_payroll_event($1, false, NULL)`, [el.id]), 'غير مصرح');
 await expectOk('manager can list and decide pending events', as(db, 'manager', `SELECT * FROM get_pending_payroll_decisions()`));
 const own = await as(db, 'emp', `SELECT count(*)::int n FROM payroll_events WHERE employee_id <> $1`, [IDS.emp]);

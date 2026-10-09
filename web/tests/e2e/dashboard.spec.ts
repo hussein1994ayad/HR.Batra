@@ -162,6 +162,15 @@ test.describe('workflows', () => {
     expect(api.writes('loan_installments', 'POST')).toHaveLength(0);
   });
 
+  test('payroll is calculated with the "calculate" button', async ({ page }) => {
+    const api = await mockSupabase(page);
+    await page.goto('/dashboard/payroll');
+    await expect(page.locator('tr', { hasText: 'زينب علي' })).toContainText('830,000 د.ع');
+    expect(api.writes('rpc:calculate_payroll', 'POST')).toHaveLength(0); // فتح الصفحة ما يحسب
+    await page.getByRole('button', { name: 'احتساب الرواتب' }).click();
+    await expect.poll(() => api.writes('rpc:calculate_payroll', 'POST').length).toBe(1);
+  });
+
   test('approval waits for the end of the payroll period', async ({ page }) => {
     await mockSupabase(page);
     await page.goto('/dashboard/payroll');

@@ -6,7 +6,7 @@ import toast from 'react-hot-toast';
 import { errorMessage } from '@/lib/error-utils';
 import {
   approvePayrollSlip, archivePayrollMonth, closePayrollPeriod, decidePayrollEvent, fetchPayrollDataset,
-  insertBonusDeduction, notifyBranchPayslips, notifySlipReverted, reopenPayrollPeriod, revertPayrollSlip, settleLoanOnExit,
+  calculatePayroll, insertBonusDeduction, notifyBranchPayslips, notifySlipReverted, reopenPayrollPeriod, revertPayrollSlip, settleLoanOnExit,
   type PayrollDataset,
 } from './api';
 import { buildPayrollRows, buildSlipAdjustments, canApproveNow, sumPayroll, type PayrollRow } from './calc';
@@ -333,6 +333,17 @@ export function usePayroll() {
     await loadData();
   };
 
+  /** «احتساب الرواتب»: يحسب المسير على السيرفر ثم يعيد التحميل. */
+  const calculate = async () => {
+    const ok = await run('calculate', async () => {
+      await calculatePayroll(selectedMonth);
+      return true;
+    }, 'ما انحسبت الرواتب');
+    if (!ok) return;
+    await loadData({ quiet: true });
+    toast.success('تم احتساب الرواتب ✅');
+  };
+
   /** ترك العمل وعليه سلفة: يخصم [amount] من آخر راتب، والباقي يسدد نقداً (settle_loan_on_exit). */
   const settleExit = async (employeeId: string, amount: number) => {
     const taken = await run(`settle_${employeeId}`, () => settleLoanOnExit(employeeId, selectedMonth, amount), 'ما انخصم الباقي');
@@ -349,7 +360,7 @@ export function usePayroll() {
     rows, filteredRows, pendingRows, approvableRows, canApprove, totals, pendingDecisions,
     isMonthArchived, isPeriodClosed, isLocked,
     payrollOverrides, saveOverride, clearOverride,
-    addBonusDeduction, decideEvent, generateSlip, bulkGenerateSlips, revertSlip, settleExit,
+    addBonusDeduction, decideEvent, generateSlip, bulkGenerateSlips, revertSlip, settleExit, calculate,
     closePeriod, reopenPeriod, sendBranchNotifications, archiveMonth,
   };
 }

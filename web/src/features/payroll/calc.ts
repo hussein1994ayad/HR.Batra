@@ -45,6 +45,8 @@ export interface PayrollPeriod {
   archived?: boolean;
   /** شهر قبل نظام المسيرات: كشوف قديمة للعرض فقط. */
   legacy?: boolean;
+  /** آخر «احتساب الرواتب» (calculate_payroll) */
+  calculated_at?: string | null;
 }
 
 /** صف موظف كما يرجعه get_payroll_run. */

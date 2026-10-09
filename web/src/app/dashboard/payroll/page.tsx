@@ -110,6 +110,9 @@ export default function PayrollPage() {
           closing={p.actionLoading === 'close_period'}
           onFilter={setStatusFilter}
           approvableCount={p.approvableRows.length}
+          calculatedAt={p.period?.calculated_at}
+          calculating={p.actionLoading === 'calculate'}
+          onCalculate={() => void p.calculate()}
           approveFrom={p.endDate}
           onOpenBulk={() => setShowBulkModal(true)}
           onClosePeriod={p.closePeriod}
