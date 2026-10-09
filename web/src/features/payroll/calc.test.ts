@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildPayrollRows, buildSlipAdjustments, describeEvent, sumPayroll, type PayrollEvent, type PayrollRun, type RunRow } from './calc';
+import { attentionReasons, buildPayrollRows, buildSlipAdjustments, describeEvent, sumPayroll, type PayrollEvent, type PayrollRun, type RunRow } from './calc';
 
 // مسير أيلول 2026: 1 → 26. راتب 600,000 → أجر اليوم 20,000، دوام 480 دقيقة.
 const baseRow: RunRow = {
@@ -94,3 +94,27 @@ describe('describeEvent', () => {
     expect(describeEvent(events[0])).toBe('غياب');
   });
 });
+
+describe('attention before approving', () => {
+  const rowOf = (over: Partial<RunRow>) =>
+    buildPayrollRows({ run: { ...run, rows: [{ ...baseRow, pending_count: 0, ...over }] }, events: [], overrides: {} })[0];
+
+  it('ready rows need nothing', () => {
+    expect(attentionReasons(rowOf({ attended_days: 20, scheduled_days: 22 }))).toEqual([]);
+  });
+
+  it('never attended, left with a loan, negative net and pending decisions are explained in plain words', () => {
+    const kinds = (r: ReturnType<typeof rowOf>) => attentionReasons(r).map((a) => a.kind);
+    expect(kinds(rowOf({ attended_days: 0, scheduled_days: 22 }))).toEqual(['never_attended']);
+    expect(kinds(rowOf({ attended_days: 3, scheduled_days: 3, termination_date: '2026-09-03', loan_balance_after_exit: 400000 })))
+      .toEqual(['left_with_loan']);
+    expect(kinds(rowOf({ basic: 100000, loans: 500000 }))).toContain('negative');
+    expect(kinds(rowOf({ pending_count: 3 }))).toEqual(['decisions']);
+  });
+
+  it('this month loan installments come through for the details', () => {
+    const r = rowOf({ loan_items: [{ installment_id: 'i', loan_id: 'l', loan_amount: 500000, due_date: '2026-09-26', amount: 50000 }] });
+    expect(r.loanItems).toHaveLength(1);
+  });
+});
+

@@ -5,6 +5,7 @@
 import { formatIQD } from '@/lib/format';
 import { Badge } from '@/components/ui';
 import type { PaymentPreview } from '../logic';
+import { payrollMonthName, payrollMonthOfDate } from '@/features/payroll/period';
 
 export function SchedulePreview({ preview, title, currentLabel }: { preview: PaymentPreview; title: string; currentLabel: string }) {
   if (preview.error) return <p className="text-xs font-bold text-rose-400">{preview.error}</p>;
@@ -21,7 +22,7 @@ export function SchedulePreview({ preview, title, currentLabel }: { preview: Pay
           <div key={`${r.due_date}-${idx}`} className={`px-3 py-2 flex items-center justify-between gap-2 text-xs ${r.current ? 'bg-emerald-500/10' : ''}`}>
             <span className="flex items-center gap-2">
               <span className="w-6 text-slate-500 font-bold">{idx + 1}</span>
-              <span className="font-mono text-slate-300" dir="ltr">{r.due_date}</span>
+              <span className="text-slate-300">رواتب {payrollMonthName(payrollMonthOfDate(r.due_date))}</span>
             </span>
             <span className="flex flex-wrap items-center justify-end gap-2">
               <b className="text-white">{formatIQD(r.amount)}</b>

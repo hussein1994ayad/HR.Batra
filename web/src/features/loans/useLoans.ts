@@ -19,6 +19,7 @@ import {
   validateApproval,
 } from './logic';
 import type { ApprovalDraft, EditLoanDraft, LoansTab, MonthAmountDraft, PayDraft } from './types';
+import { cutoffDateOf, payrollMonthOfDate } from '@/features/payroll/period';
 
 export function useLoans() {
   const confirm = useConfirm();
@@ -70,7 +71,7 @@ export function useLoans() {
       loan,
       amount: Number(loan.amount),
       months: Number(loan.installment_count),
-      startDate: sameDayNextMonth(),
+      startDate: cutoffDateOf(payrollMonthOfDate(sameDayNextMonth())),
     });
 
   // سبب الرفض يصل للموظف في إشعار قاعدة البيانات (trg_notify_employee_loan_decision)

@@ -196,3 +196,14 @@ export async function archivePayrollMonth(month: string): Promise<PeriodResult> 
   if (error) throw error;
   return data as PeriodResult;
 }
+
+/** ترك العمل وعليه سلفة: يخصم [amount] (أو الممكن من صافي آخر راتب) من آخر راتب، والباقي يسدد نقداً. */
+export async function settleLoanOnExit(employeeId: string, month: string, amount?: number): Promise<number> {
+  const { data, error } = await supabase.rpc('settle_loan_on_exit', {
+    p_employee_id: employeeId,
+    p_month: month,
+    p_amount: amount ? Math.round(amount) : null,
+  });
+  if (error) throw error;
+  return Number(data) || 0;
+}

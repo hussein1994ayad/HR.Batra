@@ -128,7 +128,7 @@ class MyLoanCard extends StatelessWidget {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('قسط ${Fmt.monthOf(installments[i].dueDate)}', style: AppText.bodySm),
+                                Text('قسط رواتب ${Fmt.monthOf(installments[i].payrollMonth)}', style: AppText.bodySm),
                                 if (installments[i].originLabel != null)
                                   Text(installments[i].originLabel!, style: AppText.caption.copyWith(color: AppTone.warning.color)),
                               ],

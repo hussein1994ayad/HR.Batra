@@ -4,8 +4,9 @@
 
 import { Settings2, Save } from 'lucide-react';
 import { formatIQD } from '@/lib/format';
-import { AmountInput, Field, Input, Modal, ModalFooter } from '@/components/ui';
+import { AmountInput, Field, Modal, ModalFooter } from '@/components/ui';
 import type { LoansState } from '../useLoans';
+import { FirstDeductionField } from './FirstDeductionField';
 
 export function ApprovalModal({ s }: { s: LoansState }) {
   const { busy, approval, setApproval, submitApproval } = s;
@@ -22,9 +23,7 @@ export function ApprovalModal({ s }: { s: LoansState }) {
               <AmountInput required value={approval.months} onValueChange={(v) => setApproval({ ...approval, months: v })} />
             </Field>
           </div>
-          <Field label="تاريخ استحقاق أول قسط">
-            <Input type="date" required value={approval.startDate} onChange={(e) => setApproval({ ...approval, startDate: e.target.value })} dir="ltr" />
-          </Field>
+          <FirstDeductionField value={approval.startDate} onChange={(startDate) => setApproval({ ...approval, startDate })} />
           <div className="rounded-2xl bg-indigo-500/5 border border-indigo-500/20 p-4 text-center">
             <p className="text-[11px] text-slate-400 mb-1">القسط الشهري</p>
             <p className="text-2xl font-extrabold text-indigo-200">{formatIQD(approval.months > 0 ? approval.amount / approval.months : 0)}</p>

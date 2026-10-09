@@ -80,6 +80,11 @@ export interface RunRow {
   unpaid_leave_days: number;
   /** ترك العمل خلال المسير: ما يبقى من السلف بعد أقساط هذا المسير */
   loan_balance_after_exit?: number;
+  /** أقساط السلف اللي تنخصم هالمسير وأسبابها */
+  loan_items?: LoanItem[];
+  /** أيام البصمة الفعلية / أيام الدوام المجدولة ضمن خدمته بالمسير */
+  attended_days?: number;
+  scheduled_days?: number;
   slip: null | {
     id: string;
     basic_salary: number;
@@ -95,6 +100,19 @@ export interface RunRow {
 export interface PayrollRun {
   period: PayrollPeriod;
   rows: RunRow[];
+}
+
+/** قسط سلفة ينخصم بهذا المسير (من payroll_employee_summary). */
+export interface LoanItem {
+  installment_id: string;
+  loan_id: string;
+  loan_amount: number;
+  due_date: string;
+  amount: number;
+  origin_kind?: 'shortfall' | 'postponed' | null;
+  origin_month?: string | null;
+  amount_locked?: boolean;
+  note?: string | null;
 }
 
 /** قيد مكافأة/خصم يُعرض في تفاصيل الموظف. */
@@ -230,6 +248,9 @@ export function buildPayrollRows({ run, events, overrides, pendingLeaveEmployeeI
       pendingCount: slip ? 0 : n(r.pending_count),
       missingPunches: n(r.missing_punches),
       loanBalanceAfterExit: n(r.loan_balance_after_exit),
+      loanItems: slip ? [] : (r.loan_items ?? []),
+      attendedDays: n(r.attended_days),
+      scheduledDays: n(r.scheduled_days),
 
       events: empEvents,
       bonusesList,
@@ -256,6 +277,28 @@ export function buildPayrollRows({ run, events, overrides, pendingLeaveEmployeeI
 }
 
 export type PayrollRow = ReturnType<typeof buildPayrollRows>[number];
+
+/** سبب يحتاج انتباه الأدمن قبل الاعتماد (بلغة بسيطة) مع نوعه للون والزر. */
+export interface AttentionReason {
+  kind: 'negative' | 'never_attended' | 'left_with_loan' | 'pending_leave' | 'decisions';
+  text: string;
+}
+
+/** ليش هذا الراتب يحتاج نظرة قبل الاعتماد. فارغ = جاهز. */
+export function attentionReasons(row: PayrollRow): AttentionReason[] {
+  if (row.isIssued) return [];
+  const out: AttentionReason[] = [];
+  if (row.pendingCount > 0) out.push({ kind: 'decisions', text: `${row.pendingCount} حركة تنتظر قرارك (غياب/تأخير)` });
+  if (row.scheduledDays > 0 && row.attendedDays === 0 && row.isActive && !row.terminationDate) {
+    out.push({ kind: 'never_attended', text: 'ما داوم ولا يوم بهذا المسير. إذا ترك العمل عطّله بآخر يوم دوام حتى ينحسب له بس الأيام اللي اشتغلها.' });
+  }
+  if (row.loanBalanceAfterExit > 0) {
+    out.push({ kind: 'left_with_loan', text: `ترك العمل وباقي عليه سلفة ${row.loanBalanceAfterExit.toLocaleString('en-US')} د.ع` });
+  }
+  if (row.isNetNegative) out.push({ kind: 'negative', text: 'الصافي بالسالب: الخصومات والسلف أكثر من الراتب' });
+  if (row.hasPendingLeave) out.push({ kind: 'pending_leave', text: 'عنده طلب إجازة معلّق بهذا المسير' });
+  return out;
+}
 
 /** مجاميع أعمدة الجدول لمجموعة صفوف. */
 export function sumPayroll(rows: PayrollRow[]) {

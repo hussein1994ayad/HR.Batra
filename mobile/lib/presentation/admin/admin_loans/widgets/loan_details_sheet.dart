@@ -189,7 +189,7 @@ class _InstallmentTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('قسط ${Fmt.monthOf(installment.dueDate)}', style: AppText.bodySm.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
+                Text('قسط رواتب ${Fmt.monthOf(installment.payrollMonth)}', style: AppText.bodySm.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
                 Text('يستحق ${Fmt.date(installment.dueDate, withYear: true)}', style: AppText.caption),
                 if (installment.originLabel != null)
                   Text(installment.originLabel!, style: AppText.caption.copyWith(color: AppTone.warning.color)),

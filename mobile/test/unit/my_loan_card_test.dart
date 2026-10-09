@@ -68,6 +68,12 @@ void main() {
     _matchGolden('my_loan_rejected', _texts(tester).where((t) => !t.startsWith('طُلبت')).toList());
   });
 
+  test('an installment belongs to the payroll month (after the 26th = next month)', () {
+    expect(payrollMonthOf(DateTime(2026, 10, 26)), DateTime(2026, 10));
+    expect(payrollMonthOf(DateTime(2026, 10, 28)), DateTime(2026, 11));
+    expect(payrollMonthOf(DateTime(2026, 12, 27)), DateTime(2027));
+  });
+
   testWidgets('installments explain a reduced month, its rest and a postponed month', (tester) async {
     final smart = {
       ..._loan,

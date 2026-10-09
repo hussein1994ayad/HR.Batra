@@ -11,6 +11,7 @@ import { errorMessage } from '@/lib/error-utils';
 import { useConfirm } from '@/components/confirm';
 import { installmentPlan, LOAN_SALARY_WARNING_RATIO, overHalfSalaryWarning } from '../logic';
 import { createDirectLoan, fetchLoanEmployees } from '../api';
+import { FirstDeductionField } from './FirstDeductionField';
 
 type Props = {
   defaultFirstDue: string;
@@ -78,9 +79,7 @@ export function CreateLoanModal({ defaultFirstDue, onClose, onCreated }: Props) 
         <p className={overHalf ? 'text-xs font-bold text-amber-300' : 'text-xs text-slate-400'}>
           القسط الشهري: {formatIQD(installment)}{lastInstallment !== installment && ` · آخر قسط ${formatIQD(lastInstallment)}`}{salary > 0 && ` · نص الراتب ${formatIQD(salary * LOAN_SALARY_WARNING_RATIO)}${overHalf ? ' (أكثر من النص: مسموح، والباقي يتسدد نقداً)' : ''}`}
         </p>
-        <Field label="تاريخ أول قسط">
-          <Input type="date" required value={firstDue} onChange={(e) => setFirstDue(e.target.value)} dir="ltr" />
-        </Field>
+        <FirstDeductionField value={firstDue} onChange={setFirstDue} />
         <Field label="صورة التعهد الموقّع (إلزامي)">
           <Input type="file" accept="image/*,application/pdf" required onChange={(e) => setPledge(e.target.files?.[0] ?? null)} />
         </Field>
