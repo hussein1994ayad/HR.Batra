@@ -2,6 +2,7 @@
 
 import type { Loan, LoanInstallment } from '@/lib/db-types';
 import { paidAmount, installmentOrigin, sortInstallments } from '../logic';
+import { payrollMonthName, payrollMonthOfDate } from '@/features/payroll/period';
 
 interface LoanStatementPrintProps {
   selectedLoanForInstallments: Loan;
@@ -68,7 +69,7 @@ export function LoanStatementPrint({ selectedLoanForInstallments }: LoanStatemen
           {sortInstallments(selectedLoanForInstallments.loan_installments).map((inst: LoanInstallment, idx: number) => (
               <tr key={inst.id} className="border-b border-slate-300">
                 <td className="border border-slate-400 p-2 font-bold">قسط #{idx + 1}</td>
-                <td className="border border-slate-400 p-2 font-mono">{inst.due_date}</td>
+                <td className="border border-slate-400 p-2">رواتب {payrollMonthName(payrollMonthOfDate(inst.due_date))} <span className="font-mono text-[10px]">({inst.due_date})</span></td>
                 <td className="border border-slate-400 p-2 font-bold">{Number(inst.amount).toLocaleString()} د.ع</td>
                 <td className="border border-slate-400 p-2 font-bold">
                   {inst.is_paid ? 'مدفوع' : 'غير مدفوع'}

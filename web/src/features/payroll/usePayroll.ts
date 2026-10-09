@@ -6,7 +6,8 @@ import toast from 'react-hot-toast';
 import { errorMessage } from '@/lib/error-utils';
 import {
   approvePayrollSlip, archivePayrollMonth, closePayrollPeriod, decidePayrollEvent, fetchPayrollDataset,
-  insertBonusDeduction, notifyBranchPayslips, notifySlipReverted, reopenPayrollPeriod, revertPayrollSlip, type PayrollDataset,
+  insertBonusDeduction, notifyBranchPayslips, notifySlipReverted, reopenPayrollPeriod, revertPayrollSlip, settleLoanOnExit,
+  type PayrollDataset,
 } from './api';
 import { buildPayrollRows, buildSlipAdjustments, sumPayroll, type PayrollRow } from './calc';
 import { baghdadToday, currentPayrollMonth, monthLabel } from './period';
@@ -332,6 +333,14 @@ export function usePayroll() {
     await loadData();
   };
 
+  /** ترك العمل وعليه سلفة: يخصم [amount] من آخر راتب، والباقي يسدد نقداً (settle_loan_on_exit). */
+  const settleExit = async (employeeId: string, amount: number) => {
+    const taken = await run(`settle_${employeeId}`, () => settleLoanOnExit(employeeId, selectedMonth, amount), 'ما انخصم الباقي');
+    if (taken === undefined) return;
+    toast.success(`تم: ${taken.toLocaleString('en-US')} د.ع تنخصم من آخر راتب`);
+    await loadData();
+  };
+
   return {
     loading, actionLoading, sendingNotifs,
     branches: data.branches,
@@ -340,7 +349,7 @@ export function usePayroll() {
     rows, filteredRows, pendingRows, totals, pendingDecisions,
     isMonthArchived, isPeriodClosed, isLocked,
     payrollOverrides, saveOverride, clearOverride,
-    addBonusDeduction, decideEvent, generateSlip, bulkGenerateSlips, revertSlip,
+    addBonusDeduction, decideEvent, generateSlip, bulkGenerateSlips, revertSlip, settleExit,
     closePeriod, reopenPeriod, sendBranchNotifications, archiveMonth,
   };
 }

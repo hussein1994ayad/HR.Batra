@@ -4,7 +4,7 @@
 
 import type { Loan, LoanInstallment } from '@/lib/db-types';
 import { getLocalDateStr } from '@/lib/dates';
-import { baghdadToday } from '@/features/payroll/period';
+import { baghdadToday, payrollMonthOfDate } from '@/features/payroll/period';
 
 /**
  * يضيف أشهراً لتاريخ YYYY-MM-DD مع تثبيت اليوم على آخر الشهر عند الحاجة
@@ -96,7 +96,8 @@ export interface PaymentPreview {
 /** 2026-10-01 ← «10/2026». */
 export function monthLabel(date: string | null | undefined): string {
   if (!date) return '';
-  const [y, m] = date.split('-');
+  // شهر الرواتب اللي يتبعه التاريخ (قسط 28/10 = رواتب 11/2026)
+  const [y, m] = payrollMonthOfDate(date).split('-');
   return `${m}/${y}`;
 }
 

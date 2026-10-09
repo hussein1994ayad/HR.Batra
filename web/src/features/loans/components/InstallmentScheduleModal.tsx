@@ -7,6 +7,7 @@ import { Calendar, CalendarClock, Pencil, Undo2, Trash2, Banknote, Printer, Tren
 import { formatIQD } from '@/lib/format';
 import { Badge, Button, IconButton, Modal, StatTile } from '@/components/ui';
 import { installmentOrigin, monthLabel, sortInstallments } from '../logic';
+import { payrollMonthName, payrollMonthOfDate } from '@/features/payroll/period';
 import type { LoansState } from '../useLoans';
 
 export function InstallmentScheduleModal({ s }: { s: LoansState }) {
@@ -71,7 +72,8 @@ export function InstallmentScheduleModal({ s }: { s: LoansState }) {
               <div className="p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-900/40 transition-colors">
                 <div className="flex flex-wrap items-center gap-3 text-xs">
                   <span className="w-7 h-7 shrink-0 rounded-lg bg-slate-800 text-slate-400 font-bold flex items-center justify-center text-[11px]">{idx + 1}</span>
-                  <span className="font-mono text-slate-300" dir="ltr">{inst.due_date}</span>
+                  <span className="text-slate-200 font-bold">رواتب {payrollMonthName(payrollMonthOfDate(inst.due_date))}</span>
+                  <span className="font-mono text-[11px] text-slate-500" dir="ltr">{inst.due_date}</span>
                   <span className="font-bold text-white">{formatIQD(inst.amount)}</span>
                   {inst.is_paid ? (
                     <Badge tone={inst.payment_type === 'cash' ? 'emerald' : 'sky'} dot>

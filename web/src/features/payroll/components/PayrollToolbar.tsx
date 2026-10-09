@@ -2,7 +2,8 @@ import { Archive, Bell, Building, CheckCircle2 } from 'lucide-react';
 import type { Branch } from '@/lib/db-types';
 import { Badge, Button, FilterSelect, SearchInput, SegmentedTabs } from '@/components/ui';
 
-export type PayrollStatusFilter = 'all' | 'pending' | 'issued';
+/** all | يحتاج قرار | يحتاج انتباه | غير معتمد | معتمد */
+export type PayrollStatusFilter = 'all' | 'decisions' | 'attention' | 'pending' | 'issued';
 
 type Props = {
   searchTerm: string;
@@ -43,6 +44,8 @@ export function PayrollToolbar({
           onChange={onStatusFilterChange}
           options={[
             { value: 'all', label: 'الكل' },
+            { value: 'decisions', label: 'يحتاج قرار' },
+            { value: 'attention', label: 'يحتاج انتباه' },
             { value: 'pending', label: 'غير معتمد' },
             { value: 'issued', label: 'معتمد' },
           ]}

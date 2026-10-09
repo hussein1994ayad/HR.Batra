@@ -4,7 +4,9 @@ import { Check, Info, Plus, Undo2 } from 'lucide-react';
 import { useConfirm } from '@/components/confirm';
 import { Avatar, Badge, Button, DataTable, IconButton, TableEmpty, cn } from '@/components/ui';
 import { formatIQD } from '@/lib/format';
-import type { PayrollRow, sumPayroll } from '../calc';
+import { installmentOrigin } from '@/features/loans/logic';
+import { attentionReasons, type PayrollRow, type sumPayroll } from '../calc';
+import { arabicDate, payrollMonthName, payrollMonthOfDate } from '../period';
 import type { OverrideField, PayrollOverrides } from '../types';
 import { EditableAmountCell } from './EditableAmountCell';
 
@@ -80,16 +82,26 @@ export function PayrollTable({
                   <Avatar name={row.full_name} size="sm" />
                   <div className="min-w-0">
                     <p className="font-bold text-white truncate">{row.full_name}</p>
-                    <p className="text-[10px] text-slate-500">{row.branches?.name || 'بدون فرع'}</p>
-                    <div className="flex flex-wrap gap-1 mt-1 print:hidden">
-                      {row.isNetNegative && <Badge tone="rose">صافي سالب</Badge>}
-                      {row.isAttendanceMissing && <Badge tone="amber">لا بصمات</Badge>}
-                      {row.hasPendingLeave && <Badge tone="sky">إجازة معلقة</Badge>}
-                      {row.pendingCount > 0 && <Badge tone="orange">بانتظار قرار ({row.pendingCount})</Badge>}
-                      {row.loanBalanceAfterExit > 0 && (
-                        <Badge tone="rose">ترك العمل وعليه سلفة {row.loanBalanceAfterExit.toLocaleString('en-US')}</Badge>
-                      )}
-                    </div>
+                    <p className="text-[10px] text-slate-500">
+                      {row.branches?.name || 'بدون فرع'}
+                      {row.terminationDate
+                        ? ` · ترك العمل ${arabicDate(row.terminationDate)}`
+                        : row.scheduledDays > 0 && !row.isIssued ? ` · داوم ${row.attendedDays} من ${row.scheduledDays} يوم` : ''}
+                    </p>
+                    {(() => {
+                      // القرارات المعلّقة بشارتها، وباقي الأسباب بشارة «يحتاج انتباه» + أول سبب بكلام واضح
+                      const others = attentionReasons(row).filter((r) => r.kind !== 'decisions');
+                      if (row.pendingCount === 0 && others.length === 0) return null;
+                      return (
+                        <div className="mt-1 flex flex-wrap gap-1 print:hidden">
+                          {row.pendingCount > 0 && !row.isIssued && <Badge tone="orange">{row.pendingCount} بانتظار قرارك</Badge>}
+                          {others.length > 0 && <Badge tone="amber">يحتاج انتباه{others.length > 1 ? ` (${others.length})` : ''}</Badge>}
+                          {others.slice(0, 1).map((r) => (
+                            <p key={r.kind} className="basis-full text-[10px] text-amber-200/80 max-w-[260px]">{r.text}</p>
+                          ))}
+                        </div>
+                      );
+                    })()}
                     {isMonthArchived ? (
                       <p className="mt-1 text-[10px] text-slate-500">تم أرشفة السجلات التفصيلية</p>
                     ) : (
@@ -98,7 +110,7 @@ export function PayrollTable({
                         onClick={() => onShowBreakdown(row.id)}
                         className="mt-1 inline-flex items-center gap-1 text-[10px] font-bold text-indigo-300 hover:text-indigo-200 cursor-pointer print:hidden"
                       >
-                        <Info className="w-3 h-3" /> تفاصيل الحضور والخصم
+                        <Info className="w-3 h-3" /> التفاصيل والقرارات
                       </button>
                     )}
                   </div>
@@ -113,7 +125,20 @@ export function PayrollTable({
                 )}
               </td>
               <td>{cell(row, 'otherDeductions', row.totalDeductions - row.totalAttendanceDeductions, 'text-rose-300', '−')}</td>
-              <td className="font-bold text-orange-300 whitespace-nowrap">{row.loanDeduction > 0 ? `−${row.loanDeduction.toLocaleString('en-US')}` : '—'}</td>
+              <td className="whitespace-nowrap">
+                {row.loanDeduction > 0 ? (
+                  <button type="button" onClick={() => onShowBreakdown(row.id)} className="text-right cursor-pointer print:cursor-auto">
+                    <span className="block font-bold text-orange-300">−{row.loanDeduction.toLocaleString('en-US')}</span>
+                    {row.loanItems.length > 0 && (
+                      <span className="block text-[10px] text-slate-500">
+                        {row.loanItems.length === 1
+                          ? installmentOrigin({ ...row.loanItems[0], is_paid: false }) ?? `قسط ${payrollMonthName(payrollMonthOfDate(row.loanItems[0].due_date))}`
+                          : `${row.loanItems.length} أقساط`}
+                      </span>
+                    )}
+                  </button>
+                ) : '—'}
+              </td>
               <td className="whitespace-nowrap">
                 <span className={cn('text-sm font-extrabold', row.netSalary < 0 ? 'text-rose-300' : 'text-white')}>{formatIQD(row.netSalary)}</span>
               </td>

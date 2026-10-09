@@ -6,13 +6,15 @@ import { useConfirmNote } from '@/components/confirm';
 import { DEDUCT_REASONS, EXCUSE_REASONS } from '@/features/payroll/decisionReasons';
 import { ARABIC_MONTHS } from '@/lib/dates';
 import { usePayroll } from '@/features/payroll/usePayroll';
-import { sumPayroll, type PayrollRow } from '@/features/payroll/calc';
+import toast from 'react-hot-toast';
+import { attentionReasons, sumPayroll, type PayrollRow } from '@/features/payroll/calc';
 import { AddAdjustmentModal } from '@/features/payroll/components/AddAdjustmentModal';
 import { AttendanceBreakdownModal } from '@/features/payroll/components/AttendanceBreakdownModal';
 import { BulkApproveModal } from '@/features/payroll/components/BulkApproveModal';
 import { PayrollHeader } from '@/features/payroll/components/PayrollHeader';
 import { PayrollPrintHeader } from '@/features/payroll/components/PayrollPrintHeader';
 import { PayrollPrintSignatures } from '@/features/payroll/components/PayrollPrintSignatures';
+import { PayrollSteps } from '@/features/payroll/components/PayrollSteps';
 import { PayrollTable } from '@/features/payroll/components/PayrollTable';
 import { PayrollToolbar, type PayrollStatusFilter } from '@/features/payroll/components/PayrollToolbar';
 
@@ -26,9 +28,40 @@ export default function PayrollPage() {
   const [showBulkModal, setShowBulkModal] = useState(false);
 
   const visibleRows = useMemo(
-    () => p.filteredRows.filter(r => statusFilter === 'all' || (statusFilter === 'issued' ? r.isIssued : !r.isIssued)),
+    () => p.filteredRows.filter((r) => {
+      switch (statusFilter) {
+        case 'decisions': return r.pendingCount > 0;
+        case 'attention': return attentionReasons(r).some((a) => a.kind !== 'decisions');
+        case 'issued': return r.isIssued;
+        case 'pending': return !r.isIssued;
+        default: return true;
+      }
+    }),
     [p.filteredRows, statusFilter],
   );
+  const attentionCount = useMemo(
+    () => p.filteredRows.filter((r) => attentionReasons(r).some((a) => a.kind !== 'decisions')).length,
+    [p.filteredRows],
+  );
+
+  // ترك العمل وعليه سلفة: الأدمن يحدد المبلغ (المقترح = الأقل بين الباقي وصافي راتبه)
+  const settleExit = async (row: PayrollRow) => {
+    const suggested = Math.max(0, Math.min(row.loanBalanceAfterExit, Math.round(row.netSalary)));
+    const answer = await confirmNote({
+      title: 'اخصم باقي السلفة من آخر راتب؟',
+      message: `باقي عليه ${row.loanBalanceAfterExit.toLocaleString('en-US')} د.ع بعد قسط هالشهر، وصافي راتبه الأخير ${Math.round(row.netSalary).toLocaleString('en-US')} د.ع. اكتب المبلغ اللي ينخصم؛ الباقي يبقى يسدده نقداً.`,
+      confirmLabel: 'خصم من آخر راتب',
+      tone: 'warning',
+      note: { initial: String(suggested), placeholder: 'المبلغ بالدينار' },
+    });
+    if (answer === null) return;
+    const amount = Number(answer.replace(/[^\d]/g, ''));
+    if (!(amount > 0)) {
+      toast.error('اكتب مبلغ صحيح');
+      return;
+    }
+    await p.settleExit(row.id, amount);
+  };
   const visibleTotals = useMemo(() => sumPayroll(visibleRows), [visibleRows]);
 
   if (p.loading) return <PageSkeleton rows={8} />;
@@ -57,10 +90,7 @@ export default function PayrollPage() {
         paymentDate={p.period?.payment_date}
         periodStatus={p.period?.status ?? null}
         legacy={!!p.period?.legacy}
-        pendingDecisions={p.pendingDecisions}
-        closing={p.actionLoading === 'close_period'}
         reopening={p.actionLoading === 'reopen_period'}
-        onClosePeriod={p.closePeriod}
         onReopenPeriod={p.reopenPeriod}
         totals={p.totals}
         issuedCount={p.filteredRows.filter(r => r.isIssued).length}
@@ -68,6 +98,21 @@ export default function PayrollPage() {
         branchLabel={branchLabel}
         onMonthChange={p.changeMonth}
       />
+
+      {!p.isMonthArchived && !p.period?.legacy && (
+        <PayrollSteps
+          pendingDecisions={p.pendingDecisions}
+          attentionCount={attentionCount}
+          issuedCount={p.filteredRows.filter(r => r.isIssued).length}
+          rowCount={p.filteredRows.length}
+          periodStatus={p.period?.status ?? null}
+          locked={p.isLocked}
+          closing={p.actionLoading === 'close_period'}
+          onFilter={setStatusFilter}
+          onOpenBulk={() => setShowBulkModal(true)}
+          onClosePeriod={p.closePeriod}
+        />
+      )}
 
       <Card className="print:border-none print:bg-transparent print:p-0">
         <PayrollToolbar
@@ -127,6 +172,7 @@ export default function PayrollPage() {
           actionLoading={p.actionLoading}
           onClose={() => setBreakdownEmployeeId(null)}
           onAddAdjustment={(type) => setAdjustmentFor({ row: breakdownRow, type })}
+          onSettleExit={() => void settleExit(breakdownRow)}
           onDecide={async (id, approve) => {
             // قرار مالي: تأكيد قبل التنفيذ، مع ملاحظة تنحفظ بالقرار (مثل: نسي البصمة وهو مداوم)
             const note = await confirmNote({

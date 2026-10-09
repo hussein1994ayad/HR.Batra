@@ -73,7 +73,10 @@ const amounts = async () => (await installments(flex)).map((r) => r.a / 1000).jo
 const remaining = async () => (await db.query('SELECT remaining_amount::int r FROM loans WHERE id=$1', [flex])).rows[0].r;
 
 await expectError('employee cannot record a payment', pay('manager', await nextId(), 100000), 'غير مصرح');
-await expectOk('month 1 pays the planned 100k', pay('admin', await nextId(), 100000, 'salary_deduction'));
+// «استقطاع راتب» يدوي قبل كشف ذاك الشهر ينرفض: الكشف نفسه يخصم القسط (وإلا ما ينخصم أبداً)
+await expectError('manual salary deduction before that month payroll is refused', pay('admin', await nextId(), 100000, 'salary_deduction'),
+  'هالشهر أقل');
+await expectOk('month 1 pays the planned 100k in cash', pay('admin', await nextId(), 100000));
 await expectOk('month 2 pays 150k instead of 100k', pay('admin', await nextId(), 150000));
 check('overpayment shrinks the last installment', (await amounts()) === '100,150,100,100,50', await amounts());
 check('remaining is 250k', (await remaining()) === 250000, String(await remaining()));
@@ -92,7 +95,7 @@ check('loan is fully repaid', (await remaining()) === 0 && (await unpaid()).leng
 const firstPaid = (await db.query(
   `SELECT payment_type, payment_note FROM loan_installments WHERE loan_id=$1 ORDER BY due_date LIMIT 1`, [flex])).rows[0];
 check('payment method and note are stored',
-  firstPaid.payment_type === 'salary_deduction' && firstPaid.payment_note === 'وصل 1', JSON.stringify(firstPaid));
+  firstPaid.payment_type === 'cash' && firstPaid.payment_note === 'وصل 1', JSON.stringify(firstPaid));
 const payNotifs = await db.query(`SELECT 1 FROM notifications WHERE employee_id=$1 AND title LIKE 'تسجيل دفعة%'`, [IDS.manager]);
 check('employee is notified of each payment', payNotifs.rows.length === 6, String(payNotifs.rows.length));
 await expectError('anon cannot record a payment', pay('anon', tail[0].id ?? IDS.branch, 1), 'permission denied');

@@ -44,23 +44,14 @@ const addMonths = (month: string, n: number) => {
 };
 
 /**
- * قائمة المسيرات بالتسلسل (الأقدم ← الأحدث) حول المسير الحالي، مع رقم الشهر وفترته:
- * "10 / 2026 · 27-09 ← 26-10".
+ * قائمة المسيرات بالتسلسل (الأقدم ← الأحدث) حول المسير الحالي بأسماء الأشهر: "رواتب تشرين الأول 2026"
+ * (فترة الدوام تنكتب تحت العنوان بجملة واضحة).
  */
-export function payrollMonthOptions(current: string, cutoffDay = 26, before = 12, after = 3) {
+export function payrollMonthOptions(current: string, before = 12, after = 3) {
   const out: { value: string; label: string }[] = [];
   for (let i = -before; i <= after; i++) {
     const month = addMonths(current, i);
-    const [y, m] = month.split('-');
-    const short = (iso: string) => iso.slice(5).split('-').reverse().join('-');
-    let range: string;
-    if (month < FIRST_ENGINE_MONTH) range = 'كشوف قديمة';
-    else if (month === FIRST_ENGINE_MONTH) range = `01-${m} ← ${pad2(cutoffDay)}-${m}`;
-    else {
-      const p = previewPayrollPeriod(month, cutoffDay, 30);
-      range = `${short(p.start)} ← ${short(p.end)}`;
-    }
-    out.push({ value: month, label: `${m} / ${y} · ${range}` });
+    out.push({ value: month, label: `رواتب ${payrollMonthName(month)}${month < FIRST_ENGINE_MONTH ? ' (كشوف قديمة)' : ''}` });
   }
   return out;
 }
@@ -75,4 +66,40 @@ export function baghdadToday(now = new Date()): string {
 export function monthLabel(month: string): string {
   const [y, m] = month.split('-').map(Number);
   return `شهر ${m} سنة ${y}`;
+}
+
+const MONTH_NAMES = ['كانون الثاني', 'شباط', 'آذار', 'نيسان', 'أيار', 'حزيران', 'تموز', 'آب', 'أيلول', 'تشرين الأول', 'تشرين الثاني', 'كانون الأول'];
+const DAY_NAMES = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+
+/** "2026-10" → "تشرين الأول 2026". */
+export function payrollMonthName(month: string): string {
+  const [y, m] = month.split('-').map(Number);
+  return `${MONTH_NAMES[m - 1] ?? m} ${y}`;
+}
+
+/** "2026-09-27" → "الأحد 27 أيلول" (بدون السنة إلا إذا طلبت). */
+export function arabicDate(iso: string | null | undefined, withYear = false): string {
+  if (!iso) return '';
+  const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
+  const day = DAY_NAMES[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
+  return `${day} ${d} ${MONTH_NAMES[m - 1]}${withYear ? ` ${y}` : ''}`;
+}
+
+/** شهر الرواتب اللي يتبعه تاريخ (نفس payroll_month_of بالسيرفر): بعد يوم القطع = الشهر الجاي. */
+export function payrollMonthOfDate(iso: string, cutoffDay = 26): string {
+  const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
+  if (d <= cutoffDay) return `${y}-${pad2(m)}`;
+  return m === 12 ? `${y + 1}-01` : `${y}-${pad2(m + 1)}`;
+}
+
+/** المسير السابق/التالي. */
+export function shiftPayrollMonth(month: string, n: number): string {
+  return addMonths(month, n);
+}
+
+/** يوم القطع داخل شهر رواتب (تاريخ أول قسط افتراضي حتى ينخصم بنفس الشهر). */
+export function cutoffDateOf(month: string, cutoffDay = 26): string {
+  const [y, m] = month.split('-').map(Number);
+  const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return `${y}-${pad2(m)}-${pad2(Math.min(cutoffDay, last))}`;
 }

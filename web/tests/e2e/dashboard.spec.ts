@@ -84,13 +84,14 @@ test.describe('overview', () => {
   });
 });
 
-const PAGES: Array<{ path: string; heading: string }> = [
+const PAGES: Array<{ path: string; heading: string | RegExp }> = [
   { path: '/dashboard/employees', heading: 'الموظفون والأجهزة' },
   { path: '/dashboard/tracking', heading: 'الحضور والتتبع' },
   { path: '/dashboard/geofences', heading: 'الفروع والسياج الجغرافي' },
   { path: '/dashboard/leaves', heading: 'الإجازات' },
   { path: '/dashboard/loans', heading: 'السلف والأقساط' },
-  { path: '/dashboard/payroll', heading: 'الرواتب والمكافآت' },
+  // صفحة الرواتب عنوانها الشهر نفسه: «رواتب تشرين الأول 2026»
+  { path: '/dashboard/payroll', heading: /^رواتب \S+( \S+)? \d{4}$/ },
   { path: '/dashboard/trash', heading: 'سلة المحذوفات' },
   { path: '/dashboard/storage', heading: 'التخزين والمساحة' },
   { path: '/dashboard/settings', heading: 'الإعدادات' },
@@ -101,7 +102,7 @@ for (const p of PAGES) {
     const errors = collectPageErrors(page);
     await mockSupabase(page);
     await page.goto(p.path);
-    await expect(page.getByRole('main').getByRole('heading', { level: 2, name: p.heading, exact: true })).toBeVisible();
+    await expect(page.getByRole('main').getByRole('heading', { level: 2, name: p.heading, exact: typeof p.heading === 'string' })).toBeVisible();
     await expect(page.locator('[aria-current="page"]').first()).toBeVisible();
     expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([]);
   });
@@ -175,8 +176,8 @@ test.describe('workflows', () => {
     const api = await mockSupabase(page);
     await page.goto('/dashboard/payroll');
     const row = page.locator('tr', { hasText: 'مصطفى حسن' });
-    await expect(row).toContainText('بانتظار قرار (1)');
-    await row.getByRole('button', { name: 'تفاصيل الحضور والخصم' }).click();
+    await expect(row).toContainText('1 بانتظار قرارك');
+    await row.getByRole('button', { name: 'التفاصيل والقرارات' }).click();
     const dialog = page.getByRole('dialog');
     await expect(dialog).toContainText('تأخير 40 دقيقة');
     await dialog.getByRole('button', { name: 'إعفاء' }).click();

@@ -1,7 +1,7 @@
-import { Archive, Banknote, CheckCircle2, Lock, LockOpen, Printer, TrendingDown, Wallet } from 'lucide-react';
-import { Badge, Button, PageHeader, StatTile } from '@/components/ui';
+import { Archive, Banknote, CheckCircle2, ChevronLeft, ChevronRight, HandCoins, Lock, LockOpen, Printer, Wallet } from 'lucide-react';
+import { Badge, Button, StatTile } from '@/components/ui';
 import { formatIQD } from '@/lib/format';
-import { currentPayrollMonth, payrollMonthOptions } from '../period';
+import { arabicDate, currentPayrollMonth, payrollMonthName, payrollMonthOptions, shiftPayrollMonth } from '../period';
 
 type Props = {
   isMonthArchived: boolean;
@@ -13,10 +13,7 @@ type Props = {
   periodStatus?: 'open' | 'closed' | null;
   /** شهر قبل نظام المسيرات (كشوف قديمة للعرض). */
   legacy?: boolean;
-  pendingDecisions: number;
-  closing?: boolean;
   reopening?: boolean;
-  onClosePeriod: () => void;
   onReopenPeriod: () => void;
   refreshing?: boolean;
   totals: { net: number; basic: number; deductions: number; loans: number };
@@ -26,11 +23,13 @@ type Props = {
   onMonthChange: (month: string) => void;
 };
 
-/** العنوان واختيار الشهر والسنة والفترة المالية وإحصاءات الرواتب. */
+/**
+ * رأس صفحة الرواتب بلغة مفهومة: «رواتب تشرين الأول 2026» وتحته جملة فترة الدوام ويوم الصرف،
+ * وتنقّل بين الأشهر بأسهم، و3 أرقام بس (الصافي، المعتمد، السلف المستقطعة).
+ */
 export function PayrollHeader({
-  isMonthArchived, currentMonthVal, currentYearVal, startDate, endDate, paymentDate, periodStatus, legacy, pendingDecisions,
-  closing, reopening, onClosePeriod, onReopenPeriod, refreshing, totals, issuedCount, rowCount, branchLabel,
-  onMonthChange,
+  isMonthArchived, currentMonthVal, currentYearVal, startDate, endDate, paymentDate, periodStatus, legacy,
+  reopening, onReopenPeriod, refreshing, totals, issuedCount, rowCount, branchLabel, onMonthChange,
 }: Props) {
   const allIssued = issuedCount === rowCount && rowCount > 0;
   const selectedMonth = `${currentYearVal}-${currentMonthVal}`;
@@ -38,67 +37,62 @@ export function PayrollHeader({
   const options = payrollMonthOptions(currentPayrollMonth());
   const monthOptions = options.some((o) => o.value === selectedMonth)
     ? options
-    : [...options, ...payrollMonthOptions(selectedMonth, 26, 0, 0)].sort((a, b) => a.value.localeCompare(b.value));
+    : [...options, ...payrollMonthOptions(selectedMonth, 0, 0)].sort((a, b) => a.value.localeCompare(b.value));
   return (
-    <div className="space-y-6 print:hidden">
-      <PageHeader
-        icon={Banknote}
-        tone="emerald"
-        title="الرواتب والمكافآت"
-        description={
-          <span className="inline-flex flex-wrap items-center gap-1.5">
-            {legacy ? 'كشوف قديمة (قبل نظام المسيرات)' : 'فترة المسير'}
-            <span className="font-mono font-bold text-slate-200" dir="ltr">{startDate}</span>←
-            <span className="font-mono font-bold text-slate-200" dir="ltr">{endDate}</span>
-            {paymentDate && <span>· الصرف <span className="font-mono font-bold text-slate-200" dir="ltr">{paymentDate}</span></span>}
+    <div className="space-y-5 print:hidden">
+      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+        <div className="space-y-2">
+          <div className="flex items-center gap-3">
+            <span className="w-11 h-11 rounded-2xl bg-emerald-500/15 text-emerald-300 flex items-center justify-center"><Banknote className="w-6 h-6" /></span>
+            <h2 className="text-2xl font-black text-white">رواتب {payrollMonthName(selectedMonth)}</h2>
             {isMonthArchived ? (
-              <Badge tone="violet"><Archive className="w-3 h-3" /> مؤرشف ومغلق مالياً</Badge>
+              <Badge tone="violet"><Archive className="w-3 h-3" /> مؤرشف</Badge>
             ) : periodStatus === 'closed' ? (
               <Badge tone="slate"><Lock className="w-3 h-3" /> المسير مغلق</Badge>
             ) : periodStatus === 'open' ? (
               <Badge tone="emerald" dot>المسير مفتوح</Badge>
             ) : null}
-            {refreshing && <span className="text-indigo-300">· جاري التحديث...</span>}
-          </span>
-        }
-        actions={
-          <>
-            <div className="flex items-center h-9 rounded-xl bg-slate-950/70 border border-slate-800 px-1">
-              <select
-                aria-label="مسير الشهر"
-                value={selectedMonth}
-                onChange={(e) => onMonthChange(e.target.value)}
-                className="h-7 bg-transparent text-xs font-bold text-white outline-none cursor-pointer px-1 font-mono"
-                dir="ltr"
-              >
-                {monthOptions.map((o) => (
-                  <option key={o.value} value={o.value} className="bg-slate-900">{o.label}</option>
-                ))}
-              </select>
-            </div>
-            {!isMonthArchived && !legacy && periodStatus === 'open' && (
-              <Button size="sm" variant="soft" icon={Lock} loading={closing} onClick={onClosePeriod}>
-                إغلاق المسير
-              </Button>
-            )}
-            {!isMonthArchived && !legacy && periodStatus === 'closed' && (
-              <Button size="sm" variant="soft" icon={LockOpen} loading={reopening} onClick={onReopenPeriod}>
-                إعادة فتح
-              </Button>
-            )}
-            <Button size="sm" variant="secondary" icon={Printer} onClick={() => window.print()}>
-              طباعة الكشف
-            </Button>
-          </>
-        }
-      />
+          </div>
+          <p className="text-sm text-slate-300">
+            {legacy
+              ? 'كشوف قديمة (قبل نظام المسيرات) للعرض فقط.'
+              : <>يُحسب الدوام من <b className="text-white">{arabicDate(startDate)}</b> إلى <b className="text-white">{arabicDate(endDate)}</b>
+                {paymentDate && <> · يوم الصرف <b className="text-white">{arabicDate(paymentDate)}</b></>}</>}
+            {refreshing && <span className="text-indigo-300"> · جاري التحديث...</span>}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center h-10 rounded-xl bg-slate-950/70 border border-slate-800">
+            <button type="button" aria-label="الشهر السابق" className="h-full px-2 text-slate-300 hover:text-white cursor-pointer"
+              onClick={() => onMonthChange(shiftPayrollMonth(selectedMonth, -1))}>
+              <ChevronRight className="w-4 h-4" />
+            </button>
+            <select
+              aria-label="مسير الشهر"
+              value={selectedMonth}
+              onChange={(e) => onMonthChange(e.target.value)}
+              className="h-full bg-transparent text-sm font-bold text-white outline-none cursor-pointer px-1"
+            >
+              {monthOptions.map((o) => (
+                <option key={o.value} value={o.value} className="bg-slate-900">{o.label}</option>
+              ))}
+            </select>
+            <button type="button" aria-label="الشهر التالي" className="h-full px-2 text-slate-300 hover:text-white cursor-pointer"
+              onClick={() => onMonthChange(shiftPayrollMonth(selectedMonth, 1))}>
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+          </div>
+          {!isMonthArchived && !legacy && periodStatus === 'closed' && (
+            <Button size="sm" variant="soft" icon={LockOpen} loading={reopening} onClick={onReopenPeriod}>إعادة فتح</Button>
+          )}
+          <Button size="sm" variant="secondary" icon={Printer} onClick={() => window.print()}>طباعة</Button>
+        </div>
+      </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatTile label="صافي الرواتب" value={formatIQD(totals.net)} icon={Wallet} tone="emerald" hint={branchLabel} />
-        <StatTile label="الرواتب الأساسية" value={formatIQD(totals.basic)} icon={Banknote} tone="indigo" />
-        <StatTile label="الخصومات والسلف" value={formatIQD(totals.deductions + totals.loans)} icon={TrendingDown} tone="rose" />
-        <StatTile label="الرواتب المعتمدة" value={`${issuedCount} / ${rowCount}`} icon={CheckCircle2} tone={allIssued ? 'emerald' : 'amber'}
-          hint={pendingDecisions > 0 ? `${pendingDecisions} حركة بانتظار قرارك` : undefined} />
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <StatTile label="الصافي المطلوب صرفه" value={formatIQD(totals.net)} icon={Wallet} tone="emerald" hint={branchLabel} />
+        <StatTile label="الرواتب المعتمدة" value={`${issuedCount} من ${rowCount}`} icon={CheckCircle2} tone={allIssued ? 'emerald' : 'amber'} />
+        <StatTile label="أقساط السلف المستقطعة" value={formatIQD(totals.loans)} icon={HandCoins} tone="orange" />
       </div>
     </div>
   );

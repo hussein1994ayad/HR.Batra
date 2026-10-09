@@ -1,7 +1,9 @@
-import { Banknote, CalendarRange, Check, Clock, Info, Plus, Printer, TrendingDown, TrendingUp, X } from 'lucide-react';
+import { AlertTriangle, Banknote, CalendarRange, Check, Clock, Info, Plus, Printer, TrendingDown, TrendingUp, X } from 'lucide-react';
 import { Badge, Button, InfoNote, Modal, StatTile, type Tone } from '@/components/ui';
 import { formatIQD } from '@/lib/format';
-import { DECIDABLE, describeEvent, type EntryItem, type PayrollEvent, type PayrollRow } from '../calc';
+import { installmentOrigin } from '@/features/loans/logic';
+import { attentionReasons, DECIDABLE, describeEvent, type EntryItem, type PayrollEvent, type PayrollRow } from '../calc';
+import { arabicDate, payrollMonthName, payrollMonthOfDate } from '../period';
 
 type Props = {
   row: PayrollRow;
@@ -12,6 +14,8 @@ type Props = {
   onClose: () => void;
   onAddAdjustment: (type: 'bonus' | 'deduction') => void;
   onDecide: (eventId: string, approve: boolean) => void;
+  /** ترك العمل وعليه سلفة: يخصم الباقي (أو الممكن) من آخر راتب. */
+  onSettleExit?: () => void;
 };
 
 const STATUS: Record<PayrollEvent['status'], { label: string; tone: Tone }> = {
@@ -47,13 +51,21 @@ function EntryList({ items, sign, tone, empty }: { items: EntryItem[]; sign: '+'
 }
 
 /** تفاصيل حركات موظف في المسير (غياب، تأخير، خروج مبكر، إضافي...) مع قرار الإدارة على المعلّق منها. */
-export function AttendanceBreakdownModal({ row, startDate, endDate, locked, actionLoading, onClose, onAddAdjustment, onDecide }: Props) {
+export function AttendanceBreakdownModal({ row, startDate, endDate, locked, actionLoading, onClose, onAddAdjustment, onDecide, onSettleExit }: Props) {
+  const reasons = attentionReasons(row).filter((r) => r.kind !== 'decisions');
   const lateHint = [row.latesCount > 0 && `${row.latesCount} تأخير`, row.earlyExitsCount > 0 && `${row.earlyExitsCount} خروج مبكر`]
     .filter(Boolean).join(' · ');
   const canDecide = !locked && !row.isIssued;
 
   return (
-    <Modal title="تفاصيل الحضور والخصومات" subtitle={`${row.full_name} · ${startDate} ← ${endDate}`} icon={CalendarRange} tone="indigo" size="lg" onClose={onClose}>
+    <Modal title={`تفاصيل راتب ${row.full_name}`}
+      subtitle={`من ${arabicDate(startDate)} إلى ${arabicDate(endDate)}${row.scheduledDays > 0 ? ` · داوم ${row.attendedDays} من ${row.scheduledDays} يوم` : ''}`}
+      icon={CalendarRange} tone="indigo" size="lg" onClose={onClose}>
+      {reasons.length > 0 && (
+        <InfoNote tone="amber" icon={AlertTriangle} className="mb-5">
+          {reasons.map((r) => <p key={r.kind}>{r.text}</p>)}
+        </InfoNote>
+      )}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
         <StatTile label="بانتظار القرار" value={row.pendingCount} tone={row.pendingCount > 0 ? 'amber' : 'slate'} className="!p-3" />
         <StatTile label="غيابات بخصم" value={row.absencesCount} tone="rose" className="!p-3" hint={lateHint || undefined} />
@@ -97,10 +109,33 @@ export function AttendanceBreakdownModal({ row, startDate, endDate, locked, acti
         </div>
       </div>
 
-      {row.loanDeduction > 0 && (
-        <InfoNote tone="orange" icon={Banknote} className="mb-5">
-          قسط السلفة المستحق لهذا المسير: <b className="font-mono">−{row.loanDeduction.toLocaleString('en-US')} د.ع</b>
-        </InfoNote>
+      {(row.loanDeduction > 0 || row.loanBalanceAfterExit > 0) && (
+        <div className="mb-5 rounded-2xl border border-orange-500/20 bg-orange-500/5 p-4 space-y-2 text-xs">
+          <p className="font-bold text-orange-300 flex items-center gap-1.5">
+            <Banknote className="w-4 h-4" /> سلف تنخصم بهذا الراتب: −{row.loanDeduction.toLocaleString('en-US')} د.ع
+          </p>
+          {row.loanItems.map((i) => (
+            <div key={i.installment_id} className="flex flex-wrap items-center justify-between gap-2 text-slate-300">
+              <span>
+                قسط {payrollMonthName(payrollMonthOfDate(i.due_date))} من سلفة {Number(i.loan_amount).toLocaleString('en-US')}
+                {installmentOrigin({ ...i, is_paid: false }) && <Badge tone="amber" className="ms-2">{installmentOrigin({ ...i, is_paid: false })}</Badge>}
+                {i.note && <span className="text-slate-500"> · {i.note}</span>}
+              </span>
+              <b className="font-mono text-orange-200">−{Number(i.amount).toLocaleString('en-US')}</b>
+            </div>
+          ))}
+          <p className="text-slate-500">المؤجّل والمسدد نقداً ما ينخصم من الراتب. التعديل من صفحة السلف.</p>
+          {row.loanBalanceAfterExit > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-orange-500/20">
+              <span className="text-rose-300">ترك العمل وباقي عليه {row.loanBalanceAfterExit.toLocaleString('en-US')} د.ع بعد هذا الراتب.</span>
+              {onSettleExit && !locked && !row.isIssued && (
+                <Button size="xs" variant="soft-danger" loading={actionLoading === `settle_${row.id}`} onClick={onSettleExit}>
+                  اخصم الباقي من آخر راتب
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
       )}
 
       <p className="text-[11px] text-slate-400 mb-2 flex items-center gap-1.5">
