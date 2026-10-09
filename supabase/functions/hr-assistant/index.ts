@@ -1,11 +1,11 @@
 // المساعد الذكي للأدمن — نقطة الدخول (HTTP). التحقق من الجلسة ودور الأدمن هنا، والباقي:
 //   agent.ts (الحلقة) · tools.ts (أدوات القراءة) · excel.ts (الملفات) · gemini.ts (مزوّد الذكاء) · prompt.ts (التعليمات)
 //   voice.ts (السؤال بالصوت: يتحول لنص ثم نفس الحلقة)
-// الأسرار: GEMINI_API_KEY (إلزامي)، GEMINI_MODEL (اختياري). النشر: supabase functions deploy hr-assistant
+// الأسرار: GEMINI_API_KEY (إلزامي)، GEMINI_MODEL و GEMINI_FALLBACK_MODEL (اختياري). النشر: supabase functions deploy hr-assistant
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { runAgent, type ChatMessage } from "./agent.ts";
-import { geminiGenerate, geminiTranscribe, QuotaError } from "./gemini.ts";
+import { GeminiError, geminiGenerate, geminiTranscribe, QuotaError } from "./gemini.ts";
 import { systemPrompt } from "./prompt.ts";
 import { cleanTranscript, transcriptionInstruction, validateAudio } from "./voice.ts";
 
@@ -46,7 +46,12 @@ Deno.serve(async (req) => {
   }
   if (!history.length && !audioRaw) return json({ error: "اكتب سؤالك." }, 400);
 
-  const model = Deno.env.get("GEMINI_MODEL") ?? "gemini-2.5-flash";
+  // اسم ثابت من Google يأشّر دائماً على أحدث Flash (الموديلات القديمة تتوقف للمستخدمين الجدد). للتثبيت: سر GEMINI_MODEL.
+  const models = [
+    Deno.env.get("GEMINI_MODEL") ?? "gemini-flash-latest",
+    // احتياطي لما الأساسي عليه ضغط أو خلص حده المجاني (حد منفصل)
+    Deno.env.get("GEMINI_FALLBACK_MODEL") ?? "gemini-flash-lite-latest",
+  ];
   const rpc = async (fn: string, args: Record<string, unknown>) => {
     const { data, error } = await db.rpc(fn, args);
     if (error) throw new Error(error.message);
@@ -60,13 +65,13 @@ Deno.serve(async (req) => {
       const audio = validateAudio(audioRaw);
       if (typeof audio === "string") return json({ error: audio }, 400);
       const hints = await rpc("assistant_name_hints", {}) as { employees?: string[]; branches?: string[] };
-      const text = cleanTranscript(await geminiTranscribe(apiKey, model)(audio, transcriptionInstruction(hints)));
+      const text = cleanTranscript(await geminiTranscribe(apiKey, models)(audio, transcriptionInstruction(hints)));
       if (!text) return json({ error: "ما انفهم التسجيل. احچي بوضوح وقرّب الموبايل، وجرّب مرة ثانية." }, 422);
       transcript = text;
       history = [...history, { role: "user", text }];
     }
     const reply = await runAgent({
-      generate: geminiGenerate(apiKey, model),
+      generate: geminiGenerate(apiKey, models),
       system: systemPrompt(today),
       history,
       ctx: { rpc },
@@ -75,6 +80,10 @@ Deno.serve(async (req) => {
   } catch (e) {
     if (e instanceof QuotaError) {
       return json({ error: "خلص الحد المجاني للمساعد هسه. جرّب بعد شوية (الحد يتجدد كل دقيقة وكل يوم)." }, 429);
+    }
+    if (e instanceof GeminiError) {
+      console.error("hr-assistant", e.message);
+      return json({ error: e.arabic }, 502);
     }
     console.error("hr-assistant", e);
     return json({ error: "صار خطأ بالمساعد. جرّب مرة ثانية." }, 500);

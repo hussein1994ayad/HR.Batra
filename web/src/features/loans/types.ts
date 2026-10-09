@@ -25,10 +25,17 @@ export type InstallmentPrompt = { installmentId: string; amount: number };
 
 export type PaymentMethod = 'cash' | 'salary_deduction';
 
-/** مسودة تسجيل دفعة بأي مبلغ على قسط (الزيادة تُخصم من آخر الأقساط والنقص يُضاف لآخر قسط). */
+/** مسودة تسجيل دفعة بأي مبلغ على قسط (الزيادة تُخصم من آخر الأقساط والنقص يصير شهر جديد بالأخير). */
 export interface PayDraft {
   installment: LoanInstallment;
   amount: number;
   method: PaymentMethod;
+  note: string;
+}
+
+/** «هالشهر يكدر يدفع بس X»: القسط يبقى غير مسدد بمبلغ X (الرواتب تخصمه) والباقي شهر جديد بالأخير. */
+export interface MonthAmountDraft {
+  installment: LoanInstallment;
+  amount: number;
   note: string;
 }

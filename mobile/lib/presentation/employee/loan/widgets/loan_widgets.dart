@@ -124,7 +124,16 @@ class MyLoanCard extends StatelessWidget {
                       child: Row(
                         children: [
                           SizedBox(width: 28, child: Text('${i + 1}', style: AppText.caption)),
-                          Expanded(child: Text('قسط ${Fmt.monthOf(installments[i].dueDate)}', style: AppText.bodySm)),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('قسط ${Fmt.monthOf(installments[i].dueDate)}', style: AppText.bodySm),
+                                if (installments[i].originLabel != null)
+                                  Text(installments[i].originLabel!, style: AppText.caption.copyWith(color: AppTone.warning.color)),
+                              ],
+                            ),
+                          ),
                           Text(Fmt.iqd(installments[i].amount), style: AppText.bodySm.copyWith(color: AppColors.textPrimary)),
                           const SizedBox(width: AppSpace.sm),
                           installments[i].isPaid

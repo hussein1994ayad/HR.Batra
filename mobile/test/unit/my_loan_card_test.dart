@@ -67,4 +67,22 @@ void main() {
     await tester.pumpWidget(MaterialApp(theme: AppTheme.darkTheme, home: Scaffold(body: SingleChildScrollView(child: _card(rejected, (_) {})))));
     _matchGolden('my_loan_rejected', _texts(tester).where((t) => !t.startsWith('طُلبت')).toList());
   });
+
+  testWidgets('installments explain a reduced month, its rest and a postponed month', (tester) async {
+    final smart = {
+      ..._loan,
+      'loan_installments': [
+        {'id': 'a', 'due_date': '2026-10-01', 'amount': 100000, 'is_paid': false, 'amount_locked': true},
+        {'id': 'b', 'due_date': '2026-11-01', 'amount': 200000, 'is_paid': false},
+        {'id': 'c', 'due_date': '2027-01-01', 'amount': 200000, 'is_paid': false, 'origin_kind': 'postponed', 'origin_month': '2026-12-01'},
+        {'id': 'd', 'due_date': '2027-02-01', 'amount': 100000, 'is_paid': false, 'origin_kind': 'shortfall', 'origin_month': '2026-10-01'},
+      ],
+    };
+    await tester.pumpWidget(MaterialApp(theme: AppTheme.darkTheme, home: Scaffold(body: SingleChildScrollView(child: _card(smart, (_) {})))));
+    await tester.tap(find.textContaining('جدول الأقساط'));
+    await tester.pumpAndSettle();
+    expect(find.text('مبلغ هالشهر مخفّض'), findsOneWidget);
+    expect(find.text('مؤجّل من 12/2026'), findsOneWidget);
+    expect(find.text('باقي شهر 10/2026'), findsOneWidget);
+  });
 }

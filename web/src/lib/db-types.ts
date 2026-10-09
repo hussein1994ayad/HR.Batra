@@ -143,6 +143,12 @@ export interface LoanInstallment {
   paid_by_slip_id?: string | null;
   payment_type?: 'cash' | 'salary_deduction' | string | null;
   payment_note?: string | null;
+  /** shortfall = باقي شهر ما انسدد كامل؛ postponed = قسط شهر مؤجّل */
+  origin_kind?: 'shortfall' | 'postponed' | null;
+  /** الشهر الأصلي (YYYY-MM-DD) */
+  origin_month?: string | null;
+  /** مبلغ ثابت حدده الأدمن لهالشهر (set_month_installment) */
+  amount_locked?: boolean;
   created_at?: string;
   loans?: Partial<Loan> | null;
 }

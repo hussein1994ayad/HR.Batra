@@ -1,7 +1,7 @@
 'use client';
 
 import type { Loan, LoanInstallment } from '@/lib/db-types';
-import { paidAmount, sortInstallments } from '../logic';
+import { paidAmount, installmentOrigin, sortInstallments } from '../logic';
 
 interface LoanStatementPrintProps {
   selectedLoanForInstallments: Loan;
@@ -83,7 +83,7 @@ export function LoanStatementPrint({ selectedLoanForInstallments }: LoanStatemen
                   {inst.paid_at ? new Date(inst.paid_at).toLocaleDateString('ar-IQ') : '-'}
                 </td>
                 <td className="border border-slate-400 p-2 text-slate-700">
-                  {inst.payment_note || '-'}
+                  {[installmentOrigin(inst), inst.payment_note].filter(Boolean).join(' · ') || '-'}
                 </td>
               </tr>
             ))}

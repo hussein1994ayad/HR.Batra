@@ -16,6 +16,15 @@ class LoanInstallment {
   final String? paymentType;
   final String? paymentNote;
 
+  /// 'shortfall' (باقي شهر ما انسدد كامل) | 'postponed' (قسط شهر مؤجّل) | null
+  final String? originKind;
+
+  /// الشهر الأصلي للباقي أو المؤجّل.
+  final DateTime? originMonth;
+
+  /// مبلغ هالشهر حدده الأدمن (يكدر يدفع أقل هالشهر).
+  final bool amountLocked;
+
   const LoanInstallment({
     required this.id,
     required this.loanId,
@@ -25,6 +34,9 @@ class LoanInstallment {
     this.paidAt,
     this.paymentType,
     this.paymentNote,
+    this.originKind,
+    this.originMonth,
+    this.amountLocked = false,
   });
 
   factory LoanInstallment.fromMap(JsonRow map) => LoanInstallment(
@@ -37,9 +49,21 @@ class LoanInstallment {
         paidAt: map.date('paid_at'),
         paymentType: map.str('payment_type'),
         paymentNote: map.str('payment_note'),
+        originKind: map.str('origin_kind'),
+        originMonth: DateTime.tryParse(map.str('origin_month') ?? ''),
+        amountLocked: map.boolean('amount_locked') ?? false,
       );
 
   bool get isCash => paymentType == 'cash';
+
+  /// ليش هذا القسط موجود: «باقي شهر 10/2026» أو «مؤجّل من 12/2026» أو «مبلغ هالشهر مخفّض» (نفس الموقع).
+  String? get originLabel {
+    String month(DateTime d) => '${d.month.toString().padLeft(2, '0')}/${d.year}';
+    if (originKind == 'shortfall') return originMonth == null ? 'باقي شهر سابق' : 'باقي شهر ${month(originMonth!)}';
+    if (originKind == 'postponed') return originMonth == null ? 'مؤجّل' : 'مؤجّل من ${month(originMonth!)}';
+    if (amountLocked && !isPaid) return 'مبلغ هالشهر مخفّض';
+    return null;
+  }
 }
 
 class LoanModel {

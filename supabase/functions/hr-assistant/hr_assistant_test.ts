@@ -243,3 +243,50 @@ Deno.test("morning_summary: reads the database summary", async () => {
   });
   assertEquals(r.forModel, { body: "بصموا 5 من 9" });
 });
+
+// ---------------- أخطاء Google بالعربي ----------------
+import { GeminiError, geminiGenerate } from "./gemini.ts";
+
+Deno.test("gemini errors: Google's reason reaches the admin in Arabic, key never shown", async () => {
+  const fake = (status: number, body: unknown) => () => Promise.resolve(new Response(JSON.stringify(body), { status }));
+  const gen = geminiGenerate("SECRET-KEY", "gemini-2.5-flash",
+    fake(400, { error: { message: "API key not valid. Please pass a valid API key." } }) as unknown as typeof fetch);
+  let err: unknown;
+  try { await gen({ system: "s", contents: [], tools: [] }); } catch (e) { err = e; }
+  assert(err instanceof GeminiError);
+  assert(err.arabic.includes("مفتاح Gemini غلط") && err.arabic.includes("رمز 400") && err.arabic.includes("Please pass a valid"));
+  assert(!err.arabic.includes("SECRET-KEY"));
+  assert(new GeminiError(403, "User location is not supported for the API use.").arabic.includes("موقع السيرفر"));
+  assert(new GeminiError(404, "models/x is not found").arabic.includes("غير موجود"));
+});
+
+Deno.test("gemini busy (503): retries, then falls back to the backup model and sticks to it", async () => {
+  const seen: string[] = [];
+  const bodies: string[] = [];
+  const fetchImpl = ((url: string, init: RequestInit) => {
+    const model = decodeURIComponent(url.split("/models/")[1].split(":")[0]);
+    seen.push(model);
+    bodies.push(String(init.body));
+    if (model === "main") return Promise.resolve(new Response(JSON.stringify({ error: { message: "high demand" } }), { status: 503 }));
+    return Promise.resolve(new Response(JSON.stringify({ candidates: [{ content: { role: "model", parts: [{ text: "تمام" }] } }] })));
+  }) as unknown as typeof fetch;
+  const gen = geminiGenerate("k", ["main", "backup"], { fetchImpl, sleep: () => Promise.resolve() });
+  const contents = [{ role: "model" as const, parts: [{ functionCall: { name: "x" }, thoughtSignature: "abc" }] }];
+  const r = await gen({ system: "s", contents, tools: [] });
+  assertEquals(r.parts, [{ text: "تمام" }]);
+  assertEquals(seen, ["main", "main", "backup"]);
+  assert(bodies[2].includes("skip_thought_signature_validator") && !bodies[2].includes("\"abc\""));
+  await gen({ system: "s", contents: [], tools: [] });
+  assertEquals(seen.at(-1), "backup"); // ما يرجع يجرب الأساسي بنفس السؤال
+});
+
+Deno.test("gemini: a real rejection (400) is not retried; all models busy gives the Arabic busy message", async () => {
+  let calls = 0;
+  const bad = (() => { calls++; return Promise.resolve(new Response(JSON.stringify({ error: { message: "bad" } }), { status: 400 })); }) as unknown as typeof fetch;
+  await geminiGenerate("k", ["a", "b"], { fetchImpl: bad, sleep: () => Promise.resolve() })({ system: "s", contents: [], tools: [] }).catch(() => {});
+  assertEquals(calls, 1);
+  const busy = (() => Promise.resolve(new Response("{}", { status: 503 }))) as unknown as typeof fetch;
+  let err: unknown;
+  try { await geminiGenerate("k", ["a", "b"], { fetchImpl: busy, sleep: () => Promise.resolve() })({ system: "s", contents: [], tools: [] }); } catch (e) { err = e; }
+  assert(err instanceof GeminiError && err.arabic.includes("ضغط"));
+});

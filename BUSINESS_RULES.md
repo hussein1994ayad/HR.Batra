@@ -22,6 +22,8 @@
 | **التتبع:** بين بصمة الحضور والانصراف فقط، ومعلن للموظف | — (سياسة) | `mobile/lib/core/services/location_service.dart` + `core/services/location/` (أندرويد)، `mobile/ios/Runner/LocationMonitorIOS.swift` (آيفون) |
 
 | **السلفة النقدية** (`payment_method = 'cash'`): أقساطها ما تنخصم من الراتب | `payroll_employee_summary` + `approve_payroll_slip` | — |
+| **أقساط السلفة: القسط الشهري هو الأساس.** كل قسط ≤ القسط الشهري. الدفع الأقل أو «هالشهر أقل» = الباقي شهر جديد بالأخير «باقي شهر MM/YYYY» (مو زيادة على آخر قسط). التأجيل = قسط الشهر ينتقل لآخر السلفة «مؤجّل من …» والباقي ما يتغير. تعديل السلفة = أقساط بالقسط الشهري بالضبط وآخرها الباقي، من شهر الرواتب المفتوح إذا كشفه ما صادر | `update_loan_and_installments_trigger`، `set_month_installment`، `postpone_loan_installment`، `reschedule_loan` (`20261009000000_smart_loan_installments.sql`) | المعاينات: `previewPayment`، `previewMonthAmount`، `reschedulePlan` (`web/src/features/loans/logic.ts`)؛ الوصف: `installmentOrigin` و`LoanInstallment.originLabel` |
+| **«تسجيل دفعة» = فلوس انستلمت فعلاً** (تنحسب مسددة فوراً، فالرواتب ما تخصمها). الشهر اللي يكدر يدفع بيه أقل من راتبه = «هالشهر أقل» (القسط يبقى غير مسدد بالمبلغ الجديد والرواتب تخصمه) | `pay_loan_installment` / `set_month_installment` | — |
 | **راتب جزئي** (مباشرة أو ترك عمل خلال المسير): أجر اليوم × أيام الخدمة (بحد 30) | `payroll_employee_summary` | — |
 | **التقريب:** لأقرب دينار على **مجموع** الكشف وليس يوم بيوم | `payroll_employee_summary` (`net`) | — |
 

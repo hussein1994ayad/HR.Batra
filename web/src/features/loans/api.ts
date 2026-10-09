@@ -3,8 +3,7 @@
 // والمبلغ المتبقي يُعاد حسابه تلقائياً بعد تعديل/حذف الأقساط: trg_update_loan_and_installments
 
 import { supabase } from '@/lib/supabase';
-import type { Loan, LoanInstallment } from '@/lib/db-types';
-import { addMonths } from './logic';
+import type { Loan } from '@/lib/db-types';
 import type { ApprovalDraft, EditLoanDraft, PaymentMethod } from './types';
 
 const EMPLOYEE_JOIN = 'employees!loans_employee_id_fkey(full_name, monthly_salary_iqd)';
@@ -53,9 +52,8 @@ export async function approveLoan(draft: ApprovalDraft) {
 }
 
 /**
- * يعدّل السلفة ويعيد جدولة الأقساط غير المدفوعة من الشهر القادم (reschedule_loan).
- * كله على السيرفر في معاملة واحدة: كان الحذف يولّد أقساطاً تلقائياً ثم يُضاف الجدول
- * الجديد فوقها فتتضاعف الأقساط. المتبقي = المبلغ − المسدَّد، والسيرفر يُشعر الموظف.
+ * يعدّل السلفة ويعيد جدولة الأقساط غير المدفوعة (reschedule_loan): أقساط بالقسط الشهري بالضبط وآخرها الباقي،
+ * من شهر الرواتب المفتوح إذا كشفه ما صادر. كله على السيرفر بمعاملة واحدة، والعدد ينحسب هناك، والموظف ينشعر.
  */
 export async function rescheduleLoan(draft: EditLoanDraft) {
   const { error } = await supabase.rpc('reschedule_loan', {
@@ -73,7 +71,7 @@ export async function rescheduleLoan(draft: EditLoanDraft) {
 
 /**
  * يسجّل سداد قسط بأي مبلغ (pay_loan_installment): الزيادة تُخصم من آخر الأقساط،
- * والنقص يُضاف لآخر قسط (أو لشهر جديد إن كان هذا آخرها)، ويُشعَر الموظف.
+ * والنقص يصير شهر جديد بالأخير «باقي شهر …»، ويُشعَر الموظف.
  */
 export async function payInstallment(installmentId: string, amount: number, method: PaymentMethod, note: string) {
   const { error } = await supabase.rpc('pay_loan_installment', {
@@ -98,24 +96,20 @@ export async function deleteInstallment(installmentId: string) {
   if (error) throw error;
 }
 
-/** يؤجل هذا القسط وكل الأقساط غير المدفوعة بعده شهراً واحداً. */
-export async function postponeInstallments(installment: LoanInstallment) {
-  const { data, error } = await supabase
-    .from('loan_installments')
-    .select('id, due_date')
-    .eq('loan_id', installment.loan_id)
-    .eq('is_paid', false)
-    .gte('due_date', installment.due_date)
-    .order('due_date', { ascending: false }); // من الأبعد للأقرب حتى لا يتصادم تاريخان مؤقتاً
+/** تأجيل قسط شهر: ينتقل لشهر جديد بعد آخر قسط بملاحظة، والباقي ما يتغير، والموظف ينشعر (postpone_loan_installment). */
+export async function postponeInstallment(installmentId: string, note: string) {
+  const { error } = await supabase.rpc('postpone_loan_installment', { p_installment_id: installmentId, p_note: note.trim() || null });
   if (error) throw error;
+}
 
-  for (const inst of data ?? []) {
-    const { error: updErr } = await supabase
-      .from('loan_installments')
-      .update({ due_date: addMonths(inst.due_date, 1) })
-      .eq('id', inst.id);
-    if (updErr) throw updErr;
-  }
+/** «هالشهر يكدر يدفع بس X» (set_month_installment): الرواتب تخصم X، والباقي شهر جديد بالأخير. */
+export async function setMonthInstallment(installmentId: string, amount: number, note: string) {
+  const { error } = await supabase.rpc('set_month_installment', {
+    p_installment_id: installmentId,
+    p_amount: Math.round(amount),
+    p_note: note.trim() || null,
+  });
+  if (error) throw error;
 }
 
 /** حذف سلفة مكتملة مع ملف التعهد المرفق بها. */
