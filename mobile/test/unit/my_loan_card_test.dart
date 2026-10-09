@@ -88,7 +88,7 @@ void main() {
     await tester.tap(find.textContaining('جدول الأقساط'));
     await tester.pumpAndSettle();
     expect(find.text('مبلغ هالشهر مخفّض'), findsOneWidget);
-    expect(find.text('مؤجّل من 12/2026'), findsOneWidget);
-    expect(find.text('باقي شهر 10/2026'), findsOneWidget);
+    expect(find.text('مؤجّل من الشهر الثاني عشر 2026'), findsOneWidget);
+    expect(find.text('باقي الشهر العاشر 2026'), findsOneWidget);
   });
 }

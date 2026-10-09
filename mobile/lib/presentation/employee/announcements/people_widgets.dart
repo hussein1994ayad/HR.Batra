@@ -8,7 +8,7 @@ import '../../shared/ui/ui.dart';
 
 bool _sameDay(DateTime a, DateTime b) => a.year == b.year && a.month == b.month && a.day == b.day;
 
-/// "حتى 28 أيلول" / "آخر يوم اليوم" / "10:00 ص – 12:00 م"
+/// "حتى 28/9" / "آخر يوم اليوم" / "10:00 ص – 12:00 م"
 String onLeaveUntil(OnLeavePerson p, {DateTime? now}) {
   if (p.isHourly) {
     return '${Fmt.timeOfDay(p.startHour)} – ${Fmt.timeOfDay(p.endHour)}';

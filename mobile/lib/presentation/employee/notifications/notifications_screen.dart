@@ -71,7 +71,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     if (diff <= 0) return 'اليوم';
     if (diff == 1) return 'أمس';
     if (diff < 7) return 'هذا الأسبوع';
-    return Fmt.monthYear(d.month, d.year);
+    return Fmt.monthNumber(d.month, d.year);
   }
 
   @override

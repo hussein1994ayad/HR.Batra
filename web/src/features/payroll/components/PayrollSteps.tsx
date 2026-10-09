@@ -5,7 +5,7 @@
 
 import { AlertTriangle, Calculator, CheckCircle2, Gavel, Lock, Stamp } from 'lucide-react';
 import { Button, cn } from '@/components/ui';
-import { arabicDate } from '../period';
+import { arabicDate, baghdadToday } from '../period';
 import type { PayrollStatusFilter } from './PayrollToolbar';
 
 type Props = {
@@ -58,7 +58,7 @@ export function PayrollSteps({
   const calcDate = calculatedAt ? new Date(calculatedAt) : null;
   const calculatedToday = !!calcDate && calcDate.toDateString() === new Date().toDateString();
   const calcLabel = calcDate
-    ? `آخر احتساب ${calcDate.toLocaleDateString('ar-IQ', { weekday: 'long', day: 'numeric', month: 'long' })} الساعة ${calcDate.toLocaleTimeString('ar-IQ', { hour: '2-digit', minute: '2-digit' })}.`
+    ? `آخر احتساب ${arabicDate(baghdadToday(calcDate))} الساعة ${calcDate.toLocaleTimeString('ar-IQ-u-nu-latn', { hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Baghdad' })}.`
     : 'ما انحسبت بعد.';
   const decisionsDone = pendingDecisions === 0;
   const attentionDone = attentionCount === 0;

@@ -1,6 +1,10 @@
 // حساب مسير الرواتب الحالي في المتصفح (للاختيار الافتراضي والمعاينة فقط).
 // التواريخ الحقيقية لكل مسير محفوظة في السيرفر (payroll_periods).
 
+import { arabicDate, monthOrdinal } from '@/lib/dates';
+
+export { arabicDate };
+
 const pad2 = (n: number) => n.toString().padStart(2, '0');
 
 /** توقيت بغداد (UTC+3 بدون توقيت صيفي) لتاريخ معيّن. */
@@ -44,7 +48,7 @@ const addMonths = (month: string, n: number) => {
 };
 
 /**
- * قائمة المسيرات بالتسلسل (الأقدم ← الأحدث) حول المسير الحالي بأسماء الأشهر: "رواتب تشرين الأول 2026"
+ * قائمة المسيرات بالتسلسل (الأقدم ← الأحدث) حول المسير الحالي: "رواتب الشهر العاشر 2026"
  * (فترة الدوام تنكتب تحت العنوان بجملة واضحة).
  */
 export function payrollMonthOptions(current: string, before = 12, after = 3) {
@@ -62,27 +66,21 @@ export function baghdadToday(now = new Date()): string {
   return `${y}-${pad2(m)}-${pad2(day)}`;
 }
 
-/** "2026-10" → "شهر 10 سنة 2026" (نفس صيغة الكشوف بالتطبيق) */
-export function monthLabel(month: string): string {
-  const [y, m] = month.split('-').map(Number);
-  return `شهر ${m} سنة ${y}`;
-}
-
-const MONTH_NAMES = ['كانون الثاني', 'شباط', 'آذار', 'نيسان', 'أيار', 'حزيران', 'تموز', 'آب', 'أيلول', 'تشرين الأول', 'تشرين الثاني', 'كانون الأول'];
-const DAY_NAMES = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
-
-/** "2026-10" → "تشرين الأول 2026". */
+/** "2026-10" → "الشهر العاشر 2026" (نفس الصيغة بالرواتب والسلف والتطبيق). */
 export function payrollMonthName(month: string): string {
   const [y, m] = month.split('-').map(Number);
-  return `${MONTH_NAMES[m - 1] ?? m} ${y}`;
+  return `${monthOrdinal(m)} ${y}`;
 }
 
-/** "2026-09-27" → "الأحد 27 أيلول" (بدون السنة إلا إذا طلبت). */
-export function arabicDate(iso: string | null | undefined, withYear = false): string {
-  if (!iso) return '';
-  const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
-  const day = DAY_NAMES[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
-  return `${day} ${d} ${MONTH_NAMES[m - 1]}${withYear ? ` ${y}` : ''}`;
+/** نص الشهر بالإشعارات: "الشهر العاشر 2026". */
+export function monthLabel(month: string): string {
+  return payrollMonthName(month);
+}
+
+/** صيغة الإشعارات القديمة "شهر 10 سنة 2026" (حتى نلكه الإشعارات اللي انبعثت قبل). */
+export function legacyMonthLabel(month: string): string {
+  const [y, m] = month.split('-').map(Number);
+  return `شهر ${m} سنة ${y}`;
 }
 
 /** شهر الرواتب اللي يتبعه تاريخ (نفس payroll_month_of بالسيرفر): بعد يوم القطع = الشهر الجاي. */

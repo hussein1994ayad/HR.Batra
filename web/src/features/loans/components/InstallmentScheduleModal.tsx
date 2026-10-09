@@ -67,7 +67,7 @@ export function InstallmentScheduleModal({ s }: { s: LoansState }) {
               {movedHere.map((p) => (
                 <div key={`moved-${p.id}`} className="px-3 py-2 text-[11px] text-slate-500 flex items-center gap-2">
                   <CalendarClock className="w-3.5 h-3.5" />
-                  شهر {monthLabel(p.origin_month)} مؤجّل ← انتقل لشهر {monthLabel(p.due_date)}{p.payment_note ? ` · ${p.payment_note}` : ''}
+                  {monthLabel(p.origin_month)} مؤجّل ← انتقل إلى {monthLabel(p.due_date)}{p.payment_note ? ` · ${p.payment_note}` : ''}
                 </div>
               ))}
               <div className="p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-900/40 transition-colors">

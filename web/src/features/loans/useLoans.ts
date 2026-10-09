@@ -183,8 +183,8 @@ export function useLoans() {
   const postponeFrom = async (inst: LoanInstallment) => {
     const to = scheduleLoan ? postponeTarget(scheduleLoan, inst.id) : null;
     const note = await askNote({
-      title: `تأجيل قسط شهر ${monthLabel(inst.due_date)}؟`,
-      message: `القسط (${Number(inst.amount).toLocaleString('en-US')} د.ع) ينتقل لآخر السلفة${to ? ` (شهر ${monthLabel(to)})` : ''}، وباقي الأشهر ما تتغير. الموظف يوصله إشعار.`,
+      title: `تأجيل قسط ${monthLabel(inst.due_date)}؟`,
+      message: `القسط (${Number(inst.amount).toLocaleString('en-US')} د.ع) ينتقل لآخر السلفة${to ? ` (${monthLabel(to)})` : ''}، وباقي الأشهر ما تتغير. الموظف يوصله إشعار.`,
       confirmLabel: 'تأجيل',
       tone: 'warning',
       note: { presets: ['طلب الموظف تأجيل', 'ظرف طارئ'], placeholder: 'سبب التأجيل (اختياري)' },
@@ -195,7 +195,7 @@ export function useLoans() {
       async () => {
         await postponeInstallment(inst.id, note);
         query.reload();
-        toast.success(`تم تأجيل قسط شهر ${monthLabel(inst.due_date)} لآخر السلفة`);
+        toast.success(`تم تأجيل قسط ${monthLabel(inst.due_date)} لآخر السلفة`);
       },
       'فشل تأجيل القسط',
     );

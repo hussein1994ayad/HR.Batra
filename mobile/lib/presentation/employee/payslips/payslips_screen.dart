@@ -303,7 +303,7 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
       child: AppListTile(
         leading: const ToneIcon(Icons.receipt_long_rounded, tone: AppTone.success),
         title: 'راتب ${Fmt.monthNumber(m, y)}',
-        subtitle: '${Fmt.months[m - 1]} · ${deductions > 0 ? 'استقطاعات ${Fmt.iqd(deductions)}' : 'بدون استقطاعات'}',
+        subtitle: deductions > 0 ? 'استقطاعات ${Fmt.iqd(deductions)}' : 'بدون استقطاعات',
         trailing: Text(Fmt.iqd(slip.netSalary), style: AppText.subtitle.copyWith(color: AppColors.brand)),
         onTap: () => _openSlip(slip),
       ),

@@ -40,7 +40,7 @@ void main() {
   group('OnLeavePerson', () {
     test('daily leave: until and return', () {
       final p = OnLeavePerson.fromMap(const {'full_name': 'سارة', 'to_date': '2026-10-06'});
-      expect(onLeaveUntil(p, now: now), 'حتى 6 تشرين الأول');
+      expect(onLeaveUntil(p, now: now), 'حتى 6/10');
       expect(onLeaveReturn(p, now: now), 'يعود بعد 3 أيام');
       expect(p.branchLabel, '—');
     });

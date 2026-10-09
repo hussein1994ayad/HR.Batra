@@ -32,6 +32,8 @@ export function usePayroll() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedBranch, setSelectedBranch] = useState('all');
   const [payrollOverrides, setPayrollOverrides] = useState<PayrollOverrides>({});
+  /** نافذة «نتيجة الاحتساب» بعد زر احتساب الرواتب. */
+  const [calcResultOpen, setCalcResultOpen] = useState(false);
 
   const period = data.run?.period ?? null;
   const startDate = period?.start_date ?? '';
@@ -196,7 +198,7 @@ export function usePayroll() {
     // اعتماد راتب = قرار مالي: تأكيد بالصافي
     const confirmed = await confirm({
       title: `اعتماد راتب ${row.full_name}؟`,
-      message: `الصافي: ${Math.round(row.netSalary).toLocaleString('en-US')} د.ع لـ${monthLabel(selectedMonth)}.`,
+      message: `الصافي: ${Math.round(row.netSalary).toLocaleString('en-US')} د.ع لرواتب ${monthLabel(selectedMonth)}.`,
       confirmLabel: 'اعتماد الراتب',
     });
     if (!confirmed) return;
@@ -301,7 +303,7 @@ export function usePayroll() {
     const branchName = data.branches.find(b => b.id === selectedBranch)?.name ?? 'الفرع';
     const confirmed = await confirm({
       title: 'إرسال إشعار كشف الراتب؟',
-      message: `يوصل إشعار "تم اعتماد وصرف راتبك لـ${monthLabel(selectedMonth)}" لموظفي ${branchName} الي كشوفهم معتمدة. الي وصلهم الإشعار قبل ما ينبعثلهم مرة ثانية.`,
+      message: `يوصل إشعار "تم اعتماد وصرف كشف راتب ${monthLabel(selectedMonth)}" لموظفي ${branchName} الي كشوفهم معتمدة. الي وصلهم الإشعار قبل ما ينبعثلهم مرة ثانية.`,
       confirmLabel: 'إرسال',
       tone: 'primary',
     });
@@ -362,7 +364,7 @@ export function usePayroll() {
     await loadData();
   };
 
-  /** «احتساب الرواتب»: يحسب المسير على السيرفر ثم يعيد التحميل. */
+  /** «احتساب الرواتب»: يحسب المسير على السيرفر، يعيد التحميل، ويطلع ملخص النتيجة. */
   const calculate = async () => {
     const ok = await run('calculate', async () => {
       await calculatePayroll(selectedMonth);
@@ -371,6 +373,7 @@ export function usePayroll() {
     if (!ok) return;
     await loadData({ quiet: true });
     toast.success('تم احتساب الرواتب ✅');
+    setCalcResultOpen(true);
   };
 
   /** ترك العمل وعليه سلفة: يخصم [amount] من آخر راتب، والباقي يسدد نقداً (settle_loan_on_exit). */
@@ -390,6 +393,7 @@ export function usePayroll() {
     isMonthArchived, isPeriodClosed, isLocked,
     payrollOverrides, saveOverride, clearOverride,
     addBonusDeduction, decideEvent, generateSlip, bulkGenerateSlips, revertSlip, settleExit, calculate,
+    calcResultOpen, setCalcResultOpen,
     closePeriod, reopenPeriod, sendBranchNotifications, archiveMonth,
   };
 }

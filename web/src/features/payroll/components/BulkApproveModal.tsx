@@ -2,6 +2,7 @@ import { AlertTriangle, CheckCircle2, Info, Users } from 'lucide-react';
 import { EmptyState, InfoNote, Modal, ModalFooter, StatTile } from '@/components/ui';
 import { formatIQD } from '@/lib/format';
 import { sumPayroll, type PayrollRow } from '../calc';
+import { arabicDate, payrollMonthName } from '../period';
 
 type Props = {
   branchName: string;
@@ -18,10 +19,10 @@ type Props = {
 export function BulkApproveModal({ branchName, selectedMonth, startDate, endDate, pendingRows, approving, onClose, onConfirm }: Props) {
   const totals = sumPayroll(pendingRows);
   return (
-    <Modal title="اعتماد الرواتب دفعة واحدة" subtitle={`${branchName || 'جميع الفروع'} · ${startDate} ← ${endDate}`} icon={Users} tone="emerald" onClose={onClose}>
+    <Modal title="اعتماد الرواتب دفعة واحدة" subtitle={`رواتب ${payrollMonthName(selectedMonth)} · ${branchName || 'جميع الفروع'} · من ${arabicDate(startDate)} إلى ${arabicDate(endDate)}`} icon={Users} tone="emerald" onClose={onClose}>
       {pendingRows.length === 0 ? (
         <>
-          <EmptyState icon={CheckCircle2} tone="emerald" title="كل الرواتب معتمدة" description={`تم اعتماد كشوف جميع الموظفين لشهر ${selectedMonth}.`} />
+          <EmptyState icon={CheckCircle2} tone="emerald" title="كل الرواتب معتمدة" description={`تم اعتماد كشوف جميع الموظفين لرواتب ${payrollMonthName(selectedMonth)}.`} />
           <ModalFooter onCancel={onClose} cancelLabel="إغلاق" />
         </>
       ) : (

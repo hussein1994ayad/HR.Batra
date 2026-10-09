@@ -72,7 +72,7 @@ export function DatabasePurgeSection() {
             <Field label="الشهر">
               <Select value={month} onChange={(e) => setMonth(Number(e.target.value))}>
                 {ARABIC_MONTH_NAMES.map((name, i) => (
-                  <option key={name} value={i + 1}>{i + 1} — {name}</option>
+                  <option key={name} value={i + 1}>{name} ({i + 1})</option>
                 ))}
               </Select>
             </Field>

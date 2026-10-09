@@ -13,6 +13,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 
 import '../constants/constants.dart';
+import '../design/formatters.dart';
 import '../utils/app_log.dart';
 import 'share_helper.dart';
 
@@ -70,18 +71,14 @@ class PdfExportService {
   @visibleForTesting
   static String money(num amount) => '${NumberFormat('#,##0', 'en').format(amount.abs().round())} ${AppConstants.currency}';
 
-  static const _arabicMonths = [
-    'كانون الثاني', 'شباط', 'آذار', 'نيسان', 'أيار', 'حزيران',
-    'تموز', 'آب', 'أيلول', 'تشرين الأول', 'تشرين الثاني', 'كانون الأول',
-  ];
-
-  /// "2026-09" ← "شهر 9 سنة 2026 · أيلول" (بدون أقواس: تنعكس في PDF العربي)
+  /// "2026-09" ← "الشهر التاسع 2026" (بدون أقواس: تنعكس في PDF العربي)
   @visibleForTesting
   static String monthLabel(String workMonth) {
     final parts = workMonth.split('-');
     final m = parts.length == 2 ? int.tryParse(parts[1]) : null;
-    if (m == null || m < 1 || m > 12) return workMonth;
-    return 'شهر $m سنة ${parts[0]} · ${_arabicMonths[m - 1]}';
+    final y = parts.isNotEmpty ? int.tryParse(parts[0]) : null;
+    if (m == null || y == null || m < 1 || m > 12) return workMonth;
+    return Fmt.monthNumber(m, y);
   }
 
   /// بناء محتوى كشف الراتب PDF (بدون حفظ) — مفصول لإمكانية اختباره.

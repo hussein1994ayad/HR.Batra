@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  arabicDate, baghdadToday, cutoffDateOf, monthLabel, payrollMonthName, payrollMonthOfDate, payrollMonthOptions, shiftPayrollMonth,
+  arabicDate, baghdadToday, cutoffDateOf, legacyMonthLabel, monthLabel, payrollMonthName, payrollMonthOfDate, payrollMonthOptions, shiftPayrollMonth,
 } from './period';
 
 describe('payroll dates', () => {
@@ -10,17 +10,20 @@ describe('payroll dates', () => {
   });
 
   it('labels a payroll month like the app', () => {
-    expect(monthLabel('2026-10')).toBe('شهر 10 سنة 2026');
-    expect(monthLabel('2027-01')).toBe('شهر 1 سنة 2027');
+    expect(monthLabel('2026-10')).toBe('الشهر العاشر 2026');
+    expect(monthLabel('2027-01')).toBe('الشهر الأول 2027');
+    expect(legacyMonthLabel('2026-10')).toBe('شهر 10 سنة 2026');
   });
 });
 
 describe('payroll month in plain words', () => {
   it('names the month and the days in Arabic', () => {
-    expect(payrollMonthName('2026-10')).toBe('تشرين الأول 2026');
-    expect(arabicDate('2026-09-27')).toBe('الأحد 27 أيلول');
-    expect(arabicDate('2026-10-26', true)).toBe('الاثنين 26 تشرين الأول 2026');
-    expect(payrollMonthOptions('2026-10', 1, 1).map((o) => o.label)).toEqual(['رواتب أيلول 2026', 'رواتب تشرين الأول 2026', 'رواتب تشرين الثاني 2026']);
+    expect(payrollMonthName('2026-10')).toBe('الشهر العاشر 2026');
+    expect(payrollMonthName('2026-11')).toBe('الشهر الحادي عشر 2026');
+    expect(payrollMonthName('2026-12')).toBe('الشهر الثاني عشر 2026');
+    expect(arabicDate('2026-09-27')).toBe('الأحد 27/9');
+    expect(arabicDate('2026-10-26', true)).toBe('الاثنين 26/10/2026');
+    expect(payrollMonthOptions('2026-10', 1, 1).map((o) => o.label)).toEqual(['رواتب الشهر التاسع 2026', 'رواتب الشهر العاشر 2026', 'رواتب الشهر الحادي عشر 2026']);
   });
 
   it('an installment belongs to the payroll month by the cutoff day (like the server)', () => {

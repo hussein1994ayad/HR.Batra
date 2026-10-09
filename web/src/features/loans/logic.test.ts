@@ -83,7 +83,7 @@ describe('previewPayment', () => {
   it('paying less: the rest becomes a new last month marked with the month it came from (not a bigger last installment)', () => {
     const p = previewPayment(schedule([100000], [100000, 100000, 100000, 100000]), 'i1', 50000);
     expect(amounts(p)).toBe('100,50,100,100,100,50');
-    expect(p.rows.at(-1)).toMatchObject({ due_date: '2026-06-10', added: true, label: 'باقي شهر 02/2026' });
+    expect(p.rows.at(-1)).toMatchObject({ due_date: '2026-06-10', added: true, label: 'باقي الشهر الثاني 2026' });
   });
 
   it('a large payment removes installments that are no longer needed', () => {
@@ -93,7 +93,7 @@ describe('previewPayment', () => {
   it('underpaying the last installment adds a new month', () => {
     const p = previewPayment(schedule([100000, 100000, 100000, 100000], [100000]), 'i4', 20000);
     expect(amounts(p)).toBe('100,100,100,100,20,80');
-    expect(p.rows.at(-1)).toMatchObject({ due_date: '2026-06-10', added: true, label: 'باقي شهر 05/2026' });
+    expect(p.rows.at(-1)).toMatchObject({ due_date: '2026-06-10', added: true, label: 'باقي الشهر الخامس 2026' });
   });
 
   it('rejects zero and amounts above the remaining balance', () => {
@@ -114,7 +114,7 @@ describe('smart installments', () => {
     const p = previewMonthAmount(l(), 'm0', 40000);
     expect(amounts(p.rows)).toBe('40,100,100,60');
     expect(p.rows[0]).toMatchObject({ current: true, is_paid: false });
-    expect(p.rows[3]).toMatchObject({ due_date: '2027-01-01', added: true, label: 'باقي شهر 10/2026' });
+    expect(p.rows[3]).toMatchObject({ due_date: '2027-01-01', added: true, label: 'باقي الشهر العاشر 2026' });
     expect(p.remaining).toBe(300000);
   });
 
@@ -128,8 +128,8 @@ describe('smart installments', () => {
   });
 
   it('labels explain each installment', () => {
-    expect(installmentOrigin({ origin_kind: 'shortfall', origin_month: '2026-10-01', is_paid: false })).toBe('باقي شهر 10/2026');
-    expect(installmentOrigin({ origin_kind: 'postponed', origin_month: '2026-12-01', is_paid: false })).toBe('مؤجّل من 12/2026');
+    expect(installmentOrigin({ origin_kind: 'shortfall', origin_month: '2026-10-01', is_paid: false })).toBe('باقي الشهر العاشر 2026');
+    expect(installmentOrigin({ origin_kind: 'postponed', origin_month: '2026-12-01', is_paid: false })).toBe('مؤجّل من الشهر الثاني عشر 2026');
     expect(installmentOrigin({ amount_locked: true, is_paid: false })).toBe('مبلغ هالشهر مخفّض');
     expect(installmentOrigin({ is_paid: true })).toBeNull();
   });

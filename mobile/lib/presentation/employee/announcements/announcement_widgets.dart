@@ -22,7 +22,7 @@ double? announcementProgress(AnnouncementModel a, {DateTime? now}) {
   return t.clamp(0.0, 1.0);
 }
 
-/// "ينتهي اليوم" / "ينتهي غداً" / "باقي 5 أيام" / "ساري حتى 28 أيلول"
+/// "ينتهي اليوم" / "ينتهي غداً" / "باقي 5 أيام" / "ساري حتى 28/9"
 String? announcementRemaining(AnnouncementModel a, {DateTime? now}) {
   final ends = a.endsAt;
   if (ends == null) return null;

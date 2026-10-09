@@ -101,8 +101,8 @@ const PAGES: Array<{ path: string; heading: string | RegExp }> = [
   { path: '/dashboard/geofences', heading: 'الفروع والسياج الجغرافي' },
   { path: '/dashboard/leaves', heading: 'الإجازات' },
   { path: '/dashboard/loans', heading: 'السلف والأقساط' },
-  // صفحة الرواتب عنوانها الشهر نفسه: «رواتب تشرين الأول 2026»
-  { path: '/dashboard/payroll', heading: /^رواتب \S+( \S+)? \d{4}$/ },
+  // صفحة الرواتب عنوانها الشهر بالترتيب: «رواتب الشهر العاشر 2026»
+  { path: '/dashboard/payroll', heading: /^رواتب الشهر \S+( عشر)? \d{4}$/ },
   { path: '/dashboard/trash', heading: 'سلة المحذوفات' },
   { path: '/dashboard/storage', heading: 'التخزين والمساحة' },
   { path: '/dashboard/settings', heading: 'الإعدادات' },
@@ -169,6 +169,12 @@ test.describe('workflows', () => {
     expect(api.writes('rpc:calculate_payroll', 'POST')).toHaveLength(0); // فتح الصفحة ما يحسب
     await page.getByRole('button', { name: 'احتساب الرواتب' }).click();
     await expect.poll(() => api.writes('rpc:calculate_payroll', 'POST').length).toBe(1);
+    // بعد الاحتساب تطلع النتيجة: الصافي والقرارات المعلّقة
+    const result = page.getByRole('dialog');
+    await expect(result).toContainText('نتيجة احتساب رواتب الشهر');
+    await expect(result).toContainText('الصافي اللي ينصرف للموظفين');
+    await result.getByRole('button', { name: 'تمام' }).click();
+    await expect(result).toBeHidden();
   });
 
   test('approval waits for the end of the payroll period', async ({ page }) => {

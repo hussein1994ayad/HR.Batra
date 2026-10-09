@@ -2,6 +2,7 @@
 // نموذج السلفة وأقساطها — الجداول: public.loans و public.loan_installments
 // =========================================================================
 
+import '../design/formatters.dart';
 import '../utils/json_map.dart';
 
 /// يوم قطع الرواتب (سياسة payroll_policy.cutoff_day).
@@ -65,13 +66,10 @@ class LoanInstallment {
   /// شهر الرواتب اللي ينخصم بيه القسط: بعد يوم القطع (26) = الشهر الجاي (نفس payroll_month_of بالسيرفر).
   DateTime get payrollMonth => payrollMonthOf(dueDate);
 
-  /// ليش هذا القسط موجود: «باقي شهر 10/2026» أو «مؤجّل من 12/2026» أو «مبلغ هالشهر مخفّض» (نفس الموقع).
+  /// ليش هذا القسط موجود: «باقي الشهر العاشر 2026» أو «مؤجّل من الشهر الثاني عشر 2026» أو «مبلغ هالشهر مخفّض» (نفس الموقع).
   String? get originLabel {
-    String month(DateTime d) {
-      final p = payrollMonthOf(d);
-      return '${p.month.toString().padLeft(2, '0')}/${p.year}';
-    }
-    if (originKind == 'shortfall') return originMonth == null ? 'باقي شهر سابق' : 'باقي شهر ${month(originMonth!)}';
+    String month(DateTime d) => Fmt.monthOf(payrollMonthOf(d));
+    if (originKind == 'shortfall') return originMonth == null ? 'باقي شهر سابق' : 'باقي ${month(originMonth!)}';
     if (originKind == 'postponed') return originMonth == null ? 'مؤجّل' : 'مؤجّل من ${month(originMonth!)}';
     if (amountLocked && !isPaid) return 'مبلغ هالشهر مخفّض';
     return null;

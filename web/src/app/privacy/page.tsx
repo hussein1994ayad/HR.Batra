@@ -58,7 +58,7 @@ export default function PrivacyPage() {
     <main dir="rtl" className="min-h-dvh bg-dark-bg text-slate-200">
       <div className="mx-auto max-w-2xl px-5 py-12">
         <h1 className="text-2xl font-extrabold text-white">سياسة الخصوصية</h1>
-        <p className="mt-2 text-sm text-slate-400">تطبيق HR Pro لإدارة الدوام والموارد البشرية · آخر تحديث: أيلول 2026</p>
+        <p className="mt-2 text-sm text-slate-400">تطبيق HR Pro لإدارة الدوام والموارد البشرية · آخر تحديث: الشهر التاسع 2026</p>
         <p className="mt-6 leading-relaxed">
           يستعمل موظفو الشركة تطبيق HR Pro لتسجيل الحضور والانصراف وتقديم طلبات الإجازات والسلف ومتابعة الرواتب. توضح هذه الصفحة
           البيانات التي يجمعها التطبيق، ولماذا، ومن يطّلع عليها.
