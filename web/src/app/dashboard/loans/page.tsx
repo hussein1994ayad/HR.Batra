@@ -17,6 +17,7 @@ import { ApprovalModal } from '@/features/loans/components/ApprovalModal';
 import { InstallmentScheduleModal } from '@/features/loans/components/InstallmentScheduleModal';
 import { EditLoanModal } from '@/features/loans/components/EditLoanModal';
 import { PaymentModal } from '@/features/loans/components/PaymentModal';
+import { MonthAmountModal } from '@/features/loans/components/MonthAmountModal';
 
 export default function LoansPage() {
   const s = useLoans();
@@ -65,6 +66,7 @@ export default function LoansPage() {
       <InstallmentScheduleModal s={s} />
       <EditLoanModal s={s} />
       <PaymentModal s={s} />
+      <MonthAmountModal s={s} />
       {rejecting && (
         <ReasonModal
           title="رفض طلب السلفة؟"

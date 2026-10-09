@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { Loan, LoanInstallment } from '@/lib/db-types';
 import {
   addMonths, installmentPlan, sameDayNextMonth, sortInstallments,
-  overHalfSalaryWarning, previewPayment, splitLoansByCompletion, validateApproval,
+  installmentOrigin, overHalfSalaryWarning, postponeTarget, previewMonthAmount, previewPayment, reschedulePlan, splitLoansByCompletion,
+  validateApproval,
 } from './logic';
 
 const inst = (id: string, due_date: string, is_paid = false): LoanInstallment =>
@@ -79,8 +80,10 @@ describe('previewPayment', () => {
     expect(p.remaining).toBe(250000);
   });
 
-  it('paying less grows the last installment', () => {
-    expect(amounts(previewPayment(schedule([100000], [100000, 100000, 100000, 100000]), 'i1', 50000))).toBe('100,50,100,100,150');
+  it('paying less: the rest becomes a new last month marked with the month it came from (not a bigger last installment)', () => {
+    const p = previewPayment(schedule([100000], [100000, 100000, 100000, 100000]), 'i1', 50000);
+    expect(amounts(p)).toBe('100,50,100,100,100,50');
+    expect(p.rows.at(-1)).toMatchObject({ due_date: '2026-06-10', added: true, label: 'باقي شهر 02/2026' });
   });
 
   it('a large payment removes installments that are no longer needed', () => {
@@ -90,7 +93,7 @@ describe('previewPayment', () => {
   it('underpaying the last installment adds a new month', () => {
     const p = previewPayment(schedule([100000, 100000, 100000, 100000], [100000]), 'i4', 20000);
     expect(amounts(p)).toBe('100,100,100,100,20,80');
-    expect(p.rows.at(-1)).toMatchObject({ due_date: '2026-06-10', added: true });
+    expect(p.rows.at(-1)).toMatchObject({ due_date: '2026-06-10', added: true, label: 'باقي شهر 05/2026' });
   });
 
   it('rejects zero and amounts above the remaining balance', () => {
@@ -99,3 +102,42 @@ describe('previewPayment', () => {
     expect(previewPayment(l, 'i1', 400001).error).toMatch('أكبر من المتبقي');
   });
 });
+
+describe('smart installments', () => {
+  const l = (): Loan => loan({
+    amount: 300000, installment_amount: 100000, installment_count: 3,
+    loan_installments: [0, 1, 2].map((i) => ({ id: `m${i}`, loan_id: 'l', due_date: `2026-1${i}-01`, amount: 100000, is_paid: false })),
+  });
+  const amounts = (rows: { amount: number }[]) => rows.map((r) => r.amount / 1000).join();
+
+  it('this month pays less: the month keeps the reduced amount, the rest is a new last month', () => {
+    const p = previewMonthAmount(l(), 'm0', 40000);
+    expect(amounts(p.rows)).toBe('40,100,100,60');
+    expect(p.rows[0]).toMatchObject({ current: true, is_paid: false });
+    expect(p.rows[3]).toMatchObject({ due_date: '2027-01-01', added: true, label: 'باقي شهر 10/2026' });
+    expect(p.remaining).toBe(300000);
+  });
+
+  it('this month: zero (use postpone) and amounts not below the installment are refused', () => {
+    expect(previewMonthAmount(l(), 'm0', 0).error).toMatch('التأجيل');
+    expect(previewMonthAmount(l(), 'm0', 100000).error).toMatch('أقل من قسط الشهر');
+  });
+
+  it('postponing moves the month after the last installment', () => {
+    expect(postponeTarget(l(), 'm1')).toBe('2027-01-01');
+  });
+
+  it('labels explain each installment', () => {
+    expect(installmentOrigin({ origin_kind: 'shortfall', origin_month: '2026-10-01', is_paid: false })).toBe('باقي شهر 10/2026');
+    expect(installmentOrigin({ origin_kind: 'postponed', origin_month: '2026-12-01', is_paid: false })).toBe('مؤجّل من 12/2026');
+    expect(installmentOrigin({ amount_locked: true, is_paid: false })).toBe('مبلغ هالشهر مخفّض');
+    expect(installmentOrigin({ is_paid: true })).toBeNull();
+  });
+
+  it('editing the loan: exactly the monthly installment, the last takes the rest, the count is computed', () => {
+    expect(reschedulePlan(10000000, 766667, 700000)).toEqual({ count: 14, last: 133333, remaining: 9233333 });
+    expect(reschedulePlan(900000, 0, 300000)).toEqual({ count: 3, last: 300000, remaining: 900000 });
+    expect(reschedulePlan(500000, 500000, 100000).count).toBe(0);
+  });
+});
+

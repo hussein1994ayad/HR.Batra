@@ -1,11 +1,12 @@
 'use client';
 
-// تسجيل دفعة بأي مبلغ مع معاينة الأقساط بعدها (الزيادة من آخر الأقساط، والنقص لآخر قسط).
+// تسجيل دفعة بأي مبلغ مع معاينة الأقساط بعدها (الزيادة من آخر الأقساط، والنقص شهر جديد بالأخير).
 
 import { Banknote } from 'lucide-react';
 import { formatIQD } from '@/lib/format';
-import { AmountInput, Badge, Field, Input, Modal, ModalFooter, SegmentedTabs } from '@/components/ui';
+import { AmountInput, Field, Input, Modal, ModalFooter, SegmentedTabs } from '@/components/ui';
 import type { LoansState } from '../useLoans';
+import { SchedulePreview } from './SchedulePreview';
 
 export function PaymentModal({ s }: { s: LoansState }) {
   const { busy, scheduleLoan, payPrompt, setPayPrompt, paymentPreview, recordPayment } = s;
@@ -21,7 +22,7 @@ export function PaymentModal({ s }: { s: LoansState }) {
       >
         <form onSubmit={recordPayment} className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Field label="المبلغ المدفوع (د.ع)" hint="الزيادة تُخصم من آخر الأقساط، والنقص يُضاف لآخر قسط.">
+            <Field label="المبلغ المدفوع (د.ع)" hint="الزيادة تُخصم من آخر الأقساط، والنقص يصير شهر جديد بآخر السلفة.">
               <AmountInput required autoFocus value={payPrompt.amount} onValueChange={(v) => setPayPrompt({ ...payPrompt, amount: v })} />
             </Field>
             <Field label="طريقة السداد">
@@ -35,44 +36,16 @@ export function PaymentModal({ s }: { s: LoansState }) {
               />
             </Field>
           </div>
+          {payPrompt.method === 'salary_deduction' && (
+            <p className="text-[11px] text-amber-300">
+              «تسجيل دفعة» يعني المبلغ انستلم فعلاً. إذا الموظف هالشهر يكدر يدفع أقل من راتبه، استعمل «هالشهر أقل» حتى الرواتب تخصمه.
+            </p>
+          )}
           <Field label="ملاحظة (اختياري)">
             <Input value={payPrompt.note} onChange={(e) => setPayPrompt({ ...payPrompt, note: e.target.value })} placeholder="مثال: وصل استلام رقم 12" />
           </Field>
 
-          {paymentPreview.error ? (
-            <p className="text-xs font-bold text-rose-400">{paymentPreview.error}</p>
-          ) : (
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <h4 className="text-xs font-bold text-slate-300">الأقساط بعد هذه الدفعة</h4>
-                <span className="text-xs text-slate-400">
-                  المتبقي بعدها: <b className="text-amber-300">{formatIQD(paymentPreview.remaining)}</b>
-                </span>
-              </div>
-              <div className="max-h-56 overflow-y-auto rounded-2xl border border-slate-800/80 divide-y divide-slate-800/70">
-                {paymentPreview.rows.map((r, idx) => (
-                  <div key={`${r.due_date}-${idx}`} className={`px-3 py-2 flex items-center justify-between text-xs ${r.current ? 'bg-emerald-500/10' : ''}`}>
-                    <span className="flex items-center gap-2">
-                      <span className="w-6 text-slate-500 font-bold">{idx + 1}</span>
-                      <span className="font-mono text-slate-300" dir="ltr">{r.due_date}</span>
-                    </span>
-                    <span className="flex items-center gap-2">
-                      <b className="text-white">{formatIQD(r.amount)}</b>
-                      {r.current ? (
-                        <Badge tone="emerald" dot>هذه الدفعة</Badge>
-                      ) : r.is_paid ? (
-                        <Badge tone="sky">مسدد</Badge>
-                      ) : r.added ? (
-                        <Badge tone="amber">شهر إضافي</Badge>
-                      ) : (
-                        <Badge tone="slate">قادم</Badge>
-                      )}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          <SchedulePreview preview={paymentPreview} title="الأقساط بعد هذه الدفعة" currentLabel="هذه الدفعة" />
           <ModalFooter
             onCancel={() => setPayPrompt(null)}
             loading={busy === 'pay'}

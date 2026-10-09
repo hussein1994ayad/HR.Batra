@@ -191,6 +191,9 @@ class _InstallmentTile extends StatelessWidget {
               children: [
                 Text('قسط ${Fmt.monthOf(installment.dueDate)}', style: AppText.bodySm.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
                 Text('يستحق ${Fmt.date(installment.dueDate, withYear: true)}', style: AppText.caption),
+                if (installment.originLabel != null)
+                  Text(installment.originLabel!, style: AppText.caption.copyWith(color: AppTone.warning.color)),
+                if (installment.paymentNote?.trim().isNotEmpty ?? false) Text(installment.paymentNote!, style: AppText.caption),
                 if (paid && installment.paidAt != null)
                   Text('سُدّد ${Fmt.date(installment.paidAt, withYear: true)}${installment.isCash ? ' نقداً' : ''}', style: AppText.caption.copyWith(color: AppColors.success)),
               ],

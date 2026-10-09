@@ -8,17 +8,21 @@ import toast from 'react-hot-toast';
 import { confetti } from '@/lib/lazy';
 import { useQuery } from '@/lib/useQuery';
 import { errorMessage } from '@/lib/format';
-import { useConfirm } from '@/components/confirm';
+import { useConfirm, useConfirmNote } from '@/components/confirm';
 import type { Loan, LoanInstallment } from '@/lib/db-types';
 import {
   approveLoan, deleteCompletedLoan, deleteInstallment, fetchLoans, payInstallment,
-  postponeInstallments, rejectLoan as rejectLoanRequest, rescheduleLoan, revertInstallmentPayment,
+  postponeInstallment, rejectLoan as rejectLoanRequest, rescheduleLoan, revertInstallmentPayment, setMonthInstallment,
 } from './api';
-import { overHalfSalaryWarning, previewPayment, sameDayNextMonth, splitLoansByCompletion, validateApproval } from './logic';
-import type { ApprovalDraft, EditLoanDraft, LoansTab, PayDraft } from './types';
+import {
+  monthLabel, overHalfSalaryWarning, postponeTarget, previewMonthAmount, previewPayment, sameDayNextMonth, splitLoansByCompletion,
+  validateApproval,
+} from './logic';
+import type { ApprovalDraft, EditLoanDraft, LoansTab, MonthAmountDraft, PayDraft } from './types';
 
 export function useLoans() {
   const confirm = useConfirm();
+  const askNote = useConfirmNote();
   const query = useQuery('loans', fetchLoans);
   const [tab, setTab] = useState<LoansTab>('active');
   const [search, setSearch] = useState('');
@@ -29,6 +33,7 @@ export function useLoans() {
   const [editDraft, setEditDraft] = useState<EditLoanDraft | null>(null);
   const [scheduleLoanId, setScheduleLoanId] = useState<string | null>(null);
   const [payPrompt, setPayPrompt] = useState<PayDraft | null>(null);
+  const [monthPrompt, setMonthPrompt] = useState<MonthAmountDraft | null>(null);
   const [creating, setCreating] = useState(false);
 
   const approved = useMemo(() => query.data?.approved ?? [], [query.data]);
@@ -38,6 +43,10 @@ export function useLoans() {
   const paymentPreview = useMemo(
     () => (payPrompt && scheduleLoan ? previewPayment(scheduleLoan, payPrompt.installment.id, payPrompt.amount) : null),
     [payPrompt, scheduleLoan],
+  );
+  const monthPreview = useMemo(
+    () => (monthPrompt && scheduleLoan ? previewMonthAmount(scheduleLoan, monthPrompt.installment.id, monthPrompt.amount) : null),
+    [monthPrompt, scheduleLoan],
   );
   const pending = query.data?.pending ?? [];
 
@@ -135,6 +144,21 @@ export function useLoans() {
     );
   };
 
+  const recordMonthAmount = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!monthPrompt || !monthPreview || monthPreview.error) return;
+    await run(
+      'month',
+      async () => {
+        await setMonthInstallment(monthPrompt.installment.id, monthPrompt.amount, monthPrompt.note);
+        setMonthPrompt(null);
+        query.reload();
+        toast.success('تم: هالشهر يتخصم المبلغ الجديد، والباقي صار شهر بالأخير');
+      },
+      'فشل تعديل قسط الشهر',
+    );
+  };
+
   const revertPayment = async (inst: LoanInstallment) => {
     const ok = await confirm({
       title: 'التراجع عن السداد؟',
@@ -177,13 +201,23 @@ export function useLoans() {
     );
   };
 
+  /** تأجيل قسط شهر واحد لآخر السلفة (بملاحظة تنحفظ وتوصل للموظف). */
   const postponeFrom = async (inst: LoanInstallment) => {
+    const to = scheduleLoan ? postponeTarget(scheduleLoan, inst.id) : null;
+    const note = await askNote({
+      title: `تأجيل قسط شهر ${monthLabel(inst.due_date)}؟`,
+      message: `القسط (${Number(inst.amount).toLocaleString('en-US')} د.ع) ينتقل لآخر السلفة${to ? ` (شهر ${monthLabel(to)})` : ''}، وباقي الأشهر ما تتغير. الموظف يوصله إشعار.`,
+      confirmLabel: 'تأجيل',
+      tone: 'warning',
+      note: { presets: ['طلب الموظف تأجيل', 'ظرف طارئ'], placeholder: 'سبب التأجيل (اختياري)' },
+    });
+    if (note === null) return;
     await run(
       `postpone_${inst.id}`,
       async () => {
-        await postponeInstallments(inst as Parameters<typeof postponeInstallments>[0]);
+        await postponeInstallment(inst.id, note);
         query.reload();
-        toast.success('تم تأجيل القسط والأقساط اللاحقة شهراً');
+        toast.success(`تم تأجيل قسط شهر ${monthLabel(inst.due_date)} لآخر السلفة`);
       },
       'فشل تأجيل القسط',
     );
@@ -213,6 +247,7 @@ export function useLoans() {
     tab, setTab, search, setSearch, busy,
     approval, setApproval, rejecting, setRejecting, editDraft, setEditDraft,
     scheduleLoan, setScheduleLoanId, payPrompt, setPayPrompt, paymentPreview, creating, setCreating,
+    monthPrompt, setMonthPrompt, monthPreview, recordMonthAmount,
     startApproval, rejectLoan, submitApproval, submitEdit, recordPayment, revertPayment, deletePaidInstallment, postponeFrom, deleteLoan,
   };
 }
