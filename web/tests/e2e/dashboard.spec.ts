@@ -1,5 +1,16 @@
 import { expect, test, type Page } from '@playwright/test';
-import { ADMIN, defaultFixtures, mockSupabase } from './mock-supabase';
+import { ADMIN, defaultFixtures, mockSupabase, payrollRunFixture } from './mock-supabase';
+
+/** مسير خلصت فترة دوامه (آخر يوم = أمس): الاعتماد متاح. */
+function endedPayrollRun() {
+  const run = payrollRunFixture().get_payroll_run;
+  const day = (offset: number) => {
+    const d = new Date();
+    d.setDate(d.getDate() + offset);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+  return { ...run, period: { ...run.period, start_date: day(-30), cutoff_date: day(-1) } };
+}
 
 function collectPageErrors(page: Page) {
   const errors: string[] = [];
@@ -151,8 +162,26 @@ test.describe('workflows', () => {
     expect(api.writes('loan_installments', 'POST')).toHaveLength(0);
   });
 
-  test('shows the server payroll and approves a salary', async ({ page }) => {
+  test('payroll is calculated with the "calculate" button', async ({ page }) => {
     const api = await mockSupabase(page);
+    await page.goto('/dashboard/payroll');
+    await expect(page.locator('tr', { hasText: 'زينب علي' })).toContainText('830,000 د.ع');
+    expect(api.writes('rpc:calculate_payroll', 'POST')).toHaveLength(0); // فتح الصفحة ما يحسب
+    await page.getByRole('button', { name: 'احتساب الرواتب' }).click();
+    await expect.poll(() => api.writes('rpc:calculate_payroll', 'POST').length).toBe(1);
+  });
+
+  test('approval waits for the end of the payroll period', async ({ page }) => {
+    await mockSupabase(page);
+    await page.goto('/dashboard/payroll');
+    const row = page.locator('tr', { hasText: 'زينب علي' });
+    await expect(row).toContainText('830,000 د.ع');
+    // فترة الدوام تنتهي يوم 26: قبلها زر الاعتماد مقفول
+    await expect(row.getByRole('button', { name: 'اعتماد' })).toBeDisabled();
+  });
+
+  test('shows the server payroll and approves a salary', async ({ page }) => {
+    const api = await mockSupabase(page, { rpc: { get_payroll_run: endedPayrollRun() } });
     await page.goto('/dashboard/payroll');
     await expect.poll(() => api.writes('rpc:get_payroll_run', 'POST').length).toBeGreaterThan(0);
     const month = (api.writes('rpc:get_payroll_run', 'POST')[0].body as { p_month: string }).p_month;

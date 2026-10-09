@@ -44,7 +44,7 @@ class _DecisionCardState extends State<DecisionCard> {
                 : 0);
     _reason = TextEditingController(
       text: _missedMinutes > 0
-          ? '${item.status == 'late' ? 'تأخير' : 'خروج مبكر'}: ${formatDurationArabic(_missedMinutes)}'
+          ? '${item.status == 'late' ? 'تأخير' : item.status == 'missing_punch' ? 'بدون بصمة انصراف' : 'خروج مبكر'}: ${formatDurationArabic(_missedMinutes)}'
           : '',
     );
   }
@@ -63,6 +63,8 @@ class _DecisionCardState extends State<DecisionCard> {
     final tone = item.status == 'absent' ? AppTone.danger : AppTone.warning;
     final isMissingPunch = item.status == 'missing_punch' || (item.status == 'half_day' && item.checkInTime == null);
     final amount = item.engineAmount ?? 0;
+    // بصمة ناقصة بخصم مقترح (دقائق الدوام بعد آخر تواجد مسجّل) = قرار خصم مثل التأخير؛ بدون مبلغ = تأكيد بس
+    final confirmOnly = isMissingPunch && amount <= 0;
 
     return RequestCard(
       title: item.employeeName,
@@ -71,7 +73,7 @@ class _DecisionCardState extends State<DecisionCard> {
       trailing: StatusBadge(item.statusArabic, tone: tone, dot: true),
       actions: DecisionButtons(
         busy: widget.busy,
-        approveLabel: isMissingPunch ? 'تأكيد' : 'تطبيق الخصم',
+        approveLabel: confirmOnly ? 'تأكيد' : 'تطبيق الخصم',
         rejectLabel: 'إعفاء',
         onApprove: () => widget.onDecide(
           deduct: true,
@@ -86,7 +88,7 @@ class _DecisionCardState extends State<DecisionCard> {
         if (_missedMinutes > 0) ...[
           InfoRow(
             icon: Icons.hourglass_bottom_rounded,
-            label: item.status == 'late' ? 'مدة التأخير' : 'خروج مبكر',
+            label: item.status == 'late' ? 'مدة التأخير' : isMissingPunch ? 'بعد آخر تواجد مسجّل' : 'خروج مبكر',
             value: formatDurationArabic(_missedMinutes),
           ),
           const SizedBox(height: AppSpace.sm),
@@ -98,8 +100,8 @@ class _DecisionCardState extends State<DecisionCard> {
         InfoRow(
           icon: Icons.payments_outlined,
           label: 'الخصم المحسوب',
-          value: isMissingPunch
-              ? 'بدون خصم تلقائي'
+          value: confirmOnly
+              ? 'بدون خصم'
               : amount > 0
                   ? Fmt.iqd(amount)
                   : 'يُحسب تلقائياً من الراتب',

@@ -1,10 +1,11 @@
 'use client';
 
-// خطوات اعتماد الرواتب بالترتيب: كل خطوة تبين شنو باقي وزرها المباشر، وتصير ✓ لما تخلص.
-//   1) القرارات المعلّقة  2) التنبيهات  3) اعتماد الرواتب  4) إغلاق المسير
+// خطوات الرواتب بالترتيب (مثل أنظمة HR المعروفة): كل خطوة تبين شنو باقي وزرها المباشر، وتصير ✓ لما تخلص.
+//   1) احتساب الرواتب  2) القرارات المعلّقة  3) التنبيهات  4) اعتماد الرواتب  5) إغلاق المسير
 
-import { AlertTriangle, CheckCircle2, Gavel, Lock, Stamp } from 'lucide-react';
+import { AlertTriangle, Calculator, CheckCircle2, Gavel, Lock, Stamp } from 'lucide-react';
 import { Button, cn } from '@/components/ui';
+import { arabicDate } from '../period';
 import type { PayrollStatusFilter } from './PayrollToolbar';
 
 type Props = {
@@ -16,6 +17,14 @@ type Props = {
   locked: boolean;
   closing?: boolean;
   onFilter: (f: PayrollStatusFilter) => void;
+  /** رواتب تكدر تنعتمد هسه (بعد نهاية الفترة، أو آخر راتب لمن ترك) */
+  approvableCount: number;
+  /** آخر يوم بفترة الدوام: الاعتماد من اليوم اللي بعده */
+  approveFrom: string;
+  /** آخر «احتساب الرواتب» (ISO) أو فارغ */
+  calculatedAt?: string | null;
+  calculating?: boolean;
+  onCalculate: () => void;
   onOpenBulk: () => void;
   onClosePeriod: () => void;
 };
@@ -41,27 +50,44 @@ function Step({ n, done, active, icon: Icon, title, detail, action }: {
 }
 
 export function PayrollSteps({
-  pendingDecisions, attentionCount, issuedCount, rowCount, periodStatus, locked, closing, onFilter, onOpenBulk, onClosePeriod,
+  pendingDecisions, attentionCount, issuedCount, rowCount, periodStatus, locked, closing, onFilter, approvableCount, approveFrom,
+  calculatedAt, calculating, onCalculate, onOpenBulk, onClosePeriod,
 }: Props) {
+  const nextDay = approveFrom ? new Date(Date.parse(approveFrom + 'T00:00:00Z') + 86400000).toISOString().slice(0, 10) : '';
+  // محسوبة اليوم = الأرقام حديثة (التحديث الليلي يغطي الأيام السابقة)
+  const calcDate = calculatedAt ? new Date(calculatedAt) : null;
+  const calculatedToday = !!calcDate && calcDate.toDateString() === new Date().toDateString();
+  const calcLabel = calcDate
+    ? `آخر احتساب ${calcDate.toLocaleDateString('ar-IQ', { weekday: 'long', day: 'numeric', month: 'long' })} الساعة ${calcDate.toLocaleTimeString('ar-IQ', { hour: '2-digit', minute: '2-digit' })}.`
+    : 'ما انحسبت بعد.';
   const decisionsDone = pendingDecisions === 0;
   const attentionDone = attentionCount === 0;
   const approvedDone = rowCount > 0 && issuedCount === rowCount;
   const closedDone = periodStatus === 'closed';
-  const current = !decisionsDone ? 1 : !attentionDone ? 2 : !approvedDone ? 3 : !closedDone ? 4 : 0;
+  const current = !calculatedToday && !approvedDone ? 1 : !decisionsDone ? 2 : !attentionDone ? 3 : !approvedDone ? 4 : !closedDone ? 5 : 0;
   return (
     <div className="flex flex-wrap gap-3 print:hidden" aria-label="خطوات اعتماد الرواتب">
-      <Step n={1} done={decisionsDone} active={current === 1} icon={Gavel} title="القرارات المعلّقة"
+      <Step n={1} done={calculatedToday || approvedDone} active={current === 1} icon={Calculator} title="احسب الرواتب"
+        detail={`${calcLabel} يحسب الغيابات والبصمات الناقصة والخصومات والسلف لكل الموظفين.`}
+        action={!locked && !approvedDone && (
+          <Button size="xs" variant={calculatedToday ? 'soft' : 'primary'} icon={Calculator} loading={calculating} onClick={onCalculate}>
+            احتساب الرواتب
+          </Button>
+        )} />
+      <Step n={2} done={decisionsDone} active={current === 2} icon={Gavel} title="القرارات المعلّقة"
         detail={decisionsDone ? 'كل الغيابات والتأخيرات اتخذت قرارها.' : `${pendingDecisions} حركة (غياب/تأخير/بصمة) تنتظر: خصم أو إعفاء.`}
         action={!decisionsDone && <Button size="xs" variant="soft" onClick={() => onFilter('decisions')}>عرض الموظفين</Button>} />
-      <Step n={2} done={attentionDone} active={current === 2} icon={AlertTriangle} title="راجع التنبيهات"
+      <Step n={3} done={attentionDone} active={current === 3} icon={AlertTriangle} title="راجع التنبيهات"
         detail={attentionDone ? 'ماكو شي غريب.' : `${attentionCount} موظف يحتاج نظرة (ما داوم، صافي سالب، ترك وعليه سلفة...).`}
         action={!attentionDone && <Button size="xs" variant="soft" onClick={() => onFilter('attention')}>عرضهم</Button>} />
-      <Step n={3} done={approvedDone} active={current === 3} icon={Stamp} title="اعتمد الرواتب"
-        detail={`المعتمد ${issuedCount} من ${rowCount}. الاعتماد يثبّت الكشف ويستقطع أقساط السلف.`}
-        action={!approvedDone && !locked && (
-          <Button size="xs" variant="soft-success" icon={CheckCircle2} disabled={issuedCount === rowCount} onClick={onOpenBulk}>اعتماد الباقي</Button>
+      <Step n={4} done={approvedDone} active={current === 4} icon={Stamp} title="اعتمد الرواتب"
+        detail={approvableCount === 0 && !approvedDone && nextDay
+          ? `المعتمد ${issuedCount} من ${rowCount}. الاعتماد يتفعّل من ${arabicDate(nextDay)} (بعد نهاية الدوام المحسوب).`
+          : `المعتمد ${issuedCount} من ${rowCount}. الاعتماد يثبّت الكشف ويستقطع أقساط السلف.`}
+        action={!approvedDone && !locked && approvableCount > 0 && (
+          <Button size="xs" variant="soft-success" icon={CheckCircle2} onClick={onOpenBulk}>اعتماد ({approvableCount})</Button>
         )} />
-      <Step n={4} done={closedDone} active={current === 4} icon={Lock} title="أغلق المسير"
+      <Step n={5} done={closedDone} active={current === 5} icon={Lock} title="أغلق المسير"
         detail={closedDone ? 'المسير مغلق، ما يتغير شي بيه.' : 'بعد الاعتماد: الإغلاق يقفل الشهر وأي حركة جديدة تروح للشهر الجاي.'}
         action={!closedDone && periodStatus === 'open' && approvedDone && (
           <Button size="xs" variant="soft" icon={Lock} loading={closing} onClick={onClosePeriod}>إغلاق المسير</Button>

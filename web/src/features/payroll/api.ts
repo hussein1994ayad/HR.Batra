@@ -15,7 +15,13 @@ export interface PayrollDataset {
   attendanceEmployeeIds: string[];
 }
 
-/** مسير شهر (YYYY-MM): السيرفر يزامن الحركات ثم يرجع الفترة وصف لكل موظف. */
+/** «احتساب الرواتب»: السيرفر يحسب المسير كله (غياب بدون بصمة، بصمات ناقصة...) ويسجّل وقت الاحتساب. */
+export async function calculatePayroll(month: string): Promise<void> {
+  const { error } = await supabase.rpc('calculate_payroll', { p_month: month });
+  if (error) throw error;
+}
+
+/** مسير شهر (YYYY-MM) كما هو (بدون إعادة حساب؛ الحساب بزر «احتساب الرواتب» والتحديث الليلي). */
 export async function fetchPayrollDataset(month: string): Promise<PayrollDataset> {
   const { data: run, error } = await supabase.rpc('get_payroll_run', { p_month: month });
   if (error) throw error;

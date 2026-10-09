@@ -45,6 +45,8 @@ export interface PayrollPeriod {
   archived?: boolean;
   /** شهر قبل نظام المسيرات: كشوف قديمة للعرض فقط. */
   legacy?: boolean;
+  /** آخر «احتساب الرواتب» (calculate_payroll) */
+  calculated_at?: string | null;
 }
 
 /** صف موظف كما يرجعه get_payroll_run. */
@@ -85,6 +87,8 @@ export interface RunRow {
   /** أيام البصمة الفعلية / أيام الدوام المجدولة ضمن خدمته بالمسير */
   attended_days?: number;
   scheduled_days?: number;
+  /** عنده جدول دوام (بدونه ما ينحسب تأخير ولا خروج مبكر) */
+  has_schedule?: boolean;
   slip: null | {
     id: string;
     basic_salary: number;
@@ -250,6 +254,7 @@ export function buildPayrollRows({ run, events, overrides, pendingLeaveEmployeeI
       loanBalanceAfterExit: n(r.loan_balance_after_exit),
       loanItems: slip ? [] : (r.loan_items ?? []),
       attendedDays: n(r.attended_days),
+      hasSchedule: r.has_schedule ?? true,
       scheduledDays: n(r.scheduled_days),
 
       events: empEvents,
@@ -278,9 +283,20 @@ export function buildPayrollRows({ run, events, overrides, pendingLeaveEmployeeI
 
 export type PayrollRow = ReturnType<typeof buildPayrollRows>[number];
 
+/**
+ * الراتب ينعتمد بعد نهاية فترة الدوام، إلا آخر راتب لموظف ترك العمل وآخر يوم دوامه فات
+ * (نفس شرط approve_payroll_slip بالسيرفر).
+ */
+export function canApproveNow(row: Pick<PayrollRow, 'isIssued' | 'terminationDate'>, startDate: string, endDate: string, today: string): boolean {
+  if (row.isIssued || !endDate) return false;
+  if (today > endDate) return true;
+  const t = row.terminationDate;
+  return !!t && t >= startDate && t <= endDate && t < today;
+}
+
 /** سبب يحتاج انتباه الأدمن قبل الاعتماد (بلغة بسيطة) مع نوعه للون والزر. */
 export interface AttentionReason {
-  kind: 'negative' | 'never_attended' | 'left_with_loan' | 'pending_leave' | 'decisions';
+  kind: 'negative' | 'never_attended' | 'left_with_loan' | 'pending_leave' | 'decisions' | 'data';
   text: string;
 }
 
@@ -296,6 +312,12 @@ export function attentionReasons(row: PayrollRow): AttentionReason[] {
     out.push({ kind: 'left_with_loan', text: `ترك العمل وباقي عليه سلفة ${row.loanBalanceAfterExit.toLocaleString('en-US')} د.ع` });
   }
   if (row.isNetNegative) out.push({ kind: 'negative', text: 'الصافي بالسالب: الخصومات والسلف أكثر من الراتب' });
+  const missing = [
+    row.monthlySalary <= 0 && 'الراتب صفر',
+    !row.branch_id && 'بدون فرع',
+    !row.hasSchedule && 'بدون جدول دوام (ما ينحسب عليه تأخير)',
+  ].filter(Boolean);
+  if (missing.length > 0) out.push({ kind: 'data', text: `بيانات ناقصة: ${missing.join('، ')}. صلّحها من صفحة الموظفين.` });
   if (row.hasPendingLeave) out.push({ kind: 'pending_leave', text: 'عنده طلب إجازة معلّق بهذا المسير' });
   return out;
 }

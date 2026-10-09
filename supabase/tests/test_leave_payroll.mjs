@@ -9,7 +9,7 @@ const bal = async (id) => {
 
 // ---------------- leave balances ----------------
 check('every employee has a balance row', (await db.query(`SELECT count(*)::int n FROM leave_balances`)).rows[0].n === 4);
-await db.exec(`INSERT INTO employees (id, employee_code, full_name) VALUES ('00000000-0000-0000-0000-0000000000f1','N1','جديد')`);
+await db.exec(`INSERT INTO employees (id, employee_code, full_name, branch_id) VALUES ('00000000-0000-0000-0000-0000000000f1','N1','جديد', '${IDS.branch}')`);
 check('new employee gets a balance row automatically',
   (await db.query(`SELECT 1 FROM leave_balances WHERE employee_id='00000000-0000-0000-0000-0000000000f1'`)).rows.length === 1);
 

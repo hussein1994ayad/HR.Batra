@@ -1,9 +1,10 @@
 'use client';
 
-// جدول أقساط سلفة: تسجيل دفعة، «هالشهر أقل»، تأجيل لآخر السلفة، تراجع عن سداد، حذف قسط مسدد، طباعة، وتعديل السلفة.
+// جدول أقساط سلفة: تسجيل دفعة، «هالشهر أقل»، تأجيل لآخر السلفة، تراجع عن دفعة يدوية، طباعة، وتعديل السلفة.
+// القسط المسدد ما ينحذف (كان يرجع ديناً)، واللي انخصم من راتب ما يتراجع إلا بإلغاء اعتماد ذاك الراتب.
 // كل قسط يبين ليش موجود: «باقي شهر 10/2026» أو «مؤجّل من 12/2026» أو «مبلغ هالشهر مخفّض».
 
-import { Calendar, CalendarClock, Pencil, Undo2, Trash2, Banknote, Printer, TrendingDown } from 'lucide-react';
+import { Calendar, CalendarClock, Pencil, Undo2, Banknote, Printer, TrendingDown } from 'lucide-react';
 import { formatIQD } from '@/lib/format';
 import { Badge, Button, IconButton, Modal, StatTile } from '@/components/ui';
 import { installmentOrigin, monthLabel, sortInstallments } from '../logic';
@@ -11,7 +12,7 @@ import { payrollMonthName, payrollMonthOfDate } from '@/features/payroll/period'
 import type { LoansState } from '../useLoans';
 
 export function InstallmentScheduleModal({ s }: { s: LoansState }) {
-  const { busy, setEditDraft, scheduleLoan, setScheduleLoanId, setPayPrompt, setMonthPrompt, revertPayment, deletePaidInstallment, postponeFrom } = s;
+  const { busy, setEditDraft, scheduleLoan, setScheduleLoanId, setPayPrompt, setMonthPrompt, revertPayment, postponeFrom } = s;
   if (!scheduleLoan) return null;
   const installments = sortInstallments(scheduleLoan.loan_installments);
   // الأشهر المؤجّلة تبين بمكانها الأصلي (سطر توضيحي، مو قسط)
@@ -107,11 +108,10 @@ export function InstallmentScheduleModal({ s }: { s: LoansState }) {
                       />
                       <IconButton icon={CalendarClock} label="تأجيل هذا القسط لآخر السلفة" tone="indigo" loading={busy === `postpone_${inst.id}`} disabled={!!busy} onClick={() => postponeFrom(inst)} />
                     </>
+                  ) : inst.paid_by_slip_id ? (
+                    <span className="text-[11px] text-slate-500">انخصم من الراتب — للتراجع ألغِ اعتماد ذاك الراتب</span>
                   ) : (
-                    <>
-                      <IconButton icon={Undo2} label="التراجع عن السداد" tone="amber" loading={busy === `revert_${inst.id}`} disabled={!!busy} onClick={() => revertPayment(inst)} />
-                      <IconButton icon={Trash2} label="حذف القسط المسدد نهائياً" tone="rose" loading={busy === `delete_${inst.id}`} disabled={!!busy} onClick={() => deletePaidInstallment(inst)} />
-                    </>
+                    <IconButton icon={Undo2} label="التراجع عن هذه الدفعة" tone="amber" loading={busy === `revert_${inst.id}`} disabled={!!busy} onClick={() => revertPayment(inst)} />
                   )}
                 </div>
               </div>

@@ -6,12 +6,13 @@ import toast from 'react-hot-toast';
 import { errorMessage } from '@/lib/error-utils';
 import {
   approvePayrollSlip, archivePayrollMonth, closePayrollPeriod, decidePayrollEvent, fetchPayrollDataset,
-  insertBonusDeduction, notifyBranchPayslips, notifySlipReverted, reopenPayrollPeriod, revertPayrollSlip, settleLoanOnExit,
+  calculatePayroll, insertBonusDeduction, notifyBranchPayslips, notifySlipReverted, reopenPayrollPeriod, revertPayrollSlip, settleLoanOnExit,
   type PayrollDataset,
 } from './api';
-import { buildPayrollRows, buildSlipAdjustments, sumPayroll, type PayrollRow } from './calc';
+import { buildPayrollRows, buildSlipAdjustments, canApproveNow, sumPayroll, type PayrollRow } from './calc';
+import { downloadMonthBeforeArchive } from './archiveExport';
 import { baghdadToday, currentPayrollMonth, monthLabel } from './period';
-import { useConfirm } from '@/components/confirm';
+import { useConfirm, useConfirmNote } from '@/components/confirm';
 import type { OverrideField, PayrollOverrides } from './types';
 
 const EMPTY_DATASET: PayrollDataset = {
@@ -21,6 +22,7 @@ const EMPTY_DATASET: PayrollDataset = {
 /** حالة صفحة الرواتب: مسير الشهر من السيرفر، الفلاتر، التعديلات اليدوية، والإجراءات. */
 export function usePayroll() {
   const confirm = useConfirm();
+  const askNote = useConfirmNote();
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [sendingNotifs, setSendingNotifs] = useState(false);
@@ -78,6 +80,9 @@ export function usePayroll() {
 
   const totals = useMemo(() => sumPayroll(filteredRows), [filteredRows]);
   const pendingRows = useMemo(() => filteredRows.filter(r => !r.isIssued), [filteredRows]);
+  // الاعتماد بعد نهاية فترة الدوام (إلا آخر راتب لمن ترك العمل)
+  const canApprove = useCallback((r: PayrollRow) => canApproveNow(r, startDate, endDate, baghdadToday()), [startDate, endDate]);
+  const approvableRows = useMemo(() => pendingRows.filter(canApprove), [pendingRows, canApprove]);
   const isMonthArchived = !!period?.archived;
   const isPeriodClosed = period?.status === 'closed';
   /** لا اعتماد ولا تعديل: الشهر مؤرشف أو المسير مغلق. */
@@ -87,9 +92,28 @@ export function usePayroll() {
   // ------------------------------------------------------------------
   // التعديلات اليدوية
   // ------------------------------------------------------------------
-  const saveOverride = (employeeId: string, field: OverrideField, value: number) => {
-    setPayrollOverrides(prev => ({ ...prev, [employeeId]: { ...prev[employeeId], [field]: value } }));
-    toast.success('تم تعديل القيمة — ستُحفظ كمكافأة/خصم عند الاعتماد 💸');
+  /**
+   * تعديل خانة بالجدول = مكافأة أو خصم بالفرق، ينحفظ فوراً على السيرفر بسبب مكتوب
+   * (كان ينحفظ بالمتصفح بس لحد الاعتماد ويضيع إذا تحدّثت الصفحة).
+   */
+  const saveOverride = async (employeeId: string, field: OverrideField, value: number) => {
+    const row = rows.find(r => r.id === employeeId);
+    if (!row) return;
+    const computed = field === 'bonuses' ? row.computedBonuses
+      : field === 'attendanceDeductions' ? row.computedAttendanceDeductions : row.computedOtherDeductions;
+    const diff = Math.round(value - computed);
+    if (diff === 0) return;
+    const type: 'bonus' | 'deduction' = (field === 'bonuses' ? diff > 0 : diff < 0) ? 'bonus' : 'deduction';
+    const label = field === 'bonuses' ? 'المكافآت' : field === 'attendanceDeductions' ? 'خصم الدوام' : 'الخصومات الأخرى';
+    const amount = Math.abs(diff);
+    const note = await askNote({
+      title: `تعديل ${label} لـ${row.full_name}`,
+      message: `${type === 'bonus' ? 'تنضاف مكافأة' : 'ينضاف خصم'} ${amount.toLocaleString('en-US')} د.ع بهذا المسير. اكتب السبب: ينحفظ ويطلع بكشف الموظف.`,
+      confirmLabel: 'حفظ',
+      note: { placeholder: 'السبب (مثلاً: تعديل حسب قرار الإدارة)' },
+    });
+    if (note === null) return;
+    await addBonusDeduction({ employeeId, type, amount, reason: note || `تعديل ${label} يدوياً` });
   };
 
   const clearOverride = (employeeId: string, field: OverrideField) => {
@@ -165,18 +189,15 @@ export function usePayroll() {
       toast.error('تم صرف الراتب مسبقاً لهذا الموظف في هذا الشهر.');
       return;
     }
-    // اعتماد راتب = قرار مالي: تأكيد، وتنبيه إذا المسير ما خلص بعد
-    const midPeriod = !!endDate && baghdadToday() < endDate;
+    if (!canApprove(row)) {
+      toast.error(`رواتب هالشهر تنعتمد بعد نهاية الدوام المحسوب (${endDate}). قبلها بس آخر راتب لموظف ترك العمل.`);
+      return;
+    }
+    // اعتماد راتب = قرار مالي: تأكيد بالصافي
     const confirmed = await confirm({
       title: `اعتماد راتب ${row.full_name}؟`,
-      message: (
-        `الصافي: ${Math.round(row.netSalary).toLocaleString('en-US')} د.ع لـ${monthLabel(selectedMonth)}.` +
-        (midPeriod ? `
-
-تنبيه: المسير ما خلص بعد (ينتهي ${endDate}). أي غياب أو تأخير أو خصم بعد اليوم ينحسب بمسير الشهر الجاي.` : '')
-      ),
+      message: `الصافي: ${Math.round(row.netSalary).toLocaleString('en-US')} د.ع لـ${monthLabel(selectedMonth)}.`,
       confirmLabel: 'اعتماد الراتب',
-      tone: midPeriod ? 'warning' : 'primary',
     });
     if (!confirmed) return;
     const ok = await run(`slip_${row.id}`, async () => {
@@ -309,6 +330,7 @@ export function usePayroll() {
     const confirmed = window.confirm(
       `⚠️ تحذير أمني: هل أنت متأكد من أرشفة كشوف الرواتب لشهر (${selectedMonth})؟\n\n` +
       `عند الأرشفة:\n` +
+      `- ينزل أولاً ملف Excel بكل الحضور والرواتب لهذا الشهر (احتفظ بيه كمرجع).\n` +
       `- سيتم حذف سجلات الحضور والغياب التفصيلية لهذا الشهر بشكل نهائي لتوفير المساحة.\n` +
       `- سيتم حذف سجلات المكافآت والخصومات التفصيلية (حيث تم حفظ المبالغ الصافية نهائياً في كشوف الرواتب).\n` +
       `- سيتم قفل الشهر مالياً ولن تتمكن من تعديل أو التراجع عن أي راتب بعد الآن.\n` +
@@ -316,6 +338,13 @@ export function usePayroll() {
       `هل تريد المتابعة؟`,
     );
     if (!confirmed) return;
+
+    // مرجع قبل الحذف: إذا ما نزل الملف، ما نأرشف
+    const saved = await run('archive_month', async () => {
+      await downloadMonthBeforeArchive(selectedMonth, startDate, endDate, rows);
+      return true;
+    }, 'ما نزل ملف الأرشيف، فما تمت الأرشفة');
+    if (!saved) return;
 
     const result = await run('archive_month', () => archivePayrollMonth(selectedMonth), 'خطأ أثناء الأرشفة');
     if (!result) return;
@@ -333,6 +362,17 @@ export function usePayroll() {
     await loadData();
   };
 
+  /** «احتساب الرواتب»: يحسب المسير على السيرفر ثم يعيد التحميل. */
+  const calculate = async () => {
+    const ok = await run('calculate', async () => {
+      await calculatePayroll(selectedMonth);
+      return true;
+    }, 'ما انحسبت الرواتب');
+    if (!ok) return;
+    await loadData({ quiet: true });
+    toast.success('تم احتساب الرواتب ✅');
+  };
+
   /** ترك العمل وعليه سلفة: يخصم [amount] من آخر راتب، والباقي يسدد نقداً (settle_loan_on_exit). */
   const settleExit = async (employeeId: string, amount: number) => {
     const taken = await run(`settle_${employeeId}`, () => settleLoanOnExit(employeeId, selectedMonth, amount), 'ما انخصم الباقي');
@@ -346,10 +386,10 @@ export function usePayroll() {
     branches: data.branches,
     period, selectedMonth, startDate, endDate, changeMonth,
     searchTerm, setSearchTerm, selectedBranch, setSelectedBranch,
-    rows, filteredRows, pendingRows, totals, pendingDecisions,
+    rows, filteredRows, pendingRows, approvableRows, canApprove, totals, pendingDecisions,
     isMonthArchived, isPeriodClosed, isLocked,
     payrollOverrides, saveOverride, clearOverride,
-    addBonusDeduction, decideEvent, generateSlip, bulkGenerateSlips, revertSlip, settleExit,
+    addBonusDeduction, decideEvent, generateSlip, bulkGenerateSlips, revertSlip, settleExit, calculate,
     closePeriod, reopenPeriod, sendBranchNotifications, archiveMonth,
   };
 }

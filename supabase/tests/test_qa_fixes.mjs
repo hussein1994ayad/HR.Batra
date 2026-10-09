@@ -63,7 +63,16 @@ await expectError('   termination before joining is refused', as(db, 'admin', `U
 await db.query(`INSERT INTO attendance (employee_id, branch_id, work_date, status, deduction_status) VALUES ($1, $2, '2026-09-22', 'absent', 'applied')`, [IDS.emp2, IDS.branch]);
 check('7) absence at the old daily rate (900,000 / 30 = 30,000)', (await absEv(IDS.emp2, '2026-09-22'))[0]?.a === 30000);
 await db.exec(`UPDATE employees SET monthly_salary_iqd = 1500000 WHERE id='${IDS.emp2}'`);
-check('   after a raise the open payroll uses the new rate (50,000)', (await absEv(IDS.emp2, '2026-09-22'))[0]?.a === 50000, JSON.stringify(await absEv(IDS.emp2, '2026-09-22')));
+// الزيادة تسري من شهر الرواتب الحالي (سجل الرواتب): المسير المفتوح الأقدم يبقى بالأجر القديم، وأيام الشهر الحالي بالجديد
+check('   after a raise an older open month keeps the old rate (30,000)', (await absEv(IDS.emp2, '2026-09-22'))[0]?.a === 30000, JSON.stringify(await absEv(IDS.emp2, '2026-09-22')));
+// أقرب يوم دوام (مو جمعة) بشهر الرواتب الحالي
+const todayQa = (await db.query(`
+  WITH t AS (SELECT (now() AT TIME ZONE 'Asia/Baghdad')::date AS d)
+  SELECT g.d::date::text d FROM t, generate_series(t.d - 6, t.d, interval '1 day') g(d)
+  WHERE EXTRACT(DOW FROM g.d) <> 5 AND payroll_month_of(g.d::date) = payroll_month_of(t.d)
+  ORDER BY g.d DESC LIMIT 1`)).rows[0].d;
+await db.query(`INSERT INTO attendance (employee_id, branch_id, work_date, status, deduction_status) VALUES ($1, $2, $3, 'absent', 'applied')`, [IDS.emp2, IDS.branch, todayQa]);
+check('   and the current month uses the new rate (1,500,000 / 30 = 50,000)', (await absEv(IDS.emp2, todayQa))[0]?.a === 50000, JSON.stringify(await absEv(IDS.emp2, todayQa)));
 
 // 8) مدير الفرع يقرأ موظفين فرعه فقط
 await db.exec(`INSERT INTO employees (id, employee_code, full_name, role, branch_id, monthly_salary_iqd, must_change_password)

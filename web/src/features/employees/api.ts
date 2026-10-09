@@ -260,3 +260,16 @@ export async function destroyArchivedEmployee(record: ArchivedEmployee) {
     .eq('id', record.id);
   if (error) throw error;
 }
+
+/** آخر يوم بصم بيه الموظف (اقتراح «آخر يوم عمل» عند التعطيل). */
+export async function fetchLastPunchDate(employeeId: string): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('attendance')
+    .select('work_date')
+    .eq('employee_id', employeeId)
+    .not('check_in_time', 'is', null)
+    .order('work_date', { ascending: false })
+    .limit(1);
+  if (error) return null;
+  return (data?.[0]?.work_date as string | undefined) ?? null;
+}

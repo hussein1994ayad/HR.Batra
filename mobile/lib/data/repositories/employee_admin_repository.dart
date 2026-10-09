@@ -36,6 +36,19 @@ class EmployeeAdminRepository {
     }).eq('id', employeeId);
   }
 
+  /// آخر يوم بصم بيه الموظف (اقتراح «آخر يوم عمل» عند التعطيل).
+  Future<DateTime?> lastPunchDate(String employeeId) async {
+    final rows = await _db
+        .from('attendance')
+        .select('work_date')
+        .eq('employee_id', employeeId)
+        .not('check_in_time', 'is', null)
+        .order('work_date', ascending: false)
+        .limit(1);
+    final value = rows.isEmpty ? null : rows.first['work_date'];
+    return value is String ? DateTime.tryParse(value) : null;
+  }
+
   /// فك ربط الجهاز: مسح تسجيلات الجهاز القديمة ثم قفل الحساب على أول جهاز جديد.
   Future<void> unbindDevice(String employeeId) async {
     // 1. مسح تسجيلات الجهاز القديمة

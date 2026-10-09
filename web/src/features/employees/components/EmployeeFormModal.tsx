@@ -146,7 +146,7 @@ export function EmployeeFormModal({ employee, branches, departments, saving, onC
               <Field label="الراتب الجديد (د.ع)">
                 <AmountInput value={form.futureSalary} onValueChange={(v) => set('futureSalary', v)} placeholder="مبلغ الراتب" />
               </Field>
-              <Field label="يبدأ من تاريخ">
+              <Field label="يبدأ من تاريخ" hint="ينطبق من رواتب الشهر اللي يقع بيه هذا التاريخ (بعد يوم 26 = الشهر الجاي).">
                 <Input type="date" value={form.futureSalaryMonth} onChange={(e) => set('futureSalaryMonth', e.target.value)} dir="ltr" />
               </Field>
             </div>
