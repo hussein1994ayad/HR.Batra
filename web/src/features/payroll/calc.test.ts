@@ -110,6 +110,11 @@ describe('attention before approving', () => {
       .toEqual(['left_with_loan']);
     expect(kinds(rowOf({ basic: 100000, loans: 500000 }))).toContain('negative');
     expect(kinds(rowOf({ pending_count: 3 }))).toEqual(['decisions']);
+    // بيانات ناقصة: راتب صفر / بدون فرع / بدون جدول
+    const data = attentionReasons(rowOf({ monthly_salary: 0, branch_id: null, has_schedule: false })).find((x) => x.kind === 'data');
+    expect(data?.text).toContain('الراتب صفر');
+    expect(data?.text).toContain('بدون فرع');
+    expect(data?.text).toContain('بدون جدول');
   });
 
   it('this month loan installments come through for the details', () => {

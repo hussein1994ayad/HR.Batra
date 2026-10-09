@@ -103,9 +103,17 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
     // آخر يوم عمل فعلي: يُحسب راتب المسير الأخير حتى هذا اليوم
     DateTime? lastDay;
     if (isActive) {
+      // الراتب ينحسب للأيام اللي اشتغلها بالضبط: المقترح آخر يوم بصم بيه
+      DateTime? lastPunch;
+      try {
+        lastPunch = await _repo.lastPunchDate(emp.id);
+      } catch (_) {}
+      if (!mounted) return;
+      final now = DateTime.now();
+      final suggested = lastPunch != null && lastPunch.isBefore(now) && now.difference(lastPunch).inDays < 120 ? lastPunch : now;
       lastDay = await showDatePicker(
         context: context,
-        initialDate: DateTime.now(),
+        initialDate: suggested,
         firstDate: DateTime.now().subtract(const Duration(days: 120)),
         lastDate: DateTime.now().add(const Duration(days: 60)),
         helpText: 'آخر يوم عمل',

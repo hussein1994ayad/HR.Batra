@@ -166,7 +166,7 @@ export function AttendanceBreakdownModal({ row, startDate, endDate, locked, acti
                   <>
                     <Button size="xs" variant={e.direction === 1 ? 'soft-success' : 'soft-danger'} icon={Check} loading={busy}
                       onClick={() => onDecide(e.id, true)}>
-                      {e.direction === 1 ? 'اعتماد' : e.event_type === 'missing_punch' ? 'تأكيد' : 'خصم'}
+                      {e.direction === 1 ? 'اعتماد' : e.event_type === 'missing_punch' && !(Number(e.amount) > 0) ? 'تأكيد' : 'خصم'}
                     </Button>
                     <Button size="xs" variant="soft-success" icon={X} disabled={busy} onClick={() => onDecide(e.id, false)}>
                       {e.direction === 1 ? 'رفض' : 'إعفاء'}

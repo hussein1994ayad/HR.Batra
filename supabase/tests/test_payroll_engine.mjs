@@ -134,7 +134,9 @@ check('early leave counted in minutes (120) and waits for admin confirmation',
   el && N(el.minutes) === 120 && N(el.amount) === 5000 && el.status === 'pending', JSON.stringify(el));
 await attend(E3, '2026-09-04', '09:00', null, 'present');
 const mp = await ev(E3, '2026-09-04', 'missing_punch');
-check('forgotten check-out = missing punch, amount 0 (no automatic deduction)', mp && N(mp.amount) === 0 && mp.status === 'pending');
+// بدون بصمة انصراف: خصم مقترح = دقائق الدوام بعد آخر تواجد (هنا بصمة الحضور 09:00 ← 480 دقيقة = 20,000)، ينتظر قرار الأدمن
+check('forgotten check-out = missing punch with a suggested deduction that waits for the admin (never automatic)',
+  mp && N(mp.minutes) === 480 && N(mp.amount) === 20000 && mp.status === 'pending' && N(mp.direction) === -1, JSON.stringify(mp));
 check('no half-day deduction anywhere', (await q(`SELECT 1 FROM payroll_events WHERE notes LIKE '%نصف%'`)).length === 0);
 
 // ---------------- 13) الساعات الإضافية ----------------

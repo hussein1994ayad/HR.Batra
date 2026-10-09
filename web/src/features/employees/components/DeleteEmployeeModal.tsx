@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Archive, Clock, ShieldAlert, Trash2 } from 'lucide-react';
 import type { Employee } from '@/lib/db-types';
 import { Field, Input, Modal, ModalFooter, cn, type Tone } from '@/components/ui';
 import { getLocalDateStr } from '@/lib/dates';
+import { fetchLastPunchDate } from '../api';
 import type { DeleteType } from '../types';
 
 const DELETE_OPTIONS: { value: DeleteType; icon: typeof Archive; tone: Tone; title: string; body: string }[] = [
@@ -44,6 +45,17 @@ export function DeleteEmployeeModal({ employeeToDelete, saving, onClose, onSubmi
   const [reason, setReason] = useState('');
   // آخر يوم عمل فعلي: يُحسب راتبه حتى هذا اليوم (كان يُعتمد يوم الضغط على الزر)
   const [lastDay, setLastDay] = useState(() => getLocalDateStr());
+  // ذكي: آخر يوم عمل المقترح = آخر يوم بصم بيه (الراتب ينحسب للأيام اللي اشتغلها بالضبط)
+  const [lastPunch, setLastPunch] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void fetchLastPunchDate(employeeToDelete.id).then((d) => {
+      if (!alive || !d) return;
+      setLastPunch(d);
+      setLastDay((cur) => (d < cur ? d : cur));
+    });
+    return () => { alive = false; };
+  }, [employeeToDelete.id]);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -80,7 +92,7 @@ export function DeleteEmployeeModal({ employeeToDelete, saving, onClose, onSubmi
             );
           })}
         </div>
-        <Field label="آخر يوم عمل" hint="يُحسب راتبه في المسير الأخير حتى هذا اليوم.">
+        <Field label="آخر يوم عمل" hint={lastPunch ? `آخر بصمة له كانت يوم ${lastPunch}. يُحسب راتبه للأيام اللي اشتغلها لحد هذا اليوم.` : 'يُحسب راتبه في المسير الأخير حتى هذا اليوم.'}>
           <Input type="date" required value={lastDay} onChange={(e) => setLastDay(e.target.value)} dir="ltr" />
         </Field>
         <Field label="السبب (اختياري)">
