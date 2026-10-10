@@ -1,0 +1,195 @@
+Resolving dependencies...
+Downloading packages...
+  _flutterfire_internals 1.3.59 (1.3.77 available)
+  app_links 7.0.0 (7.2.2 available)
+  app_links_linux 1.0.3 (1.0.4 available)
+  app_links_platform_interface 2.0.2 (2.0.4 available)
+  app_links_web 1.0.4 (1.0.5 available)
+  archive 3.6.1 (4.4.0 available)
+  audioplayers 6.7.1 (6.8.1 available)
+  audioplayers_android 5.2.1 (5.3.0 available)
+  audioplayers_darwin 6.4.0 (6.5.0 available)
+  audioplayers_linux 4.2.1 (4.3.0 available)
+  audioplayers_platform_interface 7.1.1 (7.2.0 available)
+  audioplayers_web 5.2.1 (5.3.0 available)
+  audioplayers_windows 4.3.1 (4.4.1 available)
+  cli_util 0.4.2 (0.6.0 available)
+  clock 1.1.2 (1.1.3 available)
+  code_assets 1.2.1 (2.1.0 available)
+  cross_file 0.3.5+5 (0.4.0 available)
+  cupertino_icons 1.0.9 (2.0.0 available)
+  dbus 0.7.15 (0.8.0 available)
+  device_info_plus 10.1.2 (13.3.0 available)
+  device_info_plus_platform_interface 7.0.3 (8.1.0 available)
+  file_picker 8.3.7 (13.1.0 available)
+  firebase_core 3.15.2 (4.15.0 available)
+  firebase_core_platform_interface 6.0.3 (8.1.1 available)
+  firebase_core_web 2.24.1 (3.12.0 available)
+  firebase_messaging 15.2.10 (16.7.0 available)
+  firebase_messaging_platform_interface 4.6.10 (4.10.0 available)
+  firebase_messaging_web 3.10.10 (4.2.5 available)
+  flutter_launcher_icons 0.13.1 (0.14.4 available)
+  flutter_lints 3.0.2 (6.0.0 available)
+  flutter_local_notifications 17.2.4 (22.3.1 available)
+  flutter_local_notifications_linux 4.0.1 (8.0.1 available)
+  flutter_local_notifications_platform_interface 7.2.0 (12.2.0 available)
+  flutter_map 7.0.2 (8.3.2 available)
+  flutter_riverpod 2.6.1 (3.4.3 available)
+  geolocator 13.0.4 (14.1.1 available)
+  geolocator_android 4.6.2 (5.1.1+1 available)
+  go_router 14.8.1 (18.0.2 available)
+  google_fonts 6.3.3 (9.0.0 available)
+  hooks 2.0.2 (2.2.0 available)
+  image 4.3.0 (4.10.1 available)
+  image_picker 1.2.3 (1.2.4 available)
+  image_picker_android 0.8.13+17 (0.8.13+25 available)
+  image_picker_ios 0.8.13+8 (0.8.13+9 available)
+  image_picker_platform_interface 2.11.1 (2.11.2 available)
+! intl 0.20.3 (overridden)
+  jni 1.0.3 (1.1.0 available)
+  jni_flutter 1.0.3 (1.0.4+1 available)
+  latlong2 0.9.1 (0.10.1 available)
+  lints 3.0.0 (6.1.0 available)
+  matcher 0.12.19 (0.12.20 available)
+  material_color_utilities 0.13.0 (0.13.1 available)
+  meta 1.17.0 (1.19.0 available)
+  mgrs_dart 2.0.0 (3.0.0 available)
+  objective_c 9.5.0 (9.6.2 available)
+  package_info_plus 8.3.1 (10.2.2 available)
+  package_info_plus_platform_interface 3.2.1 (4.1.0 available)
+  permission_handler 11.4.0 (13.0.2 available)
+  permission_handler_android 12.1.0 (14.1.0 available)
+  petitparser 7.0.2 (7.1.0 available)
+  platform 3.1.6 (3.2.0 available)
+  proj4dart 2.1.0 (3.0.0 available)
+  record 6.2.1 (7.1.1 available)
+  record_android 1.5.2 (2.2.0 available)
+  record_ios 1.2.1 (2.1.1 available)
+  record_linux 1.3.1 (2.1.2 available)
+  record_macos 1.2.2 (2.1.1 available)
+  record_platform_interface 1.6.0 (2.1.0 available)
+  record_use 0.6.0 (1.1.1 available)
+  record_web 1.3.0 (2.1.3 available)
+  record_windows 1.0.7 (2.3.0 available)
+  riverpod 2.6.1 (3.4.3 available)
+  share_plus 12.0.2 (13.3.1 available)
+  share_plus_platform_interface 6.1.0 (7.2.0 available)
+  shared_preferences 2.5.5 (2.5.6 available)
+  shared_preferences_android 2.4.23 (2.4.28 available)
+  stack_trace 1.12.1 (1.12.2 available)
+  storage_client 2.8.0 (2.8.1 available)
+  supabase 2.16.1 (2.16.2 available)
+  supabase_flutter 2.17.2 (2.18.0 available)
+  syncfusion_flutter_core 25.2.7 (35.1.39 available)
+  syncfusion_flutter_pdf 25.2.7 (35.1.39 available)
+  syncfusion_flutter_xlsio 25.2.7 (35.1.39 available)
+  syncfusion_officecore 25.2.7 (35.1.39 available)
+  synchronized 3.4.0+1 (3.4.2 available)
+  test_api 0.7.10 (0.7.14 available)
+  timezone 0.9.4 (0.11.1 available)
+  unicode 0.3.1 (1.1.9 available)
+  url_launcher 6.3.2 (6.3.3 available)
+  url_launcher_android 6.3.30 (6.3.33 available)
+  vector_math 2.2.0 (2.4.3 available)
+  win32 5.15.0 (6.4.0 available)
+  win32_registry 1.1.5 (3.0.3 available)
+  xml 6.6.1 (7.1.0 available)
+Got dependencies!
+93 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+Running Xcode build...                                          
+Xcode build done.                                           71.9s
+Failed to check availability in Spotlight for action is.workflow.actions.workout.end: Error Domain=NSOSStatusErrorDomain Code=-10814 "(null)" UserInfo={_LSLine=156, _LSFunction=+[LSBundleRecord bundleRecordWithBundleIdentifier:allowPlaceholder:error:], _LSFile=LSBundleRecord.mm, NSUnderlyingError=0x10c3a4ea0 {Error Domain=NSOSStatusErrorDomain Code=-10814 "Unable to find this application extension record in the Launch Services database." UserInfo={_LSLine=652, _LSFunction=_LSPluginFindWithPlatformInfo, _LSFile=LSPluginBundle.mm, NSDebugDescription=Unable to find this application extension record in the Launch Services database., SK=com.apple.SessionTrackerApp, IS=false}}}
+Failed to index action parameter: <WFSystemShortcutPickerParameter: 0x109696dc0> due to (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFSystemShortcutPickerParameter)
+Failed to index action parameter: <WFTagFieldParameter: 0x109fb00e0> due to (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFTagFieldParameter)
+Failed to index action parameter: <WFPosterPickerParameter: 0x109fbef40> due to (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFPosterPickerParameter)
+Failed to index action parameter: <WFMediaPickerParameter: 0x10ad91980> due to (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFMediaPickerParameter)
+Failed to index action parameter: <WFLightroomPresetPickerParameter: 0x10ac966c0> due to (extension in ActionKit):__C.WFParameter.ToolKitConversionError.missingIntentDescription
+Failed to check availability in Spotlight for action is.workflow.actions.lightroom.import: Error Domain=NSOSStatusErrorDomain Code=-10814 "(null)" UserInfo={_LSLine=156, _LSFunction=+[LSBundleRecord bundleRecordWithBundleIdentifier:allowPlaceholder:error:], _LSFile=LSBundleRecord.mm, NSUnderlyingError=0x10c3a75a0 {Error Domain=NSOSStatusErrorDomain Code=-10814 "Unable to find this application extension record in the Launch Services database." UserInfo={_LSLine=652, _LSFunction=_LSPluginFindWithPlatformInfo, _LSFile=LSPluginBundle.mm, NSDebugDescription=Unable to find this application extension record in the Launch Services database., SK=com.adobe.lrmobile, IS=false}}}
+Failed to index action parameter: <WFInputTypeParameter: 0x10af35800> due to ActionKit.(unknown context at $104506880).WFParameterStateToolKitConversionError.unknownParameterState(WFMultipleValueParameterState)
+Failed to index action parameter: <WFInputSurfaceParameter: 0x10af16c40> due to (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFInputSurfaceParameter)
+Failed to check availability in Spotlight for action is.workflow.actions.workout.start: Error Domain=NSOSStatusErrorDomain Code=-10814 "(null)" UserInfo={_LSLine=156, _LSFunction=+[LSBundleRecord bundleRecordWithBundleIdentifier:allowPlaceholder:error:], _LSFile=LSBundleRecord.mm, NSUnderlyingError=0x10c3d23d0 {Error Domain=NSOSStatusErrorDomain Code=-10814 "Unable to find this application extension record in the Launch Services database." UserInfo={_LSLine=652, _LSFunction=_LSPluginFindWithPlatformInfo, _LSFile=LSPluginBundle.mm, NSDebugDescription=Unable to find this application extension record in the Launch Services database., SK=com.apple.SessionTrackerApp, IS=false}}}
+VMServiceFlutterDriver: Connecting to Flutter application at http://127.0.0.1:54046/GqBFSAx-qi8=/
+VMServiceFlutterDriver: Isolate found with number: 7686979814876623
+VMServiceFlutterDriver: Isolate 7686979814876623 is runnable.
+VMServiceFlutterDriver: Isolate is paused at start.
+VMServiceFlutterDriver: Attempting to resume isolate
+flutter: 00:00 +0: (setUpAll)
+flutter: 00:00 +1: 01_login
+VMServiceFlutterDriver: Connected to Flutter application.
+VMServiceFlutterDriver: request_data message is taking a long time to complete...
+flutter: 00:09 +2: 02_change_password
+flutter: 00:12 +3: 03_home
+flutter: 00:12 +3: 01_login
+flutter: ⚠️ خدمة GPS معطلة في الجهاز
+flutter: === notifications channel: RealtimeSubscribeStatus.channelError ===
+flutter: === channel error: WebSocketChannelException: SocketException: Failed host lookup: 'fake.supabase.test' (OS Error: nodename nor servname provided, or not known, errno = 8) ===
+flutter: === attendance channel: RealtimeSubscribeStatus.channelError ===
+flutter: 💾 تم حفظ حالة التتبع محلياً للعمل أوفلاين.
+flutter: 🚀 بدء تشغيل تدفق التتبع الجغرافي الحي للموظف: 00000000-0000-4000-8000-000000000001
+flutter: ⚠️ خطأ في التقاط الموقع الأولي: type 'Null' is not a subtype of type 'Map<dynamic, dynamic>'
+Failed to index action parameter: <WFPosterPickerParameter: 0x108d200c0> due to (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFPosterPickerParameter)
+flutter: iOS: بدأت مراقبة 1 فرع
+flutter: iOS: setCheckedIn(true)
+flutter: ✅ تم تفعيل وتشغيل نظام التتبع الجغرافي بنجاح للموظف: 00000000-0000-4000-8000-000000000001
+flutter: === notifications channel: RealtimeSubscribeStatus.channelError ===
+flutter: === channel error: WebSocketChannelException: SocketException: Failed host lookup: 'fake.supabase.test' (OS Error: nodename nor servname provided, or not known, errno = 8) ===
+flutter: === attendance channel: RealtimeSubscribeStatus.channelError ===
+Failed to index action parameter: <WFDynamicTagFieldParameter: 0x10bb3ca00> due to (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFDynamicTagFieldParameter)
+Failed to index action parameter: <WFDynamicTagFieldParameter: 0x10bb3cb00> due to (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFDynamicTagFieldParameter)
+Failed to index action parameter: <WFSystemShortcutPickerParameter: 0x108d05e00> due to (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFSystemShortcutPickerParameter)
+flutter: === notifications channel: RealtimeSubscribeStatus.timedOut ===
+flutter: === attendance channel: RealtimeSubscribeStatus.timedOut ===
+is.workflow.actions.conditional WFConditionalAction: Skipped because: [control flow]
+flutter: === notifications channel: RealtimeSubscribeStatus.channelError ===
+flutter: === channel error: WebSocketChannelException: SocketException: Failed host lookup: 'fake.supabase.test' (OS Error: nodename nor servname provided, or not known, errno = 8) ===
+flutter: === attendance channel: RealtimeSubscribeStatus.channelError ===
+flutter: === notifications channel: RealtimeSubscribeStatus.closed ===
+flutter: === attendance channel: RealtimeSubscribeStatus.closed ===
+flutter: 00:23 +4: 04_attendance
+Failed to index action parameter: <WFHomeAccessoryPickerParameter: 0x108cc2100> due to (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFHomeAccessoryPickerParameter)
+Failed to index action parameter: <WFEvernoteTagsTagFieldParameter: 0x10bbf6c00> due to (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFEvernoteTagsTagFieldParameter)
+Failed to index action parameter: <WFSpotlightSearchResultTypePickerParameter: 0x10bc9d500> due to ActionKit.(unknown context at $104506880).WFParameterStateToolKitConversionError.unknownParameterState(WFMultipleValueParameterState)
+Failed to index action parameter: <WFPhotoItemCollectionParameter: 0x10bc7b560> due to (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFPhotoItemCollectionParameter)
+is.workflow.actions.repeat.each WFForEachRepeatAction: Skipped because: [control flow]
+flutter: 00:28 +5: 05_leave
+Failed to index action parameter: <WFEvernoteTagsTagFieldParameter: 0x10be24d00> due to (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFEvernoteTagsTagFieldParameter)
+Failed to index action parameter: <WFHomeServicePickerParameter: 0x10be1b900> due to (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFHomeServicePickerParameter)
+Failed to index action parameter: <WFContentArrayParameter: 0x10be90fc0> due to (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFContentArrayParameter)
+Failed to index action parameter: <WFMailSenderPickerParameter: 0x10bef7480> due to (extension in ActionKit):__C.WFParameter.ToolKitConversionError.missingIntentDescription
+Failed to check availability in Spotlight for action is.workflow.actions.sendemail: Error Domain=NSOSStatusErrorDomain Code=-10814 "(null)" UserInfo={_LSLine=156, _LSFunction=+[LSBundleRecord bundleRecordWithBundleIdentifier:allowPlaceholder:error:], _LSFile=LSBundleRecord.mm, NSUnderlyingError=0x10d19a850 {Error Domain=NSOSStatusErrorDomain Code=-10814 "Unable to find this application extension record in the Launch Services database." UserInfo={_LSLine=652, _LSFunction=_LSPluginFindWithPlatformInfo, _LSFile=LSPluginBundle.mm, NSDebugDescription=Unable to find this application extension record in the Launch Services database., SK=com.apple.mobilemail, IS=false}}}
+is.workflow.actions.choosefrommenu WFChooseFromMenuAction: Skipped because: [control flow]
+is.workflow.actions.repeat.count WFFiniteRepeatAction: Skipped because: [control flow]
+Failed to index action parameter: <WFSystemShortcutPickerParameter: 0x10bf30e40> due to (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFSystemShortcutPickerParameter)
+Failed to index action parameter: <WFFontPickerParameter: 0x10bf31140> due to (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFFontPickerParameter)
+Failed to index action parameter: <WFSystemShortcutPickerParameter: 0x10bf31ec0> due to (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFSystemShortcutPickerParameter)
+Failed to index action parameter: <WFSSHKeyParameter: 0x10bf33480> due to (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFSSHKeyParameter)
+is.workflow.actions.useractivity.open WFOpenUserActivityAction: Skipped because: [donation-based action]
+is.workflow.actions.sirikit.donation.handle WFHandleDonatedIntentAction: Skipped because: [donation-based action]
+Indexed: 1097
+Errored: 0
+Skipped: [control flow: 4, donation-based action: 2]
+   control flow: 4
+   donation-based action: 2
+Finished in 98.048681s
+-[WFIsolatedShortcutRunner unaliveProcess] Releasing sandbox extensions
+flutter: 00:32 +6: 06_loan
+flutter: 00:35 +7: 07_settings_employee
+flutter: 00:38 +8: 08_settings_admin
+flutter: 00:42 +9: 09_notifications
+flutter: 00:45 +10: 10_payslips
+flutter: 00:48 +11: 11_directory
+flutter: 00:51 +12: 11b_announcements_board
+flutter: 00:55 +13: 12_admin_dashboard
+flutter: 00:58 +14: 13_admin_loans
+flutter: 01:02 +15: 14_admin_tracking
+flutter: 01:05 +16: 15_employee_management
+flutter: 01:09 +17: 16_branches
+flutter: 01:12 +18: 17_branch_schedule
+flutter: 01:15 +19: 18_announcements
+flutter: 01:18 +20: 19_attendance_report
+flutter: 01:22 +21: 20_trash
+flutter: 01:25 +22: 21_storage
+flutter: 01:28 +23: (tearDownAll)
+flutter: 01:32 +24: All tests passed!
+All tests passed.
