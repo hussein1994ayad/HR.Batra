@@ -30,9 +30,10 @@ Deno.serve(async (req) => {
     global: { headers: { Authorization: auth } },
     auth: { persistSession: false },
   });
-  const { data: user } = await db.auth.getUser();
+  const started = Date.now();
+  // الفحصين سوا (كانوا واحد ورا الثاني)
+  const [{ data: user }, { data: isAdmin }] = await Promise.all([db.auth.getUser(), db.rpc("is_admin")]);
   if (!user?.user) return json({ error: "سجّل الدخول من جديد." }, 401);
-  const { data: isAdmin } = await db.rpc("is_admin");
   if (isAdmin !== true) return json({ error: "المساعد الذكي لمسؤول النظام (الأدمن) فقط." }, 403);
 
   let history: ChatMessage[];
@@ -52,10 +53,27 @@ Deno.serve(async (req) => {
     // احتياطي لما الأساسي عليه ضغط أو خلص حده المجاني (حد منفصل)
     Deno.env.get("GEMINI_FALLBACK_MODEL") ?? "gemini-flash-lite-latest",
   ];
+  // GEMINI_THINKING=default يرجّع تفكير الموديل الكامل (أبطأ). الافتراضي: أقل تفكير (أسرع).
+  const callOpts = { fastThinking: Deno.env.get("GEMINI_THINKING") !== "default" };
+  // قياس الوقت (يطلع بسجل الدالة): وين راح وقت السؤال — الذكاء لو القاعدة
+  const timing = { model_ms: 0, model_calls: 0, db_ms: 0, db_calls: 0 };
   const rpc = async (fn: string, args: Record<string, unknown>) => {
+    const t = Date.now();
     const { data, error } = await db.rpc(fn, args);
+    timing.db_ms += Date.now() - t;
+    timing.db_calls++;
     if (error) throw new Error(error.message);
     return data;
+  };
+  const generate = geminiGenerate(apiKey, models, callOpts);
+  const timedGenerate: typeof generate = async (req) => {
+    const t = Date.now();
+    try {
+      return await generate(req);
+    } finally {
+      timing.model_ms += Date.now() - t;
+      timing.model_calls++;
+    }
   };
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Baghdad" });
   try {
@@ -65,17 +83,18 @@ Deno.serve(async (req) => {
       const audio = validateAudio(audioRaw);
       if (typeof audio === "string") return json({ error: audio }, 400);
       const hints = await rpc("assistant_name_hints", {}) as { employees?: string[]; branches?: string[] };
-      const text = cleanTranscript(await geminiTranscribe(apiKey, models)(audio, transcriptionInstruction(hints)));
+      const text = cleanTranscript(await geminiTranscribe(apiKey, models, callOpts)(audio, transcriptionInstruction(hints)));
       if (!text) return json({ error: "ما انفهم التسجيل. احچي بوضوح وقرّب الموبايل، وجرّب مرة ثانية." }, 422);
       transcript = text;
       history = [...history, { role: "user", text }];
     }
     const reply = await runAgent({
-      generate: geminiGenerate(apiKey, models),
+      generate: timedGenerate,
       system: systemPrompt(today),
       history,
       ctx: { rpc },
     });
+    console.log("hr-assistant timing", JSON.stringify({ total_ms: Date.now() - started, ...timing, voice: !!audioRaw }));
     return json(transcript ? { ...reply, transcript } : reply);
   } catch (e) {
     if (e instanceof QuotaError) {

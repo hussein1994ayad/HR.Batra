@@ -493,6 +493,9 @@ cd supabase/tests && npm test
 - التفعيل (مرة وحدة): مفتاح مجاني من https://aistudio.google.com/apikey ثم
   `npx.cmd supabase secrets set GEMINI_API_KEY=...` و `npx.cmd supabase functions deploy hr-assistant`. موديل ثاني: `GEMINI_MODEL`.
 - الفحص: `npx deno test --allow-env --allow-read --allow-net=registry.npmjs.org,jsr.io supabase/functions/hr-assistant/`.
+- السرعة: الوقت كله بالذكاء مو بالقاعدة (دوال `assistant_*` أقل من 30ms). لذلك: أقل «تفكير» للموديل (`THINKING_LADDER` بـ`gemini.ts`،
+  ينزل وحده إذا الموديل ما يقبل الصيغة؛ `GEMINI_THINKING=default` يرجّع التفكير الكامل)، أدوات الموظف تقبل الاسم مباشرة
+  (`resolveEmployee` — جولة أقل)، ومكتبة Excel تتحمل عند الحاجة بس. كل سؤال يكتب بالسجل `hr-assistant timing` (وقت الذكاء/القاعدة).
 
 ## ملاحظات مهمة للمطور
 
