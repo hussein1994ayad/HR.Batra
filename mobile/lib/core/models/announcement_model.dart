@@ -80,6 +80,24 @@ class OnLeavePerson implements PersonCardData {
       );
 }
 
+/// غائب اليوم انخصم غيابه (get_absent_today) — يطلع بلوحة التعاميم مثل المتأخرين.
+class AbsentPerson implements PersonCardData {
+  @override
+  final String fullName;
+  @override
+  final String? avatarUrl;
+  @override
+  final String branchLabel;
+
+  const AbsentPerson({required this.fullName, this.avatarUrl, required this.branchLabel});
+
+  factory AbsentPerson.fromMap(JsonRow map) => AbsentPerson(
+        fullName: (map['full_name'] ?? 'موظف').toString(),
+        avatarUrl: map['avatar_url']?.toString(),
+        branchLabel: (map['branch_name'] ?? '—').toString(),
+      );
+}
+
 class LatePerson implements PersonCardData {
   @override
   final String fullName;

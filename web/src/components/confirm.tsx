@@ -6,7 +6,7 @@
 
 import React, { createContext, useCallback, useContext, useRef, useState } from 'react';
 import { AlertTriangle, type LucideIcon } from 'lucide-react';
-import { Button, Input, Modal, type ButtonVariant, type Tone } from './ui';
+import { AmountInput, Button, Input, Modal, type ButtonVariant, type Tone } from './ui';
 
 export interface ConfirmOptions {
   title: string;
@@ -17,11 +17,14 @@ export interface ConfirmOptions {
   icon?: LucideIcon;
   /** حقل ملاحظة (اختياري) مع ملاحظات جاهزة تنضغط. */
   note?: { presets?: readonly string[]; placeholder?: string; initial?: string };
+  /** حقل مبلغ قابل للتعديل (مثل مبلغ الخصم المحسوب)؛ يرجع بـ useConfirmAnswer. */
+  amount?: { label: string; initial: number; hint?: string };
 }
 
 type ConfirmFn = (options: ConfirmOptions) => Promise<boolean>;
 type ConfirmNoteFn = (options: ConfirmOptions) => Promise<string | null>;
-type Answer = { ok: boolean; note: string };
+type Answer = { ok: boolean; note: string; amount: number };
+type ConfirmAnswerFn = (options: ConfirmOptions) => Promise<{ note: string; amount: number } | null>;
 
 const ConfirmContext = createContext<((options: ConfirmOptions) => Promise<Answer>) | null>(null);
 
@@ -34,19 +37,21 @@ const TONES: Record<NonNullable<ConfirmOptions['tone']>, { tone: Tone; button: B
 export function ConfirmProvider({ children }: { children: React.ReactNode }) {
   const [options, setOptions] = useState<ConfirmOptions | null>(null);
   const [note, setNote] = useState('');
+  const [amount, setAmount] = useState(0);
   const resolver = useRef<((value: Answer) => void) | null>(null);
 
   const ask = useCallback((opts: ConfirmOptions) => {
-    resolver.current?.({ ok: false, note: '' });
+    resolver.current?.({ ok: false, note: '', amount: 0 });
     setOptions(opts);
     setNote(opts.note?.initial ?? '');
+    setAmount(Math.round(opts.amount?.initial ?? 0));
     return new Promise<Answer>((resolve) => {
       resolver.current = resolve;
     });
   }, []);
 
   const settle = (ok: boolean) => {
-    resolver.current?.({ ok, note: note.trim() });
+    resolver.current?.({ ok, note: note.trim(), amount });
     resolver.current = null;
     setOptions(null);
   };
@@ -65,6 +70,13 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
           onClose={() => settle(false)}
         >
           {options.message && <div className="text-xs text-slate-300 leading-relaxed whitespace-pre-line">{options.message}</div>}
+          {options.amount && (
+            <label className="block mt-4">
+              <span className="block text-[11px] font-bold text-slate-300 mb-1.5">{options.amount.label}</span>
+              <AmountInput value={amount} onValueChange={setAmount} aria-label={options.amount.label} placeholder="0" className="h-9 text-sm" />
+              {options.amount.hint && <span className="block text-[10px] text-slate-500 mt-1">{options.amount.hint}</span>}
+            </label>
+          )}
           {options.note && (
             <div className="mt-4 space-y-2">
               <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder={options.note.placeholder ?? 'ملاحظة (اختياري)'}
@@ -95,6 +107,18 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
       )}
     </ConfirmContext.Provider>
   );
+}
+
+/** تأكيد مع ملاحظة ومبلغ: يرجّع { note, amount } عند التأكيد، و null عند الإلغاء. */
+export function useConfirmAnswer(): ConfirmAnswerFn {
+  const ctx = useContext(ConfirmContext);
+  if (!ctx) {
+    return async (opts) => (window.confirm(opts.title) ? { note: '', amount: Math.round(opts.amount?.initial ?? 0) } : null);
+  }
+  return async (opts) => {
+    const a = await ctx(opts);
+    return a.ok ? { note: a.note, amount: a.amount } : null;
+  };
 }
 
 export function useConfirm(): ConfirmFn {

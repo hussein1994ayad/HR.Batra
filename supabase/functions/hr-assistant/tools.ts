@@ -1,11 +1,11 @@
 // أدوات المساعد: كل أداة = دالة قراءة بالقاعدة (supabase/migrations/20261008000000_hr_assistant.sql) تُنادى بتوكن الأدمن
 // نفسه، فصلاحيات القاعدة تنطبق. ماكو أي أداة كتابة (القرارات والمسودات بطاقات يأكدها الأدمن بنفسه). أدوات الملفات ترجّع مرفقاً للشاشة، والذكاء يشوف ملخصاً فقط.
 
-import {
-  buildAttendanceWorkbook, buildBranchAttendanceWorkbook, buildEmployeeProfileWorkbook, buildPayrollRunWorkbook, buildPayrollWorkbook,
-  safeFileName, type AttendanceLog, type BranchAttendance, type EmployeeProfile, type PayrollDetails, type PayrollRun,
-} from "./excel.ts";
+import type { AttendanceLog, BranchAttendance, EmployeeProfile, PayrollDetails, PayrollRun } from "./excel.ts";
 import type { FunctionDecl } from "./gemini.ts";
+
+/** مكتبة Excel ثقيلة: تتحمل بس لما ينطلب ملف، حتى المساعد يشتغل أسرع ببداية كل تشغيل. */
+const excel = () => import("./excel.ts");
 
 export type Attachment =
   | { kind: "file"; name: string; mime: string; base64: string }
@@ -36,7 +36,41 @@ interface Tool {
 const XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 const str = (v: unknown) => (v == null ? undefined : String(v));
 const p = (description: string, type = "STRING") => ({ type, description });
-const EMP = p("معرّف الموظف (id) من find_employees");
+const EMP = p("اسم الموظف (أو جزء منه) أو كوده أو معرّفه (id) — الاسم يكفي، ما تحتاج find_employees قبلها");
+
+interface EmployeeMatch { id: string; name: string; code?: string; branch?: string; active?: boolean }
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * معرّف الموظف من الاسم/الكود مباشرة (يوفّر جولة كاملة مع الذكاء). موظف واحد = نكمل؛ أكثر من واحد أو ماكو = نرجع
+ * للذكاء حتى يسأل الأدمن. المعرّف (uuid) يمر مثل ما هو.
+ */
+export async function resolveEmployee(value: unknown, ctx: ToolContext): Promise<{ id: string } | { stop: ToolResult }> {
+  const q = String(value ?? "").trim();
+  if (!q) return { stop: { forModel: { error: "اكتب اسم الموظف." } } };
+  if (UUID.test(q)) return { id: q };
+  const found = (await ctx.rpc("assistant_find_employees", { p_query: q, p_branch: null }) ?? []) as EmployeeMatch[];
+  if (found.length === 1) return { id: found[0].id };
+  if (!found.length) return { stop: { forModel: { error: `ما لكيت موظف باسم «${q}». تأكد من الاسم أو جرّب جزء منه.` } } };
+  const exact = found.filter((e) => e.name?.trim() === q);
+  if (exact.length === 1) return { id: exact[0].id };
+  return {
+    stop: {
+      forModel: {
+        need_choice: true,
+        matches: found.map((e) => ({ id: e.id, name: e.name, code: e.code, branch: e.branch, active: e.active })),
+        note: "أكثر من موظف بهذا الاسم: اسأل الأدمن يا واحد يقصد (اذكر الفرع والكود)، وبعدها ناد الأداة بالمعرّف id.",
+      },
+    },
+  };
+}
+
+/** يلف أداة موظف: يحوّل الاسم لمعرّف أول، ثم يشغّلها. */
+const withEmployee = (run: (id: string, a: Record<string, unknown>, ctx: ToolContext) => Promise<ToolResult>) =>
+  async (a: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult> => {
+    const r = await resolveEmployee(a.employee_id ?? a.employee, ctx);
+    return "stop" in r ? r.stop : run(r.id, a, ctx);
+  };
 const DATE = (what: string) => p(`${what} بصيغة YYYY-MM-DD`);
 
 function toBase64(bytes: Uint8Array): string {
@@ -62,7 +96,7 @@ export const TOOLS: Tool[] = [
   {
     decl: {
       name: "find_employees",
-      description: "يبحث عن موظف بالاسم (أو جزء منه) أو الكود، واختيارياً باسم الفرع. استعمله دائماً قبل أي أداة تحتاج معرّف موظف.",
+      description: "يبحث عن موظفين بالاسم (أو جزء منه) أو الكود، واختيارياً باسم الفرع. للبحث بس؛ أدوات الموظف تقبل الاسم مباشرة.",
       parameters: { type: "OBJECT", properties: { query: p("الاسم أو الكود"), branch: p("اسم الفرع (اختياري)") }, required: ["query"] },
     },
     run: async (a, ctx) => ({ forModel: { results: await ctx.rpc("assistant_find_employees", { p_query: str(a.query), p_branch: str(a.branch) ?? null }) } }),
@@ -77,10 +111,10 @@ export const TOOLS: Tool[] = [
       description: "سجل دوام موظف لفترة (أقصاها 3 أشهر): الغيابات، التأخيرات، الخروج المبكر، الإجازات، وهل انخصم أو انعفى. للإجابة بالكلام.",
       parameters: { type: "OBJECT", properties: { employee_id: EMP, from: DATE("بداية الفترة"), to: DATE("نهاية الفترة") }, required: ["employee_id", "from", "to"] },
     },
-    run: async (a, ctx) => {
-      const log = await ctx.rpc("assistant_attendance_log", { p_employee_id: a.employee_id, p_from: a.from, p_to: a.to }) as AttendanceLog;
+    run: withEmployee(async (id, a, ctx) => {
+      const log = await ctx.rpc("assistant_attendance_log", { p_employee_id: id, p_from: a.from, p_to: a.to }) as AttendanceLog;
       return { forModel: compactLog(log) };
-    },
+    }),
   },
   {
     decl: {
@@ -88,15 +122,18 @@ export const TOOLS: Tool[] = [
       description: "يسوي ملف Excel احترافي لسجل دوام موظف يوم بيوم (مع القرار: مخصوم/معفى/بانتظار والملاحظة). استعمله إذا طلب ملف/إكسل/تقرير.",
       parameters: { type: "OBJECT", properties: { employee_id: EMP, from: DATE("بداية الفترة"), to: DATE("نهاية الفترة") }, required: ["employee_id", "from", "to"] },
     },
-    run: async (a, ctx) => {
-      const log = await ctx.rpc("assistant_attendance_log", { p_employee_id: a.employee_id, p_from: a.from, p_to: a.to }) as AttendanceLog;
+    run: withEmployee(async (id, a, ctx) => {
+      const [log, { buildAttendanceWorkbook, safeFileName }] = await Promise.all([
+        ctx.rpc("assistant_attendance_log", { p_employee_id: id, p_from: a.from, p_to: a.to }) as Promise<AttendanceLog>,
+        excel(),
+      ]);
       const name = safeFileName(["سجل_دوام", log.employee.name, log.from, log.to]);
       const bytes = await buildAttendanceWorkbook(log);
       return {
         forModel: { file_ready: name, summary: log.summary },
         attachment: { kind: "file", name, mime: XLSX, base64: toBase64(bytes) },
       };
-    },
+    }),
   },
   {
     decl: {
@@ -104,7 +141,7 @@ export const TOOLS: Tool[] = [
       description: "راتب موظف لشهر مسير (YYYY-MM): الأساسي، الإضافات، الخصومات بالتفصيل (كل حركة بسببها وقرارها)، أقساط السلف، والصافي.",
       parameters: { type: "OBJECT", properties: { employee_id: EMP, month: p("شهر المسير YYYY-MM") }, required: ["employee_id", "month"] },
     },
-    run: async (a, ctx) => ({ forModel: await ctx.rpc("assistant_payroll", { p_employee_id: a.employee_id, p_month: a.month }) as Record<string, unknown> }),
+    run: withEmployee(async (id, a, ctx) => ({ forModel: await ctx.rpc("assistant_payroll", { p_employee_id: id, p_month: a.month }) as Record<string, unknown> })),
   },
   {
     decl: {
@@ -112,15 +149,18 @@ export const TOOLS: Tool[] = [
       description: "يسوي ملف Excel لتفاصيل راتب وخصومات موظف لشهر مسير (YYYY-MM).",
       parameters: { type: "OBJECT", properties: { employee_id: EMP, month: p("شهر المسير YYYY-MM") }, required: ["employee_id", "month"] },
     },
-    run: async (a, ctx) => {
-      const d = await ctx.rpc("assistant_payroll", { p_employee_id: a.employee_id, p_month: a.month }) as PayrollDetails;
+    run: withEmployee(async (id, a, ctx) => {
+      const [d, { buildPayrollWorkbook, safeFileName }] = await Promise.all([
+        ctx.rpc("assistant_payroll", { p_employee_id: id, p_month: a.month }) as Promise<PayrollDetails>,
+        excel(),
+      ]);
       const name = safeFileName(["تفاصيل_راتب", d.employee, d.month]);
       const bytes = await buildPayrollWorkbook({ ...d, events: d.events ?? [] });
       return {
         forModel: { file_ready: name, summary: d.summary ?? d.message },
         attachment: { kind: "file", name, mime: XLSX, base64: toBase64(bytes) },
       };
-    },
+    }),
   },
   {
     decl: {
@@ -128,13 +168,13 @@ export const TOOLS: Tool[] = [
       description: "يعرض وثائق (مستمسكات) موظف على الشاشة للأدمن.",
       parameters: { type: "OBJECT", properties: { employee_id: EMP }, required: ["employee_id"] },
     },
-    run: async (a, ctx) => {
-      const d = await ctx.rpc("assistant_documents", { p_employee_id: a.employee_id }) as { employee: string; count: number; urls: string[] };
+    run: withEmployee(async (id, _a, ctx) => {
+      const d = await ctx.rpc("assistant_documents", { p_employee_id: id }) as { employee: string; count: number; urls: string[] };
       return {
         forModel: { employee: d.employee, documents_count: d.count, shown_on_screen: d.count > 0 },
         attachment: d.count > 0 ? { kind: "documents", employee: d.employee, urls: d.urls } : undefined,
       };
-    },
+    }),
   },
   {
     decl: {
@@ -142,7 +182,7 @@ export const TOOLS: Tool[] = [
       description: "سلف موظف: المبلغ، الباقي، القسط، والأقساط المدفوعة والباقية.",
       parameters: { type: "OBJECT", properties: { employee_id: EMP }, required: ["employee_id"] },
     },
-    run: async (a, ctx) => ({ forModel: { loans: await ctx.rpc("assistant_loans", { p_employee_id: a.employee_id }) } }),
+    run: withEmployee(async (id, _a, ctx) => ({ forModel: { loans: await ctx.rpc("assistant_loans", { p_employee_id: id }) } })),
   },
   {
     decl: {
@@ -150,9 +190,9 @@ export const TOOLS: Tool[] = [
       description: "رصيد إجازات موظف وطلباته (اختياري بفترة).",
       parameters: { type: "OBJECT", properties: { employee_id: EMP, from: DATE("من (اختياري)"), to: DATE("إلى (اختياري)") }, required: ["employee_id"] },
     },
-    run: async (a, ctx) => ({
-      forModel: await ctx.rpc("assistant_leaves", { p_employee_id: a.employee_id, p_from: str(a.from) ?? null, p_to: str(a.to) ?? null }) as Record<string, unknown>,
-    }),
+    run: withEmployee(async (id, a, ctx) => ({
+      forModel: await ctx.rpc("assistant_leaves", { p_employee_id: id, p_from: str(a.from) ?? null, p_to: str(a.to) ?? null }) as Record<string, unknown>,
+    })),
   },
   {
     decl: {
@@ -194,7 +234,10 @@ export const TOOLS: Tool[] = [
       parameters: { type: "OBJECT", properties: { branch: p("اسم الفرع (فارغ = كل الشركة)"), from: DATE("بداية الفترة"), to: DATE("نهاية الفترة") }, required: ["from", "to"] },
     },
     run: async (a, ctx) => {
-      const r = await ctx.rpc("assistant_branch_attendance", { p_branch: str(a.branch) ?? null, p_from: a.from, p_to: a.to }) as BranchAttendance;
+      const [r, { buildBranchAttendanceWorkbook, safeFileName }] = await Promise.all([
+        ctx.rpc("assistant_branch_attendance", { p_branch: str(a.branch) ?? null, p_from: a.from, p_to: a.to }) as Promise<BranchAttendance>,
+        excel(),
+      ]);
       const name = safeFileName(["سجل_دوام", r.scope, r.from, r.to]);
       return {
         forModel: { file_ready: name, scope: r.scope, employees: r.employees.map((l) => ({ name: l.employee.name, summary: l.summary })) },
@@ -217,7 +260,10 @@ export const TOOLS: Tool[] = [
       parameters: { type: "OBJECT", properties: { month: p("شهر المسير YYYY-MM") }, required: ["month"] },
     },
     run: async (a, ctx) => {
-      const run = await ctx.rpc("assistant_payroll_run", { p_month: a.month }) as PayrollRun & { totals?: unknown };
+      const [run, { buildPayrollRunWorkbook, safeFileName }] = await Promise.all([
+        ctx.rpc("assistant_payroll_run", { p_month: a.month }) as Promise<PayrollRun & { totals?: unknown }>,
+        excel(),
+      ]);
       const name = safeFileName(["رواتب", run.month]);
       return {
         forModel: { file_ready: name, totals: run.totals ?? run.message },
@@ -245,13 +291,21 @@ export const TOOLS: Tool[] = [
     decl: {
       name: "compare_months",
       description: "مقارنة شهرين مسير (YYYY-MM) لموظف (employee_id) أو لفرع (branch) أو لكل الشركة: الحضور، التأخير، الغياب، الخروج المبكر، المخصوم.",
-      parameters: { type: "OBJECT", properties: { employee_id: p("معرّف الموظف (اختياري)"), branch: p("اسم الفرع (اختياري)"),
+      parameters: { type: "OBJECT", properties: { employee_id: p("اسم الموظف أو معرّفه (اختياري)"), branch: p("اسم الفرع (اختياري)"),
         month_a: p("الشهر الأول YYYY-MM"), month_b: p("الشهر الثاني YYYY-MM") }, required: ["month_a", "month_b"] },
     },
-    run: async (a, ctx) => ({
-      forModel: await ctx.rpc("assistant_compare", { p_employee_id: str(a.employee_id) ?? null, p_branch: str(a.branch) ?? null,
-        p_month_a: a.month_a, p_month_b: a.month_b }) as Record<string, unknown>,
-    }),
+    run: async (a, ctx) => {
+      let id: string | null = null;
+      if (str(a.employee_id)?.trim()) {
+        const r = await resolveEmployee(a.employee_id, ctx);
+        if ("stop" in r) return r.stop;
+        id = r.id;
+      }
+      return {
+        forModel: await ctx.rpc("assistant_compare", { p_employee_id: id, p_branch: str(a.branch) ?? null,
+          p_month_a: a.month_a, p_month_b: a.month_b }) as Record<string, unknown>,
+      };
+    },
   },
   {
     decl: {
@@ -267,21 +321,22 @@ export const TOOLS: Tool[] = [
       description: "ملف Excel شامل لموظف لشهر مسير (YYYY-MM): ملخص الدوام، سجل الدوام يوم بيوم، الراتب بالتفصيل، السلف، والإجازات.",
       parameters: { type: "OBJECT", properties: { employee_id: EMP, month: p("شهر المسير YYYY-MM") }, required: ["employee_id", "month"] },
     },
-    run: async (a, ctx) => {
-      const payroll = await ctx.rpc("assistant_payroll", { p_employee_id: a.employee_id, p_month: a.month }) as PayrollDetails;
+    run: withEmployee(async (id, a, ctx) => {
+      const payroll = await ctx.rpc("assistant_payroll", { p_employee_id: id, p_month: a.month }) as PayrollDetails;
       if (!payroll.period) return { forModel: { error: payroll.message ?? "هذا الشهر ما بيه مسير." } };
-      const [log, loans, leaves] = await Promise.all([
-        ctx.rpc("assistant_attendance_log", { p_employee_id: a.employee_id, p_from: payroll.period.from, p_to: payroll.period.to }),
-        ctx.rpc("assistant_loans", { p_employee_id: a.employee_id }),
-        ctx.rpc("assistant_leaves", { p_employee_id: a.employee_id, p_from: null, p_to: null }),
-      ]) as [AttendanceLog, EmployeeProfile["loans"], EmployeeProfile["leaves"]];
+      const [log, loans, leaves, { buildEmployeeProfileWorkbook, safeFileName }] = await Promise.all([
+        ctx.rpc("assistant_attendance_log", { p_employee_id: id, p_from: payroll.period.from, p_to: payroll.period.to }) as Promise<AttendanceLog>,
+        ctx.rpc("assistant_loans", { p_employee_id: id }) as Promise<EmployeeProfile["loans"]>,
+        ctx.rpc("assistant_leaves", { p_employee_id: id, p_from: null, p_to: null }) as Promise<EmployeeProfile["leaves"]>,
+        excel(),
+      ]);
       const name = safeFileName(["ملف_شامل", log.employee.name, payroll.month]);
       const bytes = await buildEmployeeProfileWorkbook({ log, payroll: { ...payroll, events: payroll.events ?? [] }, loans, leaves });
       return {
         forModel: { file_ready: name, attendance: log.summary, payroll: payroll.summary },
         attachment: { kind: "file", name, mime: XLSX, base64: toBase64(bytes) },
       };
-    },
+    }),
   },
   // ---------------- اقتراح القرارات (التنفيذ بيد الأدمن) ----------------
   {

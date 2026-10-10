@@ -27,6 +27,7 @@ class _AnnouncementsBoardScreenState extends State<AnnouncementsBoardScreen> {
   List<AnnouncementModel> _announcements = [];
   List<OnLeavePerson> _onLeave = [];
   List<LatePerson> _late = [];
+  List<AbsentPerson> _absent = [];
 
   @override
   void initState() {
@@ -42,6 +43,7 @@ class _AnnouncementsBoardScreenState extends State<AnnouncementsBoardScreen> {
         _announcements = rowsStrict(r[0], AnnouncementModel.fromMap);
         _onLeave = rowsStrict(r[1], OnLeavePerson.fromMap);
         _late = rowsStrict(r[2], LatePerson.fromMap);
+        _absent = r.length > 3 && r[3] is List ? rowsStrict(r[3], AbsentPerson.fromMap) : [];
         _failed = false;
       });
     } catch (e) {
@@ -82,6 +84,13 @@ class _AnnouncementsBoardScreenState extends State<AnnouncementsBoardScreen> {
           AppCard(
             padding: const EdgeInsets.symmetric(vertical: AppSpace.xs),
             child: Column(children: [for (final p in _late) LateTile(p)]),
+          ),
+        ],
+        if (_absent.isNotEmpty) ...[
+          SectionHeader('الغائبون اليوم', trailing: StatusBadge('${_absent.length}', tone: AppTone.danger)),
+          AppCard(
+            padding: const EdgeInsets.symmetric(vertical: AppSpace.xs),
+            child: Column(children: [for (final p in _absent) AbsentTile(p)]),
           ),
         ],
         const SectionHeader('التعاميم السارية'),

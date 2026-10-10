@@ -89,12 +89,13 @@ export async function revertPayrollSlip(slipId: string): Promise<void> {
   if (error) throw error;
 }
 
-/** قرار الإدارة على حركة: اعتماد الخصم/الإضافي أو الإعفاء منه. */
-export async function decidePayrollEvent(eventId: string, approve: boolean, reason?: string): Promise<void> {
+/** قرار الإدارة على حركة: اعتماد الخصم/الإضافي أو الإعفاء منه. [amount] = مبلغ كتبه الأدمن بدل المحسوب (عند الاعتماد بس). */
+export async function decidePayrollEvent(eventId: string, approve: boolean, reason?: string, amount?: number): Promise<void> {
   const { error } = await supabase.rpc('decide_payroll_event', {
     p_event_id: eventId,
     p_approve: approve,
     p_reason: reason ?? null,
+    ...(approve && amount !== undefined ? { p_amount: amount } : {}),
   });
   if (error) throw error;
 }

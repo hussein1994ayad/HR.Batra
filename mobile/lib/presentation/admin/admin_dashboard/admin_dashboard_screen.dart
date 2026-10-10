@@ -286,9 +286,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Ticker
                       decisions: s.decisions,
                       scheduleFor: _scheduleFor,
                       busyKey: _busyKey,
-                      onDecide: (item, {required deduct, required reason}) => _run(
+                      onDecide: (item, {required deduct, required reason, amount}) => _run(
                         item.key,
-                        () => _actions.applyDecision(item, deduct: deduct, reason: reason),
+                        () => _actions.applyDecision(item, deduct: deduct, reason: reason, amount: amount),
                         deduct ? 'تم تطبيق الخصم' : 'تم الإعفاء من الخصم',
                         deduct ? AppColors.warning : AppColors.success,
                       ),

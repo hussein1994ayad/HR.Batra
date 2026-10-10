@@ -252,20 +252,26 @@ test.describe('workflows', () => {
     expect(api.writes('employees', 'PATCH')[0].body).toEqual({ device_id_lock: 'dev-2' });
   });
 
-  test('records an absence decision from the attendance page', async ({ page }) => {
-    const api = await mockSupabase(page);
+  test('records an absence decision from the attendance page, with the amount shown and editable', async ({ page }) => {
+    const api = await mockSupabase(page, { rpc: { payroll_day_rates: [{ employee_id: 'e2', daily_rate: 20000 }] } });
     await page.goto('/dashboard/tracking');
     await page.getByRole('tab', { name: /قرارات الغياب والتأخير/ }).click();
     const row = page.locator('tr', { hasText: 'مصطفى حسن' });
+    // غياب اليوم ما انحسبت حركته بعد: المبلغ = أجر اليوم
+    await expect(row).toContainText('20,000');
     await row.getByRole('button', { name: 'تطبيق' }).click();
-    // تأكيد قبل الخصم
+    // تأكيد قبل الخصم، والمبلغ المحسوب قابل للتعديل
     const confirmDialog = page.getByRole('dialog').filter({ hasText: 'تطبيق خصم الغياب؟' });
     await expect(confirmDialog).toBeVisible();
-    expect(api.writes('attendance', 'POST')).toHaveLength(0);
+    const amount = confirmDialog.getByLabel('مبلغ الخصم (د.ع)');
+    await expect(amount).toHaveValue('20,000');
+    expect(api.writes('rpc:decide_absence_day', 'POST')).toHaveLength(0);
+    await amount.fill('10000');
     await confirmDialog.getByRole('button', { name: 'تطبيق الخصم' }).click();
-    await expect.poll(() => api.writes('attendance', 'POST').length).toBe(1);
-    expect(api.writes('attendance', 'POST')[0].body).toMatchObject({ employee_id: 'e2', status: 'absent', deduction_status: 'applied' });
-    // المبلغ يحسبه محرّك الرواتب من سجل الحضور: لا قيد خصم منفصل (كان يُخصم مرتين)
+    await expect.poll(() => api.writes('rpc:decide_absence_day', 'POST').length).toBe(1);
+    expect(api.writes('rpc:decide_absence_day', 'POST')[0].body).toMatchObject({ p_employee_id: 'e2', p_approve: true, p_amount: 10000 });
+    // السيرفر يسجّل الغياب ويحسب الخصم: لا كتابة مباشرة بالحضور ولا قيد خصم منفصل (كان يُخصم مرتين)
+    expect(api.writes('attendance', 'POST')).toHaveLength(0);
     expect(api.writes('bonuses_deductions', 'POST')).toHaveLength(0);
   });
 

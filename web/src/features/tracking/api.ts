@@ -15,6 +15,8 @@ export interface TrackingDataset {
   securityLogs: MockGpsAttempt[];
   /** مبلغ الخصم كما يحسبه محرّك الرواتب: `${employeeId}_${date}_${late|absent}` → د.ع */
   payrollAmounts: Record<string, number>;
+  /** أجر اليوم لكل موظف (payroll_day_rates): مبلغ غياب ما انحسبت حركته بعد (مثل غياب اليوم). */
+  dayRates: Record<string, number>;
   /** العطل الرسمية YYYY-MM-DD (لا غياب فيها) */
   holidays: string[];
 }
@@ -44,6 +46,7 @@ export async function fetchTrackingDataset(filters: {
   let attendanceLogs: AttendanceRecord[] = [];
   let securityLogs: MockGpsAttempt[] = [];
   const payrollAmounts: Record<string, number> = {};
+  const dayRates: Record<string, number> = {};
   let holidays: string[] = [];
   if (startDate && endDate) {
     // فترة طويلة × كل الموظفين تتجاوز حد الـ 1000 صف: كل الصفحات حتى لا ينقص التقرير
@@ -57,7 +60,7 @@ export async function fetchTrackingDataset(filters: {
     };
     type EventRow = { employee_id: string; event_date: string; event_type: string; amount: number };
 
-    const [attendanceRows, resMock, events, resHolidays] = await Promise.all([
+    const [attendanceRows, resMock, events, resHolidays, resRates] = await Promise.all([
       fetchAllRows<AttendanceRecord>(attendancePage),
       // محاولات الموقع الوهمي للفترة المختارة فقط (كانت تُجلب كلها منذ أول يوم)
       supabase.from('mock_gps_attempts').select('*, employees(full_name)')
@@ -74,7 +77,12 @@ export async function fetchTrackingDataset(filters: {
         .order('id')
         .range(from, to)).catch(() => [] as EventRow[]),
       supabase.from('official_holidays').select('holiday_date').gte('holiday_date', startDate).lte('holiday_date', endDate),
+      // سيرفر قديم بدون الدالة = بدون مبلغ (مثل قبل)
+      supabase.rpc('payroll_day_rates', { p_date: endDate }),
     ]);
+    for (const r of (resRates.data ?? []) as { employee_id: string; daily_rate: number }[]) {
+      dayRates[r.employee_id] = Number(r.daily_rate) || 0;
+    }
     holidays = (resHolidays.data ?? []).map((h: { holiday_date: string }) => h.holiday_date);
     if (resMock.error) throw resMock.error;
     for (const e of events) {
@@ -98,6 +106,7 @@ export async function fetchTrackingDataset(filters: {
     attendanceLogs,
     securityLogs,
     payrollAmounts,
+    dayRates,
     holidays,
   };
 }
@@ -214,8 +223,11 @@ export async function saveDecision(decision: {
   recordId: string | null;
   reason: string;
   fallbackBranchId: string | null;
+  /** مبلغ كتبه الأدمن بدل المحسوب (عند الخصم بس). */
+  amount?: number;
 }) {
   const { employee, type, date, status, recordId, reason } = decision;
+  const amount = status === 'applied' && decision.amount !== undefined ? { p_amount: decision.amount } : {};
 
   // يُفحص قبل إضافة الخصم حتى لا يبقى خصم بدون تسجيل الغياب
   const branchId = employee.branch_id || decision.fallbackBranchId;
@@ -232,9 +244,24 @@ export async function saveDecision(decision: {
       p_event_id: eventId,
       p_approve: status === 'applied',
       p_reason: reason,
+      ...amount,
     });
     if (error) throw error;
     return;
+  }
+
+  // غياب ماله حركة بعد (غياب اليوم قبل الاحتساب): السيرفر يسجّل اليوم ويقرر عليه بنفس باب القرارات
+  // (المبلغ المعدّل، الإشعار، صلاحية المدير). سيرفر قديم بدون الدالة (PGRST202) ← المسار القديم تحت.
+  if (type !== 'late') {
+    const { error } = await supabase.rpc('decide_absence_day', {
+      p_employee_id: employee.id,
+      p_date: date,
+      p_approve: status === 'applied',
+      p_reason: reason,
+      ...amount,
+    });
+    if (!error) return;
+    if (error.code !== 'PGRST202') throw error;
   }
 
   // ماكو حركة بعد (مثل غياب اليوم قبل حسابه): القرار ينكتب بسجل الحضور، والـ trigger trg_payroll_attendance

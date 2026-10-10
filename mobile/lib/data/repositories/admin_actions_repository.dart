@@ -23,8 +23,14 @@ class AdminActionsRepository {
 
   /// قرار على حركة رواتب موجودة (نفس باب صفحة الرواتب بالموقع): السيرفر يحدّث الحضور، يتحقق من الصلاحية،
   /// ويشعر الموظف بالخصم فقط. تستعمله لوحة الإدارة وبطاقات اقتراح المساعد الذكي.
-  Future<void> decidePayrollEvent(String eventId, {required bool deduct, required String reason}) async {
-    await _db.rpc<Object?>('decide_payroll_event', params: {'p_event_id': eventId, 'p_approve': deduct, 'p_reason': reason});
+  /// [amount]: مبلغ كتبه المدير بدل المحسوب (بس عند الخصم). null = المبلغ المحسوب.
+  Future<void> decidePayrollEvent(String eventId, {required bool deduct, required String reason, double? amount}) async {
+    await _db.rpc<Object?>('decide_payroll_event', params: {
+      'p_event_id': eventId,
+      'p_approve': deduct,
+      'p_reason': reason,
+      if (deduct && amount != null) 'p_amount': amount,
+    });
   }
 
   /// قرار خصم أو إعفاء لغياب/تأخير/خروج مبكر/بصمة ناقصة.
@@ -34,16 +40,33 @@ class AdminActionsRepository {
   /// إن وُجدت حركة للمحرّك يُرسل القرار لها مباشرة (والسيرفر يحدّث الحضور ويُشعر الموظف)؛
   /// وإلا (مثل غياب اليوم قبل حسابه) يُسجَّل في الحضور والمحرّك يلتقطه (trigger trg_payroll_attendance).
   /// التفاصيل: BUSINESS_RULES.md «دورة حياة المسير» البند 3.
-  Future<void> applyDecision(PendingDecision item, {required bool deduct, required String reason}) async {
+  Future<void> applyDecision(PendingDecision item, {required bool deduct, required String reason, double? amount}) async {
     final status = deduct ? 'applied' : 'ignored';
+
+    if (item.eventId != null) {
+      await decidePayrollEvent(item.eventId!, deduct: deduct, reason: reason, amount: amount);
+      return;
+    }
+
+    // غياب ماله حركة بعد (غياب اليوم قبل الاحتساب): السيرفر يسجّل اليوم ويقرر عليه بنفس باب القرارات
+    // (المبلغ المعدّل، الإشعار، صلاحية المدير). سيرفر قديم بدون الدالة ← المسار القديم تحت.
+    if (item.status == 'absent') {
+      try {
+        await _db.rpc<Object?>('decide_absence_day', params: {
+          'p_employee_id': item.employeeId,
+          'p_date': item.workDate,
+          'p_approve': deduct,
+          'p_reason': reason,
+          if (deduct && amount != null) 'p_amount': amount,
+        });
+        return;
+      } on PostgrestException catch (e) {
+        if (e.code != 'PGRST202') rethrow;
+      }
+    }
 
     if (item.isVirtual && item.branchId == null) {
       throw StateError('الموظف غير مرتبط بفرع، يرجى ربطه بفرع أولاً.');
-    }
-
-    if (item.eventId != null) {
-      await decidePayrollEvent(item.eventId!, deduct: deduct, reason: reason);
-      return;
     }
 
     final values = {

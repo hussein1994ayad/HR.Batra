@@ -86,8 +86,9 @@ void main() {
     expect(details.map((d) => d.type), ['deduction', 'deduction', 'deduction', 'bonus']);
   });
 
-  testWidgets('decision card shows the server amount and has no amount field', (tester) async {
+  testWidgets('decision card shows the server amount and sends an edited one', (tester) async {
     bool? deducted;
+    double? sentAmount;
     await tester.pumpWidget(MaterialApp(
       theme: AppTheme.darkTheme,
       home: Directionality(
@@ -100,16 +101,23 @@ void main() {
                 attendanceId: 'a1', eventId: 'ev1', engineAmount: 1250, engineMinutes: 30,
               ),
               schedule: null,
-              onDecide: ({required deduct, required reason}) => deducted = deduct,
+              onDecide: ({required deduct, required reason, amount}) {
+                deducted = deduct;
+                sentAmount = amount;
+              },
             ),
           ),
         ),
       ),
     ));
     expect(find.text('الخصم المحسوب'), findsOneWidget);
-    expect(find.textContaining('1,250'), findsOneWidget);
-    expect(find.text('الخصم (د.ع)'), findsNothing);
+    expect(find.text('1,250 د.ع'), findsOneWidget);
+    expect(find.text('مبلغ الخصم (د.ع)'), findsOneWidget);
+    await tester.enterText(find.widgetWithText(TextFormField, '1,250'), '1000');
+    await tester.pump();
+    await tester.ensureVisible(find.text('تطبيق الخصم'));
     await tester.tap(find.text('تطبيق الخصم'));
     expect(deducted, isTrue);
+    expect(sentAmount, 1000);
   });
 }

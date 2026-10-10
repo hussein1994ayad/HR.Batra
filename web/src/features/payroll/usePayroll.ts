@@ -171,9 +171,9 @@ export function usePayroll() {
     return true;
   };
 
-  const decideEvent = async (eventId: string, approve: boolean, reason?: string) => {
+  const decideEvent = async (eventId: string, approve: boolean, reason?: string, amount?: number) => {
     const ok = await run(`decide_${eventId}`, async () => {
-      await decidePayrollEvent(eventId, approve, reason);
+      await decidePayrollEvent(eventId, approve, reason, amount);
       return true;
     }, 'تعذر حفظ القرار');
     if (!ok) return;

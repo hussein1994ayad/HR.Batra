@@ -5,7 +5,7 @@ import { assert, assertEquals } from "jsr:@std/assert@1";
 import { runAgent, toContents, MAX_HISTORY } from "./agent.ts";
 import { buildAttendanceWorkbook, buildPayrollWorkbook, safeFileName, type AttendanceLog } from "./excel.ts";
 import type { Content, Generate } from "./gemini.ts";
-import { compactLog, runTool } from "./tools.ts";
+import { compactLog, resolveEmployee, runTool } from "./tools.ts";
 
 const LOG: AttendanceLog = {
   employee: { name: "علي محمد سعيد", code: "K7", branch: "كمب سارة" },
@@ -170,7 +170,7 @@ Deno.test("employee profile Excel: attendance, payroll, loans, leaves sheets", a
 
 Deno.test("employee_profile_excel tool: reads the month period then builds one file", async () => {
   const calls: string[] = [];
-  const r = await runTool("employee_profile_excel", { employee_id: "e1", month: "2026-10" }, {
+  const r = await runTool("employee_profile_excel", { employee_id: "0b9d7c1e-2a3f-4b5c-8d6e-7f8091a2b3c4", month: "2026-10" }, {
     rpc: async (fn, args) => {
       calls.push(fn);
       if (fn === "assistant_loans") return [];
@@ -245,7 +245,7 @@ Deno.test("morning_summary: reads the database summary", async () => {
 });
 
 // ---------------- أخطاء Google بالعربي ----------------
-import { GeminiError, geminiGenerate } from "./gemini.ts";
+import { GeminiError, geminiGenerate, resetThinkingMemory } from "./gemini.ts";
 
 Deno.test("gemini errors: Google's reason reaches the admin in Arabic, key never shown", async () => {
   const fake = (status: number, body: unknown) => () => Promise.resolve(new Response(JSON.stringify(body), { status }));
@@ -289,4 +289,132 @@ Deno.test("gemini: a real rejection (400) is not retried; all models busy gives 
   let err: unknown;
   try { await geminiGenerate("k", ["a", "b"], { fetchImpl: busy, sleep: () => Promise.resolve() })({ system: "s", contents: [], tools: [] }); } catch (e) { err = e; }
   assert(err instanceof GeminiError && err.arabic.includes("ضغط"));
+});
+
+// ---------------- السرعة ----------------
+Deno.test("speed: employee tools take the name directly (one round less), a uuid skips the search", async () => {
+  const calls: string[] = [];
+  const ctx = { rpc: (fn: string, args: Record<string, unknown>) => { calls.push(fn); return rpc(fn, args); } };
+  const { generate, seen } = scripted([
+    [{ functionCall: { name: "attendance_log", args: { employee_id: "علي محمد سعيد", from: "2026-09-27", to: "2026-09-29" } } }],
+    [{ text: "غاب يوم وتأخر يوم." }],
+  ]);
+  const reply = await runAgent({ generate, system: "s", history: [{ role: "user", text: "دوام علي" }], ctx });
+  assertEquals(reply.text, "غاب يوم وتأخر يوم.");
+  assertEquals(seen.length, 2); // جولتين مع الذكاء بدل ثلاث
+  assertEquals(calls, ["assistant_find_employees", "assistant_attendance_log"]);
+
+  calls.length = 0;
+  assertEquals(await resolveEmployee("0b9d7c1e-2a3f-4b5c-8d6e-7f8091a2b3c4", ctx), { id: "0b9d7c1e-2a3f-4b5c-8d6e-7f8091a2b3c4" });
+  assertEquals(calls, []);
+});
+
+Deno.test("speed: several employees with the same name go back to the admin to choose; none found is an error", async () => {
+  const two = [{ id: "a", name: "علي محمد", branch: "المنصور", code: "K1" }, { id: "b", name: "علي محمد حسن", branch: "الكرادة", code: "K2" }];
+  const many = await runTool("employee_loans", { employee_id: "علي" }, { rpc: () => Promise.resolve(two) });
+  assert(many.forModel.need_choice === true && (many.forModel.matches as unknown[]).length === 2);
+  // الاسم الكامل المطابق بالضبط يكفي
+  assertEquals(await resolveEmployee("علي محمد", { rpc: () => Promise.resolve(two) }), { id: "a" });
+  const none = await runTool("employee_loans", { employee_id: "زيد" }, { rpc: () => Promise.resolve([]) });
+  assert(String(none.forModel.error).includes("ما لكيت موظف"));
+});
+
+Deno.test("speed: least thinking each model accepts (lite = minimal, others = low), steps down when rejected, and remembers it", async () => {
+  resetThinkingMemory();
+  const configs: unknown[] = [];
+  const reply = () => Promise.resolve(new Response(JSON.stringify({ candidates: [{ content: { role: "model", parts: [{ text: "تمام" }] } }] })));
+  const fetchImpl = ((url: string, init: RequestInit) => {
+    const cfg = JSON.parse(String(init.body)).generationConfig.thinkingConfig;
+    configs.push(cfg ?? null);
+    if (url.includes("old-flash") && cfg?.thinkingLevel) {
+      return Promise.resolve(new Response(JSON.stringify({ error: { message: "Thinking level is not supported for this model." } }), { status: 400 }));
+    }
+    return reply();
+  }) as unknown as typeof fetch;
+  const gen = geminiGenerate("k", ["old-flash"], { fetchImpl, sleep: () => Promise.resolve() });
+  assertEquals((await gen({ system: "s", contents: [], tools: [] })).parts, [{ text: "تمام" }]);
+  assertEquals(configs, [{ thinkingLevel: "low" }, { thinkingBudget: 0 }]);
+  await gen({ system: "s", contents: [], tools: [] });
+  assertEquals(configs.at(-1), { thinkingBudget: 0 }); // ما يرجع يجرب الصيغة المرفوضة
+  assertEquals(configs.length, 3);
+
+  configs.length = 0;
+  await geminiGenerate("k", ["gemini-flash-lite-latest"], { fetchImpl })({ system: "s", contents: [], tools: [] });
+  assertEquals(configs, [{ thinkingLevel: "minimal" }]);
+
+  // GEMINI_THINKING=default: بدون أي إعداد تفكير
+  configs.length = 0;
+  await geminiGenerate("k", ["old-flash"], { fetchImpl, fastThinking: false })({ system: "s", contents: [], tools: [] });
+  assertEquals(configs, [null]);
+  resetThinkingMemory();
+});
+
+Deno.test("speed: a model that does not answer in time (or is not found) hands over to the next one, with every attempt reported", async () => {
+  const attempts: string[] = [];
+  const ok = () => new Response(JSON.stringify({ candidates: [{ content: { role: "model", parts: [{ text: "تمام" }] } }] }));
+  const fetchImpl = ((url: string, init: RequestInit) => {
+    if (url.includes("slow")) {
+      return new Promise<Response>((_res, rej) => init.signal!.addEventListener("abort", () => rej(new DOMException("aborted", "AbortError"))));
+    }
+    if (url.includes("gone")) return Promise.resolve(new Response(JSON.stringify({ error: { message: "models/gone is not found" } }), { status: 404 }));
+    return Promise.resolve(ok());
+  }) as unknown as typeof fetch;
+  const opts = { fetchImpl, timeoutsMs: [20, 1000], onAttempt: (a: { model: string; status: number }) => attempts.push(`${a.model}:${a.status}`) };
+  assertEquals((await geminiGenerate("k", ["slow", "backup"], opts)({ system: "s", contents: [], tools: [] })).parts, [{ text: "تمام" }]);
+  assertEquals(attempts, ["slow:0", "backup:200"]); // محاولة وحدة على البطيء، ما نعيد عليه
+  attempts.length = 0;
+  await geminiGenerate("k", ["gone", "backup"], opts)({ system: "s", contents: [], tools: [] });
+  assertEquals(attempts, ["gone:404", "backup:200"]);
+});
+
+// ---------------- البيانات الجاهزة (رد واحد من الذكاء بدل ردّين) ----------------
+import { currentPayrollMonth, mentionedEmployees, needsSmartModel, quickContext } from "./context.ts";
+
+Deno.test("context: finds the employee named in the question (longest match wins, attached prepositions, no false names)", () => {
+  const names = ["أحمد علي جاسم", "أحمد وليد محمد", "جبار علي حسين", "علي محمد سعيد"];
+  assertEquals(mentionedEmployees("شكد راتب احمد علي هالشهر", names), ["أحمد علي جاسم"]);
+  assertEquals(mentionedEmployees("سلفة أحمد", names), ["أحمد علي جاسم", "أحمد وليد محمد"]);
+  assertEquals(mentionedEmployees("انطيني دوام لجبار", names), ["جبار علي حسين"]);
+  assertEquals(mentionedEmployees("منو غايب اليوم", names), []);
+  // «على» مو «علي»
+  assertEquals(mentionedEmployees("شنو القرارات المعلقة على الفرع", names), []);
+});
+
+Deno.test("context: payroll month and which questions need the stronger model", () => {
+  assertEquals(currentPayrollMonth("2026-10-10"), "2026-10");
+  assertEquals(currentPayrollMonth("2026-10-27"), "2026-11");
+  assertEquals(currentPayrollMonth("2026-12-28"), "2027-01");
+  assert(!needsSmartModel("منو غايب اليوم") && !needsSmartModel("شكد راتب أحمد"));
+  assert(needsSmartModel("اقترح قرارات للغيابات") && needsSmartModel("ليش ما انخصم القسط") && needsSmartModel("اكتب تعميم عن العطلة"));
+});
+
+Deno.test("context: today's status and the named employee's data are fetched up front; failures never block the answer", async () => {
+  const calls: string[] = [];
+  const ctx = {
+    rpc: (fn: string, args: Record<string, unknown>) => {
+      calls.push(fn);
+      if (fn === "assistant_name_hints") return Promise.resolve({ employees: ["علي محمد سعيد", "سارة حسن"] });
+      if (fn === "assistant_day_overview") return Promise.resolve({ branches: [{ branch: "كمب سارة", absent: ["سارة حسن"] }] });
+      if (fn === "assistant_morning_summary") return Promise.reject(new Error("boom"));
+      if (fn === "assistant_loans") return Promise.resolve([{ amount: 500000, remaining: 250000 }]);
+      if (fn === "assistant_leaves") return Promise.resolve({ balance: { annual: { left: 10 } } });
+      return rpc(fn, args);
+    },
+  };
+  const text = await quickContext([{ role: "user", text: "شكد باقي من سلفة علي محمد؟" }], ctx, "2026-10-10");
+  assert(text.includes("بيانات جاهزة") && text.includes("كمب سارة") && text.includes("250000") && text.includes("548750"));
+  assert(text.includes("دوامه بمسير 2026-10") && !text.includes("morning_summary")); // الفاشل ينحذف بس
+  assert(calls.includes("assistant_payroll") && calls.includes("assistant_attendance_log"));
+
+  // بدون اسم موظف: وضع اليوم بس
+  calls.length = 0;
+  const general = await quickContext([{ role: "user", text: "منو غايب اليوم؟" }], ctx, "2026-10-10");
+  assert(general.includes("كمب سارة") && !calls.includes("assistant_payroll"));
+
+  // سؤال متابعة بدون اسم: الموظف من السؤال اللي قبله
+  const follow = await quickContext([{ role: "user", text: "راتب علي محمد" }, { role: "assistant", text: "..." }, { role: "user", text: "وسلفه؟" }], ctx, "2026-10-10");
+  assert(follow.includes("الموظف المذكور بالسؤال"));
+
+  // القاعدة كلها واكعة: نص فارغ والمساعد يكمل بالأدوات
+  assertEquals(await quickContext([{ role: "user", text: "منو غايب" }], { rpc: () => Promise.reject(new Error("down")) }, "2026-10-10"), "");
 });

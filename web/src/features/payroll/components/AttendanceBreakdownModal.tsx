@@ -13,7 +13,7 @@ type Props = {
   actionLoading: string | null;
   onClose: () => void;
   onAddAdjustment: (type: 'bonus' | 'deduction') => void;
-  onDecide: (eventId: string, approve: boolean) => void;
+  onDecide: (eventId: string, approve: boolean, amount: number) => void;
   /** ترك العمل وعليه سلفة: يخصم الباقي (أو الممكن) من آخر راتب. */
   onSettleExit?: () => void;
 };
@@ -162,13 +162,14 @@ export function AttendanceBreakdownModal({ row, startDate, endDate, locked, acti
                     {e.direction === 1 ? '+' : '−'}{Math.round(Number(e.amount)).toLocaleString('en-US')}
                   </span>
                 )}
+                {e.amount_override != null && e.status === 'approved' && <Badge tone="amber">مبلغ معدّل</Badge>}
                 {decidable && (
                   <>
                     <Button size="xs" variant={e.direction === 1 ? 'soft-success' : 'soft-danger'} icon={Check} loading={busy}
-                      onClick={() => onDecide(e.id, true)}>
+                      onClick={() => onDecide(e.id, true, Number(e.amount) || 0)}>
                       {e.direction === 1 ? 'اعتماد' : e.event_type === 'missing_punch' && !(Number(e.amount) > 0) ? 'تأكيد' : 'خصم'}
                     </Button>
-                    <Button size="xs" variant="soft-success" icon={X} disabled={busy} onClick={() => onDecide(e.id, false)}>
+                    <Button size="xs" variant="soft-success" icon={X} disabled={busy} onClick={() => onDecide(e.id, false, 0)}>
                       {e.direction === 1 ? 'رفض' : 'إعفاء'}
                     </Button>
                   </>

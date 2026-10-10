@@ -276,3 +276,23 @@ class LateTile extends StatelessWidget {
     );
   }
 }
+
+// ---------------------------------------------------------------------------
+// الغائبون اليوم (انخصم غيابهم)
+// ---------------------------------------------------------------------------
+
+/// سطر غائب في صفحة التعاميم.
+class AbsentTile extends StatelessWidget {
+  const AbsentTile(this.p, {super.key});
+  final AbsentPerson p;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppListTile(
+      leading: _LeaveAvatar(p, size: 40, toneOverride: AppTone.danger, icon: Icons.event_busy_rounded),
+      title: p.fullName,
+      subtitle: p.branchLabel,
+      trailing: const StatusBadge('غياب', tone: AppTone.danger),
+    );
+  }
+}

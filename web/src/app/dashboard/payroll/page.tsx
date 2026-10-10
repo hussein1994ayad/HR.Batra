@@ -3,7 +3,7 @@
 import { monthOrdinal } from '@/lib/dates';
 import { useMemo, useState } from 'react';
 import { Card, PageSkeleton } from '@/components/ui';
-import { useConfirmNote } from '@/components/confirm';
+import { useConfirmAnswer, useConfirmNote } from '@/components/confirm';
 import { DEDUCT_REASONS, EXCUSE_REASONS } from '@/features/payroll/decisionReasons';
 import { usePayroll } from '@/features/payroll/usePayroll';
 import toast from 'react-hot-toast';
@@ -22,6 +22,7 @@ import { PayrollToolbar, type PayrollStatusFilter } from '@/features/payroll/com
 export default function PayrollPage() {
   const p = usePayroll();
   const confirmNote = useConfirmNote();
+  const confirmAnswer = useConfirmAnswer();
   const [statusFilter, setStatusFilter] = useState<PayrollStatusFilter>('all');
 
   const [adjustmentFor, setAdjustmentFor] = useState<{ row: PayrollRow; type: 'bonus' | 'deduction' } | null>(null);
@@ -181,18 +182,24 @@ export default function PayrollPage() {
           onClose={() => setBreakdownEmployeeId(null)}
           onAddAdjustment={(type) => setAdjustmentFor({ row: breakdownRow, type })}
           onSettleExit={() => void settleExit(breakdownRow)}
-          onDecide={async (id, approve) => {
-            // قرار مالي: تأكيد قبل التنفيذ، مع ملاحظة تنحفظ بالقرار (مثل: نسي البصمة وهو مداوم)
-            const note = await confirmNote({
+          onDecide={async (id, approve, computed) => {
+            // قرار مالي: تأكيد قبل التنفيذ، المبلغ المحسوب يبين وينعدل، مع ملاحظة تنحفظ بالقرار (مثل: نسي البصمة وهو مداوم)
+            const answer = await confirmAnswer({
               title: approve ? 'اعتماد هذه الحركة؟' : 'إعفاء من هذه الحركة؟',
               message: approve
-                ? 'تنحسب على راتب هذا المسير، ويوصل للموظف إشعار بالخصم.'
+                ? 'تنحسب على راتب هذا المسير، ويوصل للموظف إشعار بالمبلغ.'
                 : 'ما تنحسب على الراتب، وما يوصل للموظف إشعار. الملاحظة تنحفظ مع القرار.',
               confirmLabel: approve ? 'اعتماد' : 'إعفاء',
               tone: approve ? 'warning' : 'primary',
+              amount: approve
+                ? { label: 'المبلغ (د.ع)', initial: computed, hint: `المحسوب: ${Math.round(computed).toLocaleString('en-US')} د.ع — تكدر تعدّله (مثلاً نص يوم).` }
+                : undefined,
               note: { presets: approve ? DEDUCT_REASONS : EXCUSE_REASONS, placeholder: 'ملاحظة (اختياري)' },
             });
-            if (note !== null) await p.decideEvent(id, approve, note || undefined);
+            if (answer === null) return;
+            // نفس المحسوب = ما ندز مبلغ (السيرفر يبقى على حسابه ويحدّثه إذا تغير الدوام)
+            const edited = approve && answer.amount !== Math.round(computed) ? answer.amount : undefined;
+            await p.decideEvent(id, approve, answer.note || undefined, edited);
           }}
         />
       )}

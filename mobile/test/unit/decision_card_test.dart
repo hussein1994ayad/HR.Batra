@@ -18,7 +18,7 @@ void main() {
           child: DecisionCard(
             item: const PendingDecision(employeeId: 'e1', employeeName: 'علي', status: 'late', workDate: '2026-10-04', engineMinutes: 25),
             schedule: null,
-            onDecide: ({required deduct, required reason}) {
+            onDecide: ({required deduct, required reason, amount}) {
               deducted = deduct;
               sentReason = reason;
             },
@@ -39,6 +39,50 @@ void main() {
     await tester.pump();
     expect(deducted, isFalse);
     expect(sentReason, 'نسي البصمة وهو مداوم');
+  });
+
+  testWidgets('the computed amount is shown and can be edited before deducting', (tester) async {
+    final sent = <double?>[];
+    Widget card(PendingDecision item) => MaterialApp(
+          theme: AppTheme.darkTheme,
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: DecisionCard(
+                key: ValueKey(item.workDate),
+                item: item,
+                schedule: null,
+                onDecide: ({required deduct, required reason, amount}) => sent.add(amount),
+              ),
+            ),
+          ),
+        );
+    const absence = PendingDecision(employeeId: 'e1', employeeName: 'علي', status: 'absent', workDate: '2026-10-10', engineAmount: 20000);
+    await tester.pumpWidget(card(absence));
+    final field = find.widgetWithText(TextFormField, '20,000');
+    expect(field, findsOneWidget);
+
+    // بدون تعديل: ما ينرسل مبلغ (السيرفر يبقى على المحسوب)
+    await tester.ensureVisible(find.text('تطبيق الخصم'));
+    await tester.tap(find.text('تطبيق الخصم'));
+    await tester.pump();
+    expect(sent, [null]);
+
+    // نص يوم
+    await tester.enterText(field, '10000');
+    await tester.pump();
+    await tester.ensureVisible(find.text('تطبيق الخصم'));
+    await tester.tap(find.text('تطبيق الخصم'));
+    await tester.pump();
+    expect(sent.last, 10000);
+  });
+
+  test('editedAmount: empty or unchanged means the computed amount', () {
+    expect(editedAmount('', 20000), isNull);
+    expect(editedAmount('20,000', 20000), isNull);
+    expect(editedAmount('20,000', 20000.4), isNull);
+    expect(editedAmount('15,000', 20000), 15000);
+    expect(editedAmount('0', 20000), 0);
+    expect(editedAmount('5000', 0), 5000);
   });
 
   test('the same ready notes as the website', () {
