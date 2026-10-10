@@ -493,9 +493,15 @@ cd supabase/tests && npm test
 - التفعيل (مرة وحدة): مفتاح مجاني من https://aistudio.google.com/apikey ثم
   `npx.cmd supabase secrets set GEMINI_API_KEY=...` و `npx.cmd supabase functions deploy hr-assistant`. موديل ثاني: `GEMINI_MODEL`.
 - الفحص: `npx deno test --allow-env --allow-read --allow-net=registry.npmjs.org,jsr.io supabase/functions/hr-assistant/`.
-- السرعة: الوقت كله بالذكاء مو بالقاعدة (دوال `assistant_*` أقل من 30ms). لذلك: أقل «تفكير» للموديل (`THINKING_LADDER` بـ`gemini.ts`،
-  ينزل وحده إذا الموديل ما يقبل الصيغة؛ `GEMINI_THINKING=default` يرجّع التفكير الكامل)، أدوات الموظف تقبل الاسم مباشرة
-  (`resolveEmployee` — جولة أقل)، ومكتبة Excel تتحمل عند الحاجة بس. كل سؤال يكتب بالسجل `hr-assistant timing` (وقت الذكاء/القاعدة).
+- السرعة: الوقت كله بالذكاء مو بالقاعدة (دوال `assistant_*` أقل من 30ms، والرد الواحد من Gemini كان 7 ثواني وأكثر). لذلك:
+  - **بيانات جاهزة** (`context.ts`): قبل السؤال ينجاب وضع اليوم + بيانات الموظف المذكور (راتب، سلف، إجازات، دوام المسير الحالي)
+    وتنحط ويا التعليمات، فأغلب الأسئلة تنجاوب برد واحد من الذكاء بدل ردّين أو ثلاثة.
+  - **موديلين**: السريع `gemini-flash-lite-latest` (سر `GEMINI_FAST_MODEL`) للأسئلة العادية، والأقوى `gemini-flash-latest`
+    (سر `GEMINI_MODEL`) للقرارات والتعاميم والمقارنات و«ليش» (`needsSmartModel`) وللصوت. كل واحد احتياطي للثاني.
+  - **أقل تفكير** يقبله الموديل (`thinkingLadder`: lite = minimal، غيره = low؛ `GEMINI_THINKING=default` يرجّع الكامل)، ومهلة لكل
+    محاولة (12 ثانية للسريع) بعدها يروح للموديل الثاني، و404 يروح للثاني هم.
+  - أدوات الموظف تقبل الاسم مباشرة (`resolveEmployee`)، ومكتبة Excel تتحمل عند الحاجة بس.
+  - كل سؤال يكتب بالسجل `hr-assistant timing`: الوقت الكلي، وقت الذكاء والقاعدة، وكل محاولة `موديل:حالة:وقت` (حالة 0 = انتهت المهلة).
 
 ## ملاحظات مهمة للمطور
 

@@ -71,11 +71,14 @@ const BUSY = new Set([500, 502, 503, 504]);
 const RETRY_DELAY_MS = 700;
 
 /**
- * السرعة: موديلات Flash الجديدة «تفكر» قبل كل رد (ثواني زايدة بكل جولة)، وأسئلة المساعد قراءة بيانات ما تحتاجه.
- * نطلب أقل تفكير؛ الصيغة تختلف بين الأجيال (Gemini 3: thinkingLevel، 2.5: thinkingBudget) والاسم «latest» يتغير،
- * فنجرب بالتسلسل: إذا الموديل رفض الصيغة (400 عن thinking) ننزل للي بعدها ونتذكرها لهذا الموديل.
+ * السرعة: موديلات Flash «تفكر» قبل كل رد (ثواني زايدة بكل جولة)، وأسئلة المساعد قراءة بيانات ما تحتاجه.
+ * نطلب أقل تفكير يقبله الموديل: «minimal» لموديلات lite، و«low» للباقي (الموديلات الأكبر ما تقبل minimal).
+ * إذا الموديل رفض الصيغة (400 عن thinking) ننزل للي بعدها ونتذكرها لهذا الموديل.
  */
-export const THINKING_LADDER: Array<Record<string, unknown> | null> = [{ thinkingLevel: "minimal" }, { thinkingBudget: 0 }, null];
+export function thinkingLadder(model: string): Array<Record<string, unknown> | null> {
+  const low = [{ thinkingLevel: "low" }, { thinkingBudget: 0 }, null];
+  return /lite/i.test(model) ? [{ thinkingLevel: "minimal" }, ...low] : low;
+}
 const thinkingStep = new Map<string, number>();
 /** للفحوص: ينسى الصيغ المحفوظة. */
 export function resetThinkingMemory(): void {
@@ -84,31 +87,62 @@ export function resetThinkingMemory(): void {
 /** توقيع وهمي رسمي من Google لتاريخ جاي من موديل ثاني (حتى الموديل الاحتياطي يقبل استدعاءات الأدوات السابقة). */
 const FOREIGN_SIGNATURE = "skip_thought_signature_validator";
 
+/** محاولة وحدة مع Google (للقياس بالسجل): الموديل، الحالة (0 = انتهت المهلة)، والوقت. */
+export interface Attempt {
+  model: string;
+  status: number;
+  ms: number;
+}
+
 export interface CallOptions {
   fetchImpl?: typeof fetch;
   sleep?: (ms: number) => Promise<void>;
   /** false = تفكير الموديل الافتراضي (أبطأ). الافتراضي: أقل تفكير. */
   fastThinking?: boolean;
+  /** مهلة كل محاولة بالملّي ثانية حسب ترتيب الموديل (الأول سريع فمهلته قصيرة). بعدها نروح للموديل اللي بعده. */
+  timeoutsMs?: number[];
+  onAttempt?: (a: Attempt) => void;
 }
+
+const DEFAULT_TIMEOUTS_MS = [12000, 45000];
 
 /** يرسل لأول موديل يرد. يتذكر الموديل اللي اشتغل (sticky) لباقي جولات نفس السؤال. */
 function caller(apiKey: string, models: string[], opts: CallOptions = {}) {
   const fetchImpl = opts.fetchImpl ?? fetch;
   const sleep = opts.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   const fast = opts.fastThinking !== false;
-  const lastStep = THINKING_LADDER.length - 1;
+  const timeouts = opts.timeoutsMs ?? DEFAULT_TIMEOUTS_MS;
   let current = 0;
   return async (body: (model: string, switched: boolean, thinking: Record<string, unknown> | null) => unknown): Promise<Record<string, unknown>> => {
     let last: Error = new Error("no model");
     for (let i = current; i < models.length; i++) {
+      const ladder = thinkingLadder(models[i]);
+      const lastStep = ladder.length - 1;
+      const hasNext = i < models.length - 1;
       for (let attempt = 0; attempt < 2; attempt++) {
         const step = fast ? (thinkingStep.get(models[i]) ?? 0) : lastStep;
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(models[i])}:generateContent`;
-        const res = await fetchImpl(url, {
-          method: "POST",
-          headers: { "content-type": "application/json", "x-goog-api-key": apiKey },
-          body: JSON.stringify(body(models[i], i > 0, THINKING_LADDER[step])),
-        });
+        const started = Date.now();
+        const abort = new AbortController();
+        const timer = setTimeout(() => abort.abort(), timeouts[Math.min(i, timeouts.length - 1)]);
+        let res: Response;
+        try {
+          res = await fetchImpl(url, {
+            method: "POST",
+            headers: { "content-type": "application/json", "x-goog-api-key": apiKey },
+            body: JSON.stringify(body(models[i], i > 0, ladder[step])),
+            signal: abort.signal,
+          });
+        } catch (e) {
+          if (!abort.signal.aborted) throw e;
+          // الموديل ما رد بالمهلة: ما نعيد عليه، نروح للي بعده
+          opts.onAttempt?.({ model: models[i], status: 0, ms: Date.now() - started });
+          last = new GeminiError(504, "timeout");
+          break;
+        } finally {
+          clearTimeout(timer);
+        }
+        opts.onAttempt?.({ model: models[i], status: res.status, ms: Date.now() - started });
         if (res.ok) {
           current = i;
           return await res.json();
@@ -125,6 +159,8 @@ function caller(apiKey: string, models: string[], opts: CallOptions = {}) {
           attempt--;
           continue;
         }
+        // اسم موديل غير موجود/موقوف: الاحتياطي يكمل بدل ما يوكف المساعد
+        if (res.status === 404 && hasNext) break;
         if (!BUSY.has(res.status)) throw last;
         if (attempt === 0) await sleep(RETRY_DELAY_MS);
       }
