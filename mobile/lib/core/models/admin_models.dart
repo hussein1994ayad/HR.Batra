@@ -135,6 +135,21 @@ class PendingDecision {
         engineMinutes: minutes,
       );
 
+  /// نفس القرار بمبلغ معروف (أجر اليوم لغياب ما انحسبت حركته بعد).
+  PendingDecision withAmount(double amount) => PendingDecision(
+        employeeId: employeeId,
+        employeeName: employeeName,
+        status: status,
+        workDate: workDate,
+        attendanceId: attendanceId,
+        branchId: branchId,
+        checkInTime: checkInTime,
+        checkOutTime: checkOutTime,
+        eventId: eventId,
+        engineAmount: amount,
+        engineMinutes: engineMinutes,
+      );
+
   factory PendingDecision.fromAttendance(JsonRow map) {
     final employee = map.obj('employees');
     return PendingDecision(

@@ -199,6 +199,9 @@ Map<String, List<Map<String, dynamic>>> buildFixtures({String role = 'admin'}) {
       {'employee_id': 'x4', 'full_name': 'حيدر عباس', 'avatar_url': null, 'branch_name': 'مكتب بغداد الرئيسي', 'check_in_time': _iso(0, 9, 25), 'late_minutes': 25},
       {'employee_id': 'x5', 'full_name': 'نور الهدى سالم', 'avatar_url': null, 'branch_name': 'فرع المنصور', 'check_in_time': _iso(0, 10, 15), 'late_minutes': 75},
     ],
+    'rpc:get_absent_today': [
+      {'employee_id': 'x6', 'full_name': 'سجاد كاظم', 'avatar_url': null, 'branch_name': 'فرع الكرادة'},
+    ],
     'system_settings': [
       {'key': 'tracking_enabled', 'value': 'true'},
     ],

@@ -20,7 +20,7 @@ export function DecisionsTable({ decisionsList, selectedReasons, busyKey, onReas
         icon={Gavel}
         tone="amber"
         title="قرارات الغياب والتأخير"
-        description="«تطبيق» يخصم المبلغ المحسوب (أجر اليوم = الراتب ÷ 30، والتأخير بالدقيقة من بداية الدوام)، و«تجاهل» يعفي الموظف"
+        description="«تطبيق» يعرض المبلغ المحسوب (أجر اليوم = الراتب ÷ 30، والتأخير بالدقيقة من بداية الدوام) وتكدر تعدّله قبل الخصم، و«تجاهل» يعفي الموظف"
       />
       <DataTable>
         <thead>

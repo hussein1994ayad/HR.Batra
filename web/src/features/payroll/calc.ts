@@ -23,6 +23,8 @@ export interface PayrollEvent {
   minutes: number;
   days: number;
   amount: number;
+  /** مبلغ كتبه الأدمن عند القرار بدل المحسوب (null = المحسوب). */
+  amount_override?: number | null;
   direction: -1 | 0 | 1;
   payroll_month: string;
   carried_from?: string | null;
@@ -113,6 +115,8 @@ export interface LoanItem {
   loan_amount: number;
   due_date: string;
   amount: number;
+  /** مبلغ كتبه الأدمن عند القرار بدل المحسوب (null = المحسوب). */
+  amount_override?: number | null;
   origin_kind?: 'shortfall' | 'postponed' | null;
   origin_month?: string | null;
   amount_locked?: boolean;
@@ -125,6 +129,8 @@ export interface EntryItem {
   reason: string;
   issue_date: string;
   amount: number;
+  /** مبلغ كتبه الأدمن عند القرار بدل المحسوب (null = المحسوب). */
+  amount_override?: number | null;
 }
 
 export const EVENT_LABELS: Record<PayrollEventType, string> = {

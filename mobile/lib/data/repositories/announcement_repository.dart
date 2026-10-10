@@ -25,10 +25,15 @@ class AnnouncementRepository {
     ]);
   }
 
-  /// [التعاميم، المجازون الآن، المتأخرون اليوم] بالتوازي (لوحة التعاميم).
+  /// الغائبون اليوم اللي انخصم غيابهم. الدالة قد لا تكون منشورة على السيرفر بعد: فشلها = قائمة فارغة.
+  Future<dynamic> fetchAbsentToday() {
+    return _db.rpc<dynamic>('get_absent_today').catchError((Object _) => <dynamic>[]);
+  }
+
+  /// [التعاميم، المجازون الآن، المتأخرون اليوم، الغائبون اليوم] بالتوازي (لوحة التعاميم).
   Future<List<dynamic>> fetchBoard({int limit = 50}) async {
-    final r = await Future.wait<dynamic>([fetchActive(limit: limit), fetchOnLeaveAndLateToday()]);
-    return [r[0], ...(r[1] as List<dynamic>)];
+    final r = await Future.wait<dynamic>([fetchActive(limit: limit), fetchOnLeaveAndLateToday(), fetchAbsentToday()]);
+    return [r[0], ...(r[1] as List<dynamic>), r[2]];
   }
 
   // ── نشر تعميم (للإدارة) ──

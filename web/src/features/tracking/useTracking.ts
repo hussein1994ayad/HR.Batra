@@ -17,6 +17,7 @@ import type { Decision, DetectedStop } from './types';
 const EMPTY: TrackingDataset = {
   geofenceZones: [], branches: [], employees: [], workSchedules: [], leaveRequests: [], attendanceLogs: [], securityLogs: [],
   payrollAmounts: {},
+  dayRates: {},
   holidays: [],
 };
 const BAGHDAD: [number, number] = [33.3152, 44.3661];
@@ -98,7 +99,9 @@ export function useTracking() {
     startDate, endDate, selectedBranch, selectedEmployee,
     employees: data.employees, workSchedules: data.workSchedules,
     leaveRequests: data.leaveRequests, attendanceLogs: data.attendanceLogs, payrollAmounts: data.payrollAmounts, holidays: data.holidays,
-  }), [data, startDate, endDate, selectedBranch, selectedEmployee]);
+    // غياب ما انحسبت حركته بعد (مثل غياب اليوم): مبلغه = أجر اليوم
+  }).map((d) => (d.suggestedAmount > 0 || d.type === 'late' ? d : { ...d, suggestedAmount: data.dayRates[d.employee.id] ?? 0 })),
+  [data, startDate, endDate, selectedBranch, selectedEmployee]);
 
   const attendanceRows = useMemo(() => buildAttendanceRows(data.attendanceLogs, decisionsList, data.leaveRequests), [data.attendanceLogs, decisionsList, data.leaveRequests]);
 
@@ -159,9 +162,9 @@ export function useTracking() {
   const checkoutNow = (recordId: string) =>
     run(`checkout_${recordId}`, () => forceCheckout(recordId), 'تم تسجيل خروج الموظف بنجاح!', () => 'حدث خطأ أثناء تسجيل الخروج.');
 
-  const decide = (item: Decision, status: 'applied' | 'ignored', reason: string) =>
+  const decide = (item: Decision, status: 'applied' | 'ignored', reason: string, amount?: number) =>
     run(decisionKey(item), () => saveDecision({
-      employee: item.employee, type: item.type, date: item.date, status, recordId: item.id, reason, fallbackBranchId,
+      employee: item.employee, type: item.type, date: item.date, status, recordId: item.id, reason, fallbackBranchId, amount,
     }), 'تم حفظ القرار وإرسال إشعار للموظف بنجاح! 🔔', (err) => `حدث خطأ أثناء حفظ القرار: ${errorMessage(err)}`);
 
   const exportReport = () => {

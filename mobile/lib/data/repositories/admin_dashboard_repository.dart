@@ -124,9 +124,24 @@ List<PendingDecision> attachEngineEvents(
   return out;
 }
 
+/// غياب بدون حركة محسوبة بعد (غياب اليوم): مبلغه = أجر اليوم، حتى المدير يشوفه ويكدر يعدّله قبل الخصم.
+List<PendingDecision> withAbsenceRates(List<PendingDecision> decisions, Map<String, double> rates) => [
+      for (final d in decisions)
+        d.status == 'absent' && d.engineAmount == null && (rates[d.employeeId] ?? 0) > 0 ? d.withAmount(rates[d.employeeId]!) : d,
+    ];
+
 class AdminDashboardRepository {
   AdminDashboardRepository({SupabaseClient? client}) : _db = client ?? SupabaseService.client;
   final SupabaseClient _db;
+
+  /// أجر اليوم لكل موظف (payroll_day_rates). سيرفر قديم بدون الدالة = قائمة فارغة.
+  Future<Object?> _dayRates(String day) async {
+    try {
+      return await _db.rpc<Object?>('payroll_day_rates', params: {'p_date': day});
+    } catch (_) {
+      return const <dynamic>[];
+    }
+  }
 
   Future<DashboardLookups> loadLookups() async {
     final results = await Future.wait<Object?>([
@@ -195,6 +210,8 @@ class AdminDashboardRepository {
             .inFilter('event_type', ['absence', 'late', 'early_leave', 'missing_punch'])
             .neq('status', 'void')
             .eq('event_date', dayStr)),
+      // أجر اليوم لكل موظف: مبلغ غياب اليوم يبين قبل القرار (حتى لو ما انحسبت حركته بعد)
+      if (date != null) _dayRates(dayStr),
     ]);
 
     final isHoliday = rowOf(await _db.from('official_holidays').select('holiday_date').eq('holiday_date', dayStr).maybeSingle()) != null;
@@ -231,11 +248,16 @@ class AdminDashboardRepository {
         ));
       }
     }
+    final rates = date == null
+        ? const <String, double>{}
+        : {for (final r in rowsOf(results[10])) r.str('employee_id') ?? '': r.dbl('daily_rate') ?? 0};
     final withEngine = date == null
         ? decisions
-        : attachEngineEvents(decisions, rowsOf(results[9]), {
-            for (final e in employees) e.id: (name: e.fullName, branchId: e.branchId),
-          }, dayStr);
+        : withAbsenceRates(
+            attachEngineEvents(decisions, rowsOf(results[9]), {
+              for (final e in employees) e.id: (name: e.fullName, branchId: e.branchId),
+            }, dayStr),
+            rates);
 
     return DashboardSnapshot(
       present: summary.present,
