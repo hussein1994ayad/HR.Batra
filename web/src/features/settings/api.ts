@@ -40,7 +40,7 @@ export async function fetchSettings(): Promise<SettingsData> {
   const lp = leave.data?.value;
   return {
     company: (comp.data as CompanySettings | null) ?? null,
-    trackingDays: archive.data?.value?.tracking_archive_days || 180,
+    trackingDays: archive.data?.value?.tracking_archive_days || 45,
     cutoffDay: payroll.data?.value?.cutoff_day || 26,
     paymentDay: payroll.data?.value?.payment_day || 30,
     overtimeEnabled: payroll.data?.value?.overtime_enabled === true,

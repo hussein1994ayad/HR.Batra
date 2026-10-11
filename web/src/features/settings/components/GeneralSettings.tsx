@@ -248,8 +248,8 @@ export function GeneralSettings({ initial, onSaved }: { initial: SettingsData; o
 
         <Card>
           <CardHeader icon={ShieldAlert} tone="amber" title="الأرشفة والتتبع" />
-          <Field label="الاحتفاظ ببيانات التتبع (يوم)" hint="تُحذف إحداثيات التتبع ومخالفات السياج الأقدم من هذه المدة تلقائياً.">
-            <Input type="number" min={1} required value={trackingDays} onChange={(e) => setTrackingDays(Number(e.target.value))} dir="ltr" className="text-left" />
+          <Field label="الاحتفاظ ببيانات التتبع (يوم)" hint="نقاط GPS والوقفات ومخالفات السياج الأقدم من هذه المدة تنحذف وحدها كل يوم. أقل شي 35 يوم (حتى يخلص مسير الرواتب اللي يخصها)، والمستحسن 45.">
+            <Input type="number" min={35} max={366} required value={trackingDays} onChange={(e) => setTrackingDays(Number(e.target.value))} dir="ltr" className="text-left" />
           </Field>
           <InfoNote tone="slate" icon={Trash2} className="mt-4">
             تُحفظ المستندات المحذوفة 30 يوماً في سلة المحذوفات قبل إتلافها نهائياً.
