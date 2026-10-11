@@ -107,15 +107,18 @@ export async function setMonthInstallment(installmentId: string, amount: number,
   if (error) throw error;
 }
 
-/** حذف سلفة مكتملة مع ملف التعهد المرفق بها. */
+/**
+ * حذف سلفة مسددة بالكامل مع ملف التعهد. السطر ينحذف أولاً: السيرفر يرفض إذا عليها باقي (trg_guard_loan_delete)،
+ * ووقتها صورة التعهد تبقى (كانت تنحذف الصورة أول ثم يفشل الحذف).
+ */
 export async function deleteCompletedLoan(loan: Loan) {
-  const pledgePath = loan.pledge_url?.match(/\/loan-pledges\/(.+)$/)?.[1];
-  if (pledgePath) {
-    const { error } = await supabase.storage.from('loan-pledges').remove([pledgePath]);
-    if (error) console.error('Failed to delete pledge file', error);
-  }
   const { error } = await supabase.from('loans').delete().eq('id', loan.id);
   if (error) throw error;
+  const pledgePath = loan.pledge_url?.match(/\/loan-pledges\/(.+)$/)?.[1];
+  if (pledgePath) {
+    const { error: fileError } = await supabase.storage.from('loan-pledges').remove([pledgePath]);
+    if (fileError) console.error('Failed to delete pledge file', fileError);
+  }
 }
 
 /** الموظفون النشطون لاختيار صاحب السلفة (مع الراتب لتنبيه القسط فوق نص الراتب). */

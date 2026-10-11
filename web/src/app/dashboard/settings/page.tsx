@@ -12,7 +12,7 @@ import { fetchSettings } from '@/features/settings/api';
 import { GeneralSettings } from '@/features/settings/components/GeneralSettings';
 import { SchedulesSection } from '@/features/settings/components/SchedulesSection';
 import { AnnouncementsSection } from '@/features/settings/components/AnnouncementsSection';
-import { DatabasePurgeSection } from '@/features/settings/components/DatabasePurgeSection';
+import { PayrollCleanupSection } from '@/features/settings/components/PayrollCleanupSection';
 
 export default function SettingsPage() {
   const query = useQuery('settings', fetchSettings);
@@ -47,7 +47,7 @@ export default function SettingsPage() {
 
       {section === 'general' && <GeneralSettings initial={query.data} onSaved={query.reload} />}
       {section === 'schedules' && <SchedulesSection data={query.data} onChanged={query.reload} />}
-      {section === 'cleanup' && <DatabasePurgeSection />}
+      {section === 'cleanup' && <PayrollCleanupSection />}
       {section === 'announcements' && (
         <AnnouncementsSection
           announcements={query.data.announcements}

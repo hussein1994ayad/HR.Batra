@@ -1,22 +1,44 @@
-// أنواع صفحة الإعدادات (البيانات العامة + أداة تنظيف قاعدة البيانات).
+// أنواع صفحة الإعدادات (البيانات العامة + أداة تنظيف المسيرات المغلقة).
 
 import type { Announcement, Branch, Department, Employee, LeaveTypeOption, WorkSchedule } from '@/lib/db-types';
 
-export interface PurgeOptions {
-  year: number;
-  month: number;
-  notifications: boolean;
+/** الفئات اللي تنحذف بتنظيف مسير. */
+export interface CleanupSelection {
+  attendance: boolean;
   tracking: boolean;
-  absences: boolean;
+  notifications: boolean;
 }
 
-/** نتيجة manual_purge_month_data. */
-export interface PurgeResult {
-  notifications_deleted?: number | null;
+/** نتيجة payroll_cleanup_run (null = الفئة ما انطلبت). */
+export interface CleanupResult {
+  attendance_deleted?: number | null;
   tracking_deleted?: number | null;
   stops_deleted?: number | null;
   violations_deleted?: number | null;
-  absences_deleted?: number | null;
+  notifications_deleted?: number | null;
+}
+
+/** معاينة payroll_cleanup_preview. */
+export interface CleanupPreview {
+  month: string;
+  start_date: string;
+  end_date: string;
+  status: string;
+  next_month: string | null;
+  next_status: string | null;
+  checks: { closed: boolean; next_closed: boolean; pending_decisions: number };
+  counts: { attendance: number; tracking: number; stops: number; violations: number; notifications: number };
+  done: CleanupSelection;
+  can: CleanupSelection;
+  history: {
+    at: string;
+    by: string | null;
+    attendance: number | null;
+    tracking: number | null;
+    stops: number | null;
+    violations: number | null;
+    notifications: number | null;
+  }[];
 }
 
 export interface CompanySettings {

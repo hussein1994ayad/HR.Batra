@@ -149,20 +149,23 @@ export function Toggle({
   checked,
   onChange,
   label,
+  disabled = false,
 }: {
   checked: boolean;
   onChange: (checked: boolean) => void;
   label?: React.ReactNode;
+  disabled?: boolean;
 }) {
   return (
-    <label className="inline-flex items-center gap-2.5 cursor-pointer select-none">
+    <label className={cn('inline-flex items-center gap-2.5 select-none', disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer')}>
       <button
         type="button"
         role="switch"
         aria-checked={checked}
+        disabled={disabled}
         onClick={() => onChange(!checked)}
         className={cn(
-          'relative w-9 h-5 rounded-full transition-colors cursor-pointer',
+          'relative w-9 h-5 rounded-full transition-colors', disabled ? 'cursor-not-allowed' : 'cursor-pointer',
           checked ? 'bg-emerald-500' : 'bg-slate-700',
         )}
       >

@@ -46,7 +46,7 @@ void main() {
   });
 
   testWidgets('right at the end of the shift it is already absent', (tester) async {
-    await tester.pumpWidget(_card(DateTime(2026, 10, 10, 14, 0)));
+    await tester.pumpWidget(_card(DateTime(2026, 10, 10, 14)));
     expect(find.text('غائب'), findsOneWidget);
   });
 
@@ -66,7 +66,7 @@ void main() {
   });
 
   testWidgets('a night shift that crosses midnight keeps the old behaviour', (tester) async {
-    await tester.pumpWidget(_card(DateTime(2026, 10, 10, 23, 0), schedule: {..._schedule, 'check_in_time': '22:00:00', 'check_out_time': '06:00:00'}));
+    await tester.pumpWidget(_card(DateTime(2026, 10, 10, 23), schedule: {..._schedule, 'check_in_time': '22:00:00', 'check_out_time': '06:00:00'}));
     expect(find.text('غائب'), findsNothing);
     expect(find.text('متأخر 1 س'), findsOneWidget);
   });

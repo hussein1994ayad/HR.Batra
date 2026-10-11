@@ -3,6 +3,7 @@
 // حالة وإجراءات صفحة السلف: تحميل الطلبات والسلف المعتمدة، الاعتماد/الرفض، التعديل وإعادة الجدولة،
 // تسجيل/التراجع عن دفعة، تأجيل الأقساط، والحذف. كل إجراء يمر بـ run (مؤشر تحميل + رسالة خطأ موحّدة).
 
+import { downloadLoanStatement } from './statementExport';
 import React, { useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { confetti } from '@/lib/lazy';
@@ -204,17 +205,19 @@ export function useLoans() {
   /** حذف سلفة مسددة بالكامل مع ملف تعهدها لتوفير المساحة. */
   const deleteLoan = async (loan: Loan) => {
     const ok = await confirm({
-      title: 'حذف سجل السلفة المكتملة؟',
-      message: 'ستُحذف السلفة وأقساطها وصورة التعهد نهائياً لتوفير المساحة. لا يمكن التراجع.',
-      confirmLabel: 'حذف نهائي',
+      title: 'حذف سجل السلفة المسددة؟',
+      message: 'ينزل كشف السلفة ملف Excel أولاً (الأقساط وتواريخ السداد)، وبعدها تنحذف السلفة وأقساطها وصورة التعهد نهائياً.\nالرواتب القديمة ما تتغير: مبلغ القسط محفوظ بكل كشف راتب. لا يمكن التراجع.',
+      confirmLabel: 'تنزيل الكشف والحذف',
     });
     if (!ok) return;
     await run(
       `delete_loan_${loan.id}`,
       async () => {
+        // الكشف أولاً: إذا ما نزل، السلفة ما تنحذف
+        downloadLoanStatement(loan);
         await deleteCompletedLoan(loan);
         query.mutate((d) => ({ ...d, approved: d.approved.filter((l) => l.id !== loan.id) }));
-        toast.success('تم حذف السلفة وتوفير المساحة');
+        toast.success('نزل كشف السلفة وانحذفت السلفة');
       },
       'فشل الحذف',
     );
