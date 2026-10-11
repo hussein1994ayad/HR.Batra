@@ -24,6 +24,11 @@ String? punchNote({required bool isCheckIn, required Map<String, dynamic>? sched
     if (start == null) return null;
     final grace = (schedule?['grace_period_minutes'] as num?)?.toInt() ?? kDefaultGraceMinutes;
     final late = nowMin - start;
+    // بعد نهاية الدوام ما نكول «متأخر 12 ساعة»
+    final end = scheduleMinutesOf(schedule?['check_out_time']);
+    if (end != null && end > start && nowMin >= end) {
+      return 'بصمة حضور بعد نهاية الدوام (${Fmt.timeOfDay(schedule?['check_out_time']?.toString())})';
+    }
     return late > grace ? 'متأخر ${Fmt.minutesLabel(late)} عن بداية الدوام' : null;
   }
   final end = scheduleMinutesOf(schedule?['check_out_time']);

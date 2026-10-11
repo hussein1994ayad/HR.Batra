@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/models/models.dart';
 import '../../../shared/ui/ui.dart';
 import '../../announcements/announcement_widgets.dart';
+import '../../attendance/attendance_logic.dart';
 
 
 class HomeHeader extends StatelessWidget {
@@ -48,8 +49,10 @@ class HomeHeader extends StatelessWidget {
 enum HomeDayState { notStarted, working, done }
 
 class HomeTodayCard extends StatelessWidget {
-  const HomeTodayCard({super.key, required this.loading, required this.attendance, required this.schedule, required this.onAction, this.onLeave = false, this.isHoliday = false});
+  const HomeTodayCard({super.key, required this.loading, required this.attendance, required this.schedule, required this.onAction, this.onLeave = false, this.isHoliday = false, this.now});
 
+  /// للفحوص: الوقت الحالي (الافتراضي ساعة الجهاز).
+  final DateTime? now;
   final bool loading;
   final bool onLeave;
   final bool isHoliday;
@@ -101,12 +104,14 @@ class HomeTodayCard extends StatelessWidget {
             ? HomeDayState.working
             : HomeDayState.notStarted;
 
-    final now = DateTime.now();
+    final now = this.now ?? DateTime.now();
     final worked = checkIn == null ? Duration.zero : (checkOut ?? now).difference(checkIn);
     final planned = _scheduledMinutes;
 
     final lateMinutes = state == HomeDayState.notStarted && !onLeave ? _lateSoFar(now) : 0;
     final dayOff = state == HomeDayState.notStarted && !_isWorkDay(now);
+    // خلص وقت الدوام وما بصم: غائب (مو «متأخر 12 ساعة»)
+    final shiftOver = state == HomeDayState.notStarted && !dayOff && !onLeave && _shiftEnded(now);
 
     final (badge, tone, bigLabel, bigValue, actionLabel, actionIcon, variant) = switch (state) {
       // يوم عطلة ولم يبصم: ما نطلب منه يسجّل حضور
@@ -115,6 +120,15 @@ class HomeTodayCard extends StatelessWidget {
           AppTone.info,
           'اليوم',
           'عطلة',
+          'عرض سجل الدوام',
+          Icons.history_rounded,
+          AppButtonVariant.secondary,
+        ),
+      HomeDayState.notStarted when shiftOver => (
+          'غائب',
+          AppTone.danger,
+          'انتهى دوامك',
+          Fmt.timeOfDay(schedule?['check_out_time']?.toString()),
           'عرض سجل الدوام',
           Icons.history_rounded,
           AppButtonVariant.secondary,
@@ -183,7 +197,12 @@ class HomeTodayCard extends StatelessWidget {
           ),
           const SizedBox(height: AppSpace.xl),
           AppButton(label: actionLabel, icon: actionIcon, variant: variant, size: AppButtonSize.large, expand: true, onPressed: onAction),
-          if (state == HomeDayState.notStarted && !dayOff && schedule?['grace_period_minutes'] != null)
+          if (shiftOver)
+            const Padding(
+              padding: EdgeInsets.only(top: AppSpace.sm),
+              child: Center(child: Text('ما سجّلت حضور اليوم. إذا جنت مداوم راجع الإدارة.', style: AppText.caption, textAlign: TextAlign.center)),
+            )
+          else if (state == HomeDayState.notStarted && !dayOff && schedule?['grace_period_minutes'] != null)
             Padding(
               padding: const EdgeInsets.only(top: AppSpace.sm),
               child: Center(child: Text('سماحية التأخير ${schedule!['grace_period_minutes']} دقيقة', style: AppText.caption)),
@@ -203,6 +222,14 @@ class HomeTodayCard extends StatelessWidget {
     final grace = (schedule?['grace_period_minutes'] as num?)?.toInt() ?? kDefaultGraceMinutes;
     final late = now.hour * 60 + now.minute - start;
     return late > grace ? late : 0;
+  }
+
+  /// خلص وقت الدوام اليوم (الدوام اللي يعبر منتصف الليل ما ينحسب هنا).
+  bool _shiftEnded(DateTime now) {
+    final start = scheduleMinutesOf(schedule?['check_in_time']);
+    final end = scheduleMinutesOf(schedule?['check_out_time']);
+    if (start == null || end == null || end <= start) return false;
+    return now.hour * 60 + now.minute >= end;
   }
 
   static String _hm(Duration d) {
