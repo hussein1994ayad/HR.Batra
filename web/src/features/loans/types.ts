@@ -2,7 +2,7 @@
 
 import type { Loan, LoanInstallment } from '@/lib/db-types';
 
-export type LoansTab = 'active' | 'completed';
+export type LoansTab = 'active' | 'completed' | 'archived';
 
 /** مسودة الاعتماد: يمكن للإدارة تعديل المبلغ والمدة وتاريخ أول قسط قبل التوليد. */
 export interface ApprovalDraft {

@@ -3,7 +3,10 @@
 import { supabase } from '@/lib/supabase';
 import type { Announcement, Department, LeaveTypeOption, WorkSchedule } from '@/lib/db-types';
 import { DEFAULT_LEAVE_TYPES } from './logic';
-import type { CleanupPreview, CleanupResult, CleanupSelection, CompanySettings, SettingsData } from './types';
+import type {
+  CleanupPreview, CleanupResult, CleanupSelection, CompanySettings, LoansCleanupPreview, LoansCleanupResult, SettingsData,
+} from './types';
+import { removePledgeFiles } from '@/features/loans/api';
 
 /** معاينة تنظيف مسير: الشروط، أعداد السجلات المرشحة للحذف، وسجل التنظيف السابق (payroll_cleanup_preview). */
 export async function fetchCleanupPreview(month: string): Promise<CleanupPreview> {
@@ -22,6 +25,22 @@ export async function runPayrollCleanup(month: string, selection: CleanupSelecti
   });
   if (error) throw error;
   return data as CleanupResult;
+}
+
+/** معاينة تنظيف السلف: المسددة المرشحة للأرشفة، المستثناة وسببها، والطلبات المرفوضة/الملغاة القديمة. */
+export async function fetchLoansCleanupPreview(): Promise<LoansCleanupPreview> {
+  const { data, error } = await supabase.rpc('loans_cleanup_preview');
+  if (error) throw error;
+  return data as LoansCleanupPreview;
+}
+
+/** أرشفة كل السلف المسددة المؤهلة و/أو حذف الطلبات المرفوضة القديمة، ثم حذف صور التعهد من التخزين. */
+export async function runLoansCleanup(settled: boolean, requests: boolean): Promise<LoansCleanupResult> {
+  const { data, error } = await supabase.rpc('loans_cleanup_run', { p_settled: settled, p_requests: requests });
+  if (error) throw error;
+  const result = data as LoansCleanupResult;
+  await removePledgeFiles(result.pledge_urls ?? []);
+  return result;
 }
 
 /** تحميل الإعدادات كلها بالتوازي، مع القيم الافتراضية للسياسات غير المحفوظة. */

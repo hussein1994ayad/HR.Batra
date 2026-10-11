@@ -49,6 +49,8 @@ export interface PayrollPeriod {
   legacy?: boolean;
   /** آخر «احتساب الرواتب» (calculate_payroll) */
   calculated_at?: string | null;
+  /** الأدمن أكد إن رواتب المسير تسلّمت للموظفين (mark_payroll_delivered) */
+  delivered_at?: string | null;
 }
 
 /** صف موظف كما يرجعه get_payroll_run. */

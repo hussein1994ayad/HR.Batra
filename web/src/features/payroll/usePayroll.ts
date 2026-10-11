@@ -6,12 +6,12 @@ import toast from 'react-hot-toast';
 import { errorMessage } from '@/lib/error-utils';
 import {
   approvePayrollSlip, archivePayrollMonth, closePayrollPeriod, decidePayrollEvent, fetchPayrollDataset,
-  calculatePayroll, insertBonusDeduction, notifyBranchPayslips, notifySlipReverted, reopenPayrollPeriod, revertPayrollSlip, settleLoanOnExit,
+  calculatePayroll, insertBonusDeduction, markPayrollDelivered, notifyBranchPayslips, notifySlipReverted, reopenPayrollPeriod, revertPayrollSlip, settleLoanOnExit,
   type PayrollDataset,
 } from './api';
 import { buildPayrollRows, buildSlipAdjustments, canApproveNow, sumPayroll, type PayrollRow } from './calc';
 import { downloadMonthBeforeArchive } from './archiveExport';
-import { baghdadToday, currentPayrollMonth, monthLabel } from './period';
+import { baghdadToday, currentPayrollMonth, monthLabel, payrollMonthName } from './period';
 import { useConfirm, useConfirmNote } from '@/components/confirm';
 import type { OverrideField, PayrollOverrides } from './types';
 
@@ -283,6 +283,24 @@ export function usePayroll() {
     await loadData();
   };
 
+  /** «تم تسليم الرواتب»: تأكيد من الأدمن بعد إغلاق المسير. */
+  const markDelivered = async () => {
+    const yes = await confirm({
+      title: `تأكيد تسليم رواتب ${payrollMonthName(selectedMonth)}؟`,
+      message: 'تأكد إن الرواتب وصلت للموظفين فعلاً. بعد التأكيد يصير ممكن تنظيف سجلات حضور المسير اللي قبله من الإعدادات.',
+      confirmLabel: 'نعم، تسلّمت',
+      tone: 'primary',
+    });
+    if (!yes) return;
+    const ok = await run('deliver_period', async () => {
+      await markPayrollDelivered(selectedMonth);
+      return true;
+    }, 'تعذر تأكيد التسليم');
+    if (!ok) return;
+    toast.success('تم تأكيد تسليم الرواتب ✅');
+    await loadData({ quiet: true });
+  };
+
   const reopenPeriod = async () => {
     const reason = window.prompt('سبب إعادة فتح المسير (يُسجَّل للتدقيق):')?.trim();
     if (!reason) return;
@@ -394,7 +412,7 @@ export function usePayroll() {
     payrollOverrides, saveOverride, clearOverride,
     addBonusDeduction, decideEvent, generateSlip, bulkGenerateSlips, revertSlip, settleExit, calculate,
     calcResultOpen, setCalcResultOpen,
-    closePeriod, reopenPeriod, sendBranchNotifications, archiveMonth,
+    closePeriod, reopenPeriod, markDelivered, sendBranchNotifications, archiveMonth,
   };
 }
 

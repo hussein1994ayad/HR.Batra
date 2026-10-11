@@ -110,6 +110,12 @@ export async function closePayrollPeriod(month: string): Promise<PeriodResult> {
   return data as PeriodResult;
 }
 
+/** تأكيد إن رواتب مسير مغلق تسلّمت للموظفين فعلاً (شرط لتنظيف حضور المسير اللي قبله). */
+export async function markPayrollDelivered(month: string): Promise<void> {
+  const { error } = await supabase.rpc('mark_payroll_delivered', { p_month: month, p_delivered: true });
+  if (error) throw error;
+}
+
 export async function reopenPayrollPeriod(month: string, reason: string): Promise<void> {
   const { error } = await supabase.rpc('reopen_payroll_period', { p_month: month, p_reason: reason });
   if (error) throw error;

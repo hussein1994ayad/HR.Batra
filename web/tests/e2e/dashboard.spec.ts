@@ -310,13 +310,25 @@ test.describe('workflows', () => {
   test('cleans a closed payroll period: preview with counts, blocked attendance, confirm, one server call', async ({ page }) => {
     const preview = {
       month: '2026-09', start_date: '2026-09-01', end_date: '2026-09-26', status: 'closed', next_month: '2026-10', next_status: 'open',
-      checks: { closed: true, next_closed: false, pending_decisions: 0 },
+      checks: { closed: true, next_closed: false, next_delivered: false, pending_decisions: 1 },
+      pending_list: [{ employee: 'مصطفى حسن', date: '2026-09-20', type: 'خروج مبكر', amount: 1250 }],
       counts: { attendance: 120, tracking: 5400, stops: 30, violations: 2, notifications: 85 },
+      bytes: { attendance: 18360, tracking: 521000, notifications: 21335 },
       done: { attendance: false, tracking: false, notifications: false },
       can: { attendance: false, tracking: true, notifications: true },
       history: [],
     };
-    const api = await mockSupabase(page, { rpc: { payroll_cleanup_preview: preview, payroll_cleanup_run: { success: true, tracking_deleted: 5400, stops_deleted: 30, violations_deleted: 2 } } });
+    const loans = {
+      settled: [{ id: 'ln9', loan_no: 7, employee: 'زينب علي', amount: 300000, settled_at: '2026-10-28T09:00:00Z' }],
+      excluded: [{ loan_no: 8, employee: 'مصطفى حسن', amount: 500000, remaining: 200000, reason: 'عليها باقي 200,000 د.ع.' }],
+      requests: [], requests_recent: 1,
+      bytes: { settled_rows: 2000, settled_files: 130000, requests_rows: 0, requests_files: 0 },
+      archived_total: 3,
+    };
+    const api = await mockSupabase(page, { rpc: {
+      payroll_cleanup_preview: preview, payroll_cleanup_run: { success: true, tracking_deleted: 5400, stops_deleted: 30, violations_deleted: 2 },
+      loans_cleanup_preview: loans, loans_cleanup_run: { success: true, loans_archived: 1, loan_requests_deleted: null, pledge_urls: [] },
+    } });
     await page.goto('/dashboard/settings');
     await page.getByRole('tab', { name: 'تنظيف البيانات' }).click();
     // الأعداد تبين قبل أي حذف
@@ -325,7 +337,12 @@ test.describe('workflows', () => {
     // الحضور مقفول لأن المسير اللي بعده بعده مفتوح، مع السبب
     await expect(page.getByRole('switch').first()).toBeDisabled();
     await expect(page.getByText(/لازم تعتمد وتغلق رواتب المسير اللي بعده/)).toBeVisible();
+    // المستثنى وسببه: الحركة اللي تنتظر قرار بالاسم
+    await expect(page.getByText('مستثنى: حركات تنتظر قرارك (1)')).toBeVisible();
+    await expect(page.getByText(/مصطفى حسن · .*خروج مبكر/)).toBeVisible();
     await page.getByRole('switch').nth(1).click();
+    // تقدير المساحة للفئة المختارة
+    await expect(page.getByText('المساحة التقريبية: 508.8 KB')).toBeVisible();
     await page.getByRole('button', { name: 'تنظيف المحدد' }).click();
     const dialog = page.getByRole('dialog');
     await expect(dialog).toContainText('5,432 سجل تتبع');
@@ -333,6 +350,18 @@ test.describe('workflows', () => {
     await dialog.getByRole('button', { name: 'نعم، حذف نهائي' }).click();
     await expect.poll(() => api.writes('rpc:payroll_cleanup_run', 'POST').length).toBe(1);
     expect(api.writes('rpc:payroll_cleanup_run', 'POST')[0].body).toMatchObject({ p_attendance: false, p_tracking: true, p_notifications: false });
+
+    // تنظيف السلف: المسددة مرشحة للأرشفة، واللي عليها باقي مستثناة مع السبب
+    await expect(page.getByText('أرشفة السلف المسددة بالكامل — 1 سلفة')).toBeVisible();
+    await expect(page.getByText('L-0007')).toBeVisible();
+    await expect(page.getByText('عليها باقي 200,000 د.ع.')).toBeVisible();
+    await page.getByRole('switch', { name: /أرشفة السلف المسددة/ }).click();
+    await page.getByRole('button', { name: 'تنظيف السلف المحددة' }).click();
+    const loansDialog = page.getByRole('dialog');
+    await expect(loansDialog).toContainText('أرشفة 1 سلفة مسددة');
+    await loansDialog.getByRole('button', { name: 'نعم، نفّذ' }).click();
+    await expect.poll(() => api.writes('rpc:loans_cleanup_run', 'POST').length).toBe(1);
+    expect(api.writes('rpc:loans_cleanup_run', 'POST')[0].body).toMatchObject({ p_settled: true, p_requests: false });
   });
 
   test('saves settings', async ({ page }) => {

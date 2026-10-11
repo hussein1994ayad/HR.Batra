@@ -2,14 +2,16 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import { CheckCircle2, Eraser, History, ShieldAlert, Trash2, XCircle } from 'lucide-react';
+import { CheckCircle2, Eraser, FileSpreadsheet, History, ShieldAlert, Trash2, XCircle } from 'lucide-react';
 import { useConfirm } from '@/components/confirm';
 import { Button, Card, CardHeader, Field, InfoNote, Select, Toggle } from '@/components/ui';
 import { errorMessage, formatDate } from '@/lib/format';
 import { FIRST_ENGINE_MONTH, arabicDate, currentPayrollMonth, payrollMonthName, shiftPayrollMonth } from '@/features/payroll/period';
-import { fetchCleanupPreview, runPayrollCleanup } from '../api';
-import { attendanceBlockers, cleanupSummary } from '../logic';
-import type { CleanupPreview, CleanupSelection } from '../types';
+import { fetchCleanupPreview, fetchLoansCleanupPreview, runPayrollCleanup } from '../api';
+import { downloadCleanupReport } from '../cleanupReport';
+import { attendanceBlockers, cleanupSummary, formatBytes } from '../logic';
+import type { CleanupPreview, CleanupSelection, LoansCleanupPreview } from '../types';
+import { LoansCleanupCard } from './LoansCleanupCard';
 
 const NONE: CleanupSelection = { attendance: false, tracking: false, notifications: false };
 const n = (v: number | null | undefined) => Number(v ?? 0).toLocaleString('en-US');
@@ -32,6 +34,20 @@ export function PayrollCleanupSection() {
   const [loadError, setLoadError] = useState('');
   const [pick, setPick] = useState<CleanupSelection>(NONE);
   const [busy, setBusy] = useState(false);
+  const [loans, setLoans] = useState<LoansCleanupPreview | null>(null);
+
+  const loadLoans = useCallback(async () => {
+    try {
+      setLoans(await fetchLoansCleanupPreview());
+    } catch {
+      setLoans(null); // سيرفر قديم بدون الدالة: القسم ما يطلع
+    }
+  }, []);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- جلب معاينة السلف مرة عند فتح القسم
+    void loadLoans();
+  }, [loadLoans]);
 
   const load = useCallback(async (m: string) => {
     if (!m) return;
@@ -51,6 +67,11 @@ export function PayrollCleanupSection() {
 
   const blockers = preview ? attendanceBlockers(preview) : [];
   const trackingTotal = preview ? preview.counts.tracking + preview.counts.stops + preview.counts.violations : 0;
+  // تقدير المساحة للفئات المختارة (حجم السطور بدون الفهارس — تقريبي)
+  const pickedBytes = preview
+    ? (pick.attendance ? Number(preview.bytes?.attendance ?? 0) : 0) + (pick.tracking ? Number(preview.bytes?.tracking ?? 0) : 0)
+      + (pick.notifications ? Number(preview.bytes?.notifications ?? 0) : 0)
+    : 0;
 
   const run = async () => {
     if (!preview) return;
@@ -83,12 +104,18 @@ export function PayrollCleanupSection() {
   };
 
   return (
+    <div className="space-y-6">
     <Card>
       <CardHeader
         icon={Eraser}
         tone="rose"
         title="تنظيف مسير مغلق"
         description="حذف سجلات الحضور والتتبع والإشعارات لمسير رواتب خلص وتسلّم، لتوفير مساحة القاعدة. كشوف الرواتب ما تنلمس."
+        actions={
+          <Button size="sm" variant="soft" icon={FileSpreadsheet} disabled={!preview && !loans} onClick={() => downloadCleanupReport(preview, loans)}>
+            تقرير المعاينة Excel
+          </Button>
+        }
       />
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-5">
@@ -109,6 +136,10 @@ export function PayrollCleanupSection() {
                   text={preview.checks.next_closed
                     ? `رواتب المسير اللي بعده${preview.next_month ? ` (${payrollMonthName(preview.next_month)})` : ''} معتمدة ومغلقة`
                     : `رواتب المسير اللي بعده${preview.next_month ? ` (${payrollMonthName(preview.next_month)})` : ''} بعدها ما انغلقت — الحضور ينتظرها`} />
+                <Check ok={preview.checks.next_delivered}
+                  text={preview.checks.next_delivered
+                    ? 'تأكد تسليم رواتب المسير اللي بعده'
+                    : 'تسليم رواتب المسير اللي بعده ما تأكد بعد (من صفحة الرواتب ← «تم تسليم الرواتب»)'} />
                 <Check ok={preview.checks.pending_decisions === 0}
                   text={preview.checks.pending_decisions === 0 ? 'ماكو حركات تنتظر قرار لأيام هذا المسير' : `${preview.checks.pending_decisions} حركة لأيام هذا المسير تنتظر قرارك`} />
               </ul>
@@ -125,6 +156,16 @@ export function PayrollCleanupSection() {
                     {blockers.map((b) => <li key={b}>{b}</li>)}
                   </ul>
                 )}
+                {(preview.pending_list?.length ?? 0) > 0 && (
+                  <div className="rounded-2xl border border-slate-800 p-3">
+                    <p className="text-[11px] font-bold text-slate-300 mb-2">مستثنى: حركات تنتظر قرارك ({preview.pending_list.length})</p>
+                    <ul className="space-y-1 text-[11px] text-slate-400 max-h-40 overflow-y-auto">
+                      {preview.pending_list.map((e, i) => (
+                        <li key={`${e.employee}_${e.date}_${i}`}>{e.employee} · <span dir="ltr" className="font-mono">{e.date}</span> · {e.type}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
                 <Toggle
                   checked={pick.tracking}
                   onChange={(v) => setPick((p) => ({ ...p, tracking: v }))}
@@ -139,10 +180,13 @@ export function PayrollCleanupSection() {
                 />
               </div>
 
-              <Button variant="danger" icon={Trash2} loading={busy} onClick={run}
-                disabled={!preview.checks.closed || (!pick.attendance && !pick.tracking && !pick.notifications)}>
-                تنظيف المحدد
-              </Button>
+              <div className="flex flex-wrap items-center gap-3">
+                <Button variant="danger" icon={Trash2} loading={busy} onClick={run}
+                  disabled={!preview.checks.closed || (!pick.attendance && !pick.tracking && !pick.notifications)}>
+                  تنظيف المحدد
+                </Button>
+                {pickedBytes > 0 && <span className="text-[11px] text-slate-400">المساحة التقريبية: {formatBytes(pickedBytes)}</span>}
+              </div>
 
               {preview.history.length > 0 && (
                 <div className="rounded-2xl border border-slate-800 p-3">
@@ -167,11 +211,13 @@ export function PayrollCleanupSection() {
         <InfoNote tone="amber" icon={ShieldAlert}>
           <p className="font-bold text-amber-200 mb-1">شنو ينحذف وشنو يبقى</p>
           ينحذف: سطور الحضور والبصمات، نقاط التتبع، والإشعارات لهذا المسير بس. يبقى: كشوف الرواتب وتفاصيلها (الخصومات
-          والسلف والصافي) وكل شي يخص المسيرات الثانية. الحضور ما ينحذف إلا بعد ما تنغلق رواتب المسير اللي بعده، وأيامه
+          والسلف والصافي) وكل شي يخص المسيرات الثانية. الحضور ما ينحذف إلا بعد ما تنغلق رواتب المسير اللي بعده ويتأكد تسليمها، وأيامه
           بعدها ما ينعاد حسابها. الحذف نهائي.
         </InfoNote>
       </div>
     </Card>
+    {loans && <LoansCleanupCard preview={loans} onDone={() => void loadLoans()} />}
+    </div>
   );
 }
 

@@ -2,14 +2,15 @@
 
 // سجل السلف المعتمدة (جارية/مكتملة): نسبة السداد، المتبقي، القسط القادم، وفتح جدول الأقساط.
 
-import { Calendar, CreditCard, Trash2 } from 'lucide-react';
+import { Archive, Calendar, CreditCard } from 'lucide-react';
 import { formatIQD } from '@/lib/format';
 import { Avatar, Badge, Button, Card, CardHeader, DataTable, IconButton, SearchInput, SegmentedTabs, TableEmpty } from '@/components/ui';
-import { sortInstallments } from '../logic';
+import { loanRef, sortInstallments } from '../logic';
 import type { LoansState } from '../useLoans';
+import { SettledLoansTable } from './SettledLoansTable';
 
 export function ApprovedLoansTable({ s }: { s: LoansState }) {
-  const { active, completed, displayed, tab, setTab, search, setSearch, busy, setScheduleLoanId, deleteLoan } = s;
+  const { active, completed, settled, displayed, tab, setTab, search, setSearch, busy, setScheduleLoanId, deleteLoan } = s;
   return (
     <>
     <Card>
@@ -27,11 +28,13 @@ export function ApprovedLoansTable({ s }: { s: LoansState }) {
               options={[
                 { value: 'active', label: 'الجارية', count: active.length },
                 { value: 'completed', label: 'المكتملة', count: completed.length },
+                { value: 'archived', label: 'المؤرشفة', count: settled.length },
               ]}
             />
           </>
         }
       />
+      {tab === 'archived' ? <SettledLoansTable s={s} /> : (
       <DataTable>
         <thead>
           <tr>
@@ -56,7 +59,10 @@ export function ApprovedLoansTable({ s }: { s: LoansState }) {
                   <td>
                     <div className="flex items-center gap-2.5">
                       <Avatar name={loan.employees?.full_name} size="sm" />
-                      <span className="font-bold text-white">{loan.employees?.full_name}</span>
+                      <div>
+                        <span className="font-bold text-white">{loan.employees?.full_name}</span>
+                        {loan.loan_no && <span className="block text-[10px] font-mono text-slate-500" dir="ltr">{loanRef(loan.loan_no)}</span>}
+                      </div>
                     </div>
                   </td>
                   <td className="font-bold text-slate-200">{formatIQD(amount)}</td>
@@ -83,7 +89,7 @@ export function ApprovedLoansTable({ s }: { s: LoansState }) {
                         جدول الأقساط
                       </Button>
                       {tab === 'completed' && (
-                        <IconButton icon={Trash2} label="حذف السجل نهائياً" tone="rose" loading={busy === `delete_loan_${loan.id}`} onClick={() => deleteLoan(loan)} />
+                        <IconButton icon={Archive} label="أرشفة السلفة المسددة" tone="amber" loading={busy === `delete_loan_${loan.id}`} onClick={() => deleteLoan(loan)} />
                       )}
                     </div>
                   </td>
@@ -93,6 +99,7 @@ export function ApprovedLoansTable({ s }: { s: LoansState }) {
           )}
         </tbody>
       </DataTable>
+      )}
     </Card>
     </>
   );

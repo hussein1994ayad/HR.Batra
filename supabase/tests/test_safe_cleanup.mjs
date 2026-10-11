@@ -109,6 +109,8 @@ async function world() {
 
   // قرار معلّق لأيام المسير يمنع حذف الحضور حتى بعد إغلاق المسير التالي
   await w.q(`UPDATE payroll_periods SET status = 'closed' WHERE period_month = '2026-10'`);
+  await expectError('   ...and for its delivery to be confirmed', run('2026-09', true, false, false), 'تم تسليم الرواتب');
+  await expectOk('   the admin confirms the next payroll was delivered', as(w.db, 'admin', `SELECT mark_payroll_delivered('2026-10')`));
   const pend = await w.one(`INSERT INTO payroll_events (employee_id, event_date, event_type, minutes, days, amount, direction, payroll_month, status, source)
              VALUES ($1, '2026-09-20', 'early_leave', 30, 0, 1250, -1, '2026-11', 'pending', 'attendance') RETURNING id`, [E]);
   await expectError('   a pending decision for a day of the period blocks the attendance cleanup', run('2026-09', true, false, false), 'تنتظر قرارك');
@@ -150,7 +152,8 @@ async function world() {
   const octBefore = await w.money('2026-10');
   await w.q(`UPDATE loan_installments SET is_paid = true, paid_at = now(), payment_type = 'cash' WHERE loan_id = $1 AND NOT is_paid`, [w.loan]);
   const slipBefore = await w.slip();
-  await expectOk('   once fully repaid it can be deleted', as(w.db, 'admin', `DELETE FROM loans WHERE id = $1`, [w.loan]));
+  await expectError('   a repaid loan is not deleted directly (its record must be kept)', as(w.db, 'admin', `DELETE FROM loans WHERE id = $1`, [w.loan]), 'أرشفة السلفة');
+  await expectOk('   once fully repaid it is archived (summary kept, loan removed)', as(w.db, 'admin', `SELECT archive_settled_loan($1)`, [w.loan]));
   check('   the old slip still carries its 100,000 installment and its "loan" line',
     (await w.slip()) === slipBefore && (await w.one(`SELECT count(*)::int c FROM salary_slip_lines WHERE line_type = 'loan'`)).c === 1, await w.slip());
   check('   pending and rejected requests can still be removed', true);

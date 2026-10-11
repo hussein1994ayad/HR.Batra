@@ -93,6 +93,11 @@ export interface PaymentPreview {
   error: string | null;
 }
 
+/** الرقم المرجعي للسلفة كما يطلع للمستخدم: 7 ← «L-0007». */
+export function loanRef(no: number | null | undefined): string {
+  return no ? 'L-' + String(no).padStart(4, '0') : '';
+}
+
 /** 2026-10-01 ← «الشهر العاشر 2026». */
 export function monthLabel(date: string | null | undefined): string {
   if (!date) return '';

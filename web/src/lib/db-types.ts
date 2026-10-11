@@ -153,8 +153,40 @@ export interface LoanInstallment {
   loans?: Partial<Loan> | null;
 }
 
+/** قسط بسجل سلفة مسددة (settled_loans.installments). */
+export interface SettledLoanInstallment {
+  due_date: string;
+  amount: number;
+  paid_at: string | null;
+  /** salary = انخصم براتب، cash = نقد */
+  method: 'salary' | 'cash';
+  /** رواتب يا شهر (YYYY-MM) */
+  payroll_month: string;
+  slip_id: string | null;
+  note?: string | null;
+}
+
+/** سجل مالي دائم مختصر لسلفة تسددت وانحذف سجلها التشغيلي (settled_loans). */
+export interface SettledLoan {
+  id: string;
+  loan_id: string;
+  loan_no: number;
+  employee_id: string | null;
+  employee_name: string;
+  employee_code?: string | null;
+  amount: number;
+  total_deducted: number;
+  final_balance: number;
+  installments: SettledLoanInstallment[];
+  approved_at?: string | null;
+  settled_at: string;
+  archived_at: string;
+}
+
 export interface Loan {
   id: string;
+  /** رقم مرجعي يطلع للمستخدم (L-0007) */
+  loan_no?: number;
   employee_id: string;
   amount: number;
   installment_amount: number;

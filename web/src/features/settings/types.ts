@@ -24,10 +24,17 @@ export interface CleanupPreview {
   start_date: string;
   end_date: string;
   status: string;
+  /** الأدمن أكد إن رواتب هذا المسير تسلّمت */
+  delivered_at?: string | null;
   next_month: string | null;
   next_status: string | null;
-  checks: { closed: boolean; next_closed: boolean; pending_decisions: number };
+  next_delivered_at?: string | null;
+  checks: { closed: boolean; next_closed: boolean; next_delivered: boolean; pending_decisions: number };
+  /** المستثنى وسببه: حركات تنتظر قرار لأيام هذا المسير (تمنع حذف الحضور) */
+  pending_list: { employee: string; date: string; type: string; amount: number }[];
   counts: { attendance: number; tracking: number; stops: number; violations: number; notifications: number };
+  /** تقدير المساحة بالبايت (حجم السطور بدون الفهارس) */
+  bytes: { attendance: number; tracking: number; notifications: number };
   done: CleanupSelection;
   can: CleanupSelection;
   history: {
@@ -69,4 +76,24 @@ export interface SettingsData {
   branches: Pick<Branch, 'id' | 'name'>[];
   departments: Department[];
   employees: Pick<Employee, 'id' | 'full_name'>[];
+}
+
+/** معاينة تنظيف السلف (loans_cleanup_preview). */
+export interface LoansCleanupPreview {
+  /** مسددة بالكامل ومؤهلة للأرشفة */
+  settled: { id: string; loan_no: number; employee: string; amount: number; settled_at: string | null }[];
+  /** معتمدة بس ما تتأرشف هسه، مع السبب */
+  excluded: { loan_no: number; employee: string; amount: number; remaining: number; reason: string }[];
+  /** طلبات مرفوضة/ملغاة أقدم من 30 يوم */
+  requests: { id: string; loan_no: number; employee: string; amount: number; status: string; created_at: string }[];
+  requests_recent: number;
+  bytes: { settled_rows: number; settled_files: number; requests_rows: number; requests_files: number };
+  archived_total: number;
+}
+
+/** نتيجة loans_cleanup_run (null = الفئة ما انطلبت). */
+export interface LoansCleanupResult {
+  loans_archived: number | null;
+  loan_requests_deleted: number | null;
+  pledge_urls: string[];
 }
