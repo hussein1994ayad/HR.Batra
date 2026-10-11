@@ -44,7 +44,10 @@ const before1 = JSON.stringify(await inst(l1));
 await expectError('1) deleting a paid installment is refused (it would turn into debt again)',
   as(db, 'admin', `DELETE FROM loan_installments WHERE id = $1`, [paid1.id]), 'ما ينحذف');
 check('   the schedule is untouched (no new month added)', JSON.stringify(await inst(l1)) === before1);
-await expectOk('   deleting the whole loan (with its paid installments) still works', as(db, 'admin', `DELETE FROM loans WHERE id = $1`, [l1]));
+// السلفة ما تنحذف وعليها باقي (20261014000000_safe_cleanup.sql)؛ بعد التسديد الكامل تنحذف ويا أقساطها المسددة
+await expectError('   a loan with a remaining balance cannot be deleted', as(db, 'admin', `DELETE FROM loans WHERE id = $1`, [l1]), 'عليها باقي');
+await q(`UPDATE loan_installments SET is_paid = true, paid_at = now(), payment_type = 'cash' WHERE loan_id = $1 AND NOT is_paid`, [l1]);
+await expectOk('   deleting the whole repaid loan (with its paid installments) still works', as(db, 'admin', `DELETE FROM loans WHERE id = $1`, [l1]));
 
 // ---------------- 2) التراجع عن قسط انخصم من راتب ----------------
 const e2 = await newEmp('PM2');

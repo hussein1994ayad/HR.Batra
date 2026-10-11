@@ -307,6 +307,34 @@ test.describe('workflows', () => {
     await expect(page.getByRole('button', { name: 'حذف أو أرشفة الموظف' })).toHaveCount(0);
   });
 
+  test('cleans a closed payroll period: preview with counts, blocked attendance, confirm, one server call', async ({ page }) => {
+    const preview = {
+      month: '2026-09', start_date: '2026-09-01', end_date: '2026-09-26', status: 'closed', next_month: '2026-10', next_status: 'open',
+      checks: { closed: true, next_closed: false, pending_decisions: 0 },
+      counts: { attendance: 120, tracking: 5400, stops: 30, violations: 2, notifications: 85 },
+      done: { attendance: false, tracking: false, notifications: false },
+      can: { attendance: false, tracking: true, notifications: true },
+      history: [],
+    };
+    const api = await mockSupabase(page, { rpc: { payroll_cleanup_preview: preview, payroll_cleanup_run: { success: true, tracking_deleted: 5400, stops_deleted: 30, violations_deleted: 2 } } });
+    await page.goto('/dashboard/settings');
+    await page.getByRole('tab', { name: 'تنظيف البيانات' }).click();
+    // الأعداد تبين قبل أي حذف
+    await expect(page.getByText('5,432 سجل')).toBeVisible();
+    await expect(page.getByText('120 سجل')).toBeVisible();
+    // الحضور مقفول لأن المسير اللي بعده بعده مفتوح، مع السبب
+    await expect(page.getByRole('switch').first()).toBeDisabled();
+    await expect(page.getByText(/لازم تعتمد وتغلق رواتب المسير اللي بعده/)).toBeVisible();
+    await page.getByRole('switch').nth(1).click();
+    await page.getByRole('button', { name: 'تنظيف المحدد' }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog).toContainText('5,432 سجل تتبع');
+    expect(api.writes('rpc:payroll_cleanup_run', 'POST')).toHaveLength(0);
+    await dialog.getByRole('button', { name: 'نعم، حذف نهائي' }).click();
+    await expect.poll(() => api.writes('rpc:payroll_cleanup_run', 'POST').length).toBe(1);
+    expect(api.writes('rpc:payroll_cleanup_run', 'POST')[0].body).toMatchObject({ p_attendance: false, p_tracking: true, p_notifications: false });
+  });
+
   test('saves settings', async ({ page }) => {
     const api = await mockSupabase(page);
     await page.goto('/dashboard/settings');

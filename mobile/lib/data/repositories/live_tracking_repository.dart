@@ -32,17 +32,23 @@ class LiveTrackingRepository {
     ]);
   }
 
+  /// بصمات اليوم بس (للتحديث الخفيف).
+  Future<List<Map<String, dynamic>>> fetchDayAttendance(String date) async {
+    return List<Map<String, dynamic>>.from(await _db.from('attendance').select().eq('work_date', date));
+  }
+
   /// نقاط اليوم لكل الموظفين تتجاوز حد الـ 1000 صف للطلب الواحد، فتُجلب على صفحات
   /// حتى لا ينقطع مسار الحركة على الخريطة بصمت.
-  Future<List<Map<String, dynamic>>> fetchDayLocations(String start, String end) async {
+  /// [createdAfter]: بس النقاط اللي وصلت السيرفر بعد هذا الوقت (created_at) — للتحديث كل 15 ثانية: نجيب الجديد بس
+  /// بدل كل نقاط اليوم لكل الموظفين (كانت تنعاد كلها بكل تحديث). وقت الوصول مو وقت النقطة، حتى النقاط المرفوعة
+  /// متأخر (بدون إنترنت) ما تضيع.
+  Future<List<Map<String, dynamic>>> fetchDayLocations(String start, String end, {String? createdAfter}) async {
     const pageSize = 1000;
     final rows = <Map<String, dynamic>>[];
     for (var from = 0;; from += pageSize) {
-      final page = await _db
-          .from('location_tracking')
-          .select()
-          .gte('timestamp', start)
-          .lte('timestamp', end)
+      var query = _db.from('location_tracking').select().gte('timestamp', start).lte('timestamp', end);
+      if (createdAfter != null) query = query.gt('created_at', createdAfter);
+      final page = await query
           .order('timestamp', ascending: true)
           .order('id', ascending: true)
           .range(from, from + pageSize - 1);

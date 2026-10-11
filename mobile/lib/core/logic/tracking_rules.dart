@@ -152,3 +152,29 @@ List<TrackedEmployee> buildTracking({
 
 /// "350 م" أو "1.4 كم".
 String formatDistance(double meters) => meters < 1000 ? '${meters.round()} م' : '${(meters / 1000).toStringAsFixed(1)} كم';
+
+/// أحدث وقت وصول للسيرفر (created_at) بين النقاط المحمّلة، أو null إذا ماكو — حتى نطلب اللي بعده بس.
+String? latestCreatedAt(List<Map<String, dynamic>> points) {
+  String? latest;
+  DateTime? latestTime;
+  for (final p in points) {
+    final raw = p['created_at']?.toString();
+    final t = raw == null ? null : DateTime.tryParse(raw);
+    if (t != null && (latestTime == null || t.isAfter(latestTime))) {
+      latestTime = t;
+      latest = raw;
+    }
+  }
+  return latest;
+}
+
+/// يضيف النقاط الجديدة للمحمّلة بدون تكرار (حسب id) ويرتبها بوقت النقطة (النقاط المتأخرة تدخل بمكانها بالمسار).
+List<Map<String, dynamic>> mergeNewPoints(List<Map<String, dynamic>> current, List<Map<String, dynamic>> fresh) {
+  if (fresh.isEmpty) return current;
+  final seen = {for (final p in current) p['id']?.toString()};
+  final added = [for (final p in fresh) if (!seen.contains(p['id']?.toString())) p];
+  if (added.isEmpty) return current;
+  final merged = [...current, ...added];
+  merged.sort((a, b) => (a['timestamp']?.toString() ?? '').compareTo(b['timestamp']?.toString() ?? ''));
+  return merged;
+}

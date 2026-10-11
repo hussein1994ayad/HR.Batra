@@ -38,6 +38,8 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
   final MapController _mapController = MapController();
   bool _isLoading = true;
   bool _isRefreshing = false;
+  bool _silentBusy = false;
+  DateTime? _lastSilentRefresh;
   bool _autoRefreshEnabled = true;
   Timer? _autoRefreshTimer;
   RealtimeChannel? _trackingChannel;
@@ -70,6 +72,9 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
     // تحديث لحظي عند أي حركة أو بصمة
     try {
       _trackingChannel = _repo.subscribe(() {
+        // ويا مئات الموظفين النقاط توصل كل لحظة: تحديث واحد كل 5 ثواني يكفي (الباقي يلحكه التحديث الجاي)
+        final last = _lastSilentRefresh;
+        if (last != null && DateTime.now().difference(last) < const Duration(seconds: 5)) return;
         if (mounted && !_isRefreshing && _autoRefreshEnabled) _refreshLocationsSilently();
       });
     } catch (e) {
@@ -145,16 +150,26 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
     }
   }
 
-  /// تحديث صامت للمواقع بدون وميض.
+  /// تحديث صامت للمواقع بدون وميض: بصمات اليوم + النقاط الجديدة بس (مو كل نقاط اليوم من جديد).
+  /// يوم قديم ما يتغير، فما يحتاج تحديث.
   Future<void> _refreshLocationsSilently() async {
+    if (_silentBusy || !DateUtils.isSameDay(_selectedDate, DateTime.now())) return;
+    _silentBusy = true;
+    _lastSilentRefresh = DateTime.now();
     try {
-      final day = await _fetchDay();
+      final (dateStr, start, end) = _dayRange;
+      final results = await Future.wait<List<Map<String, dynamic>>>([
+        _repo.fetchDayAttendance(dateStr),
+        _repo.fetchDayLocations(start, end, createdAfter: latestCreatedAt(_locationTrackingList)),
+      ]);
       if (!mounted) return;
-      _attendanceList = List<Map<String, dynamic>>.from(day[0] as Iterable<dynamic>);
-      _locationTrackingList = List<Map<String, dynamic>>.from(day[1] as Iterable<dynamic>);
+      _attendanceList = results[0];
+      _locationTrackingList = mergeNewPoints(_locationTrackingList, results[1]);
       setState(_process);
     } catch (e) {
       appLog('تعذّر التحديث الصامت للتتبع الحي: $e');
+    } finally {
+      _silentBusy = false;
     }
   }
 

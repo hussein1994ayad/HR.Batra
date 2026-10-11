@@ -1,20 +1,27 @@
-// بيانات صفحة الإعدادات. أداة التنظيف: حذف بيانات شهر (بعد اعتماد رواتبه) عبر RPC يتحقق من القفل المالي.
+// بيانات صفحة الإعدادات. أداة التنظيف: «تنظيف مسير» مغلق عبر RPC يتحقق من الشروط ويسجّل العملية.
 
 import { supabase } from '@/lib/supabase';
 import type { Announcement, Department, LeaveTypeOption, WorkSchedule } from '@/lib/db-types';
 import { DEFAULT_LEAVE_TYPES } from './logic';
-import type { CompanySettings, PurgeOptions, PurgeResult, SettingsData } from './types';
+import type { CleanupPreview, CleanupResult, CleanupSelection, CompanySettings, SettingsData } from './types';
 
-export async function purgeMonthData(options: PurgeOptions): Promise<PurgeResult | null> {
-  const { data, error } = await supabase.rpc('manual_purge_month_data', {
-    p_year: Number(options.year),
-    p_month: Number(options.month),
-    p_notifications: options.notifications,
-    p_tracking: options.tracking,
-    p_absences: options.absences,
+/** معاينة تنظيف مسير: الشروط، أعداد السجلات المرشحة للحذف، وسجل التنظيف السابق (payroll_cleanup_preview). */
+export async function fetchCleanupPreview(month: string): Promise<CleanupPreview> {
+  const { data, error } = await supabase.rpc('payroll_cleanup_preview', { p_month: month });
+  if (error) throw error;
+  return data as CleanupPreview;
+}
+
+/** تنفيذ التنظيف بمعاملة وحدة على السيرفر (يتحقق من الشروط من جديد، ويسجّل منو ومتى وكم سطر). */
+export async function runPayrollCleanup(month: string, selection: CleanupSelection): Promise<CleanupResult> {
+  const { data, error } = await supabase.rpc('payroll_cleanup_run', {
+    p_month: month,
+    p_attendance: selection.attendance,
+    p_tracking: selection.tracking,
+    p_notifications: selection.notifications,
   });
   if (error) throw error;
-  return (data as PurgeResult[] | null)?.[0] ?? null;
+  return data as CleanupResult;
 }
 
 /** تحميل الإعدادات كلها بالتوازي، مع القيم الافتراضية للسياسات غير المحفوظة. */
