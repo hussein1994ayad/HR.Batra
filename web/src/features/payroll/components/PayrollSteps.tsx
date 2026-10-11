@@ -3,7 +3,7 @@
 // خطوات الرواتب بالترتيب (مثل أنظمة HR المعروفة): كل خطوة تبين شنو باقي وزرها المباشر، وتصير ✓ لما تخلص.
 //   1) احتساب الرواتب  2) القرارات المعلّقة  3) التنبيهات  4) اعتماد الرواتب  5) إغلاق المسير
 
-import { AlertTriangle, Calculator, CheckCircle2, Gavel, Lock, Stamp } from 'lucide-react';
+import { AlertTriangle, Calculator, CheckCircle2, Gavel, Lock, Stamp, HandCoins } from 'lucide-react';
 import { Button, cn } from '@/components/ui';
 import { arabicDate, baghdadToday } from '../period';
 import type { PayrollStatusFilter } from './PayrollToolbar';
@@ -27,6 +27,10 @@ type Props = {
   onCalculate: () => void;
   onOpenBulk: () => void;
   onClosePeriod: () => void;
+  /** تاريخ تأكيد تسليم الرواتب (ISO) أو فارغ */
+  deliveredAt?: string | null;
+  delivering?: boolean;
+  onMarkDelivered?: () => void;
 };
 
 function Step({ n, done, active, icon: Icon, title, detail, action }: {
@@ -51,7 +55,7 @@ function Step({ n, done, active, icon: Icon, title, detail, action }: {
 
 export function PayrollSteps({
   pendingDecisions, attentionCount, issuedCount, rowCount, periodStatus, locked, closing, onFilter, approvableCount, approveFrom,
-  calculatedAt, calculating, onCalculate, onOpenBulk, onClosePeriod,
+  calculatedAt, calculating, onCalculate, onOpenBulk, onClosePeriod, deliveredAt, delivering, onMarkDelivered,
 }: Props) {
   const nextDay = approveFrom ? new Date(Date.parse(approveFrom + 'T00:00:00Z') + 86400000).toISOString().slice(0, 10) : '';
   // محسوبة اليوم = الأرقام حديثة (التحديث الليلي يغطي الأيام السابقة)
@@ -91,6 +95,13 @@ export function PayrollSteps({
         detail={closedDone ? 'المسير مغلق، ما يتغير شي بيه.' : 'بعد الاعتماد: الإغلاق يقفل الشهر وأي حركة جديدة تروح للشهر الجاي.'}
         action={!closedDone && periodStatus === 'open' && approvedDone && (
           <Button size="xs" variant="soft" icon={Lock} loading={closing} onClick={onClosePeriod}>إغلاق المسير</Button>
+        )} />
+      <Step n={6} done={!!deliveredAt} active={closedDone && !deliveredAt} icon={HandCoins} title="تسليم الرواتب"
+        detail={deliveredAt
+          ? `تأكد التسليم ${arabicDate(baghdadToday(new Date(deliveredAt)), true)}.`
+          : 'بعد ما توصل الرواتب للموظفين فعلاً أكد التسليم (شرط لتنظيف حضور المسير اللي قبله).'}
+        action={closedDone && !deliveredAt && onMarkDelivered && (
+          <Button size="xs" variant="soft-success" icon={CheckCircle2} loading={delivering} onClick={onMarkDelivered}>تم تسليم الرواتب</Button>
         )} />
     </div>
   );

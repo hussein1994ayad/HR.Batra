@@ -1,7 +1,7 @@
 // منطق وثوابت صفحة الإعدادات — بدون React/Supabase.
 
 import type { LeaveTypeOption } from '@/lib/db-types';
-import type { CleanupPreview, CleanupResult } from './types';
+import type { CleanupPreview, CleanupResult, LoansCleanupPreview } from './types';
 import { payrollMonthName } from '@/features/payroll/period';
 import { MONTH_ORDINALS } from '@/lib/dates';
 
@@ -28,8 +28,25 @@ export function attendanceBlockers(p: CleanupPreview): string[] {
   if (!p.checks.next_closed) {
     out.push(`لازم تعتمد وتغلق رواتب المسير اللي بعده${p.next_month ? ` (${payrollMonthName(p.next_month)})` : ''} أولاً، حتى نتأكد ماكو شي يخص هذا المسير بعده معلّق.`);
   }
+  else if (!p.checks.next_delivered) {
+    out.push(`أكد «تم تسليم الرواتب» للمسير اللي بعده${p.next_month ? ` (${payrollMonthName(p.next_month)})` : ''} من صفحة الرواتب أولاً.`);
+  }
   if (p.checks.pending_decisions > 0) out.push(`اكو ${p.checks.pending_decisions} حركة (غياب/تأخير) لأيام هذا المسير تنتظر قرارك. احسمها أولاً.`);
   return out;
+}
+
+/** حجم تقريبي مقروء: 1536 ← «1.5 KB». */
+export function formatBytes(bytes: number | null | undefined): string {
+  const b = Number(bytes ?? 0);
+  if (b < 1024) return `${Math.round(b)} B`;
+  if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
+  return `${(b / 1024 / 1024).toFixed(1)} MB`;
+}
+
+/** مجموع المساحة التقريبية اللي تتحرر من السلف (سطور + صور التعهد). */
+export function loansCleanupBytes(p: LoansCleanupPreview, settled: boolean, requests: boolean): number {
+  return (settled ? Number(p.bytes.settled_rows) + Number(p.bytes.settled_files) : 0)
+    + (requests ? Number(p.bytes.requests_rows) + Number(p.bytes.requests_files) : 0);
 }
 
 /** أنواع الإجازات إذا ما محفوظة سياسة إجازات بعد. */

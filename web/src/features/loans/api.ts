@@ -3,19 +3,21 @@
 // والمبلغ المتبقي يُعاد حسابه تلقائياً بعد تعديل/حذف الأقساط: trg_update_loan_and_installments
 
 import { supabase } from '@/lib/supabase';
-import type { Loan } from '@/lib/db-types';
+import type { Loan, SettledLoan } from '@/lib/db-types';
 import type { ApprovalDraft, EditLoanDraft, PaymentMethod } from './types';
 
 const EMPLOYEE_JOIN = 'employees!loans_employee_id_fkey(full_name, monthly_salary_iqd)';
 
-export async function fetchLoans(): Promise<{ pending: Loan[]; approved: Loan[] }> {
-  const [pending, approved] = await Promise.all([
+export async function fetchLoans(): Promise<{ pending: Loan[]; approved: Loan[]; settled: SettledLoan[] }> {
+  const [pending, approved, settled] = await Promise.all([
     supabase.from('loans').select(`*, ${EMPLOYEE_JOIN}`).eq('status', 'pending').order('created_at', { ascending: false }),
     supabase.from('loans').select(`*, ${EMPLOYEE_JOIN}, loan_installments(*)`).eq('status', 'approved').order('created_at', { ascending: false }),
+    // سجل السلف المسددة (سيرفر قديم بدون الجدول = قائمة فارغة)
+    supabase.from('settled_loans').select('*').order('archived_at', { ascending: false }),
   ]);
   if (pending.error) throw pending.error;
   if (approved.error) throw approved.error;
-  return { pending: pending.data ?? [], approved: approved.data ?? [] };
+  return { pending: pending.data ?? [], approved: approved.data ?? [], settled: (settled.data ?? []) as SettledLoan[] };
 }
 
 async function currentAdminId(): Promise<string> {
@@ -107,18 +109,27 @@ export async function setMonthInstallment(installmentId: string, amount: number,
   if (error) throw error;
 }
 
+/** مسار ملف التعهد داخل bucket «loan-pledges» من رابطه، أو null. */
+export function pledgePathOf(url: string | null | undefined): string | null {
+  return url?.match(/\/loan-pledges\/([^?]+)/)?.[1] ?? null;
+}
+
+/** حذف صور التعهد من التخزين (اللي يفشل يلكطه الفحص الأسبوعي للملفات اليتيمة). */
+export async function removePledgeFiles(urls: (string | null | undefined)[]): Promise<void> {
+  const paths = urls.map(pledgePathOf).filter((p): p is string => !!p);
+  if (paths.length === 0) return;
+  const { error } = await supabase.storage.from('loan-pledges').remove(paths);
+  if (error) console.error('Failed to delete pledge files', error);
+}
+
 /**
- * حذف سلفة مسددة بالكامل مع ملف التعهد. السطر ينحذف أولاً: السيرفر يرفض إذا عليها باقي (trg_guard_loan_delete)،
- * ووقتها صورة التعهد تبقى (كانت تنحذف الصورة أول ثم يفشل الحذف).
+ * أرشفة سلفة مسددة بالكامل (archive_settled_loan): السيرفر يحفظ سجلها المالي الدائم (settled_loans) ثم يحذف السلفة
+ * وأقساطها بخطوة وحدة، ويرفض إذا عليها باقي أو قسط منها مخصوم براتب مسير مفتوح. بعدها تنحذف صورة التعهد.
  */
-export async function deleteCompletedLoan(loan: Loan) {
-  const { error } = await supabase.from('loans').delete().eq('id', loan.id);
+export async function archiveSettledLoan(loan: Loan) {
+  const { error } = await supabase.rpc('archive_settled_loan', { p_loan_id: loan.id });
   if (error) throw error;
-  const pledgePath = loan.pledge_url?.match(/\/loan-pledges\/(.+)$/)?.[1];
-  if (pledgePath) {
-    const { error: fileError } = await supabase.storage.from('loan-pledges').remove([pledgePath]);
-    if (fileError) console.error('Failed to delete pledge file', fileError);
-  }
+  await removePledgeFiles([loan.pledge_url]);
 }
 
 /** الموظفون النشطون لاختيار صاحب السلفة (مع الراتب لتنبيه القسط فوق نص الراتب). */

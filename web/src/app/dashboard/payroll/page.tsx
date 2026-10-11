@@ -118,6 +118,9 @@ export default function PayrollPage() {
           approveFrom={p.endDate}
           onOpenBulk={() => setShowBulkModal(true)}
           onClosePeriod={p.closePeriod}
+          deliveredAt={p.period?.delivered_at}
+          delivering={p.actionLoading === 'deliver_period'}
+          onMarkDelivered={() => void p.markDelivered()}
         />
       )}
 

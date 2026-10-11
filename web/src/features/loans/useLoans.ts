@@ -10,9 +10,9 @@ import { confetti } from '@/lib/lazy';
 import { useQuery } from '@/lib/useQuery';
 import { errorMessage } from '@/lib/format';
 import { useConfirm, useConfirmNote } from '@/components/confirm';
-import type { Loan, LoanInstallment } from '@/lib/db-types';
+import type { Loan, LoanInstallment, SettledLoan } from '@/lib/db-types';
 import {
-  approveLoan, deleteCompletedLoan, fetchLoans, payInstallment,
+  approveLoan, archiveSettledLoan, fetchLoans, payInstallment,
   postponeInstallment, rejectLoan as rejectLoanRequest, rescheduleLoan, revertInstallmentPayment, setMonthInstallment,
 } from './api';
 import {
@@ -37,6 +37,7 @@ export function useLoans() {
   const [payPrompt, setPayPrompt] = useState<PayDraft | null>(null);
   const [monthPrompt, setMonthPrompt] = useState<MonthAmountDraft | null>(null);
   const [creating, setCreating] = useState(false);
+  const [settledView, setSettledView] = useState<SettledLoan | null>(null);
 
   const approved = useMemo(() => query.data?.approved ?? [], [query.data]);
   const { incomplete: active, completed } = splitLoansByCompletion(approved);
@@ -55,6 +56,9 @@ export function useLoans() {
   const displayed = (tab === 'active' ? active : completed).filter((l) =>
     (l.employees?.full_name || '').toLowerCase().includes(search.trim().toLowerCase()),
   );
+  // سجل السلف المسددة (المؤرشفة): للعرض والإثبات
+  const settled = useMemo(() => query.data?.settled ?? [], [query.data]);
+  const displayedSettled = settled.filter((l) => (l.employee_name || '').toLowerCase().includes(search.trim().toLowerCase()));
 
   const run = async (key: string, action: () => Promise<void>, failMsg: string) => {
     setBusy(key);
@@ -202,29 +206,30 @@ export function useLoans() {
     );
   };
 
-  /** حذف سلفة مسددة بالكامل مع ملف تعهدها لتوفير المساحة. */
+  /** أرشفة سلفة مسددة بالكامل: سجلها المالي يبقى بـ«المؤرشفة»، وسجلها التشغيلي وصورة التعهد ينحذفون. */
   const deleteLoan = async (loan: Loan) => {
     const ok = await confirm({
-      title: 'حذف سجل السلفة المسددة؟',
-      message: 'ينزل كشف السلفة ملف Excel أولاً (الأقساط وتواريخ السداد)، وبعدها تنحذف السلفة وأقساطها وصورة التعهد نهائياً.\nالرواتب القديمة ما تتغير: مبلغ القسط محفوظ بكل كشف راتب. لا يمكن التراجع.',
-      confirmLabel: 'تنزيل الكشف والحذف',
+      title: 'أرشفة السلفة المسددة؟',
+      message: 'ينحفظ سجل مختصر دائم للسلفة (الموظف، المبلغ، كل استقطاع ورواتب يا شهر، تاريخ التسوية) وتلكاه بتبويب «المؤرشفة»، وينزل كشفها Excel.\nبعدها ينحذف سجلها من قائمة السلف ويا أقساطها وصورة التعهد.\nالرواتب القديمة ما تتغير: مبلغ القسط محفوظ بكل كشف راتب.',
+      confirmLabel: 'أرشفة السلفة',
+      tone: 'warning',
     });
     if (!ok) return;
     await run(
       `delete_loan_${loan.id}`,
       async () => {
-        // الكشف أولاً: إذا ما نزل، السلفة ما تنحذف
+        // الكشف أولاً: إذا ما نزل، السلفة ما تتأرشف
         downloadLoanStatement(loan);
-        await deleteCompletedLoan(loan);
-        query.mutate((d) => ({ ...d, approved: d.approved.filter((l) => l.id !== loan.id) }));
-        toast.success('نزل كشف السلفة وانحذفت السلفة');
+        await archiveSettledLoan(loan);
+        toast.success('تأرشفت السلفة وانحفظ سجلها');
+        query.reload();
       },
-      'فشل الحذف',
+      'ما تأرشفت السلفة',
     );
   };
 
   return {
-    query, pending, active, completed, outstanding, displayed,
+    query, pending, active, completed, outstanding, displayed, settled, displayedSettled, settledView, setSettledView,
     tab, setTab, search, setSearch, busy,
     approval, setApproval, rejecting, setRejecting, editDraft, setEditDraft,
     scheduleLoan, setScheduleLoanId, payPrompt, setPayPrompt, paymentPreview, creating, setCreating,

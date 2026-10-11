@@ -2,12 +2,14 @@
 // حتى يبقى عندك إثبات إذا صار نزاع. الرواتب القديمة ما تتأثر بالحذف (مبلغ القسط محفوظ بالكشف نفسه).
 
 import * as XLSX from 'xlsx';
-import type { Loan } from '@/lib/db-types';
-import { installmentOrigin, monthLabel, paidAmount, sortInstallments } from './logic';
+import type { Loan, SettledLoan } from '@/lib/db-types';
+import { installmentOrigin, loanRef, monthLabel, paidAmount, sortInstallments } from './logic';
+import { payrollMonthName } from '@/features/payroll/period';
 
 /** صفوف كشف السلفة (مفصولة عن الملف حتى تنفحص). */
 export function loanStatementRows(loan: Loan) {
   const summary = [
+    { 'البند': 'رقم السلفة', 'القيمة': loanRef(loan.loan_no) },
     { 'البند': 'الموظف', 'القيمة': loan.employees?.full_name ?? '' },
     { 'البند': 'مبلغ السلفة (د.ع)', 'القيمة': Number(loan.amount) },
     { 'البند': 'القسط الشهري (د.ع)', 'القيمة': Number(loan.installment_amount) },
@@ -42,4 +44,39 @@ export function downloadLoanStatement(loan: Loan): void {
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summary), 'ملخص السلفة');
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(installments), 'الأقساط');
   XLSX.writeFile(wb, loanStatementFileName(loan));
+}
+
+/** صفوف كشف سلفة مؤرشفة من سجلها الدائم (settled_loans). */
+export function settledLoanRows(loan: SettledLoan) {
+  const summary = [
+    { 'البند': 'رقم السلفة', 'القيمة': loanRef(loan.loan_no) },
+    { 'البند': 'الموظف', 'القيمة': loan.employee_name },
+    { 'البند': 'كود الموظف', 'القيمة': loan.employee_code ?? '' },
+    { 'البند': 'مبلغ السلفة (د.ع)', 'القيمة': Number(loan.amount) },
+    { 'البند': 'مجموع المستقطع (د.ع)', 'القيمة': Number(loan.total_deducted) },
+    { 'البند': 'الرصيد النهائي (د.ع)', 'القيمة': Number(loan.final_balance) },
+    { 'البند': 'تاريخ الاعتماد', 'القيمة': loan.approved_at ? loan.approved_at.slice(0, 10) : '' },
+    { 'البند': 'تاريخ التسوية', 'القيمة': loan.settled_at.slice(0, 10) },
+    { 'البند': 'تاريخ الأرشفة', 'القيمة': loan.archived_at.slice(0, 10) },
+  ];
+  const installments = loan.installments.map((inst, i) => ({
+    'ت': i + 1,
+    'رواتب': payrollMonthName(inst.payroll_month),
+    'تاريخ الاستحقاق': inst.due_date,
+    'المبلغ (د.ع)': Number(inst.amount),
+    'طريقة السداد': inst.method === 'salary' ? 'خصم من الراتب' : 'نقداً',
+    'تاريخ السداد': inst.paid_at ? inst.paid_at.slice(0, 10) : '',
+    'ملاحظة': inst.note ?? '',
+  }));
+  return { summary, installments };
+}
+
+/** ينزّل كشف سلفة مؤرشفة من سجلها الدائم. */
+export function downloadSettledLoanStatement(loan: SettledLoan): void {
+  const { summary, installments } = settledLoanRows(loan);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summary), 'ملخص السلفة');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(installments), 'الاستقطاعات');
+  const name = loan.employee_name.trim().replace(/[\\/:*?"<>|\s]+/g, '_');
+  XLSX.writeFile(wb, `كشف_سلفة_${loanRef(loan.loan_no)}_${name}.xlsx`);
 }

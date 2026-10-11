@@ -47,7 +47,7 @@ check('   the schedule is untouched (no new month added)', JSON.stringify(await 
 // السلفة ما تنحذف وعليها باقي (20261014000000_safe_cleanup.sql)؛ بعد التسديد الكامل تنحذف ويا أقساطها المسددة
 await expectError('   a loan with a remaining balance cannot be deleted', as(db, 'admin', `DELETE FROM loans WHERE id = $1`, [l1]), 'عليها باقي');
 await q(`UPDATE loan_installments SET is_paid = true, paid_at = now(), payment_type = 'cash' WHERE loan_id = $1 AND NOT is_paid`, [l1]);
-await expectOk('   deleting the whole repaid loan (with its paid installments) still works', as(db, 'admin', `DELETE FROM loans WHERE id = $1`, [l1]));
+await expectOk('   the whole repaid loan (with its paid installments) is removed through the archive', as(db, 'admin', `SELECT archive_settled_loan($1)`, [l1]));
 
 // ---------------- 2) التراجع عن قسط انخصم من راتب ----------------
 const e2 = await newEmp('PM2');
