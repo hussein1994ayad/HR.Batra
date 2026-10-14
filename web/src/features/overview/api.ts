@@ -50,7 +50,7 @@ export async function fetchDashboard(): Promise<DashboardData> {
     { data: leavesData },
     { data: schedules },
   ] = await Promise.all([
-    supabase.from('employees').select('*', { count: 'exact', head: true }),
+    supabase.from('employees').select('id', { count: 'exact', head: true }),
     supabase.from('attendance').select('status, employee_id').eq('work_date', todayStr),
     supabase.from('leave_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
     supabase.from('loans').select('*', { count: 'exact', head: true }).eq('status', 'pending'),

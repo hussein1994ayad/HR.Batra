@@ -2,6 +2,7 @@
 
 import { imageCompression } from '@/lib/lazy';
 import { supabase } from '@/lib/supabase';
+import { EMPLOYEE_COLUMNS, fetchEmployeePay } from '@/lib/employeePay';
 import type { ArchivedEmployee, Department, Employee, EmployeeDevice } from '@/lib/db-types';
 import { documentList, documentPathFromUrl, salaryUpdateFields } from './logic';
 import { currentPayrollMonth } from '@/features/payroll/period';
@@ -19,13 +20,15 @@ export interface EmployeesDataset {
 }
 
 export async function fetchEmployeesDataset(): Promise<EmployeesDataset> {
-  const [emps, reqs, bound, brs, depts] = await Promise.all([
-    supabase.from('employees').select('*, branches(name)').order('full_name', { ascending: true }),
+  const [emps, reqs, bound, brs, depts, pay] = await Promise.all([
+    supabase.from('employees').select(`${EMPLOYEE_COLUMNS}, branches(name)`).order('full_name', { ascending: true }),
     supabase.from('employee_devices').select('*, employees(full_name)').eq('is_approved', false),
     supabase.from('employee_devices').select('employee_id, model').eq('is_approved', true),
     supabase.from('branches').select('id, name').order('name'),
     // تُستعمل في البحث بالقسم
     supabase.from('departments').select('id, name').order('name'),
+    // الراتب من السيرفر (للأدمن؛ المدير ما يوصله شي)
+    fetchEmployeePay(),
   ]);
   const firstError = [emps, reqs, bound, brs, depts].find(r => r.error)?.error;
   if (firstError) throw firstError;
@@ -36,7 +39,7 @@ export async function fetchEmployeesDataset(): Promise<EmployeesDataset> {
   }
 
   return {
-    employees: emps.data ?? [],
+    employees: ((emps.data ?? []) as unknown as Employee[]).map(e => ({ ...e, ...pay[e.id] })),
     deviceRequests: reqs.data ?? [],
     boundDevices,
     branches: brs.data ?? [],

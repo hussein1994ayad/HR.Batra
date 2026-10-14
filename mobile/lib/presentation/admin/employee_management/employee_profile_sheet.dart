@@ -17,7 +17,10 @@ String employeeRoleLabel(Object? role) => switch (role) {
 Future<void> showEmployeeProfileSheet(
   BuildContext context,
   ManagedEmployee emp, {
-  required VoidCallback onEditDocuments,
+  /// null = المستخدم مو أدمن: المستمسكات ما تنعرض (السيرفر يسمحها للأدمن وصاحبها بس)
+  VoidCallback? onEditDocuments,
+  /// الراتب للأدمن بس (المدير ما يوصله من السيرفر أصلاً)
+  bool showPay = true,
 }) {
   final name = emp.fullName ?? 'بدون اسم';
   final phone = emp.phone ?? '';
@@ -114,7 +117,7 @@ Future<void> showEmployeeProfileSheet(
                 KeyValueRow('الهاتف', hasPhone ? phone : 'غير مسجل', icon: Icons.phone_iphone_rounded),
                 KeyValueRow('الفرع', branch ?? 'غير محدد', icon: Icons.store_rounded, valueColor: branch == null ? AppColors.warning : null),
                 KeyValueRow('القسم', department ?? 'غير محدد', icon: Icons.apartment_rounded),
-                KeyValueRow('الراتب', salary == null || salary == 0 ? 'غير محدد' : Fmt.iqd(salary), icon: Icons.payments_outlined),
+                if (showPay) KeyValueRow('الراتب', salary == null || salary == 0 ? 'غير محدد' : Fmt.iqd(salary), icon: Icons.payments_outlined),
                 KeyValueRow(
                   'الجهاز',
                   !emp.hasDevice ? 'غير مربوط' : 'مربوط (${emp.firstDeviceModel ?? 'هاتف'})',
@@ -123,6 +126,7 @@ Future<void> showEmployeeProfileSheet(
               ],
             ),
           ),
+          if (onEditDocuments != null) ...[
           SectionHeader(
             'المستمسكات (${docUrls.length})',
             trailing: docUrls.length > 1
@@ -159,6 +163,7 @@ Future<void> showEmployeeProfileSheet(
                 ],
               ),
             ),
+          ],
         ],
       ),
     ),

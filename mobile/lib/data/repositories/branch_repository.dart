@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/models/models.dart';
 import '../../core/services/supabase_service.dart';
+import 'write_guard.dart';
 
 class BranchRepository {
   BranchRepository({SupabaseClient? client}) : _db = client ?? SupabaseService.client;
@@ -22,11 +23,11 @@ class BranchRepository {
   }
 
   Future<void> update(Object id, Map<String, dynamic> data) async {
-    await _db.from('branches').update(data).eq('id', id);
+    ensureChanged(await _db.from('branches').update(data).eq('id', id).select('id'));
   }
 
   Future<void> delete(String id) async {
-    await _db.from('branches').delete().eq('id', id);
+    ensureChanged(await _db.from('branches').delete().eq('id', id).select('id'));
   }
 
   /// [الأفرع (id, name)، جداول الدوام على مستوى الفرع] بالتوازي.
@@ -40,7 +41,7 @@ class BranchRepository {
   /// إضافة جدول دوام فرع، أو تعديله إذا [scheduleId] موجود.
   Future<void> saveBranchSchedule(Map<String, dynamic> row, {Object? scheduleId}) async {
     if (scheduleId != null) {
-      await _db.from('work_schedules').update(row).eq('id', scheduleId);
+      ensureChanged(await _db.from('work_schedules').update(row).eq('id', scheduleId).select('id'));
     } else {
       await _db.from('work_schedules').insert(row);
     }

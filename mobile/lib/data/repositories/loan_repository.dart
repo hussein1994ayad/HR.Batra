@@ -10,6 +10,7 @@ import 'package:uuid/uuid.dart';
 import '../../core/models/models.dart';
 import '../../core/services/file_upload_service.dart';
 import '../../core/services/supabase_service.dart';
+import 'employee_pay.dart';
 
 class LoansOverview {
   final List<LoanRecord> loans;
@@ -27,23 +28,28 @@ class LoanRepository {
       _db.from('branches').select('id, name').order('name'),
       _db
           .from('employees')
-          .select('id, full_name, monthly_salary_iqd, branch_id, branches(name)')
+          .select('id, full_name, branch_id, branches(name)')
           .eq('is_active', true)
           .order('full_name'),
       _db.from('loans').select('''
             *,
             employees!loans_employee_id_fkey(
-              id, full_name, avatar_url, monthly_salary_iqd, branch_id, department_id,
+              id, full_name, avatar_url, branch_id, department_id,
               branches(name),
               departments!employees_department_id_fkey(name)
             ),
             loan_installments(*)
           ''').order('created_at', ascending: false),
+      // الراتب (لتنبيه القسط فوق نص الراتب) من السيرفر، ما ينقرا بالربط المباشر
+      fetchEmployeePay(_db),
     ]);
+    final pay = results[3]! as Map<String, JsonRow>;
     return LoansOverview(
       branches: rowsOf(results[0]).map(BranchModel.fromMap).toList(),
-      employees: rowsOf(results[1]).map(LoanEmployeeOption.fromMap).toList(),
-      loans: rowsOf(results[2]).map(LoanRecord.fromMap).toList(),
+      employees: rowsOf(results[1]).map((e) => LoanEmployeeOption.fromMap(withPay(e, pay))).toList(),
+      loans: rowsOf(results[2])
+          .map((l) => LoanRecord.fromMap({...l, 'employees': withPay(l.obj('employees') ?? const {}, pay)}))
+          .toList(),
     );
   }
 
@@ -87,8 +93,8 @@ class LoanRepository {
 
   /// راتب الموظف الشهري (لتنبيه القسط فوق نص الراتب أو فوق الراتب كله).
   Future<double?> fetchMySalary(String userId) async {
-    final me = await _db.from('employees').select('monthly_salary_iqd').eq('id', userId).maybeSingle();
-    return (me?['monthly_salary_iqd'] as num?)?.toDouble();
+    final pay = await fetchEmployeePay(_db, ids: [userId]);
+    return (pay[userId]?['monthly_salary_iqd'] as num?)?.toDouble();
   }
 
   /// طلب سلفة جديد (pending). إشعار المدراء يُرسل من قاعدة البيانات (trg_notify_admins_new_loan_request).

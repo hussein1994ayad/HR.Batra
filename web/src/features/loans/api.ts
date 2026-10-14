@@ -3,21 +3,32 @@
 // والمبلغ المتبقي يُعاد حسابه تلقائياً بعد تعديل/حذف الأقساط: trg_update_loan_and_installments
 
 import { supabase } from '@/lib/supabase';
+import { fetchEmployeePay, type EmployeePay } from '@/lib/employeePay';
 import type { Loan, SettledLoan } from '@/lib/db-types';
 import type { ApprovalDraft, EditLoanDraft, PaymentMethod } from './types';
 
-const EMPLOYEE_JOIN = 'employees!loans_employee_id_fkey(full_name, monthly_salary_iqd)';
+// الراتب ما ينقرا بالربط المباشر (تدقيق 14/10 BUG-005): ينضاف من get_employee_pay لتنبيه القسط فوق نص الراتب
+const EMPLOYEE_JOIN = 'employees!loans_employee_id_fkey(full_name)';
+
+function withSalary(rows: Loan[], pay: Record<string, EmployeePay>): Loan[] {
+  return rows.map(r => ({ ...r, employees: { ...(r.employees ?? {}), monthly_salary_iqd: pay[r.employee_id]?.monthly_salary_iqd ?? null } }));
+}
 
 export async function fetchLoans(): Promise<{ pending: Loan[]; approved: Loan[]; settled: SettledLoan[] }> {
-  const [pending, approved, settled] = await Promise.all([
+  const [pending, approved, settled, pay] = await Promise.all([
     supabase.from('loans').select(`*, ${EMPLOYEE_JOIN}`).eq('status', 'pending').order('created_at', { ascending: false }),
     supabase.from('loans').select(`*, ${EMPLOYEE_JOIN}, loan_installments(*)`).eq('status', 'approved').order('created_at', { ascending: false }),
     // سجل السلف المسددة (سيرفر قديم بدون الجدول = قائمة فارغة)
     supabase.from('settled_loans').select('*').order('archived_at', { ascending: false }),
+    fetchEmployeePay(),
   ]);
   if (pending.error) throw pending.error;
   if (approved.error) throw approved.error;
-  return { pending: pending.data ?? [], approved: approved.data ?? [], settled: (settled.data ?? []) as SettledLoan[] };
+  return {
+    pending: withSalary((pending.data ?? []) as Loan[], pay),
+    approved: withSalary((approved.data ?? []) as Loan[], pay),
+    settled: (settled.data ?? []) as SettledLoan[],
+  };
 }
 
 async function currentAdminId(): Promise<string> {
@@ -134,13 +145,12 @@ export async function archiveSettledLoan(loan: Loan) {
 
 /** الموظفون النشطون لاختيار صاحب السلفة (مع الراتب لتنبيه القسط فوق نص الراتب). */
 export async function fetchLoanEmployees(): Promise<{ id: string; full_name: string; monthly_salary_iqd: number | null }[]> {
-  const { data, error } = await supabase
-    .from('employees')
-    .select('id, full_name, monthly_salary_iqd')
-    .eq('is_active', true)
-    .order('full_name');
+  const [{ data, error }, pay] = await Promise.all([
+    supabase.from('employees').select('id, full_name').eq('is_active', true).order('full_name'),
+    fetchEmployeePay(),
+  ]);
   if (error) throw error;
-  return data ?? [];
+  return (data ?? []).map(e => ({ ...e, monthly_salary_iqd: pay[e.id]?.monthly_salary_iqd ?? null }));
 }
 
 /**

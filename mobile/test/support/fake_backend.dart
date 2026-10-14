@@ -40,6 +40,9 @@ class FakeBackend {
     if (failAll && !path.startsWith('/auth/')) {
       return http.Response(jsonEncode({'message': 'offline'}), 500, headers: _json);
     }
+    if (path == '/rest/v1/rpc/get_employee_pay' && !tables.containsKey('rpc:get_employee_pay')) {
+      return http.Response(jsonEncode(_employeePay()), 200, headers: _json);
+    }
     if (path.startsWith('/rest/v1/rpc/')) {
       final rows = tables['rpc:${path.substring('/rest/v1/rpc/'.length)}'];
       // RPC يرجع كائناً واحداً (jsonb): صف واحد فيه '__single'
@@ -67,13 +70,39 @@ class FakeBackend {
     return http.Response('{}', 200, headers: _json);
   }
 
+  // مثل السيرفر (تدقيق 14/10/2026، BUG-005): أعمدة الراتب ما تنقرا من جدول الموظفين، تنقرا من get_employee_pay
+  static const _salaryColumns = {'monthly_salary_iqd', 'future_salary_iqd', 'future_salary_month'};
+
+  static bool _readsSalary(String select) => select
+      .replaceAll(RegExp(r'([^()]*)'), '')
+      .split(',')
+      .map((c) => c.trim())
+      .any((c) => c == '*' || _salaryColumns.contains(c));
+
+  /// الأدمن: رواتب الكل. غيره: راتبه هو بس.
+  static List<Map<String, dynamic>> _employeePay() => [
+        for (final e in tables['employees'] ?? const <Map<String, dynamic>>[])
+          if (AuthService.currentUserRole == 'admin' || e['id'] == kTestUserId)
+            {
+              'employee_id': e['id'],
+              for (final k in _salaryColumns) k: e[k],
+            },
+      ];
+
   static http.Response _rest(http.Request req, String table) {
     if (req.method != 'GET' && req.method != 'HEAD') {
       final body = req.body.isEmpty ? null : jsonDecode(req.body);
-      final echo = body is List ? body : (body == null ? <Object?>[] : [body]);
+      // الحذف بدون جسم: يرجع سطر محذوف (مثل return=representation) حتى «ما تغيّر شي» ما يطلع بالغلط
+      final echo = body is List ? body : (body == null ? <Object?>[if (req.method == 'DELETE') {'id': 'deleted'}] : [body]);
       return http.Response(jsonEncode(echo), 201, headers: _json);
     }
+    if (table == 'employees' && _readsSalary(req.url.queryParameters['select'] ?? '*')) {
+      return http.Response(jsonEncode({'code': '42501', 'message': 'permission denied for table employees'}), 401, headers: _json);
+    }
     var rows = List<Map<String, dynamic>>.from(tables[table] ?? const []);
+    if (table == 'employees') {
+      rows = [for (final r in rows) {for (final e in r.entries) if (!_salaryColumns.contains(e.key)) e.key: e.value}];
+    }
     req.url.queryParameters.forEach((key, value) {
       if (const {'select', 'order', 'limit', 'offset', 'or', 'and'}.contains(key)) return;
       if (value.startsWith('eq.')) {
