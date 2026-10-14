@@ -174,7 +174,12 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
     }
   }
 
-  void _openProfile(ManagedEmployee emp) => showEmployeeProfileSheet(context, emp, onEditDocuments: () => _editDocuments(emp));
+  void _openProfile(ManagedEmployee emp) => showEmployeeProfileSheet(
+        context,
+        emp,
+        onEditDocuments: _isAdmin ? () => _editDocuments(emp) : null,
+        showPay: _isAdmin,
+      );
 
 
   List<ManagedEmployee> get _filtered {
@@ -317,8 +322,9 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
             },
             itemBuilder: (_) => [
               const PopupMenuItem(value: 'profile', child: ListTile(leading: Icon(Icons.badge_rounded), title: Text('الملف'))),
-              const PopupMenuItem(value: 'docs', child: ListTile(leading: Icon(Icons.folder_rounded), title: Text('المستمسكات'))),
-              if (hasDevice) const PopupMenuItem(value: 'unbind', child: ListTile(leading: Icon(Icons.phonelink_erase_rounded), title: Text('فك ربط الجهاز'))),
+              // المستمسكات وفك الجهاز للأدمن بس (السيرفر يرفضها للمدير)
+              if (_isAdmin) const PopupMenuItem(value: 'docs', child: ListTile(leading: Icon(Icons.folder_rounded), title: Text('المستمسكات'))),
+              if (_isAdmin && hasDevice) const PopupMenuItem(value: 'unbind', child: ListTile(leading: Icon(Icons.phonelink_erase_rounded), title: Text('فك ربط الجهاز'))),
               if (_isAdmin)
                 PopupMenuItem(
                   value: 'toggle',

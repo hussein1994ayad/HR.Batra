@@ -45,8 +45,12 @@ await db.exec(`
     ('${IDS.manager}', '${IDS.branch}', '2026-10-06', 'absent', 'pending'),
     ('${IDS.emp}', '${IDS.branch}', '2026-10-07', 'absent', 'pending');
 `);
-await expectError('2) manager cannot excuse his own absence', as(db, 'manager', `UPDATE attendance SET deduction_status='ignored' WHERE employee_id=$1`, [IDS.manager]), 'حضورك');
-await expectError('   manager cannot apply a deduction in another branch', as(db, 'manager', `UPDATE attendance SET deduction_status='applied' WHERE employee_id=$1`, [OTHER]), 'فرع آخر');
+// المدير ما يكدر يعدّل حضوره ولا حضور فرع ثاني (تدقيق 14/10 BUG-002: الصف ما يوصله أصلاً، فما يتغير شي)
+const attStatus = async (emp) => (await db.query(`SELECT deduction_status s FROM attendance WHERE employee_id = $1`, [emp])).rows[0].s;
+await as(db, 'manager', `UPDATE attendance SET deduction_status='ignored' WHERE employee_id=$1`, [IDS.manager]);
+check('2) manager cannot excuse his own absence', (await attStatus(IDS.manager)) === 'pending');
+await as(db, 'manager', `UPDATE attendance SET deduction_status='applied' WHERE employee_id=$1`, [OTHER]);
+check('   manager cannot apply a deduction in another branch', (await attStatus(OTHER)) === 'pending');
 await expectError('   manager cannot record an absence in another branch', as(db, 'manager',
   `INSERT INTO attendance (employee_id, branch_id, work_date, status, deduction_status) VALUES ($1, $2, '2026-10-08', 'absent', 'applied')`, [OTHER, B2]), 'فرع آخر');
 await expectOk('   manager decides for his own branch', as(db, 'manager', `UPDATE attendance SET deduction_status='applied' WHERE employee_id=$1 AND work_date='2026-10-07'`, [IDS.emp]));
@@ -63,8 +67,13 @@ await expectOk('   and can request the same dates again', as(db, 'emp', `INSERT 
 const mgrLeave = (await as(db, 'manager', `INSERT INTO leave_requests (employee_id, start_date, end_date, leave_type, status)
   VALUES ($1, '2026-11-10T21:00:00Z', '2026-11-10T21:00:00Z', 'annual', 'pending') RETURNING id`, [IDS.manager])).rows[0].id;
 await expectError('   manager cannot approve his own leave', as(db, 'manager', `UPDATE leave_requests SET status='approved' WHERE id=$1`, [mgrLeave]), 'إجازتك');
+// إدخال من النظام (بدون جلسة مستخدم متبقية من الخطوة السابقة)
+await db.exec(`SELECT set_config('request.jwt.claim.sub', '', false)`);
 await db.query(`INSERT INTO leave_requests (employee_id, start_date, end_date, leave_type, status) VALUES ($1, '2026-11-14T21:00:00Z', '2026-11-14T21:00:00Z', 'annual', 'pending')`, [OTHER]);
-await expectError('   manager cannot approve another branch leave', as(db, 'manager', `UPDATE leave_requests SET status='approved' WHERE employee_id=$1`, [OTHER]), 'فرع آخر');
+// إجازة فرع ثاني ما توصل للمدير أصلاً (تدقيق 14/10 BUG-002)، فتبقى معلّقة
+await as(db, 'manager', `UPDATE leave_requests SET status='approved' WHERE employee_id=$1`, [OTHER]);
+check('   manager cannot approve another branch leave',
+  (await db.query(`SELECT status FROM leave_requests WHERE employee_id = $1`, [OTHER])).rows[0].status === 'pending');
 await expectOk('   admin approves the manager leave', as(db, 'admin', `UPDATE leave_requests SET status='approved' WHERE id=$1`, [mgrLeave]));
 await expectError('   leave more than 30 days in the past is refused', as(db, 'emp', `INSERT INTO leave_requests (employee_id, start_date, end_date, leave_type, status)
   VALUES ($1, $2::date - 40, $2::date - 39, 'sick', 'pending')`, [IDS.emp, today]), '30 يوماً');

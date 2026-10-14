@@ -81,7 +81,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Ticker
           _managerBranchId = branchId;
           // فرع غير محدد = ما يشوف أحد (بدل كل الشركة)
           _filter = DashboardFilter(branchId: branchId ?? '__none__');
-          _tabController = TabController(length: 4, vsync: this);
+          // المدير: القرارات، الإجازات، الأمان (السلف والأجهزة للأدمن بس)
+          _tabController = TabController(length: 3, vsync: this);
         });
         oldController.dispose();
       }
@@ -143,8 +144,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Ticker
   }
 
 
-  /// أدوات الأدمن فقط (مثل الموقع: السلف، المحذوفات، التخزين)
-  static const _adminOnlyTools = {AppRoutes.adminLoans, AppRoutes.adminTrash, AppRoutes.adminStorage, AppRoutes.adminAssistant};
+  /// أدوات الأدمن فقط (السيرفر يسمح بيها للأدمن بس): السلف، المحذوفات، التخزين، المساعد، الفروع، أوقات الدوام
+  static const _adminOnlyTools = kAdminOnlyRoutes;
 
   static const _tools = <(IconData, String, String, AppTone)>[
     (Icons.auto_awesome_rounded, 'المساعد الذكي', AppRoutes.adminAssistant, AppTone.accent),
@@ -194,12 +195,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Ticker
   @override
   Widget build(BuildContext context) {
     final s = _snapshot;
-    final pending = s.leaves.length + (_isAdmin ? s.loans.length : 0) + s.devices.length;
+    // السلف والأجهزة للأدمن بس (السيرفر يرفضها للمدير)
+    final pending = s.leaves.length + (_isAdmin ? s.loans.length + s.devices.length : 0);
     final tabs = [
       ('القرارات', s.decisions.length),
       ('الإجازات', s.leaves.length),
       if (_isAdmin) ('السلف', s.loans.length),
-      ('الأجهزة', s.devices.length),
+      if (_isAdmin) ('الأجهزة', s.devices.length),
       ('الأمان', s.securityLogs.length),
     ];
 
@@ -314,6 +316,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Ticker
                         approve ? AppColors.success : AppColors.danger,
                       ),
                     ),
+                    if (_isAdmin)
                     DevicesTab(
                       devices: s.devices,
                       busyKey: _busyKey,

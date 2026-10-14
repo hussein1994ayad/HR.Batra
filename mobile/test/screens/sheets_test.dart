@@ -117,11 +117,15 @@ void main() {
     });
   }
 
-  testWidgets('branch manager dashboard: own branch only, no loans tab', (tester) async {
+  testWidgets('branch manager dashboard: own branch only, no loans, devices or admin-only tools', (tester) async {
     await pumpScreen(tester, const AdminDashboardScreen(), role: 'manager');
     await _settle(tester);
     expect(find.text('القرارات'), findsOneWidget);
     expect(find.text('السلف'), findsNothing);
+    // تدقيق 14/10 BUG-006: الأجهزة والفروع وأوقات الدوام للأدمن بس (السيرفر يرفضها للمدير)
+    expect(find.text('الأجهزة'), findsNothing);
+    expect(find.text('الفروع'), findsNothing);
+    expect(find.text('أوقات الدوام'), findsNothing);
     expect(find.text('كل الفروع'), findsNothing);
     expect(tester.takeException(), isNull);
     await disposeScreen(tester);

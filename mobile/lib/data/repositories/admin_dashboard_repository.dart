@@ -8,6 +8,7 @@ import '../../core/logic/attendance_rules.dart';
 import '../../core/models/models.dart';
 import '../../core/services/supabase_service.dart';
 import '../../core/utils/arabic_format.dart';
+import 'employee_pay.dart';
 
 class DashboardFilter {
   final String branchId;
@@ -184,10 +185,12 @@ class AdminDashboardRepository {
         .eq('status', 'pending'));
     if (date != null) leaves = leaves.lte('start_date', dayEnd).gte('end_date', dayStart);
 
+    // الراتب (لتنبيه قسط السلفة فوق نص الراتب) من السيرفر: للأدمن، والمدير ما يوصله شي
+    final payFuture = fetchEmployeePay(_db);
     final results = await Future.wait<Object?>([
       scoped(_db.from('attendance').select('status, employee_id').eq('work_date', dayStr)),
       leaves,
-      inDay(scoped(_db.from('loans').select('*, employees!loans_employee_id_fkey!inner(full_name, monthly_salary_iqd)')
+      inDay(scoped(_db.from('loans').select('*, employees!loans_employee_id_fkey!inner(id, full_name)')
           .eq('status', 'pending')), 'created_at'),
       inDay(scoped(_db.from('employee_devices').select('*, employees!inner(full_name)').eq('is_approved', false)), 'created_at'),
       inDay(scoped(_db.from('mock_gps_attempts').select('*, employees!inner(full_name)')), 'timestamp')
@@ -259,11 +262,14 @@ class AdminDashboardRepository {
             }, dayStr),
             rates);
 
+    final pay = await payFuture;
     return DashboardSnapshot(
       present: summary.present,
       absent: summary.absent,
       leaves: rowsOf(results[1]).map(LeaveRequestModel.fromMap).toList(),
-      loans: rowsOf(results[2]).map(LoanModel.fromMap).toList(),
+      loans: rowsOf(results[2])
+          .map((l) => LoanModel.fromMap({...l, 'employees': withPay(l.obj('employees') ?? const {}, pay)}))
+          .toList(),
       devices: rowsOf(results[3]).map(DeviceRequest.fromMap).toList(),
       securityLogs: securityLogs,
       decisions: withEngine,

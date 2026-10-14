@@ -10,6 +10,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/models/models.dart';
 import '../../core/services/supabase_service.dart';
+import 'write_guard.dart';
 
 class AdminActionsRepository {
   AdminActionsRepository({SupabaseClient? client}) : _db = client ?? SupabaseService.client;
@@ -139,11 +140,11 @@ class AdminActionsRepository {
 
   /// اعتماد جهاز: يُقفل حساب الموظف على هذا الجهاز ويُرسل له إشعاراً.
   Future<void> approveDevice(DeviceRequest request) async {
-    await _db.from('employee_devices').update({
+    ensureChanged(await _db.from('employee_devices').update({
       'is_approved': true,
       'approved_at': DateTime.now().toUtc().toIso8601String(),
-    }).eq('id', request.id);
-    await _db.from('employees').update({'device_id_lock': request.deviceId}).eq('id', request.employeeId);
+    }).eq('id', request.id).select('id'));
+    ensureChanged(await _db.from('employees').update({'device_id_lock': request.deviceId}).eq('id', request.employeeId).select('id'));
     await _db.from('notifications').insert({
       'employee_id': request.employeeId,
       'title': 'اعتماد جهاز الدخول الجديد 📱',

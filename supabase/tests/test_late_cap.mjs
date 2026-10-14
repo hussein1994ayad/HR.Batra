@@ -1,5 +1,5 @@
 // خصم التأخير ما يتجاوز أجر يوم واحد (بصمة بعد نهاية الدوام كانت تطلع «تأخير 13 ساعة» بأجر أكثر من يومين).
-import { setup, as, IDS, expectOk, check, done } from './lib.mjs';
+import { setup, as, IDS, expectOk, expectError, check, done } from './lib.mjs';
 
 const db = await setup();
 const q = async (sql, p = []) => (await db.query(sql, p)).rows;
@@ -46,10 +46,11 @@ check('   ...one day is deducted, not two and a half', (await deductions()) === 
 await q(`SELECT sync_payroll_period('2026-09', $1)`, [E]);
 check('   ...and it stays capped after a recalculation', N((await late('2026-09-08')).a) === 20000 && (await deductions()) === 20000);
 
-// المبلغ اللي كتبه الأدمن يبقى هو، حتى لو أكبر من أجر اليوم (قراره)
-await expectOk('   an amount the admin typed is kept as typed', as(db, 'admin', `SELECT decide_payroll_event($1, true, 'قرار الإدارة', 25000)`, [huge.id]));
+// المبلغ اللي كتبه الأدمن يبقى هو بعد إعادة الحساب. حده أجر يوم (تدقيق 14/10 PAY-003): العقوبة الأكبر = «خصم يدوي»
+await expectError('   an amount above one day rate is refused', as(db, 'admin', `SELECT decide_payroll_event($1, true, 'قرار الإدارة', 25000)`, [huge.id]), 'أجر يوم');
+await expectOk('   an amount the admin typed is kept as typed', as(db, 'admin', `SELECT decide_payroll_event($1, true, 'قرار الإدارة', 15000)`, [huge.id]));
 await q(`SELECT sync_payroll_day($1, '2026-09-08')`, [E]);
 const typed = await late('2026-09-08');
-check('   ...25,000 after a recalculation', N(typed.a) === 25000 && N(typed.o) === 25000, JSON.stringify(typed));
+check('   ...15,000 after a recalculation', N(typed.a) === 15000 && N(typed.o) === 15000, JSON.stringify(typed));
 
 await done();

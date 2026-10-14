@@ -57,6 +57,16 @@ class AppRoutes {
   static const String settings = '/settings';
 }
 
+/// شاشات الأدمن فقط: السيرفر يرفضها لمدير الفرع، فما تنفتح إله حتى برابط مباشر (تدقيق 14/10/2026، BUG-006).
+const Set<String> kAdminOnlyRoutes = {
+  AppRoutes.adminLoans,
+  AppRoutes.adminTrash,
+  AppRoutes.adminStorage,
+  AppRoutes.adminAssistant,
+  AppRoutes.adminBranchManagement,
+  AppRoutes.adminBranchSchedule,
+};
+
 final GoRouter appRouter = GoRouter(
   initialLocation: AppRoutes.splash,
   
@@ -77,6 +87,9 @@ final GoRouter appRouter = GoRouter(
     if (loggedIn && state.matchedLocation.startsWith('/admin')) {
       if (!Roles.canManage(AuthService.currentUserRole)) {
         return AppRoutes.employeeHome;
+      }
+      if (kAdminOnlyRoutes.contains(state.matchedLocation) && !Roles.isAdmin(AuthService.currentUserRole)) {
+        return AppRoutes.adminDashboard;
       }
     }
 

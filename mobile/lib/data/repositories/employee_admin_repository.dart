@@ -11,6 +11,8 @@ import '../../core/models/models.dart';
 import '../../core/services/image_compression_service.dart';
 import '../../core/services/supabase_service.dart';
 import '../../core/utils/app_log.dart';
+import 'employee_pay.dart';
+import 'write_guard.dart';
 
 class EmployeeAdminRepository {
   EmployeeAdminRepository({SupabaseClient? client}) : _db = client ?? SupabaseService.client;
@@ -19,21 +21,26 @@ class EmployeeAdminRepository {
   /// الموظفون مع أجهزتهم وفروعهم وأقسامهم، والأفرع (id, name) — بالتوازي.
   Future<({List<ManagedEmployee> employees, List<BranchModel> branches})> fetchEmployeesAndBranches() async {
     final results = await Future.wait<dynamic>([
-      _db.from('employees').select('*, employee_devices(id, model), branches(name), departments(name)').order('full_name'),
+      _db.from('employees').select('$kEmployeeColumns, employee_devices(id, model), branches(name), departments(name)').order('full_name'),
       _db.from('branches').select('id, name').order('name'),
+      // الراتب من السيرفر: للأدمن، والمدير ما يوصله شي
+      fetchEmployeePay(_db),
     ]);
+    final pay = results[2] as Map<String, JsonRow>;
     return (
-      employees: List<Map<String, dynamic>>.from(results[0] as Iterable<dynamic>).map(ManagedEmployee.fromMap).toList(),
+      employees: List<Map<String, dynamic>>.from(results[0] as Iterable<dynamic>)
+          .map((row) => ManagedEmployee.fromMap(withPay(row, pay)))
+          .toList(),
       branches: List<Map<String, dynamic>>.from(results[1] as Iterable<dynamic>).map(BranchModel.fromMap).toList(),
     );
   }
 
   /// تفعيل/تعطيل الحساب. عند التعطيل يُحفظ آخر يوم عمل فعلي (termination_date).
   Future<void> setActive(String employeeId, {required bool active, DateTime? lastDay}) async {
-    await _db.from('employees').update({
+    ensureChanged(await _db.from('employees').update({
       'is_active': active,
       if (lastDay != null) 'termination_date': '${lastDay.year}-${lastDay.month.toString().padLeft(2, '0')}-${lastDay.day.toString().padLeft(2, '0')}',
-    }).eq('id', employeeId);
+    }).eq('id', employeeId).select('id'));
   }
 
   /// آخر يوم بصم بيه الموظف (اقتراح «آخر يوم عمل» عند التعطيل).
@@ -54,7 +61,7 @@ class EmployeeAdminRepository {
     // 1. مسح تسجيلات الجهاز القديمة
     await _db.from('employee_devices').delete().eq('employee_id', employeeId);
     // 2. تحديث قفل الموظف ليكون نشطاً للجهاز القادم
-    await _db.from('employees').update({'device_id_lock': 'force_lock_active'}).eq('id', employeeId);
+    ensureChanged(await _db.from('employees').update({'device_id_lock': 'force_lock_active'}).eq('id', employeeId).select('id'));
   }
 
   Future<void> createEmployee(Map<String, dynamic> params) async {
@@ -83,6 +90,6 @@ class EmployeeAdminRepository {
   }
 
   Future<void> updateDocumentUrls(Object employeeId, List<String> urls) async {
-    await _db.from('employees').update({'document_urls': urls}).eq('id', employeeId);
+    ensureChanged(await _db.from('employees').update({'document_urls': urls}).eq('id', employeeId).select('id'));
   }
 }
