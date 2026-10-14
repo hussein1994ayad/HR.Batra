@@ -70,7 +70,8 @@ await q(`SELECT ensure_payroll_period(public.payroll_month_of($1::date))`, [toda
 const rates = await as(db, 'admin', `SELECT * FROM payroll_day_rates($1::date)`, [today]);
 const rate = rates.rows.find((r) => r.employee_id === E);
 check('3) the day rate is known before any decision (20,000)', rate && N(rate.daily_rate) === 20000, JSON.stringify(rate));
-check('   a manager sees rates for his branch only', (await as(db, 'manager', `SELECT * FROM payroll_day_rates($1::date)`, [today])).rows.length >= 1);
+// أجر اليوم يكشف الراتب (× 30): للأدمن بس (تدقيق 14/10، الخطر المتبقي بالمرحلة 1)
+check('   a manager gets no rates (they reveal the salary)', (await as(db, 'manager', `SELECT * FROM payroll_day_rates($1::date)`, [today])).rows.length === 0);
 await expectError('   an employee cannot read rates', as(db, 'emp', `SELECT * FROM payroll_day_rates($1::date)`, [today]), '');
 
 const isWorkday = (await one(`SELECT NOT EXISTS (SELECT 1 FROM official_holidays WHERE holiday_date = $1::date) ok`, [today])).ok;

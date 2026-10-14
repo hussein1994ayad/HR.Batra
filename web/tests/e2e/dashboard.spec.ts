@@ -288,6 +288,24 @@ test.describe('workflows', () => {
     expect(api.writes('loan_installments', 'POST')).toHaveLength(0);
   });
 
+  test('a branch manager decides an absence without seeing or typing any amount', async ({ page }) => {
+    const fixtures = defaultFixtures();
+    fixtures.employees = fixtures.employees.map((e) => (e.id === ADMIN.id ? { ...e, role: 'manager' } : e));
+    // السيرفر ما يعطي المدير أجر اليوم (تدقيق 14/10: المبالغ تكشف الراتب)
+    const api = await mockSupabase(page, { fixtures, rpc: { payroll_day_rates: [] } });
+    await page.goto('/dashboard/tracking');
+    await page.getByRole('tab', { name: /قرارات الغياب والتأخير/ }).click();
+    const row = page.locator('tr', { hasText: 'مصطفى حسن' });
+    await expect(row).toContainText('يُحسب تلقائياً');
+    await row.getByRole('button', { name: 'تطبيق' }).click();
+    const confirmDialog = page.getByRole('dialog').filter({ hasText: 'تطبيق خصم الغياب؟' });
+    await expect(confirmDialog).toContainText('المبلغ المحسوب');
+    await expect(confirmDialog.getByLabel('مبلغ الخصم (د.ع)')).toHaveCount(0);
+    await confirmDialog.getByRole('button', { name: 'تطبيق الخصم' }).click();
+    await expect.poll(() => api.writes('rpc:decide_absence_day', 'POST').length).toBe(1);
+    expect(api.writes('rpc:decide_absence_day', 'POST')[0].body).not.toHaveProperty('p_amount');
+  });
+
   test('a branch manager does not see admin-only pages', async ({ page }) => {
     const fixtures = defaultFixtures();
     fixtures.employees = fixtures.employees.map((e) => (e.id === ADMIN.id ? { ...e, role: 'manager' } : e));

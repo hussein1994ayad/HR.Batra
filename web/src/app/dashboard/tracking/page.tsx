@@ -6,6 +6,7 @@ import type { AttendanceRecord } from '@/lib/db-types';
 import { EmptyState, PageSkeleton, cn } from '@/components/ui';
 import { useTracking } from '@/features/tracking/useTracking';
 import { useConfirmAnswer } from '@/components/confirm';
+import { useRole } from '@/lib/role';
 import { AttendanceLogTable } from '@/features/tracking/components/AttendanceLogTable';
 import { DecisionsTable } from '@/features/tracking/components/DecisionsTable';
 import { EditAttendanceModal } from '@/features/tracking/components/EditAttendanceModal';
@@ -18,6 +19,8 @@ import { TrackingTabs } from '@/features/tracking/components/TrackingTabs';
 
 export default function TrackingPage() {
   const t = useTracking();
+  // المبالغ للأدمن بس: مدير الفرع يقرر خصم بالمحسوب أو إعفاء (المبالغ تكشف الراتب)
+  const isAdmin = useRole() === 'admin';
   const confirmAnswer = useConfirmAnswer();
   const [editingRecord, setEditingRecord] = useState<AttendanceRecord | null>(null);
   const [showManualModal, setShowManualModal] = useState(false);
@@ -104,16 +107,16 @@ export default function TrackingPage() {
                   const computed = Math.round(item.suggestedAmount);
                   const answer = await confirmAnswer({
                     title: apply ? `تطبيق خصم ${what}؟` : `إعفاء من ${what}؟`,
-                    message: `${item.employee.full_name} · ${item.date}\n${apply ? 'يُخصم من راتب المسير ويوصل للموظف إشعار بالمبلغ.' : 'ما ينخصم شي، وما يوصل للموظف إشعار.'}`,
+                    message: `${item.employee.full_name} · ${item.date}\n${apply ? (isAdmin ? 'يُخصم من راتب المسير ويوصل للموظف إشعار بالمبلغ.' : 'يُخصم المبلغ المحسوب من راتب المسير ويوصل للموظف إشعار.') : 'ما ينخصم شي، وما يوصل للموظف إشعار.'}`,
                     confirmLabel: apply ? 'تطبيق الخصم' : 'إعفاء',
                     tone: apply ? 'warning' : 'primary',
-                    amount: apply
+                    amount: apply && isAdmin
                       ? { label: 'مبلغ الخصم (د.ع)', initial: computed, hint: computed > 0 ? `المحسوب: ${computed.toLocaleString('en-US')} د.ع — تكدر تعدّله (مثلاً نص يوم).` : 'اتركه صفر حتى ينحسب تلقائياً من الراتب.' }
                       : undefined,
                   });
                   if (!answer) return;
                   // نفس المحسوب (أو صفر بدون مبلغ محسوب) = ما ندز مبلغ، السيرفر يحسبه
-                  const edited = apply && answer.amount !== computed ? answer.amount : undefined;
+                  const edited = apply && isAdmin && answer.amount !== computed ? answer.amount : undefined;
                   await t.decide(item, status, reason, edited);
                 }}
               />

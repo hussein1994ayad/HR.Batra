@@ -67,15 +67,9 @@ export async function fetchTrackingDataset(filters: {
         .gte('timestamp', new Date(`${startDate}T00:00:00`).toISOString())
         .lte('timestamp', new Date(`${endDate}T23:59:59.999`).toISOString())
         .order('timestamp', { ascending: false }),
-      // الأيام قبل نظام المسيرات ليس لها حركات؛ خطأ هنا لا يمنع عرض الصفحة
-      fetchAllRows<EventRow>((from, to) => supabase.from('payroll_events')
-        .select('employee_id, event_date, event_type, amount')
-        .in('event_type', ['absence', 'late'])
-        .neq('status', 'void')
-        .gte('event_date', startDate)
-        .lte('event_date', endDate)
-        .order('id')
-        .range(from, to)).catch(() => [] as EventRow[]),
+      // مبالغ الحركات للأدمن بس (تدقيق 14/10: المبالغ تكشف الراتب). الأيام قبل نظام المسيرات ليس لها حركات؛
+      // خطأ هنا لا يمنع عرض الصفحة
+      fetchEventAmounts(startDate, endDate).catch(() => [] as EventRow[]),
       supabase.from('official_holidays').select('holiday_date').gte('holiday_date', startDate).lte('holiday_date', endDate),
       // سيرفر قديم بدون الدالة = بدون مبلغ (مثل قبل)
       supabase.rpc('payroll_day_rates', { p_date: endDate }),
@@ -192,6 +186,29 @@ export async function forceCheckout(recordId: string) {
     .update({ check_out_time: new Date().toISOString() })
     .eq('id', recordId);
   if (error) throw error;
+}
+
+type EventAmountRow = { employee_id: string; event_date: string; event_type: string; amount: number };
+
+/** مبالغ حركات الغياب والتأخير لفترة: الأدمن من get_payroll_event_amounts (المدير يرجعله فارغ).
+ *  سيرفر قبل تحديث 20261018000100 (الدالة ما موجودة): المبالغ تنقرا مباشرة مثل قبل. */
+async function fetchEventAmounts(startDate: string, endDate: string): Promise<EventAmountRow[]> {
+  try {
+    return await fetchAllRows<EventAmountRow>((from, to) => supabase.rpc('get_payroll_event_amounts', { p_from: startDate, p_to: endDate })
+      .in('event_type', ['absence', 'late'])
+      .order('event_id')
+      .range(from, to));
+  } catch (err) {
+    if ((err as { code?: string })?.code !== 'PGRST202') throw err;
+    return fetchAllRows<EventAmountRow>((from, to) => supabase.from('payroll_events')
+      .select('employee_id, event_date, event_type, amount')
+      .in('event_type', ['absence', 'late'])
+      .neq('status', 'void')
+      .gte('event_date', startDate)
+      .lte('event_date', endDate)
+      .order('id')
+      .range(from, to));
+  }
 }
 
 /** حركة رواتب (غياب/تأخير) لنفس الموظف واليوم تحتاج قرار، أو null (ماكو حركة، أو ما مسموح نقراها). */

@@ -37,6 +37,7 @@ class DecisionsTab extends StatelessWidget {
     required this.scheduleFor,
     required this.onDecide,
     this.busyKey,
+    this.showAmounts = true,
   });
 
   final bool hasDate;
@@ -44,6 +45,9 @@ class DecisionsTab extends StatelessWidget {
   final WorkScheduleModel? Function(PendingDecision) scheduleFor;
   final void Function(PendingDecision item, {required bool deduct, required String reason, double? amount}) onDecide;
   final String? busyKey;
+
+  /// المبالغ للأدمن بس (المدير يقرر خصم بالمحسوب أو إعفاء)
+  final bool showAmounts;
 
   @override
   Widget build(BuildContext context) {
@@ -59,6 +63,7 @@ class DecisionsTab extends StatelessWidget {
         item: item,
         schedule: scheduleFor(item),
         busy: busyKey == item.key,
+        showAmount: showAmounts,
         onDecide: ({required deduct, required reason, amount}) => onDecide(item, deduct: deduct, reason: reason, amount: amount),
       );
     });

@@ -125,7 +125,12 @@ List<PendingDecision> attachEngineEvents(
   return out;
 }
 
-/// غياب بدون حركة محسوبة بعد (غياب اليوم): مبلغه = أجر اليوم، حتى المدير يشوفه ويكدر يعدّله قبل الخصم.
+/// يضيف مبلغ كل حركة (للأدمن؛ المدير ما يوصله مبلغ فتبقى بدون).
+List<JsonRow> withEventAmounts(List<JsonRow> events, Map<String, double> amounts) => [
+      for (final e in events) amounts.containsKey(e.str('id')) ? {...e, 'amount': amounts[e.str('id')]} : e,
+    ];
+
+/// غياب بدون حركة محسوبة بعد (غياب اليوم): مبلغه = أجر اليوم (للأدمن؛ المدير ما يوصله أجر اليوم).
 List<PendingDecision> withAbsenceRates(List<PendingDecision> decisions, Map<String, double> rates) => [
       for (final d in decisions)
         d.status == 'absent' && d.engineAmount == null && (rates[d.employeeId] ?? 0) > 0 ? d.withAmount(rates[d.employeeId]!) : d,
@@ -134,6 +139,26 @@ List<PendingDecision> withAbsenceRates(List<PendingDecision> decisions, Map<Stri
 class AdminDashboardRepository {
   AdminDashboardRepository({SupabaseClient? client}) : _db = client ?? SupabaseService.client;
   final SupabaseClient _db;
+
+  /// مبالغ حركات اليوم (event id → المبلغ) للأدمن بس (تدقيق 14/10: المبالغ تكشف الراتب؛ المدير يرجعله فارغ).
+  /// سيرفر قبل تحديث 20261018000100 (الدالة ما موجودة): المبالغ تنقرا مباشرة مثل قبل.
+  Future<Map<String, double>> _eventAmounts(String day) async {
+    try {
+      List<JsonRow> rows;
+      try {
+        rows = rowsOf(await _db.rpc<Object?>('get_payroll_event_amounts', params: {'p_from': day, 'p_to': day}));
+      } on PostgrestException catch (e) {
+        if (e.code != 'PGRST202') rethrow;
+        rows = [
+          for (final r in rowsOf(await _db.from('payroll_events').select('id, amount').eq('event_date', day)))
+            {'event_id': r['id'], 'amount': r['amount']},
+        ];
+      }
+      return {for (final r in rows) if (r.str('event_id') != null) r.str('event_id')!: r.dbl('amount') ?? 0};
+    } catch (_) {
+      return const {};
+    }
+  }
 
   /// أجر اليوم لكل موظف (payroll_day_rates). سيرفر قديم بدون الدالة = قائمة فارغة.
   Future<Object?> _dayRates(String day) async {
@@ -187,6 +212,7 @@ class AdminDashboardRepository {
 
     // الراتب (لتنبيه قسط السلفة فوق نص الراتب) من السيرفر: للأدمن، والمدير ما يوصله شي
     final payFuture = fetchEmployeePay(_db);
+    final amountsFuture = date != null ? _eventAmounts(dayStr) : Future.value(const <String, double>{});
     final results = await Future.wait<Object?>([
       scoped(_db.from('attendance').select('status, employee_id').eq('work_date', dayStr)),
       leaves,
@@ -209,7 +235,7 @@ class AdminDashboardRepository {
       // حركات محرّك الرواتب لليوم: مبلغ الخصم المحسوب + الخروج المبكر والبصمة الناقصة بانتظار القرار
       if (date != null)
         scoped(_db.from('payroll_events')
-            .select('id, employee_id, event_type, amount, minutes, status, source_id')
+            .select('id, employee_id, event_type, minutes, status, source_id')
             .inFilter('event_type', ['absence', 'late', 'early_leave', 'missing_punch'])
             .neq('status', 'void')
             .eq('event_date', dayStr)),
@@ -257,7 +283,7 @@ class AdminDashboardRepository {
     final withEngine = date == null
         ? decisions
         : withAbsenceRates(
-            attachEngineEvents(decisions, rowsOf(results[9]), {
+            attachEngineEvents(decisions, withEventAmounts(rowsOf(results[9]), await amountsFuture), {
               for (final e in employees) e.id: (name: e.fullName, branchId: e.branchId),
             }, dayStr),
             rates);
