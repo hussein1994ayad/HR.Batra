@@ -67,6 +67,13 @@ extension JsonMap on JsonRow {
 
   List<JsonRow> list(String key) => rowsOf(this[key]);
 
+  /// قائمة نصوص (مثل روابط المستمسكات). أي شكل غير قائمة (كائن `{}`، null) = قائمة فارغة بدل ما يوكف.
+  List<String> strings(String key) {
+    final v = this[key];
+    if (v is! List) return const [];
+    return [for (final e in v) if (e != null) e.toString()];
+  }
+
   List<int> ints(String key) {
     final v = this[key];
     if (v is! List) return const [];

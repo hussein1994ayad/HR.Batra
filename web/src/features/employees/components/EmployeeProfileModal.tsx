@@ -1,5 +1,6 @@
 'use client';
 
+import { documentList } from '../logic';
 import toast from 'react-hot-toast';
 import { Download, Eye, FileImage, FileText, FolderOpen, Pencil, Share2 } from 'lucide-react';
 import type { Employee } from '@/lib/db-types';
@@ -33,7 +34,7 @@ function Detail({ label, children }: { label: string; children: React.ReactNode 
 
 /** ملف الموظف الشامل مع قائمة الوثائق المرفوعة. */
 export function EmployeeProfileModal({ profileEmployee: emp, onClose, onEdit, onPreview }: Props) {
-  const docs = emp.document_urls ?? [];
+  const docs = documentList(emp.document_urls);
   const showSalary = useRole() === 'admin';
   const role = ROLE_META[emp.role] ?? ROLE_META.employee;
 

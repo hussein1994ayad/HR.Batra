@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Employee } from '@/lib/db-types';
-import { daysUntil, documentPathFromUrl, employeeToFormValues, salaryChangeMonth, salaryUpdateFields, filterEmployees, normalizeArabic } from './logic';
+import { daysUntil, documentPathFromUrl, employeeToFormValues, salaryChangeMonth, salaryUpdateFields, filterEmployees, normalizeArabic, documentList } from './logic';
 
 const emp = (over: Partial<Employee>): Employee => ({
   id: 'e', employee_code: 'EMP-100', full_name: '', is_active: true, role: 'employee', ...over,
@@ -88,5 +88,15 @@ describe('documentPathFromUrl', () => {
 describe('daysUntil', () => {
   it('rounds up partial days', () => {
     expect(daysUntil('2026-10-01T12:00:00Z', new Date('2026-09-25T00:00:00Z'))).toBe(7);
+  });
+});
+
+describe('documentList', () => {
+  it('always gives a list, whatever the database stored', () => {
+    expect(documentList(['a', 'b'])).toEqual(['a', 'b']);
+    expect(documentList({})).toEqual([]);
+    expect(documentList(null)).toEqual([]);
+    expect(documentList(undefined)).toEqual([]);
+    expect(documentList(['a', 3, null])).toEqual(['a']);
   });
 });

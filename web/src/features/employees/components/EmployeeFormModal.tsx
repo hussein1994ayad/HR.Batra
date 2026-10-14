@@ -6,7 +6,7 @@ import toast from 'react-hot-toast';
 import { Clock, Eye, EyeOff, Pencil, Save, Upload, UserPlus, X } from 'lucide-react';
 import type { Employee } from '@/lib/db-types';
 import { AmountInput, Field, Input, Modal, ModalFooter, Select, cn } from '@/components/ui';
-import { emptyEmployeeForm, employeeToFormValues } from '../logic';
+import { documentList, emptyEmployeeForm, employeeToFormValues } from '../logic';
 import { currentPayrollMonth, payrollMonthName, shiftPayrollMonth } from '@/features/payroll/period';
 import { formatIQD } from '@/lib/format';
 import type { BranchOption, EmployeeFormValues } from '../types';
@@ -58,7 +58,7 @@ export function EmployeeFormModal({ employee, branches, departments, saving, onC
   const isEdit = !!employee;
   const [form, setForm] = useState<EmployeeFormValues>(() => (employee ? employeeToFormValues(employee) : emptyEmployeeForm()));
   const [showPassword, setShowPassword] = useState(false);
-  const [existingDocs, setExistingDocs] = useState<string[]>(employee?.document_urls ?? []);
+  const [existingDocs, setExistingDocs] = useState<string[]>(documentList(employee?.document_urls));
   const [newDocs, setNewDocs] = useState<File[]>([]);
 
   // تغيير الراتب: من راتب هذا الشهر لحد 11 شهر قدّام (والشهر المحفوظ إذا قديم)

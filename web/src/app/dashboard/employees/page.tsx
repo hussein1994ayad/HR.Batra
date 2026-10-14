@@ -13,7 +13,7 @@ import {
 import { formatDate, formatIQD } from '@/lib/format';
 import { useRole } from '@/lib/role';
 import { useEmployees } from '@/features/employees/useEmployees';
-import { daysUntil, filterEmployees } from '@/features/employees/logic';
+import { daysUntil, filterEmployees, documentList } from '@/features/employees/logic';
 import { DeleteEmployeeModal } from '@/features/employees/components/DeleteEmployeeModal';
 import { DocumentPreviewModal } from '@/features/employees/components/DocumentPreviewModal';
 import { EmployeeFormModal } from '@/features/employees/components/EmployeeFormModal';
@@ -158,7 +158,7 @@ export default function EmployeesPage() {
                   const isLocked = emp.device_id_lock != null;
                   const boundModel = e.boundDevices?.[emp.id];
                   const role = ROLE_META[emp.role ?? 'employee'] ?? ROLE_META.employee;
-                  const docCount = emp.document_urls?.length ?? 0;
+                  const docCount = documentList(emp.document_urls).length;
                   return (
                     <tr key={emp.id} className={cn(emp.is_active === false && 'opacity-50')}>
                       <td>

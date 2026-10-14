@@ -7,6 +7,11 @@ import { getLocalDateStr } from '@/lib/dates';
 import { payrollMonthOfDate } from '@/features/payroll/period';
 import type { BranchOption, EmployeeFormValues } from './types';
 
+/** روابط مستمسكات الموظف كقائمة دائماً: أي شكل ثاني (كائن `{}`، null) = قائمة فارغة بدل ما توكف الصفحة. */
+export function documentList(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((u): u is string => typeof u === 'string') : [];
+}
+
 /** توحيد الهمزات والتاء المربوطة والياء وحذف التشكيل حتى يطابق البحث كل الكتابات. */
 export function normalizeArabic(text: string = ''): string {
   return text
