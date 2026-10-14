@@ -23,3 +23,6 @@ supabase/.temp/
 
 # Firebase iOS config (من Firebase Console — يُمرَّر في CI كـ Secret)
 mobile/ios/Runner/GoogleService-Info.plist
+
+# تصفير البيانات قبل الإطلاق: نسخة احتياطية وملف تنفيذ محلي (ما ينرفعون)
+launch-reset/
