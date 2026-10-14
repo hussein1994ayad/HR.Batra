@@ -41,6 +41,6 @@ class DirectoryEntry {
         employeeCode: map.str('employee_code'),
         branchName: map.str('branch_name'),
         departmentName: map.str('department_name'),
-        documentUrls: [for (final u in (map['document_urls'] as List<dynamic>? ?? const [])) u.toString()],
+        documentUrls: map.strings('document_urls'),
       );
 }

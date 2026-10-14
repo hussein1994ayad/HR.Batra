@@ -364,6 +364,21 @@ test.describe('workflows', () => {
     expect(api.writes('rpc:loans_cleanup_run', 'POST')[0].body).toMatchObject({ p_settled: true, p_requests: false });
   });
 
+  test('the employees page opens even if a document list was stored as an object (after the launch reset)', async ({ page }) => {
+    const fixtures = defaultFixtures();
+    fixtures.employees = fixtures.employees.map((e) => ({ ...e, document_urls: {} }));
+    const errors: string[] = [];
+    page.on('pageerror', (err) => errors.push(err.message));
+    await mockSupabase(page, { fixtures });
+    await page.goto('/dashboard/employees');
+    await expect(page.getByText('زينب علي').first()).toBeVisible();
+    // فتح ملف الموظف (قائمة وثائقه) ثم نموذج التعديل — هنا كانت الصفحة توكف («h.map is not a function»)
+    await page.locator('tr', { hasText: 'زينب علي' }).getByRole('button').first().click();
+    await expect(page.getByRole('dialog')).toBeVisible();
+    await expect(page.getByText('حدث خطأ غير متوقع')).toHaveCount(0);
+    expect(errors).toEqual([]);
+  });
+
   test('saves settings', async ({ page }) => {
     const api = await mockSupabase(page);
     await page.goto('/dashboard/settings');

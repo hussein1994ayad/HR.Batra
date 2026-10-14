@@ -92,9 +92,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _phone = (data['phone'] ?? 'لا يوجد هاتف مسجل') as String;
           _employeeCode = (data['employee_code'] ?? 'EMP-000') as String;
           _avatarUrl = (data['avatar_url'] ?? '') as String;
-          if (data['document_urls'] != null) {
-            _documentUrls = List<String>.from(data['document_urls'] as Iterable<dynamic>);
-          }
+          final docs = data['document_urls'];
+          // أي شكل غير قائمة = بدون مستمسكات (بدل ما توكف الشاشة)
+          _documentUrls = docs is List ? [for (final u in docs) if (u != null) u.toString()] : [];
         });
       }
 

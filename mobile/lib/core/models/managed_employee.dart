@@ -62,7 +62,7 @@ class ManagedEmployee {
       monthlySalary: map['monthly_salary_iqd'] as num?,
       branchName: _joinedName(map['branches']),
       departmentName: _joinedName(map['departments']),
-      documentUrls: [for (final u in (map['document_urls'] as List<dynamic>? ?? const [])) u.toString()],
+      documentUrls: map.strings('document_urls'),
       deviceCount: devices.length,
       firstDeviceModel: devices.isEmpty ? null : (devices.first as Map)['model']?.toString(),
     );

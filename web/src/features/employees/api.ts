@@ -3,7 +3,7 @@
 import { imageCompression } from '@/lib/lazy';
 import { supabase } from '@/lib/supabase';
 import type { ArchivedEmployee, Department, Employee, EmployeeDevice } from '@/lib/db-types';
-import { documentPathFromUrl, salaryUpdateFields } from './logic';
+import { documentList, documentPathFromUrl, salaryUpdateFields } from './logic';
 import { currentPayrollMonth } from '@/features/payroll/period';
 import type { BranchOption, DeleteType, EmployeeFormValues } from './types';
 
@@ -175,7 +175,7 @@ export async function updateEmployee(
   });
   if (rpcErr) throw rpcErr;
 
-  await removeEmployeeDocuments((employee.document_urls || []).filter(url => !keptDocuments.includes(url)));
+  await removeEmployeeDocuments(documentList(employee.document_urls).filter(url => !keptDocuments.includes(url)));
   const { urls, failed } = await uploadEmployeeDocuments(employee.id, newDocuments);
 
   const { error } = await supabase
