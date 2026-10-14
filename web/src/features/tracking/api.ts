@@ -179,6 +179,12 @@ export async function saveManualAttendance(entry: {
   if (error) throw error;
 }
 
+/** «تمت المراجعة» لبصمة بدون إنترنت وقتها من ساعة الموبايل (الأدمن أو مدير الفرع، وينسجل منو). */
+export async function markOfflinePunchReviewed(recordId: string) {
+  const { error } = await supabase.rpc('mark_offline_punch_reviewed', { p_attendance_id: recordId });
+  if (error) throw error;
+}
+
 /** تسجيل خروج الآن. الحالة تبقى كما هي (كانت تُضبط على 'completed' وهي قيمة يرفضها القيد). */
 export async function forceCheckout(recordId: string) {
   const { error } = await supabase

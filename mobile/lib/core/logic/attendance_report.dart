@@ -59,6 +59,17 @@ class ReportAttendance {
   final DateTime? checkOut;
   final double? checkInLat, checkInLng, checkOutLat, checkOutLng;
 
+  /// مصدر وقت البصمة (online | offline_verified | offline_review | offline_reviewed | manual) ووقت ساعة الموبايل
+  /// لبصمة محفوظة بدون إنترنت (تدقيق 14/10 BUG-001)
+  final String? checkInSource, checkOutSource;
+  final DateTime? checkInDeviceTime, checkOutDeviceTime;
+
+  /// بصمة بدون إنترنت وقتها من ساعة الموبايل (ما انعرف بثقة) وتنتظر مراجعة الإدارة.
+  bool get needsOfflineReview => checkInSource == 'offline_review' || checkOutSource == 'offline_review';
+
+  /// أي بصمة بهذا اليوم انسجلت بدون إنترنت.
+  bool get hasOfflinePunch => [checkInSource, checkOutSource].any((s) => s != null && s.startsWith('offline'));
+
   const ReportAttendance({
     required this.id,
     required this.employeeId,
@@ -70,6 +81,10 @@ class ReportAttendance {
     this.checkInLng,
     this.checkOutLat,
     this.checkOutLng,
+    this.checkInSource,
+    this.checkOutSource,
+    this.checkInDeviceTime,
+    this.checkOutDeviceTime,
   });
 }
 
@@ -138,6 +153,10 @@ class ReportRow {
       if (lateMinutes > 0) 'تأخير $lateMinutes دقيقة',
       if (earlyMinutes > 0) 'خروج مبكر $earlyMinutes دقيقة',
       if (attendance != null && attendance!.checkIn != null && attendance!.checkOut == null && status.attended) 'بدون بصمة انصراف',
+      if (attendance != null && attendance!.needsOfflineReview)
+        'بصمة بدون إنترنت تحتاج مراجعة'
+      else if (attendance != null && attendance!.hasOfflinePunch)
+        'بصمة بدون إنترنت',
       if (leave != null) leave!.label,
       if (holidayName != null) 'عطلة رسمية: $holidayName',
     ];

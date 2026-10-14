@@ -15,6 +15,7 @@ import '../../../core/services/location_service.dart';
 import '../../../core/services/precise_location.dart';
 import '../../../core/services/schedule_service.dart';
 import '../../../core/services/supabase_service.dart';
+import '../../../core/services/trusted_clock.dart';
 import '../../../core/utils/app_log.dart';
 import '../../../core/utils/company_time.dart';
 import '../../../data/repositories/attendance_repository.dart';
@@ -260,6 +261,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   /// 5. من السيرفر: رفع البصمات المحفوظة أوفلاين أولاً (حتى تظهر حالة اليوم الصحيحة)، ثم الفرع وسجل اليوم بالتوازي،
   /// والجدول، وتحديث الكاش. فشل الإنترنت ما يوقف الشاشة (وضع أوفلاين). يرجع تحذير إذا السيرفر رفض بصمة محفوظة.
   Future<String?> _refreshFromServer(String userId, String todayStr) async {
+    // وقت السيرفر ينحفظ ويا عدّاد الموبايل: لو انقطع الإنترنت وقت البصمة، وقتها الحقيقي ينعرف
+    unawaited(TrustedClock.anchorFromServer());
     String? syncWarning;
     try {
       final rejectedPunches = await AttendanceSyncService.syncOfflinePunches();

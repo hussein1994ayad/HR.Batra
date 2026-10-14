@@ -16,6 +16,7 @@ import '../../../core/models/models.dart';
 import '../../../core/services/excel_export_service.dart';
 import '../../../core/services/supabase_service.dart';
 import '../../../core/utils/app_log.dart';
+import '../../../core/utils/error_text.dart';
 import '../../../data/repositories/attendance_report_repository.dart';
 import '../../../data/repositories/role_repository.dart';
 import '../../shared/ui/ui.dart';
@@ -259,6 +260,18 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
 
 
 
+  /// «تمت المراجعة» لبصمة بدون إنترنت (وقتها من ساعة الموبايل)، وبعدها يتحدث التقرير.
+  Future<void> _markReviewed(String attendanceId) async {
+    try {
+      await _repo.markOfflinePunchReviewed(attendanceId);
+      if (!mounted) return;
+      AppSnack.success(context, 'تم تعليم البصمة «تمت المراجعة»');
+      await _loadRecords();
+    } catch (e) {
+      if (mounted) AppSnack.error(context, 'تعذّر الحفظ: ${errorText(e)}');
+    }
+  }
+
   Future<void> _editTimeDialog(ReportTimeEdit record) async {
     final times = await showEditTimesSheet(context, record);
     if (times != null) {
@@ -355,7 +368,7 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
         lastDay = row.date;
         list.add(Padding(
           padding: const EdgeInsets.only(bottom: AppSpace.sm),
-          child: FadeSlideIn(index: i < 20 ? i : 20, child: ReportRecordCard(row: row, onOpenMap: _openMap, onEditTimes: _editTimeDialog)),
+          child: FadeSlideIn(index: i < 20 ? i : 20, child: ReportRecordCard(row: row, onOpenMap: _openMap, onEditTimes: _editTimeDialog, onReview: _markReviewed)),
         ));
       }
     }

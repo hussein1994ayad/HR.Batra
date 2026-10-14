@@ -74,6 +74,7 @@ export default function TrackingPage() {
                 <AttendanceLogTable
                   attendanceRows={t.attendanceRows}
                   busyKey={t.busyKey}
+                  onReview={t.markReviewed}
                   onExport={t.exportReport}
                   onEdit={setEditingRecord}
                   onForceCheckout={t.checkoutNow}

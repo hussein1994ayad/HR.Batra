@@ -288,6 +288,19 @@ test.describe('workflows', () => {
     expect(api.writes('loan_installments', 'POST')).toHaveLength(0);
   });
 
+  test('an offline punch with an unverified time is flagged and can be marked reviewed', async ({ page }) => {
+    const fixtures = defaultFixtures();
+    fixtures.attendance = fixtures.attendance.map((a) => ({ ...a, check_in_offline: true, check_in_time_source: 'offline_review', check_in_device_time: a.check_in_time }));
+    const api = await mockSupabase(page, { fixtures });
+    await page.goto('/dashboard/tracking');
+    const row = page.locator('tr', { hasText: 'زينب علي' }).first();
+    await expect(row).toContainText('بدون إنترنت · تحتاج مراجعة');
+    await page.getByRole('button', { name: /بصمة بدون إنترنت تحتاج مراجعة/ }).click();
+    await row.getByRole('button', { name: /تمت المراجعة/ }).click();
+    await expect.poll(() => api.writes('rpc:mark_offline_punch_reviewed', 'POST').length).toBe(1);
+    expect(api.writes('rpc:mark_offline_punch_reviewed', 'POST')[0].body).toMatchObject({ p_attendance_id: 'att1' });
+  });
+
   test('a branch manager decides an absence without seeing or typing any amount', async ({ page }) => {
     const fixtures = defaultFixtures();
     fixtures.employees = fixtures.employees.map((e) => (e.id === ADMIN.id ? { ...e, role: 'manager' } : e));

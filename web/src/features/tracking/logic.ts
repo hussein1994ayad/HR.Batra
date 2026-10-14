@@ -327,6 +327,25 @@ return list;
  * (منتصف ليل بغداد = 21:00 من اليوم السابق)، فتُحوَّل لليوم المحلي قبل المقارنة.
  * قبل: قصّ النص عند "T" كان يأخذ اليوم السابق، فإجازة يوم 28 تُقرأ 27 ويظهر صاحبها "غائب".
  */
+/** شلون انسجل وقت البصمة (للعرض): بدون إنترنت، يحتاج مراجعة، يدوي، وفرق ساعة الموبايل بالدقائق. null = بصمة عادية. */
+export interface PunchTimeInfo {
+  kind: 'offline' | 'review' | 'reviewed' | 'manual';
+  /** فرق ساعة الموبايل عن الوقت المسجّل (دقائق) — كبير = الساعة متغيّرة */
+  clockDiffMinutes: number | null;
+}
+
+export function punchTimeInfo(time?: string | null, source?: string | null, deviceTime?: string | null): PunchTimeInfo | null {
+  if (!time || !source || source === 'online') return null;
+  const kind = source === 'offline_review' ? 'review' : source === 'offline_reviewed' ? 'reviewed' : source === 'manual' ? 'manual' : 'offline';
+  const diff = deviceTime ? Math.round(Math.abs(new Date(time).getTime() - new Date(deviceTime).getTime()) / 60000) : null;
+  return { kind, clockDiffMinutes: diff };
+}
+
+/** بصمة بدون إنترنت وقتها ما انعرف بثقة (ساعة الموبايل) وتنتظر مراجعة الإدارة. */
+export function needsOfflineReview(row: Pick<AttendanceRecord, 'check_in_time_source' | 'check_out_time_source'>): boolean {
+  return row.check_in_time_source === 'offline_review' || row.check_out_time_source === 'offline_review';
+}
+
 export function isDateWithinRange(dStr: string, startStr: string, endStr: string): boolean {
   if (!dStr || !startStr || !endStr) return false;
   const s = getLocalDateStr(new Date(startStr));

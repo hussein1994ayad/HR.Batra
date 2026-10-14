@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { AttendanceRecord, WorkSchedule } from '@/lib/db-types';
-import { analyzeTrail, buildAttendanceRows, buildDecisions, formatHours, parseZonePolygons } from './logic';
+import { analyzeTrail, buildAttendanceRows, buildDecisions, formatHours, needsOfflineReview, parseZonePolygons, punchTimeInfo } from './logic';
 import type { TrackedEmployee } from './types';
 
 describe('analyzeTrail', () => {
@@ -83,5 +83,21 @@ describe('formatHours', () => {
   it('formats worked duration', () => {
     expect(formatHours('2026-09-01T05:00:00Z', '2026-09-01T13:15:00Z')).toBe('8 س و 15 د');
     expect(formatHours(null, '2026-09-01T13:15:00Z')).toBe('-');
+  });
+});
+
+describe('punchTimeInfo (offline punches, audit 14/10 BUG-001)', () => {
+  const t = '2026-10-15T06:30:00Z';
+  it('an online punch shows nothing', () => {
+    expect(punchTimeInfo(t, 'online', null)).toBeNull();
+    expect(punchTimeInfo(t, null, null)).toBeNull();
+  });
+  it('an offline punch with a changed phone clock shows the difference in minutes', () => {
+    expect(punchTimeInfo(t, 'offline_verified', '2026-10-15T04:30:00Z')).toEqual({ kind: 'offline', clockDiffMinutes: 120 });
+  });
+  it('flags punches that need review until they are reviewed', () => {
+    expect(punchTimeInfo(t, 'offline_review', t)?.kind).toBe('review');
+    expect(needsOfflineReview({ check_in_time_source: 'online', check_out_time_source: 'offline_review' })).toBe(true);
+    expect(needsOfflineReview({ check_in_time_source: 'offline_reviewed', check_out_time_source: 'manual' })).toBe(false);
   });
 });
