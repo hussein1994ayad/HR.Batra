@@ -7,6 +7,19 @@ export type BranchOption = Pick<Branch, 'id' | 'name'>;
 /** طريقة إنهاء خدمة الموظف: أرشفة، حذف مجدول بعد 30 يوماً، أو حذف فوري. */
 export type DeleteType = 'immediate' | 'archive' | 'scheduled';
 
+/** حدث بسجل الموظف (get_employee_history): باشر، انتقل، ترك، رجع. */
+export interface EmployeeHistoryEvent {
+  date: string;
+  kind: 'join' | 'transfer' | 'exit' | 'return';
+  text: string;
+}
+
+/** نتيجة «تفعيل الحساب» بتاريخ رجوع (reactivate_employee). */
+export interface ReactivateResult {
+  gap_days: number;
+  warnings: string[];
+}
+
 /** مسير واحد بمعاينة «إنهاء خدمات» (end_of_service_preview). */
 export interface EndOfServicePeriod {
   month: string;

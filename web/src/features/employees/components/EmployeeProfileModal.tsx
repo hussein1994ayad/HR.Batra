@@ -8,6 +8,7 @@ import { Avatar, Badge, Button, EmptyState, IconButton, Modal, type Tone } from 
 import { formatIQD } from '@/lib/format';
 import { useRole } from '@/lib/role';
 import { openStorageUrl, resolveStorageUrl } from '@/lib/signed-urls';
+import { EmployeeHistoryCard } from './EmployeeHistoryCard';
 import { LeaveBalanceCard } from './LeaveBalanceCard';
 
 const ROLE_META: Record<string, { label: string; tone: Tone }> = {
@@ -72,6 +73,8 @@ export function EmployeeProfileModal({ profileEmployee: emp, onClose, onEdit, on
       </div>
 
       <LeaveBalanceCard employeeId={emp.id} />
+
+      <EmployeeHistoryCard employeeId={emp.id} />
 
       <div className="flex items-center justify-between mb-3">
         <h4 className="text-sm font-bold text-white flex items-center gap-2">

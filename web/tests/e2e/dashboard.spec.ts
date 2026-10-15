@@ -435,6 +435,34 @@ test.describe('workflows', () => {
     expect(api.writes('employees', 'PATCH')).toHaveLength(0);
   });
 
+  test('restoring an employee asks for the return date, and the profile shows his history', async ({ page }) => {
+    const fixtures = defaultFixtures();
+    fixtures.archived_employees = [{ id: 'ar1', employee_id: 'e9', employee_code: 'EMP-109', full_name: 'حيدر كريم', archived_at: '2026-10-05T09:00:00Z',
+      archive_reason: 'استقالة', archive_type: 'archived', scheduled_deletion_date: null }];
+    const history = [
+      { date: '2026-01-01', kind: 'join', text: 'باشر بالعمل بفرع الكرادة' },
+      { date: '2026-09-01', kind: 'transfer', text: 'انتقل من فرع الكرادة إلى فرع المنصور' },
+    ];
+    const api = await mockSupabase(page, { fixtures, rpc: { reactivate_employee: { gap_days: 6, warnings: [] }, get_employee_history: history } });
+    await page.goto('/dashboard/employees');
+    await page.getByRole('tab', { name: /الأرشيف/ }).click();
+    await page.getByRole('button', { name: 'تفعيل', exact: true }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByLabel('تاريخ الرجوع للعمل')).toBeVisible();
+    await dialog.getByLabel('تاريخ الرجوع للعمل').fill('2026-10-12');
+    await dialog.getByRole('button', { name: 'استعادة' }).click();
+    await expect.poll(() => api.calls.filter((c) => c.table === 'rpc:reactivate_employee').length).toBe(1);
+    expect(api.calls.find((c) => c.table === 'rpc:reactivate_employee')?.body).toEqual({ p_employee_id: 'e9', p_return_date: '2026-10-12' });
+    await expect.poll(() => api.writes('archived_employees', 'DELETE').length).toBe(1);
+    await expect(page.getByText('6 يوم انقطاع ما تنحسب غياب')).toBeVisible();
+
+    await page.getByRole('tab', { name: /دليل الموظفين/ }).click();
+    await page.locator('tr', { hasText: 'زينب علي' }).getByRole('button').first().click();
+    const historyBox = page.getByTestId('employee-history');
+    await expect(historyBox).toContainText('انتقل من فرع الكرادة إلى فرع المنصور');
+    await expect(historyBox).toContainText('مباشرة');
+  });
+
   test('saves settings', async ({ page }) => {
     const api = await mockSupabase(page);
     await page.goto('/dashboard/settings');

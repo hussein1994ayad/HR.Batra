@@ -5,7 +5,7 @@ import {
   Archive, Building, Check, FolderOpen, Lock, Pencil, RotateCcw, Smartphone, Trash2, Unlock, UserMinus, UserPlus, Users, X,
 } from 'lucide-react';
 import type { Employee } from '@/lib/db-types';
-import { useConfirm } from '@/components/confirm';
+import { useConfirm, useConfirmDate } from '@/components/confirm';
 import {
   Avatar, Badge, Button, Card, CardHeader, DataTable, FilterSelect, IconButton, PageHeader, PageSkeleton, SearchInput,
   SegmentedTabs, StatTile, TableEmpty, cn, type Tone,
@@ -35,7 +35,8 @@ export default function EmployeesPage() {
   // مدير الفرع لا يرى الرواتب (الرواتب للأدمن فقط)
   const isAdmin = useRole() === 'admin';
   const showSalary = isAdmin;
-  const e = useEmployees(confirm);
+  const askDate = useConfirmDate();
+  const e = useEmployees(confirm, askDate);
   const [tab, setTab] = useState<'active' | 'archived'>('active');
   const [search, setSearch] = useState('');
   const [branchFilter, setBranchFilter] = useState('all');

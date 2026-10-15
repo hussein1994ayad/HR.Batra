@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/logic/employee_history.dart';
 import '../../../core/models/models.dart';
 import '../../../core/services/share_helper.dart';
 import '../../shared/ui/ui.dart';
@@ -21,6 +22,8 @@ Future<void> showEmployeeProfileSheet(
   VoidCallback? onEditDocuments,
   /// الراتب للأدمن بس (المدير ما يوصله من السيرفر أصلاً)
   bool showPay = true,
+  /// سجل الموظف (باشر، انتقل، ترك، رجع)؛ null أو قائمة فارغة = ما يظهر القسم
+  Future<List<EmployeeHistoryEvent>?>? history,
 }) {
   final name = emp.fullName ?? 'بدون اسم';
   final phone = emp.phone ?? '';
@@ -126,6 +129,28 @@ Future<void> showEmployeeProfileSheet(
               ],
             ),
           ),
+          if (history != null)
+            FutureBuilder<List<EmployeeHistoryEvent>?>(
+              future: history.catchError((Object _) => null),
+              builder: (_, snap) {
+                final events = snap.data;
+                if (events == null || events.isEmpty) return const SizedBox.shrink();
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const SectionHeader('سجل الموظف'),
+                    AppCard(
+                      padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg, vertical: AppSpace.sm),
+                      child: Column(
+                        children: [
+                          for (final ev in events) KeyValueRow(ev.kindLabel, '${Fmt.date(ev.date, withYear: true)} · ${ev.text}', icon: Icons.history_rounded),
+                        ],
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
           if (onEditDocuments != null) ...[
           SectionHeader(
             'المستمسكات (${docUrls.length})',

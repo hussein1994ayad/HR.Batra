@@ -7,6 +7,7 @@ import 'dart:io';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/logic/employee_history.dart';
 import '../../core/logic/end_of_service.dart';
 import '../../core/models/models.dart';
 import '../../core/services/image_compression_service.dart';
@@ -43,6 +44,33 @@ class EmployeeAdminRepository {
       'is_active': active,
       if (lastDay != null) 'termination_date': '${lastDay.year}-${lastDay.month.toString().padLeft(2, '0')}-${lastDay.day.toString().padLeft(2, '0')}',
     }).eq('id', employeeId).select('id'));
+  }
+
+  /// تفعيل حساب موظف ترك ورجع بتاريخ رجوعه (تدقيق 14/10 PAY-009): أيام الانقطاع ما تطلع غياب وتنقص من راتب ذاك المسير.
+  /// سيرفر قبل تحديث 20261021000000: تفعيل عادي (الرجوع = اليوم).
+  Future<ReactivateResult> reactivate(String employeeId, DateTime returnDate) async {
+    try {
+      final res = await _db.rpc<dynamic>('reactivate_employee', params: {'p_employee_id': employeeId, 'p_return_date': isoDate(returnDate)});
+      return res is Map ? ReactivateResult.fromMap(Map<String, dynamic>.from(res)) : const ReactivateResult();
+    } on PostgrestException catch (e) {
+      if (e.code != 'PGRST202') rethrow;
+      await setActive(employeeId, active: true);
+      return const ReactivateResult();
+    }
+  }
+
+  /// سجل الموظف بالتواريخ (باشر، انتقل، ترك، رجع). null = سيرفر قبل تحديث 20261021000000.
+  Future<List<EmployeeHistoryEvent>?> employeeHistory(String employeeId) async {
+    try {
+      final res = await _db.rpc<dynamic>('get_employee_history', params: {'p_employee_id': employeeId});
+      return [
+        for (final e in (res as List?) ?? const [])
+          if (e is Map) EmployeeHistoryEvent.fromMap(Map<String, dynamic>.from(e)),
+      ];
+    } on PostgrestException catch (e) {
+      if (e.code == 'PGRST202') return null;
+      rethrow;
+    }
   }
 
   /// معاينة «إنهاء الخدمات»: شلون ينحسب آخر راتب لو آخر يوم = [lastDay] (السيرفر يحسب ويتراجع، ما يتغير شي).

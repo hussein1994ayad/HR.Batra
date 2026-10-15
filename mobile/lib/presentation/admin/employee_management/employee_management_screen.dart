@@ -103,15 +103,43 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
       final ok = await showAppConfirm(
         context,
         title: 'تفعيل حساب ${emp.fullName}؟',
-        message: 'يرجع يقدر يدخل ويبصم عادي.',
+        message: 'يرجع يقدر يدخل ويبصم عادي. بعدها تختار تاريخ رجوعه للعمل: الأيام من آخر يوم عمل لحد رجوعه ما تطلع غياب، وتنقص من راتب ذاك الشهر.',
         confirmLabel: 'تفعيل',
       );
       if (!ok || !mounted) return;
+      // تاريخ الرجوع (تدقيق 14/10 PAY-009): الافتراضي اليوم، وما يكون بالمستقبل
+      final now = DateTime.now();
+      final returnDate = await showDatePicker(
+        context: context,
+        initialDate: now,
+        firstDate: now.subtract(const Duration(days: 120)),
+        lastDate: now,
+        helpText: 'تاريخ الرجوع للعمل',
+      );
+      if (returnDate == null || !mounted) return;
+      try {
+        setState(() => _isLoading = true);
+        final result = await _repo.reactivate(emp.id, returnDate);
+        if (mounted) {
+          AppSnack.show(context, result.message(emp.fullName ?? 'الموظف'), tone: AppTone.success);
+          for (final w in result.warnings) {
+            AppSnack.show(context, w, tone: AppTone.warning);
+          }
+        }
+        unawaited(_loadEmployees());
+      } catch (e) {
+        appLog('Error reactivating: $e');
+        if (mounted) {
+          AppSnack.error(context, 'تعذّر التفعيل: ${errorText(e)}');
+          setState(() => _isLoading = false);
+        }
+      }
+      return;
     }
     try {
       setState(() => _isLoading = true);
-      await _repo.setActive(emp.id, active: !isActive, lastDay: lastDay);
-      if (mounted) AppSnack.show(context, isActive ? 'انتهت خدمات ${emp.fullName}' : 'فُعّل الحساب', tone: isActive ? AppTone.warning : AppTone.success);
+      await _repo.setActive(emp.id, active: false, lastDay: lastDay);
+      if (mounted) AppSnack.show(context, 'انتهت خدمات ${emp.fullName}', tone: AppTone.warning);
       unawaited(_loadEmployees());
     } catch (e) {
       appLog('Error toggling status: $e');
@@ -204,6 +232,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
         emp,
         onEditDocuments: _isAdmin ? () => _editDocuments(emp) : null,
         showPay: _isAdmin,
+        history: _repo.employeeHistory(emp.id),
       );
 
 
