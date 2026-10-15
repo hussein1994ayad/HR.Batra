@@ -6,7 +6,7 @@ import { EMPLOYEE_COLUMNS, fetchEmployeePay } from '@/lib/employeePay';
 import type { ArchivedEmployee, Department, Employee, EmployeeDevice } from '@/lib/db-types';
 import { documentList, documentPathFromUrl, salaryUpdateFields } from './logic';
 import { currentPayrollMonth } from '@/features/payroll/period';
-import type { BranchOption, DeleteType, EmployeeFormValues } from './types';
+import type { BranchOption, DeleteType, EmployeeFormValues, EndOfServicePreview } from './types';
 
 const DOCS_BUCKET = 'employee-documents';
 
@@ -261,6 +261,19 @@ export async function destroyArchivedEmployee(record: ArchivedEmployee) {
     .update({ archive_type: 'permanent', notes: 'تم الإتلاف النهائي اليدوي للبيانات والحساب من قبل المسؤول.' })
     .eq('id', record.id);
   if (error) throw error;
+}
+
+/**
+ * معاينة «إنهاء خدمات»: شلون ينحسب آخر راتب لو آخر يوم = lastDay (أيام الدوام بس، والخصومات اللي قررتها الإدارة).
+ * السيرفر يحسبها ويتراجع، فما يتغير شي. null = سيرفر قبل تحديث 20261020000000.
+ */
+export async function fetchEndOfServicePreview(employeeId: string, lastDay: string): Promise<EndOfServicePreview | null> {
+  const { data, error } = await supabase.rpc('end_of_service_preview', { p_employee_id: employeeId, p_last_day: lastDay });
+  if (error) {
+    if (error.code === 'PGRST202') return null;
+    throw error;
+  }
+  return data as EndOfServicePreview;
 }
 
 /** آخر يوم بصم بيه الموظف (اقتراح «آخر يوم عمل» عند التعطيل). */

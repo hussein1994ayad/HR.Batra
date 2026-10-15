@@ -93,6 +93,10 @@ export interface RunRow {
   scheduled_days?: number;
   /** عنده جدول دوام (بدونه ما ينحسب تأخير ولا خروج مبكر) */
   has_schedule?: boolean;
+  /** شلون انحسب الأساسي: full | joined (باشر بنص المسير) | end_of_service (أيام الدوام بس) | none */
+  basic_basis?: string;
+  /** شرح حساب الأساسي بكلام بسيط («باشر …» / «نهاية خدمة: N يوم دوام …») */
+  basic_note?: string;
   slip: null | {
     id: string;
     basic_salary: number;
@@ -263,6 +267,9 @@ export function buildPayrollRows({ run, events, overrides, pendingLeaveEmployeeI
       loanItems: slip ? [] : (r.loan_items ?? []),
       attendedDays: n(r.attended_days),
       hasSchedule: r.has_schedule ?? true,
+      // شرح الأساسي (للكشف المعتمد: بس إذا رقمه نفس المحسوب هسه)
+      basicBasis: r.basic_basis ?? null,
+      basicNote: slip && n(slip.basic_salary) !== n(r.basic) ? null : (r.basic_note ?? null),
       scheduledDays: n(r.scheduled_days),
 
       events: empEvents,
@@ -319,7 +326,16 @@ export function attentionReasons(row: PayrollRow): AttentionReason[] {
   if (row.loanBalanceAfterExit > 0) {
     out.push({ kind: 'left_with_loan', text: `ترك العمل وباقي عليه سلفة ${row.loanBalanceAfterExit.toLocaleString('en-US')} د.ع` });
   }
-  if (row.isNetNegative) out.push({ kind: 'negative', text: 'الصافي بالسالب: الخصومات والسلف أكثر من الراتب' });
+  if (row.isNetNegative) {
+    // نفس الاعتماد بالسيرفر: القسط ينقص بقد الراتب، وإذا الخصومات بعدها أكثر = صافي صفر والزايد خارج النظام
+    const excess = Math.max(-(row.netSalary + row.loanDeduction), 0);
+    out.push({
+      kind: 'negative',
+      text: excess > 0
+        ? `الخصومات أكثر من الراتب بـ ${excess.toLocaleString('en-US')} د.ع: ينعتمد بصافي صفر${row.loanDeduction > 0 ? ' (وقسط السلفة يتأجل لآخرها)' : ''}، والزايد تسويه ويا الموظف خارج النظام`
+        : 'الراتب ما يكفي لقسط السلفة كامل: ينخصم بقد الراتب والباقي ينضاف بآخر السلفة',
+    });
+  }
   const missing = [
     row.monthlySalary <= 0 && 'الراتب صفر',
     !row.branch_id && 'بدون فرع',
@@ -334,7 +350,8 @@ export function attentionReasons(row: PayrollRow): AttentionReason[] {
 export function sumPayroll(rows: PayrollRow[]) {
   const sum = (pick: (r: PayrollRow) => number) => rows.reduce((acc, r) => acc + pick(r), 0);
   return {
-    net: sum(r => r.netSalary),
+    // الصافي السالب ينعتمد صفر (الزايد يتسوى خارج النظام)
+    net: sum(r => Math.max(r.netSalary, 0)),
     basic: sum(r => r.basic),
     bonuses: sum(r => r.totalBonuses),
     attendanceDeductions: sum(r => r.totalAttendanceDeductions),

@@ -335,7 +335,7 @@ test.describe('workflows', () => {
     // صفحة الموظفين مسموحة، لكن بدون زر الحذف/الأرشفة
     await page.goto('/dashboard/employees');
     await expect(page.getByRole('button', { name: 'الملف والوثائق' }).first()).toBeVisible();
-    await expect(page.getByRole('button', { name: 'حذف أو أرشفة الموظف' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'إنهاء خدمات الموظف' })).toHaveCount(0);
   });
 
   test('cleans a closed payroll period: preview with counts, blocked attendance, confirm, one server call', async ({ page }) => {
@@ -408,6 +408,31 @@ test.describe('workflows', () => {
     await expect(page.getByRole('dialog')).toBeVisible();
     await expect(page.getByText('حدث خطأ غير متوقع')).toHaveCount(0);
     expect(errors).toEqual([]);
+  });
+
+  test('ending a service shows how the last salary is computed before anything is saved', async ({ page }) => {
+    const summary = (basic: number, note: string) => ({ basic, basic_note: note, earnings: 0, deductions: 0, loans: 0, net: basic });
+    const preview = {
+      last_day: '2026-10-28', total_net: 853333, loans_left_after: 150000,
+      periods: [
+        { month: '2026-10', start_date: '2026-10-01', cutoff_date: '2026-10-26', can_approve_now: false, expected_net: 800000, loan_cut: 0, excess_deductions: 0,
+          summary: summary(800000, 'راتب المسير كامل: 800,000 د.ع') },
+        { month: '2026-11', start_date: '2026-10-27', cutoff_date: '2026-11-26', can_approve_now: false, expected_net: 53333, loan_cut: 0, excess_deductions: 0,
+          summary: summary(53333, 'نهاية خدمة: 2 يوم دوام من 27/10 لحد 28/10 (الجمع والعطل الرسمية ما تنحسب) × أجر اليوم 26,667 = 53,333 د.ع') },
+      ],
+    };
+    const api = await mockSupabase(page, { rpc: { end_of_service_preview: preview } });
+    await page.goto('/dashboard/employees');
+    await page.locator('tr', { hasText: 'زينب علي' }).getByRole('button', { name: 'إنهاء خدمات الموظف' }).click();
+    const box = page.getByTestId('end-of-service-preview');
+    await expect(box).toContainText('الشهر الحادي عشر 2026');
+    await expect(box).toContainText('نهاية خدمة: 2 يوم دوام');
+    await expect(box).toContainText('المجموع المستحق: 853,333 د.ع');
+    await expect(box).toContainText('تسويها ويا الموظف خارج النظام');
+    const call = api.calls.find((c) => c.table === 'rpc:end_of_service_preview');
+    expect(call?.body).toMatchObject({ p_last_day: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) });
+    // المعاينة وحدها ما تحفظ شي: لا آخر يوم ولا تعطيل
+    expect(api.writes('employees', 'PATCH')).toHaveLength(0);
   });
 
   test('saves settings', async ({ page }) => {

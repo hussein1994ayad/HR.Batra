@@ -78,7 +78,9 @@ export function AttendanceBreakdownModal({ row, startDate, endDate, locked, acti
         <p>
           أجر الدقيقة = أجر اليوم ÷ {row.shiftMinutes} دقيقة دوام = <b>{row.minuteRate.toLocaleString('en-US', { maximumFractionDigits: 2 })} د.ع</b>
         </p>
-        {row.employedDays < row.periodDays && (
+        {row.basicNote && row.basicBasis && row.basicBasis !== 'full' ? (
+          <p>الأساسي: {row.basicNote}</p>
+        ) : row.employedDays < row.periodDays && (
           <p>الأساسي = {row.employedDays} يوم خدمة × أجر اليوم = <b>{formatIQD(row.basic)}</b></p>
         )}
         {row.absenceDeduction > 0 && <p>خصم الغياب = {row.absencesCount} يوم = <b>{formatIQD(row.absenceDeduction)}</b></p>}

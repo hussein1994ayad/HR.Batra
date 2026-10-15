@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Archive, Building, Check, FolderOpen, Lock, Pencil, RotateCcw, Smartphone, Trash2, Unlock, UserPlus, Users, X,
+  Archive, Building, Check, FolderOpen, Lock, Pencil, RotateCcw, Smartphone, Trash2, Unlock, UserMinus, UserPlus, Users, X,
 } from 'lucide-react';
 import type { Employee } from '@/lib/db-types';
 import { useConfirm } from '@/components/confirm';
@@ -203,7 +203,7 @@ export default function EmployeesPage() {
                           )}
                           {/* الحذف والأرشفة للأدمن فقط؛ مدير الفرع لا يملك هذا الحق */}
                           {isAdmin && (
-                            <IconButton icon={Trash2} label="حذف أو أرشفة الموظف" tone="rose" onClick={() => setDeleting(emp)} />
+                            <IconButton icon={UserMinus} label="إنهاء خدمات الموظف" tone="rose" onClick={() => setDeleting(emp)} />
                           )}
                         </div>
                       </td>

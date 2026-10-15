@@ -2,7 +2,7 @@
 // HR Pro — إدارة الموظفين
 // =========================================================================
 // القائمة مع بحث عربي وفلتر الحالة، ملف كل موظف، إضافة موظف (حساب دخول)،
-// تعديل المستمسكات، تفعيل/تعطيل الحساب، وفك ربط الجهاز.
+// تعديل المستمسكات، إنهاء الخدمات (مع معاينة آخر راتب) أو التفعيل، وفك ربط الجهاز.
 // الأجزاء: employee_management/{employee_form_sheet, employee_documents,
 // employee_profile_sheet}.dart
 // =========================================================================
@@ -15,6 +15,7 @@ import '../../../core/models/models.dart';
 import '../../../core/services/supabase_service.dart';
 import '../../../core/utils/app_log.dart';
 import '../../../core/utils/arabic_format.dart';
+import '../../../core/utils/error_text.dart';
 import '../../../data/repositories/employee_admin_repository.dart';
 import '../../../data/repositories/role_repository.dart';
 import '../../shared/ui/ui.dart';
@@ -92,38 +93,25 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
 
   Future<void> _toggleEmployeeStatus(ManagedEmployee emp) async {
     final isActive = emp.isActive;
-    final ok = await showAppConfirm(
-      context,
-      title: isActive ? 'تعطيل حساب ${emp.fullName}؟' : 'تفعيل حساب ${emp.fullName}؟',
-      message: isActive ? 'ما يقدر يسجل دخول أو يبصم حتى تفعّله مرة ثانية.' : 'يرجع يقدر يدخل ويبصم عادي.',
-      confirmLabel: isActive ? 'تعطيل' : 'تفعيل',
-      destructive: isActive,
-    );
-    if (!ok || !mounted) return;
-    // آخر يوم عمل فعلي: يُحسب راتب المسير الأخير حتى هذا اليوم
+    // إنهاء الخدمات: آخر يوم عمل فعلي، وبعدها معاينة آخر راتب قبل التأكيد (أيام الدوام بس)
     DateTime? lastDay;
     if (isActive) {
-      // الراتب ينحسب للأيام اللي اشتغلها بالضبط: المقترح آخر يوم بصم بيه
-      DateTime? lastPunch;
-      try {
-        lastPunch = await _repo.lastPunchDate(emp.id);
-      } catch (_) {}
-      if (!mounted) return;
-      final now = DateTime.now();
-      final suggested = lastPunch != null && lastPunch.isBefore(now) && now.difference(lastPunch).inDays < 120 ? lastPunch : now;
-      lastDay = await showDatePicker(
-        context: context,
-        initialDate: suggested,
-        firstDate: DateTime.now().subtract(const Duration(days: 120)),
-        lastDate: DateTime.now().add(const Duration(days: 60)),
-        helpText: 'آخر يوم عمل',
-      );
+      lastDay = await _pickLastDay(emp);
       if (lastDay == null || !mounted) return;
+      if (!await _confirmEndOfService(emp, lastDay) || !mounted) return;
+    } else {
+      final ok = await showAppConfirm(
+        context,
+        title: 'تفعيل حساب ${emp.fullName}؟',
+        message: 'يرجع يقدر يدخل ويبصم عادي.',
+        confirmLabel: 'تفعيل',
+      );
+      if (!ok || !mounted) return;
     }
     try {
       setState(() => _isLoading = true);
       await _repo.setActive(emp.id, active: !isActive, lastDay: lastDay);
-      if (mounted) AppSnack.show(context, isActive ? 'عُطّل الحساب' : 'فُعّل الحساب', tone: isActive ? AppTone.warning : AppTone.success);
+      if (mounted) AppSnack.show(context, isActive ? 'انتهت خدمات ${emp.fullName}' : 'فُعّل الحساب', tone: isActive ? AppTone.warning : AppTone.success);
       unawaited(_loadEmployees());
     } catch (e) {
       appLog('Error toggling status: $e');
@@ -132,6 +120,43 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
         setState(() => _isLoading = false);
       }
     }
+  }
+
+  /// آخر يوم عمل: المقترح آخر يوم بصم بيه (الراتب ينحسب لأيام الدوام لحد هذا اليوم).
+  Future<DateTime?> _pickLastDay(ManagedEmployee emp) async {
+    DateTime? lastPunch;
+    try {
+      lastPunch = await _repo.lastPunchDate(emp.id);
+    } catch (_) {}
+    if (!mounted) return null;
+    final now = DateTime.now();
+    final suggested = lastPunch != null && lastPunch.isBefore(now) && now.difference(lastPunch).inDays < 120 ? lastPunch : now;
+    return showDatePicker(
+      context: context,
+      initialDate: suggested,
+      firstDate: DateTime.now().subtract(const Duration(days: 120)),
+      lastDate: DateTime.now().add(const Duration(days: 60)),
+      helpText: 'آخر يوم عمل',
+    );
+  }
+
+  /// التأكيد ويا معاينة آخر راتب من السيرفر (ما ينحفظ شي قبل الضغط على «إنهاء الخدمات»).
+  Future<bool> _confirmEndOfService(ManagedEmployee emp, DateTime lastDay) async {
+    String details;
+    try {
+      final preview = await _repo.endOfServicePreview(emp.id, lastDay);
+      details = preview?.describe() ?? 'آخر راتب ينحسب لأيام الدوام لحد هذا اليوم.';
+    } catch (e) {
+      details = 'تعذّر حساب معاينة الراتب: ${errorText(e)}';
+    }
+    if (!mounted) return false;
+    return showAppConfirm(
+      context,
+      title: 'إنهاء خدمات ${emp.fullName}؟',
+      message: 'آخر يوم عمل: ${Fmt.dateWithDay(lastDay)}. بعده ما يقدر يدخل أو يبصم.\n\n$details',
+      confirmLabel: 'إنهاء الخدمات',
+      destructive: true,
+    );
   }
 
   Future<void> _unbindDevice(ManagedEmployee emp) async {
@@ -330,7 +355,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                   value: 'toggle',
                   child: ListTile(
                     leading: Icon(isActive ? Icons.block_rounded : Icons.check_circle_rounded, color: isActive ? AppColors.danger : AppColors.success),
-                    title: Text(isActive ? 'تعطيل الحساب' : 'تفعيل الحساب'),
+                    title: Text(isActive ? 'إنهاء الخدمات' : 'تفعيل الحساب'),
                   ),
                 ),
             ],

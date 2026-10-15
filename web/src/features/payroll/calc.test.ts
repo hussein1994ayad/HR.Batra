@@ -117,6 +117,23 @@ describe('attention before approving', () => {
     expect(data?.text).toContain('بدون جدول');
   });
 
+  it('a negative net says what the approval will do (stage 3, PAY-006)', () => {
+    const loanOnly = attentionReasons(rowOf({ basic: 100000, loans: 500000 })).find((a) => a.kind === 'negative');
+    expect(loanOnly?.text).toContain('الباقي ينضاف بآخر السلفة');
+    const excess = attentionReasons(rowOf({ basic: 100000, earnings: 0, deductions: 300000, attendance_deductions: 0, loans: 50000 })).find((a) => a.kind === 'negative');
+    expect(excess?.text).toContain('200,000');
+    expect(excess?.text).toContain('خارج النظام');
+    expect(sumPayroll([rowOf({ basic: 100000, earnings: 0, deductions: 300000, attendance_deductions: 0 })]).net).toBe(0);
+  });
+
+  it('the basic salary explanation comes from the server', () => {
+    const r = rowOf({ basic: 360000, basic_basis: 'end_of_service', basic_note: 'نهاية خدمة: 12 يوم دوام' });
+    expect(r.basicNote).toBe('نهاية خدمة: 12 يوم دوام');
+    expect(r.basicBasis).toBe('end_of_service');
+    const old = rowOf({ basic: 360000, basic_note: 'x', slip: { id: 's', basic_salary: 400000, allowances: 0, deductions: 0, loans_deduction: 0, net_salary: 400000, legacy: false } });
+    expect(old.basicNote).toBeNull();
+  });
+
   it('this month loan installments come through for the details', () => {
     const r = rowOf({ loan_items: [{ installment_id: 'i', loan_id: 'l', loan_amount: 500000, due_date: '2026-09-26', amount: 50000 }] });
     expect(r.loanItems).toHaveLength(1);

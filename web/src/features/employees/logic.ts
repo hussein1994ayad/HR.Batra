@@ -5,7 +5,47 @@
 import type { Department, Employee } from '@/lib/db-types';
 import { getLocalDateStr } from '@/lib/dates';
 import { payrollMonthOfDate } from '@/features/payroll/period';
-import type { BranchOption, EmployeeFormValues } from './types';
+import { formatIQD } from '@/lib/format';
+import { arabicDate } from '@/lib/dates';
+import { payrollMonthName } from '@/features/payroll/period';
+import type { BranchOption, EmployeeFormValues, EndOfServicePreview } from './types';
+
+/** مسير بمعاينة «إنهاء خدمات» بأسطر بسيطة: شلون انحسب، الخصومات، السلفة، والصافي. */
+export interface EndOfServiceBlock {
+  title: string;
+  lines: string[];
+  net: string;
+  when: string;
+}
+
+export function endOfServiceBlocks(preview: EndOfServicePreview): EndOfServiceBlock[] {
+  return preview.periods.map((p) => {
+    const s = p.summary;
+    const lines: string[] = [];
+    lines.push(s.basic_note || `الأساسي ${formatIQD(s.basic)}`);
+    if (Number(s.earnings) > 0) lines.push(`مكافآت وإضافي: +${formatIQD(s.earnings)}`);
+    if (Number(s.deductions) > 0) lines.push(`خصومات قررتها الإدارة (غياب/تأخير/إجازة بدون راتب): -${formatIQD(s.deductions)}`);
+    if (Number(s.loans) > 0) {
+      lines.push(Number(p.loan_cut) > 0
+        ? `قسط سلفة ${formatIQD(s.loans)}: ينخصم منه ${formatIQD(Number(s.loans) - Number(p.loan_cut))} بس (الراتب ما يكفي)`
+        : `قسط سلفة: -${formatIQD(s.loans)}`);
+    }
+    if (Number(p.excess_deductions) > 0) {
+      lines.push(`خصومات أكثر من الراتب بـ ${formatIQD(p.excess_deductions)}: ما تنخصم وتتسوى ويا الموظف خارج النظام`);
+    }
+    if (Number(s.pending_count) > 0) {
+      lines.push(`${s.pending_count} حركة تنتظر قرارك (غياب/تأخير): الأرقام تتغير بعد القرار`);
+    }
+    return {
+      title: `مسير ${payrollMonthName(p.month)} (${arabicDate(p.start_date)} - ${arabicDate(p.cutoff_date)})`,
+      lines,
+      net: formatIQD(p.expected_net),
+      when: p.can_approve_now
+        ? 'تكدر تعتمده هسه من صفحة الرواتب'
+        : `تعتمده من صفحة الرواتب بعد ${arabicDate(p.cutoff_date < preview.last_day ? p.cutoff_date : preview.last_day)}`,
+    };
+  });
+}
 
 /** روابط مستمسكات الموظف كقائمة دائماً: أي شكل ثاني (كائن `{}`، null) = قائمة فارغة بدل ما توكف الصفحة. */
 export function documentList(value: unknown): string[] {
