@@ -3,25 +3,26 @@
 const String kTestUserId = '00000000-0000-4000-8000-000000000001';
 const String kTestBranchId = '00000000-0000-4000-8000-0000000000b1';
 
-String _today() {
-  final now = DateTime.now();
-  return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-}
+// «الآن» بتوقيت الشركة (بغداد) مهما كان توقيت الجهاز اللي يشغّل الفحص: التطبيق يحسب «اليوم» ببغداد
+// (companyDateStr)، وأجهزة GitHub على UTC. بدونه بين 00:00 و03:00 بغداد بصمة «اليوم» تصير أمس واللقطات تختلف.
+DateTime _companyNow() => DateTime.now().toUtc().add(const Duration(hours: 3));
 
-String _daysAgo(int d) {
-  final t = DateTime.now().subtract(Duration(days: d));
-  return '${t.year}-${t.month.toString().padLeft(2, '0')}-${t.day.toString().padLeft(2, '0')}';
-}
+String _ymd(DateTime t) => '${t.year}-${t.month.toString().padLeft(2, '0')}-${t.day.toString().padLeft(2, '0')}';
+
+String _today() => _ymd(_companyNow());
+
+String _daysAgo(int d) => _ymd(_companyNow().subtract(Duration(days: d)));
 
 String _monthKey(int monthsAgo) {
-  final n = DateTime.now();
+  final n = _companyNow();
   final d = DateTime(n.year, n.month - monthsAgo);
   return '${d.year}-${d.month.toString().padLeft(2, '0')}';
 }
 
+/// وقت [hour]:[minute] ببغداد قبل [daysAgo] يوم (ISO بـ UTC).
 String _iso(int daysAgo, int hour, int minute) {
-  final t = DateTime.now().subtract(Duration(days: daysAgo));
-  return DateTime(t.year, t.month, t.day, hour, minute).toUtc().toIso8601String();
+  final t = _companyNow().subtract(Duration(days: daysAgo));
+  return DateTime.utc(t.year, t.month, t.day, hour, minute).subtract(const Duration(hours: 3)).toIso8601String();
 }
 
 const Map<String, dynamic> _branch = {
@@ -120,7 +121,7 @@ Map<String, List<Map<String, dynamic>>> buildFixtures({String role = 'admin'}) {
       {'id': 'lr2', 'employee_id': '00000000-0000-4000-8000-000000000002', 'leave_type': 'sick', 'start_date': _daysAgo(10), 'end_date': _daysAgo(9), 'reason': 'مراجعة طبية', 'status': 'approved', 'is_hourly': false, 'is_paid': true, 'employees': {'full_name': 'علي كريم'}, 'created_at': _iso(11, 10, 0)},
     ],
     'leave_balances': [
-      {'employee_id': kTestUserId, 'year': DateTime.now().year, 'annual_total': 20, 'annual_used': 6, 'sick_total': 10, 'sick_used': 1},
+      {'employee_id': kTestUserId, 'year': _companyNow().year, 'annual_total': 20, 'annual_used': 6, 'sick_total': 10, 'sick_used': 1},
     ],
     'loans': [
       {
