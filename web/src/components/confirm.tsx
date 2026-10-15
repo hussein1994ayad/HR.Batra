@@ -3,6 +3,7 @@
 // Promise-based confirmation dialog that replaces the browser's confirm().
 // Usage: const confirm = useConfirm(); if (await confirm({ title, message })) { ... }
 // With a note: const ask = useConfirmNote(); const note = await ask({ title, note: { presets } }); // null = cancelled
+// With a date: const ask = useConfirmDate(); const day = await ask({ title, date: { label, initial } }); // null = cancelled
 
 import React, { createContext, useCallback, useContext, useRef, useState } from 'react';
 import { AlertTriangle, type LucideIcon } from 'lucide-react';
@@ -19,11 +20,14 @@ export interface ConfirmOptions {
   note?: { presets?: readonly string[]; placeholder?: string; initial?: string };
   /** حقل مبلغ قابل للتعديل (مثل مبلغ الخصم المحسوب)؛ يرجع بـ useConfirmAnswer. */
   amount?: { label: string; initial: number; hint?: string };
+  /** حقل تاريخ (YYYY-MM-DD) مثل «تاريخ الرجوع للعمل»؛ يرجع بـ useConfirmDate. */
+  date?: { label: string; initial: string; min?: string; max?: string; hint?: string };
 }
 
 type ConfirmFn = (options: ConfirmOptions) => Promise<boolean>;
 type ConfirmNoteFn = (options: ConfirmOptions) => Promise<string | null>;
-type Answer = { ok: boolean; note: string; amount: number };
+type ConfirmDateFn = (options: ConfirmOptions) => Promise<string | null>;
+type Answer = { ok: boolean; note: string; amount: number; date: string };
 type ConfirmAnswerFn = (options: ConfirmOptions) => Promise<{ note: string; amount: number } | null>;
 
 const ConfirmContext = createContext<((options: ConfirmOptions) => Promise<Answer>) | null>(null);
@@ -38,20 +42,22 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
   const [options, setOptions] = useState<ConfirmOptions | null>(null);
   const [note, setNote] = useState('');
   const [amount, setAmount] = useState(0);
+  const [date, setDate] = useState('');
   const resolver = useRef<((value: Answer) => void) | null>(null);
 
   const ask = useCallback((opts: ConfirmOptions) => {
-    resolver.current?.({ ok: false, note: '', amount: 0 });
+    resolver.current?.({ ok: false, note: '', amount: 0, date: '' });
     setOptions(opts);
     setNote(opts.note?.initial ?? '');
     setAmount(Math.round(opts.amount?.initial ?? 0));
+    setDate(opts.date?.initial ?? '');
     return new Promise<Answer>((resolve) => {
       resolver.current = resolve;
     });
   }, []);
 
   const settle = (ok: boolean) => {
-    resolver.current?.({ ok, note: note.trim(), amount });
+    resolver.current?.({ ok, note: note.trim(), amount, date });
     resolver.current = null;
     setOptions(null);
   };
@@ -77,6 +83,14 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
               {options.amount.hint && <span className="block text-[10px] text-slate-500 mt-1">{options.amount.hint}</span>}
             </label>
           )}
+          {options.date && (
+            <label className="block mt-4">
+              <span className="block text-[11px] font-bold text-slate-300 mb-1.5">{options.date.label}</span>
+              <Input type="date" value={date} min={options.date.min} max={options.date.max} onChange={(e) => setDate(e.target.value)}
+                aria-label={options.date.label} dir="ltr" className="h-9 text-sm" />
+              {options.date.hint && <span className="block text-[10px] text-slate-500 mt-1">{options.date.hint}</span>}
+            </label>
+          )}
           {options.note && (
             <div className="mt-4 space-y-2">
               <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder={options.note.placeholder ?? 'ملاحظة (اختياري)'}
@@ -96,7 +110,7 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
             </div>
           )}
           <div className="flex items-center gap-2 mt-6">
-            <Button variant={t.button} block onClick={() => settle(true)}>
+            <Button variant={t.button} block disabled={!!options.date && !date} onClick={() => settle(true)}>
               {options.confirmLabel ?? 'تأكيد'}
             </Button>
             <Button variant="secondary" block autoFocus onClick={() => settle(false)}>
@@ -128,6 +142,18 @@ export function useConfirm(): ConfirmFn {
     return async (opts) => window.confirm(opts.title);
   }
   return async (opts) => (await ctx(opts)).ok;
+}
+
+/** تأكيد مع تاريخ: يرجّع التاريخ المختار (YYYY-MM-DD) عند التأكيد، و null عند الإلغاء. */
+export function useConfirmDate(): ConfirmDateFn {
+  const ctx = useContext(ConfirmContext);
+  if (!ctx) {
+    return async (opts) => (window.confirm(opts.title) ? opts.date?.initial ?? '' : null);
+  }
+  return async (opts) => {
+    const a = await ctx(opts);
+    return a.ok ? a.date : null;
+  };
 }
 
 /** تأكيد مع ملاحظة: يرجّع نص الملاحظة (قد يكون فارغاً) عند التأكيد، و null عند الإلغاء. */

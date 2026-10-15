@@ -6,7 +6,7 @@ import { EMPLOYEE_COLUMNS, fetchEmployeePay } from '@/lib/employeePay';
 import type { ArchivedEmployee, Department, Employee, EmployeeDevice } from '@/lib/db-types';
 import { documentList, documentPathFromUrl, salaryUpdateFields } from './logic';
 import { currentPayrollMonth } from '@/features/payroll/period';
-import type { BranchOption, DeleteType, EmployeeFormValues, EndOfServicePreview } from './types';
+import type { BranchOption, DeleteType, EmployeeFormValues, EmployeeHistoryEvent, EndOfServicePreview, ReactivateResult } from './types';
 
 const DOCS_BUCKET = 'employee-documents';
 
@@ -246,11 +246,40 @@ export async function archiveOrDeleteEmployee(employee: Employee, deleteType: De
   if (error) throw error;
 }
 
-export async function restoreArchivedEmployee(record: ArchivedEmployee) {
-  const { error: updErr } = await supabase.from('employees').update({ is_active: true, termination_date: null }).eq('id', record.employee_id);
+/**
+ * تفعيل حساب موظف ترك ورجع بتاريخ رجوعه (تدقيق 14/10 PAY-009): أيام الانقطاع ما تطلع غياب وتنقص من راتب ذاك المسير.
+ * سيرفر قبل تحديث 20261021000000: تفعيل عادي (الرجوع = اليوم).
+ */
+export async function reactivateEmployee(employeeId: string, returnDate: string): Promise<ReactivateResult> {
+  const { data, error } = await supabase.rpc('reactivate_employee', { p_employee_id: employeeId, p_return_date: returnDate });
+  if (!error) return data as ReactivateResult;
+  if (error.code !== 'PGRST202') throw error;
+  const { error: updErr } = await supabase.from('employees').update({ is_active: true, termination_date: null }).eq('id', employeeId);
   if (updErr) throw updErr;
+  return { gap_days: 0, warnings: [] };
+}
+
+export async function restoreArchivedEmployee(record: ArchivedEmployee, returnDate: string): Promise<ReactivateResult> {
+  let result: ReactivateResult = { gap_days: 0, warnings: [] };
+  try {
+    result = await reactivateEmployee(record.employee_id, returnDate);
+  } catch (err) {
+    // سجل أرشيف لحساب مفعّل أصلاً: بس ينشال من الأرشيف
+    if (!String((err as { message?: string })?.message ?? '').includes('مفعّل أصلاً')) throw err;
+  }
   const { error } = await supabase.from('archived_employees').delete().eq('id', record.id);
   if (error) throw error;
+  return result;
+}
+
+/** سجل الموظف بالتواريخ (باشر، انتقل، ترك، رجع). null = سيرفر قبل تحديث 20261021000000. */
+export async function fetchEmployeeHistory(employeeId: string): Promise<EmployeeHistoryEvent[] | null> {
+  const { data, error } = await supabase.rpc('get_employee_history', { p_employee_id: employeeId });
+  if (error) {
+    if (error.code === 'PGRST202') return null;
+    throw error;
+  }
+  return (data ?? []) as EmployeeHistoryEvent[];
 }
 
 export async function destroyArchivedEmployee(record: ArchivedEmployee) {

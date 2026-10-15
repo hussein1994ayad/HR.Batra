@@ -12,6 +12,7 @@ import {
   fetchEmployeesDataset, rejectDeviceRequest, resetDeviceBinding, restoreArchivedEmployee, setDeviceLock,
   updateEmployee, type EmployeesDataset,
 } from './api';
+import { getLocalDateStr } from '@/lib/dates';
 import type { DeleteType, EmployeeFormValues } from './types';
 
 const CACHE_KEY = 'batra_cache_employees';
@@ -25,8 +26,9 @@ const celebrate = (colors?: string[]) => confetti({ particleCount: 60, spread: 4
 
 /** حالة صفحة الموظفين: البيانات، الأرشيف، وكل الإجراءات. */
 type Ask = (options: ConfirmOptions) => Promise<boolean>;
+type AskDate = (options: ConfirmOptions) => Promise<string | null>;
 
-export function useEmployees(ask: Ask) {
+export function useEmployees(ask: Ask, askDate: AskDate) {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<EmployeesDataset>(EMPTY);
   const [archivedEmployees, setArchivedEmployees] = useState<ArchivedEmployee[]>([]);
@@ -161,18 +163,29 @@ export function useEmployees(ask: Ask) {
     }, 'فشل إتمام العملية');
 
   const restoreArchived = async (record: ArchivedEmployee) => {
-    const ok = await ask({
+    // رجوع للعمل بتاريخه (تدقيق 14/10 PAY-009): الأيام بين آخر يوم عمل ويوم الرجوع ما تطلع غياب
+    const today = getLocalDateStr();
+    const returnDate = await askDate({
       title: 'استعادة الموظف؟',
-      message: `سيتم إعادة تفعيل حساب ${record.full_name} والسماح له بتسجيل الدوام مجدداً.`,
+      message: `يرجع حساب ${record.full_name} يشتغل ويكدر يبصم.`,
       confirmLabel: 'استعادة',
       tone: 'primary',
+      date: {
+        label: 'تاريخ الرجوع للعمل',
+        initial: today,
+        max: today,
+        hint: 'الأيام من آخر يوم عمل لحد هذا اليوم ما تطلع غياب، وتنقص من راتب ذاك الشهر مثل الأيام قبل المباشرة.',
+      },
     });
-    if (!ok) return;
+    if (!returnDate) return;
     return run('restore_' + record.id, async () => {
-      await restoreArchivedEmployee(record);
+      const result = await restoreArchivedEmployee(record, returnDate);
       await refreshAll();
       void celebrate(['#10B981', '#34D399']);
-      toast.success('تم استعادة الموظف وتنشيط حسابه بالكامل بنجاح! ✅');
+      toast.success(result.gap_days > 0
+        ? `رجع ${record.full_name} للعمل. ${result.gap_days} يوم انقطاع ما تنحسب غياب ✅`
+        : `رجع ${record.full_name} للعمل ✅`);
+      for (const w of result.warnings) toast(w, { icon: '⚠️', duration: 8000 });
     }, 'فشل استعادة الموظف');
   };
 
