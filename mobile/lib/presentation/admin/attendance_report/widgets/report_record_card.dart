@@ -9,11 +9,14 @@ import '../../../shared/ui/ui.dart';
 typedef ReportTimeEdit = ({String id, String employeeName, String workDate, String? checkIn, String? checkOut});
 
 class ReportRecordCard extends StatelessWidget {
-  const ReportRecordCard({super.key, required this.row, required this.onOpenMap, required this.onEditTimes});
+  const ReportRecordCard({super.key, required this.row, required this.onOpenMap, required this.onEditTimes, this.onReview});
 
   final ReportRow row;
   final void Function(Object? lat, Object? lng) onOpenMap;
   final void Function(ReportTimeEdit record) onEditTimes;
+
+  /// «تمت المراجعة» لبصمة بدون إنترنت وقتها من ساعة الموبايل (null = ما يظهر الزر)
+  final void Function(String attendanceId)? onReview;
 
   @override
   Widget build(BuildContext context) {
@@ -72,6 +75,12 @@ class ReportRecordCard extends StatelessWidget {
                 Expanded(child: ReportTimeButton(icon: Icons.login_rounded, label: 'حضور', time: att.checkIn, onMap: () => onOpenMap(att.checkInLat, att.checkInLng))),
                 const SizedBox(width: AppSpace.sm),
                 Expanded(child: ReportTimeButton(icon: Icons.logout_rounded, label: 'انصراف', time: att.checkOut, onMap: () => onOpenMap(att.checkOutLat, att.checkOutLng))),
+                if (onReview != null && att.needsOfflineReview)
+                  IconButton(
+                    tooltip: 'تمت المراجعة (وقت البصمة من ساعة الموبايل)',
+                    icon: const Icon(Icons.verified_user_rounded, color: AppColors.warning),
+                    onPressed: () => onReview!(att.id),
+                  ),
                 IconButton(
                   tooltip: 'تعديل الأوقات',
                   icon: const Icon(Icons.edit_calendar_rounded, color: AppColors.brand),

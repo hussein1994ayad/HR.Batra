@@ -40,6 +40,19 @@ class FakeBackend {
     if (failAll && !path.startsWith('/auth/')) {
       return http.Response(jsonEncode({'message': 'offline'}), 500, headers: _json);
     }
+    // مبالغ الحركات وأجر اليوم للأدمن بس (تدقيق 14/10: المبالغ تكشف الراتب)
+    if (path == '/rest/v1/rpc/get_payroll_event_amounts') {
+      final rows = AuthService.currentUserRole != 'admin'
+          ? const <Map<String, dynamic>>[]
+          : [
+              for (final e in tables['payroll_events'] ?? const <Map<String, dynamic>>[])
+                {'event_id': e['id'], 'employee_id': e['employee_id'], 'event_date': e['event_date'], 'event_type': e['event_type'], 'amount': e['amount']},
+            ];
+      return http.Response(jsonEncode(rows), 200, headers: _json);
+    }
+    if (path == '/rest/v1/rpc/payroll_day_rates' && AuthService.currentUserRole != 'admin') {
+      return http.Response('[]', 200, headers: _json);
+    }
     if (path == '/rest/v1/rpc/get_employee_pay' && !tables.containsKey('rpc:get_employee_pay')) {
       return http.Response(jsonEncode(_employeePay()), 200, headers: _json);
     }
@@ -73,11 +86,13 @@ class FakeBackend {
   // مثل السيرفر (تدقيق 14/10/2026، BUG-005): أعمدة الراتب ما تنقرا من جدول الموظفين، تنقرا من get_employee_pay
   static const _salaryColumns = {'monthly_salary_iqd', 'future_salary_iqd', 'future_salary_month'};
 
-  static bool _readsSalary(String select) => select
+  static const _eventMoneyColumns = {'amount', 'amount_override', 'daily_rate', 'minute_rate'};
+
+  static bool _readsSalary(String select, [Set<String> hidden = _salaryColumns]) => select
       .replaceAll(RegExp(r'([^()]*)'), '')
       .split(',')
       .map((c) => c.trim())
-      .any((c) => c == '*' || _salaryColumns.contains(c));
+      .any((c) => c == '*' || hidden.contains(c));
 
   /// الأدمن: رواتب الكل. غيره: راتبه هو بس.
   static List<Map<String, dynamic>> _employeePay() => [
@@ -96,8 +111,9 @@ class FakeBackend {
       final echo = body is List ? body : (body == null ? <Object?>[if (req.method == 'DELETE') {'id': 'deleted'}] : [body]);
       return http.Response(jsonEncode(echo), 201, headers: _json);
     }
-    if (table == 'employees' && _readsSalary(req.url.queryParameters['select'] ?? '*')) {
-      return http.Response(jsonEncode({'code': '42501', 'message': 'permission denied for table employees'}), 401, headers: _json);
+    if ((table == 'employees' && _readsSalary(req.url.queryParameters['select'] ?? '*')) ||
+        (table == 'payroll_events' && _readsSalary(req.url.queryParameters['select'] ?? '*', _eventMoneyColumns))) {
+      return http.Response(jsonEncode({'code': '42501', 'message': 'permission denied for table $table'}), 401, headers: _json);
     }
     var rows = List<Map<String, dynamic>>.from(tables[table] ?? const []);
     if (table == 'employees') {

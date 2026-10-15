@@ -8,6 +8,35 @@ import 'package:hr_pro/core/theme/app_theme.dart';
 import 'package:hr_pro/presentation/admin/admin_dashboard/widgets/decision_card.dart';
 
 void main() {
+  testWidgets('a branch manager sees no amount and cannot type one (the computed amount is deducted)', (tester) async {
+    double? sentAmount = -1;
+    bool? deducted;
+    await tester.pumpWidget(MaterialApp(
+      theme: AppTheme.darkTheme,
+      home: Scaffold(
+        body: SingleChildScrollView(
+          child: DecisionCard(
+            item: const PendingDecision(employeeId: 'e1', employeeName: 'علي', status: 'late', workDate: '2026-10-04', engineMinutes: 25, engineAmount: 4000),
+            schedule: null,
+            showAmount: false,
+            onDecide: ({required deduct, required reason, amount}) {
+              deducted = deduct;
+              sentAmount = amount;
+            },
+          ),
+        ),
+      ),
+    ));
+    expect(find.text('الخصم المحسوب'), findsNothing);
+    expect(find.text('مبلغ الخصم (د.ع)'), findsNothing);
+    expect(find.textContaining('4,000'), findsNothing);
+    await tester.ensureVisible(find.text('تطبيق الخصم'));
+    await tester.tap(find.text('تطبيق الخصم'));
+    await tester.pump();
+    expect(deducted, isTrue);
+    expect(sentAmount, isNull);
+  });
+
   testWidgets('tapping a ready note fills the reason and the excuse sends it', (tester) async {
     bool? deducted;
     String? sentReason;

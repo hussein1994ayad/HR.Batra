@@ -6,7 +6,7 @@ import { getLocalDateStr } from '@/lib/dates';
 import { errorMessage } from '@/lib/error-utils';
 import type { AttendanceRecord } from '@/lib/db-types';
 import {
-  fetchTrackingDataset, fetchTrailPoints, forceCheckout, saveDecision, saveManualAttendance,
+  fetchTrackingDataset, fetchTrailPoints, forceCheckout, markOfflinePunchReviewed, saveDecision, saveManualAttendance,
   subscribeToEmployeeLocations, updateAttendanceTimes, type TrackingDataset,
 } from './api';
 import { exportDisciplineReport } from './exportReport';
@@ -162,6 +162,10 @@ export function useTracking() {
   const checkoutNow = (recordId: string) =>
     run(`checkout_${recordId}`, () => forceCheckout(recordId), 'تم تسجيل خروج الموظف بنجاح!', () => 'حدث خطأ أثناء تسجيل الخروج.');
 
+  const markReviewed = (recordId: string) =>
+    run(`review_${recordId}`, () => markOfflinePunchReviewed(recordId), 'تم تعليم البصمة «تمت المراجعة».',
+      (err) => `حدث خطأ: ${errorMessage(err)}`);
+
   const decide = (item: Decision, status: 'applied' | 'ignored', reason: string, amount?: number) =>
     run(decisionKey(item), () => saveDecision({
       employee: item.employee, type: item.type, date: item.date, status, recordId: item.id, reason, fallbackBranchId, amount,
@@ -181,7 +185,7 @@ export function useTracking() {
   };
 
   return {
-    loading, refreshing, busyKey, ...data,
+    loading, refreshing, busyKey, ...data, markReviewed,
     startDate, setStartDate, endDate, setEndDate,
     selectedBranch, changeBranch, selectedEmployee, setSelectedEmployee,
     activeTab, setActiveTab,

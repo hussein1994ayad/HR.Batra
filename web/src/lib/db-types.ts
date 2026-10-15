@@ -101,6 +101,12 @@ export interface AttendanceRecord {
   check_out_lng?: number | null;
   check_in_offline?: boolean;
   check_out_offline?: boolean;
+  /** مصدر وقت البصمة: online | offline_verified | offline_review | offline_reviewed | manual (تدقيق 14/10 BUG-001) */
+  check_in_time_source?: string | null;
+  check_out_time_source?: string | null;
+  /** وقت ساعة الموبايل لبصمة محفوظة بدون إنترنت (للمقارنة) */
+  check_in_device_time?: string | null;
+  check_out_device_time?: string | null;
   is_mock_detected?: boolean;
   status: 'present' | 'late' | 'absent' | 'half_day' | string;
   work_date: string;

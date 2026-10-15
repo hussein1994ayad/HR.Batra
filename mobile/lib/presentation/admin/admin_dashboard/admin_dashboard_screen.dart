@@ -285,6 +285,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Ticker
                   children: [
                     DecisionsTab(
                       hasDate: _filter.date != null,
+                      showAmounts: _isAdmin,
                       decisions: s.decisions,
                       scheduleFor: _scheduleFor,
                       busyKey: _busyKey,

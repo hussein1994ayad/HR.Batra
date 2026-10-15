@@ -83,17 +83,38 @@ const late = await ev('late');
 const ot = await ev('overtime');
 check('PAY-003) the late (40 min) and overtime (90 min) events exist', late && ot, JSON.stringify({ late, ot }));
 const daily = Math.round(N(late.daily_rate) * 100) / 100;
-await expectError('   a manager cannot raise a late deduction above the computed amount', as(db, 'manager',
-  `SELECT decide_payroll_event($1, true, 'x', $2)`, [late.id, N(late.amount) + 1]), 'يقلل المبلغ بس');
+// مدير الفرع ما يشوف المبالغ (منها ينعرف الراتب)، فما يكتب مبلغ: يقرر خصم بالمحسوب أو إعفاء
+await expectError('   a manager cannot type an amount, even a lower one', as(db, 'manager',
+  `SELECT decide_payroll_event($1, true, 'نص', $2)`, [late.id, Math.floor(N(late.amount) / 2)]), 'يحدده مسؤول النظام');
 await expectError('   a manager cannot inflate overtime', as(db, 'manager',
-  `SELECT decide_payroll_event($1, true, 'x', 1000000)`, [ot.id]), 'يقلل المبلغ بس');
-await expectOk('   a manager can lower a late deduction', as(db, 'manager', `SELECT decide_payroll_event($1, true, 'نص', $2)`, [late.id, Math.floor(N(late.amount) / 2)]));
+  `SELECT decide_payroll_event($1, true, 'x', 1000000)`, [ot.id]), 'يحدده مسؤول النظام');
+const mgrDecided = await as(db, 'manager', `SELECT (r).amount, (r).daily_rate, (r).minute_rate, (r).status FROM (SELECT decide_payroll_event($1, true, 'تأخير') r) x`, [late.id]);
+check('   a manager deducts with the computed amount, and the reply shows no money',
+  mgrDecided.rows[0].status === 'approved' && mgrDecided.rows[0].amount === null && mgrDecided.rows[0].daily_rate === null, JSON.stringify(mgrDecided.rows));
+check('   ...the deduction itself is the computed amount', N((await one(`SELECT amount FROM payroll_events WHERE id = $1`, [late.id])).amount) === N(late.amount));
 await expectError('   the admin cannot deduct more than one day for a late', as(db, 'admin',
   `SELECT decide_payroll_event($1, true, 'x', $2)`, [late.id, daily + 1]), 'أجر يوم');
 await expectOk('   ...one full day is allowed', as(db, 'admin', `SELECT decide_payroll_event($1, true, 'x', $2)`, [late.id, daily]));
 await expectError('   the admin cannot raise overtime above the computed amount', as(db, 'admin',
   `SELECT decide_payroll_event($1, true, 'x', $2)`, [ot.id, N(ot.amount) + 1]), 'مكافأة');
 await expectOk('   ...the computed overtime is approved', as(db, 'admin', `SELECT decide_payroll_event($1, true, 'x', $2)`, [ot.id, N(ot.amount)]));
+
+// ---------------- الخطر المتبقي: المدير ما يستنتج الراتب من المبالغ ----------------
+await expectError('RISK) a manager cannot read event amounts', as(db, 'manager', `SELECT amount FROM payroll_events`), 'permission denied');
+await expectError('   ...nor the day/minute rates', as(db, 'manager', `SELECT daily_rate, minute_rate FROM payroll_events`), 'permission denied');
+check('   ...but still lists his branch events without money', (await as(db, 'manager', `SELECT id, event_type, minutes, status FROM payroll_events`)).rows.length > 0);
+check('   the day rate is admin-only', (await as(db, 'manager', `SELECT * FROM payroll_day_rates($1::date)`, [day])).rows.length === 0
+  && (await as(db, 'admin', `SELECT * FROM payroll_day_rates($1::date)`, [day])).rows.length > 0);
+const mgrEvents = (await as(db, 'manager', `SELECT amount, daily_rate FROM get_payroll_events($1)`, [month])).rows;
+check('   get_payroll_events gives the manager no money', mgrEvents.length > 0 && mgrEvents.every((r) => r.amount === null && r.daily_rate === null), JSON.stringify(mgrEvents));
+const mgrPending = (await as(db, 'manager', `SELECT amount FROM get_pending_payroll_decisions()`)).rows;
+check('   pending decisions give the manager no money', mgrPending.every((r) => r.amount === null), JSON.stringify(mgrPending));
+const adminAmounts = (await as(db, 'admin', `SELECT amount FROM get_payroll_event_amounts($1::date, $1::date)`, [day])).rows;
+check('   the admin reads amounts through get_payroll_event_amounts', adminAmounts.length > 0 && adminAmounts.every((r) => r.amount !== null));
+check('   ...and the manager gets nothing from it', (await as(db, 'manager', `SELECT * FROM get_payroll_event_amounts($1::date, $1::date)`, [day])).rows.length === 0);
+check('   a manager no longer reads branch bonuses/deductions', (await as(db, 'manager', `SELECT id FROM bonuses_deductions WHERE employee_id = $1`, [IDS.emp])).rows.length === 0);
+const ownEvents = (await as(db, 'emp2', `SELECT status, amount FROM get_payroll_events($1)`, [month])).rows;
+check('   an employee gets only his decided events (with their amounts) from get_payroll_events', ownEvents.every((r) => r.status === 'approved'), JSON.stringify(ownEvents));
 
 // ---------------- BUG-014: الموظف يشوف المقرر بس ----------------
 await noUser();

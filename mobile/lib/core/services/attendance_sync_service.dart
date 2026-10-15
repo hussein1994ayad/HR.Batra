@@ -19,6 +19,7 @@ import '../utils/app_log.dart';
 import 'device_service.dart';
 import 'notification_service.dart';
 import 'supabase_service.dart';
+import 'trusted_clock.dart';
 
 /// نتيجة محاولة البصمة.
 class PunchResult {
@@ -77,6 +78,8 @@ class AttendanceSyncService {
     bool isMocked = false,
   }) async {
     final punchTime = DateTime.now().toUtc();
+    // وقت البصمة الحقيقي (من آخر وقت سيرفر وعدّاد الموبايل) ينحسب لحظة الضغط، قبل محاولة الإرسال
+    final trusted = await TrustedClock.offlinePunchTime();
     try {
       return await _sendPunch(
         type: type,
@@ -98,6 +101,9 @@ class AttendanceSyncService {
         'is_mocked': isMocked,
         'user_id': SupabaseService.currentUser?.id,
         'time': punchTime.toIso8601String(),
+        // ساعة الموبايل ممكن تتغيّر: الوقت المحسوب يرسل ويا البصمة، وبدونه السيرفر يعلّمها «تحتاج مراجعة»
+        if (trusted.trustedTime != null) 'trusted_time': trusted.trustedTime!.toIso8601String(),
+        'time_check': trusted.check,
       });
       return const PunchResult.queued();
     }
@@ -110,22 +116,38 @@ class AttendanceSyncService {
     double? accuracy,
     bool isMocked = false,
     DateTime? offlineTime,
+    DateTime? trustedTime,
+    String? timeCheck,
   }) async {
-    final dynamic response = await SupabaseService.client.rpc<dynamic>(
-      'punch_attendance',
-      params: {
-        'p_type': type,
-        'p_latitude': latitude,
-        'p_longitude': longitude,
-        'p_device_id': await DeviceService.getDeviceUUID(),
-        'p_is_mocked': isMocked,
-        // دقة الـ GPS: السيرفر يرفض الموقع التقريبي/الضعيف
-        if (accuracy != null) 'p_accuracy': accuracy,
-        if (offlineTime != null) 'p_client_time': offlineTime.toIso8601String(),
-      },
-    ).timeout(const Duration(seconds: 15));
+    final params = {
+      'p_type': type,
+      'p_latitude': latitude,
+      'p_longitude': longitude,
+      'p_device_id': await DeviceService.getDeviceUUID(),
+      'p_is_mocked': isMocked,
+      // دقة الـ GPS: السيرفر يرفض الموقع التقريبي/الضعيف
+      if (accuracy != null) 'p_accuracy': accuracy,
+      if (offlineTime != null) 'p_client_time': offlineTime.toIso8601String(),
+    };
+    final timeParams = {
+      if (trustedTime != null) 'p_trusted_time': trustedTime.toIso8601String(),
+      if (timeCheck != null) 'p_time_check': timeCheck,
+    };
+    dynamic response;
+    try {
+      response = await SupabaseService.client
+          .rpc<dynamic>('punch_attendance', params: {...params, ...timeParams})
+          .timeout(const Duration(seconds: 15));
+    } on PostgrestException catch (e) {
+      // سيرفر قبل تحديث 20261019000000 (ما يعرف الوقت المحسوب): نفس البصمة بالطريقة القديمة
+      if (e.code != 'PGRST202' || timeParams.isEmpty) rethrow;
+      response = await SupabaseService.client.rpc<dynamic>('punch_attendance', params: params).timeout(const Duration(seconds: 15));
+    }
 
     final data = Map<String, dynamic>.from(response as Map);
+    // وقت السيرفر بالرد: ينحفظ ويا عدّاد الموبايل حتى البصمة الجاية لو بدون إنترنت ينعرف وقتها
+    final serverTime = DateTime.tryParse('${data['server_time'] ?? ''}');
+    if (serverTime != null) unawaited(TrustedClock.anchor(serverTime));
     if (data['ok'] == true) {
       // بعد البصمة: لا تذكير بما سُجّل اليوم
       unawaited(NotificationService.refreshLocalAttendanceReminders());
@@ -239,6 +261,9 @@ class AttendanceSyncService {
           accuracy: (punch['accuracy'] as num?)?.toDouble(),
           isMocked: punch['is_mocked'] as bool? ?? false,
           offlineTime: time,
+          trustedTime: DateTime.tryParse(punch['trusted_time'] as String? ?? ''),
+          // بصمة محفوظة بنسخة أقدم من التطبيق (بدون حساب) = السيرفر يعلّمها «تحتاج مراجعة»
+          timeCheck: punch['time_check'] as String? ?? 'no_anchor',
         );
         // مكررة = سبق رفعها؛ لا داعي لإزعاج الموظف
         if (!result.ok && !(result.code?.startsWith('already_') ?? false)) {

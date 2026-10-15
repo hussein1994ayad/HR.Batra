@@ -29,10 +29,12 @@ const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6];
 
 // مثل السيرفر (تدقيق 14/10 BUG-005): أعمدة الراتب ما تنقرا من جدول الموظفين، تنقرا من get_employee_pay
 const SALARY_COLUMNS = ['monthly_salary_iqd', 'future_salary_iqd', 'future_salary_month'];
-function readsSalary(select: string): boolean {
+function readsSalary(select: string, hidden: string[] = SALARY_COLUMNS): boolean {
   const top = select.replace(/([^()]*)/g, '');
-  return top.split(',').some((c) => c.trim() === '*' || SALARY_COLUMNS.includes(c.trim()));
+  return top.split(',').some((c) => c.trim() === '*' || hidden.includes(c.trim()));
 }
+// ومبالغ حركات الرواتب كذلك (تنقرا من get_payroll_event_amounts للأدمن بس)
+const EVENT_MONEY_COLUMNS = ['amount', 'amount_override', 'daily_rate', 'minute_rate'];
 
 export function defaultFixtures(): Record<string, Row[]> {
   const today = localDate();
@@ -156,6 +158,7 @@ export async function mockSupabase(page: Page, options: MockOptions = {}) {
   const run = payrollRunFixture();
   const rpc = { get_storage_stats: [{ bucket_name: 'employee-documents', total_size: 52428800 }], perform_daily_cleanup: null, ...run,
     calculate_payroll: run.get_payroll_run,
+    get_payroll_event_amounts: [],
     get_employee_pay: (fixtures.employees ?? []).map((e) => ({ employee_id: e.id, monthly_salary_iqd: e.monthly_salary_iqd ?? null,
       future_salary_iqd: e.future_salary_iqd ?? null, future_salary_month: e.future_salary_month ?? null })),
     ...options.rpc };
@@ -208,8 +211,9 @@ export async function mockSupabase(page: Page, options: MockOptions = {}) {
       return route.fulfill({ status: method === 'POST' ? 201 : 204, headers: cors, body: '' });
     }
 
-    if (table === 'employees' && readsSalary(url.searchParams.get('select') ?? '*')) {
-      return route.fulfill({ status: 401, headers: cors, json: { code: '42501', message: 'permission denied for table employees' } });
+    if ((table === 'employees' && readsSalary(url.searchParams.get('select') ?? '*'))
+      || (table === 'payroll_events' && readsSalary(url.searchParams.get('select') ?? '*', EVENT_MONEY_COLUMNS))) {
+      return route.fulfill({ status: 401, headers: cors, json: { code: '42501', message: `permission denied for table ${table}` } });
     }
     let rows = applyFilters(fixtures[table] ?? [], url);
     if (table === 'employees') rows = rows.map((r) => Object.fromEntries(Object.entries(r).filter(([k]) => !SALARY_COLUMNS.includes(k))));

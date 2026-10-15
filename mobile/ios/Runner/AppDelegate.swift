@@ -39,10 +39,23 @@ import UserNotifications
       switch call.method {
       case "getStableDeviceId":
         result(StableDeviceId.get())
+      case "clockSnapshot":
+        result(Self.clockSnapshot())
       default:
         result(FlutterMethodNotImplemented)
       }
     }
+  }
+
+  /// عدّاد منذ تشغيل الموبايل (CLOCK_MONOTONIC بالآيفون يكمل والشاشة مطفية وما يتأثر بتغيير الساعة) + وقت التشغيل:
+  /// التطبيق يحسب منهم وقت البصمة الحقيقي بدون إنترنت (تدقيق 14/10 BUG-001).
+  private static func clockSnapshot() -> [String: Any] {
+    let elapsedMs = Int64(clock_gettime_nsec_np(CLOCK_MONOTONIC) / 1_000_000)
+    var boot = timeval()
+    var size = MemoryLayout<timeval>.stride
+    var mib: [Int32] = [CTL_KERN, KERN_BOOTTIME]
+    let bootSec = sysctl(&mib, 2, &boot, &size, nil, 0) == 0 ? Int(boot.tv_sec) : -1
+    return ["elapsedMs": elapsedMs, "bootId": "time:\(bootSec)"]
   }
 
   private func setupIOSLocationChannel(messenger: FlutterBinaryMessenger) {

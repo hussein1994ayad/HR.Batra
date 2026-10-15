@@ -45,11 +45,29 @@ class AttendanceReportRepository {
 
   /// الصفحات تضمن جلب كل السجلات حتى لو تجاوزت حدّ 1000 سطر لكل طلب
   Future<List<ReportAttendance>> fetchAttendance(List<String> employeeIds, {required String from, required String to}) async {
+    const base = 'id, employee_id, check_in_time, check_out_time, check_in_lat, check_in_lng, check_out_lat, check_out_lng, status, work_date';
+    const timeSources = 'check_in_time_source, check_out_time_source, check_in_device_time, check_out_device_time';
+    try {
+      return await _fetchAttendance(employeeIds, from: from, to: to, columns: '$base, $timeSources');
+    } on PostgrestException catch (e) {
+      // سيرفر قبل تحديث 20261019000000 (ما بيه أعمدة مصدر الوقت): نفس التقرير بدونها
+      if (e.code != '42703') rethrow;
+      return _fetchAttendance(employeeIds, from: from, to: to, columns: base);
+    }
+  }
+
+  /// «تمت المراجعة» لبصمة بدون إنترنت وقتها من ساعة الموبايل (الأدمن أو مدير الفرع، وينسجل منو).
+  Future<void> markOfflinePunchReviewed(String attendanceId) async {
+    await _db.rpc<void>('mark_offline_punch_reviewed', params: {'p_attendance_id': attendanceId});
+  }
+
+  Future<List<ReportAttendance>> _fetchAttendance(List<String> employeeIds,
+      {required String from, required String to, required String columns}) async {
     final attendanceRows = <Map<String, dynamic>>[];
     for (var offset = 0;; offset += 1000) {
       final page = await _db
           .from('attendance')
-          .select('id, employee_id, check_in_time, check_out_time, check_in_lat, check_in_lng, check_out_lat, check_out_lng, status, work_date')
+          .select(columns)
           .inFilter('employee_id', employeeIds)
           .gte('work_date', from)
           .lte('work_date', to)
@@ -71,6 +89,10 @@ class AttendanceReportRepository {
           checkInLng: a.dbl('check_in_lng'),
           checkOutLat: a.dbl('check_out_lat'),
           checkOutLng: a.dbl('check_out_lng'),
+          checkInSource: a.str('check_in_time_source'),
+          checkOutSource: a.str('check_out_time_source'),
+          checkInDeviceTime: a.date('check_in_device_time'),
+          checkOutDeviceTime: a.date('check_out_device_time'),
         ),
     ];
   }

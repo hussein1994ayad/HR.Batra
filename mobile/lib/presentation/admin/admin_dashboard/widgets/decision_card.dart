@@ -24,12 +24,22 @@ double? editedAmount(String text, double computed) {
 /// (مثل: نص يوم بدل يوم). حقل السبب يحتفظ بما كتبه المدير عند إعادة بناء القائمة، وتحته ملاحظات جاهزة
 /// تنضغط (مثل: نسي البصمة وهو مداوم). الإعفاء ما يوصل بيه إشعار للموظف.
 class DecisionCard extends StatefulWidget {
-  const DecisionCard({super.key, required this.item, required this.schedule, required this.onDecide, this.busy = false});
+  const DecisionCard({
+    super.key,
+    required this.item,
+    required this.schedule,
+    required this.onDecide,
+    this.busy = false,
+    this.showAmount = true,
+  });
 
   final PendingDecision item;
   final WorkScheduleModel? schedule;
   final bool busy;
   final DecisionCallback onDecide;
+
+  /// المبلغ وتعديله للأدمن بس: مدير الفرع يقرر خصم بالمحسوب أو إعفاء (المبالغ تكشف الراتب)
+  final bool showAmount;
 
   @override
   State<DecisionCard> createState() => _DecisionCardState();
@@ -77,7 +87,8 @@ class _DecisionCardState extends State<DecisionCard> {
     final isMissingPunch = item.status == 'missing_punch' || (item.status == 'half_day' && item.checkInTime == null);
     final amount = _computed;
     // بصمة ناقصة بخصم مقترح (دقائق الدوام بعد آخر تواجد مسجّل) = قرار خصم مثل التأخير؛ بدون مبلغ = تأكيد بس
-    final confirmOnly = isMissingPunch && amount <= 0 && _amount.text.trim().isEmpty;
+    final confirmOnly = isMissingPunch &&
+        (widget.showAmount ? amount <= 0 && _amount.text.trim().isEmpty : _missedMinutes <= 0);
 
     return RequestCard(
       title: item.employeeName,
@@ -91,7 +102,7 @@ class _DecisionCardState extends State<DecisionCard> {
         onApprove: () => widget.onDecide(
           deduct: true,
           reason: _reasonOr('تم الخصم بناءً على تعليمات الإدارة'),
-          amount: editedAmount(_amount.text, amount),
+          amount: widget.showAmount ? editedAmount(_amount.text, amount) : null,
         ),
         onReject: () => widget.onDecide(
           deduct: false,
@@ -111,6 +122,7 @@ class _DecisionCardState extends State<DecisionCard> {
           InfoRow(icon: Icons.login_rounded, label: 'وقت البصمة', value: Fmt.time(item.checkInTime)),
           const SizedBox(height: AppSpace.sm),
         ],
+        if (widget.showAmount) ...[
         InfoRow(
           icon: Icons.payments_outlined,
           label: 'الخصم المحسوب',
@@ -133,6 +145,7 @@ class _DecisionCardState extends State<DecisionCard> {
           onChanged: (_) => setState(() {}),
         ),
         const SizedBox(height: AppSpace.sm),
+        ],
         AppTextField(controller: _reason, label: 'السبب', hint: 'سبب الخصم أو الإعفاء'),
         const SizedBox(height: AppSpace.sm),
         Wrap(
