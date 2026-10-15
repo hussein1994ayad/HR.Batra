@@ -24,6 +24,8 @@ type Props = {
   /** آخر «احتساب الرواتب» (ISO) أو فارغ */
   calculatedAt?: string | null;
   calculating?: boolean;
+  /** تقدم الاحتساب على دفعات (موظفين انحسبوا من المجموع) */
+  calcProgress?: { done: number; total: number } | null;
   onCalculate: () => void;
   onOpenBulk: () => void;
   onClosePeriod: () => void;
@@ -55,7 +57,7 @@ function Step({ n, done, active, icon: Icon, title, detail, action }: {
 
 export function PayrollSteps({
   pendingDecisions, attentionCount, issuedCount, rowCount, periodStatus, locked, closing, onFilter, approvableCount, approveFrom,
-  calculatedAt, calculating, onCalculate, onOpenBulk, onClosePeriod, deliveredAt, delivering, onMarkDelivered,
+  calculatedAt, calculating, calcProgress, onCalculate, onOpenBulk, onClosePeriod, deliveredAt, delivering, onMarkDelivered,
 }: Props) {
   const nextDay = approveFrom ? new Date(Date.parse(approveFrom + 'T00:00:00Z') + 86400000).toISOString().slice(0, 10) : '';
   // محسوبة اليوم = الأرقام حديثة (التحديث الليلي يغطي الأيام السابقة)
@@ -74,8 +76,11 @@ export function PayrollSteps({
       <Step n={1} done={calculatedToday || approvedDone} active={current === 1} icon={Calculator} title="احسب الرواتب"
         detail={`${calcLabel} يحسب الغيابات والبصمات الناقصة والخصومات والسلف لكل الموظفين.`}
         action={!locked && !approvedDone && (
-          <Button size="xs" variant={calculatedToday ? 'soft' : 'primary'} icon={Calculator} loading={calculating} onClick={onCalculate}>
-            احتساب الرواتب
+          <Button size="xs" variant={calculatedToday ? 'soft' : 'primary'} icon={Calculator} loading={calculating} onClick={onCalculate}
+            aria-live="polite">
+            {calculating && calcProgress && calcProgress.total > 0
+              ? `جاري الاحتساب: ${calcProgress.done} من ${calcProgress.total} موظف`
+              : 'احتساب الرواتب'}
           </Button>
         )} />
       <Step n={2} done={decisionsDone} active={current === 2} icon={Gavel} title="القرارات المعلّقة"

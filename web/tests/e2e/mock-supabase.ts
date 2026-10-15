@@ -149,6 +149,7 @@ export function payrollRunFixture() {
 export interface MockOptions {
   fixtures?: Record<string, Row[]>;
   loggedIn?: boolean;
+  /** رد كل دالة: قيمة ثابتة، أو دالة تاخذ جسم الطلب، و{ __error: {code, message} } = خطأ 404 (مثل سيرفر قديم). */
   rpc?: Record<string, unknown>;
 }
 
@@ -194,7 +195,12 @@ export async function mockSupabase(page: Page, options: MockOptions = {}) {
     if (url.pathname.startsWith('/rest/v1/rpc/')) {
       const name = url.pathname.split('/rpc/')[1];
       calls.push({ method, table: `rpc:${name}`, url: req.url(), body: req.postDataJSON() });
-      return route.fulfill({ status: 200, headers: cors, json: rpc[name as keyof typeof rpc] ?? null });
+      const entry = rpc[name as keyof typeof rpc] as unknown;
+      const value = typeof entry === 'function' ? (entry as (body: unknown) => unknown)(req.postDataJSON()) : entry;
+      if (value && typeof value === 'object' && '__error' in value) {
+        return route.fulfill({ status: 404, headers: cors, json: (value as { __error: unknown }).__error });
+      }
+      return route.fulfill({ status: 200, headers: cors, json: value ?? null });
     }
 
     if (url.pathname.startsWith('/realtime/')) return route.abort();

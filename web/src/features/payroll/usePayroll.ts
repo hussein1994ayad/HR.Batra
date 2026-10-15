@@ -25,6 +25,8 @@ export function usePayroll() {
   const askNote = useConfirmNote();
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  // تقدم «احتساب الرواتب» على دفعات: «20 من 120»
+  const [calcProgress, setCalcProgress] = useState<{ done: number; total: number } | null>(null);
   const [sendingNotifs, setSendingNotifs] = useState(false);
   const [data, setData] = useState<PayrollDataset>(EMPTY_DATASET);
 
@@ -384,8 +386,13 @@ export function usePayroll() {
 
   /** «احتساب الرواتب»: يحسب المسير على السيرفر، يعيد التحميل، ويطلع ملخص النتيجة. */
   const calculate = async () => {
+    setCalcProgress(null);
     const ok = await run('calculate', async () => {
-      await calculatePayroll(selectedMonth);
+      try {
+        await calculatePayroll(selectedMonth, (done, total) => setCalcProgress({ done, total }));
+      } finally {
+        setCalcProgress(null);
+      }
       return true;
     }, 'ما انحسبت الرواتب');
     if (!ok) return;
@@ -403,7 +410,7 @@ export function usePayroll() {
   };
 
   return {
-    loading, actionLoading, sendingNotifs,
+    loading, actionLoading, sendingNotifs, calcProgress,
     branches: data.branches,
     period, selectedMonth, startDate, endDate, changeMonth,
     searchTerm, setSearchTerm, selectedBranch, setSelectedBranch,
