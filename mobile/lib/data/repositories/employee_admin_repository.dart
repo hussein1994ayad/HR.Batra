@@ -7,10 +7,12 @@ import 'dart:io';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/logic/end_of_service.dart';
 import '../../core/models/models.dart';
 import '../../core/services/image_compression_service.dart';
 import '../../core/services/supabase_service.dart';
 import '../../core/utils/app_log.dart';
+import '../../core/utils/arabic_format.dart';
 import 'employee_pay.dart';
 import 'write_guard.dart';
 
@@ -41,6 +43,18 @@ class EmployeeAdminRepository {
       'is_active': active,
       if (lastDay != null) 'termination_date': '${lastDay.year}-${lastDay.month.toString().padLeft(2, '0')}-${lastDay.day.toString().padLeft(2, '0')}',
     }).eq('id', employeeId).select('id'));
+  }
+
+  /// معاينة «إنهاء الخدمات»: شلون ينحسب آخر راتب لو آخر يوم = [lastDay] (السيرفر يحسب ويتراجع، ما يتغير شي).
+  /// null = سيرفر قبل تحديث 20261020000000.
+  Future<EndOfServicePreview?> endOfServicePreview(String employeeId, DateTime lastDay) async {
+    try {
+      final res = await _db.rpc<dynamic>('end_of_service_preview', params: {'p_employee_id': employeeId, 'p_last_day': isoDate(lastDay)});
+      return res is Map ? EndOfServicePreview.fromMap(Map<String, dynamic>.from(res)) : null;
+    } on PostgrestException catch (e) {
+      if (e.code == 'PGRST202') return null;
+      rethrow;
+    }
   }
 
   /// آخر يوم بصم بيه الموظف (اقتراح «آخر يوم عمل» عند التعطيل).

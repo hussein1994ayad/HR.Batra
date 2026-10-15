@@ -20,6 +20,9 @@ const Map<String, String> kPayrollEventLabels = {
   'advance': 'سلفة',
   'adjustment': 'تسوية',
   'other': 'أخرى',
+  // سطور الكشف (تدقيق 14/10، المرحلة 3)
+  'rounding': 'فرق تقريب',
+  'excess_deduction': 'خصومات ما انخصمت (أكثر من الراتب، تتسوى خارج النظام)',
 };
 
 class SalarySlipModel {

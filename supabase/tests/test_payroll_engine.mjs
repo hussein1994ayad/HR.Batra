@@ -175,9 +175,10 @@ check('September summary for E3: 600,000 − 41,250 + 3,750 = 562,500',
 check('   pending decisions are counted for the admin', N(r3.pending_count) >= 1);
 
 const rj = await row('2026-09', J);
-check('joiner on 20 Sep: 7 days × 20,000 = 140,000 (÷30 rule)', N(rj.basic) === 140000, JSON.stringify(rj));
+// المرحلة 3 (قرار 15/10/2026): المباشر = الراتب ناقص الأيام قبل المباشرة (مثل أي موظف)، والمنتهية خدمته = أيام الدوام بس
+check('joiner on 20 Sep: salary minus the 19 days before joining = 600,000 - 380,000 = 220,000', N(rj.basic) === 220000 && rj.basic_basis === 'joined', JSON.stringify(rj));
 const rt = await row('2026-09', T);
-check('terminated on 10 Sep still in the run: 10 days = 200,000', rt && N(rt.basic) === 200000, JSON.stringify(rt));
+check('terminated on 10 Sep still in the run: 9 workdays (1-10 Sep minus Friday 4 Sep) = 180,000', rt && N(rt.basic) === 180000 && rt.basic_basis === 'end_of_service', JSON.stringify(rt));
 
 await expectError('manager cannot approve slips', as(db, 'manager', `SELECT approve_payroll_slip($1, '2026-09')`, [E3]), 'غير مصرح');
 const slip3 = (await as(db, 'admin', `SELECT approve_payroll_slip($1, '2026-09', '[{"type":"bonus","amount":10000,"reason":"مكافأة أداء"}]') id`, [E3])).rows[0].id;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Employee } from '@/lib/db-types';
-import { daysUntil, documentPathFromUrl, employeeToFormValues, salaryChangeMonth, salaryUpdateFields, filterEmployees, normalizeArabic, documentList } from './logic';
+import { daysUntil, documentPathFromUrl, endOfServiceBlocks, employeeToFormValues, salaryChangeMonth, salaryUpdateFields, filterEmployees, normalizeArabic, documentList } from './logic';
 
 const emp = (over: Partial<Employee>): Employee => ({
   id: 'e', employee_code: 'EMP-100', full_name: '', is_active: true, role: 'employee', ...over,
@@ -98,5 +98,32 @@ describe('documentList', () => {
     expect(documentList(null)).toEqual([]);
     expect(documentList(undefined)).toEqual([]);
     expect(documentList(['a', 3, null])).toEqual(['a']);
+  });
+});
+
+describe('end of service preview (stage 3)', () => {
+  const preview = {
+    last_day: '2026-10-28',
+    total_net: 853333,
+    loans_left_after: 0,
+    periods: [
+      { month: '2026-10', start_date: '2026-10-01', cutoff_date: '2026-10-26', can_approve_now: false, expected_net: 800000, loan_cut: 0, excess_deductions: 0,
+        summary: { basic: 800000, basic_note: 'راتب المسير كامل: 800,000 د.ع', earnings: 0, deductions: 0, loans: 0, net: 800000 } },
+      { month: '2026-11', start_date: '2026-10-27', cutoff_date: '2026-11-26', can_approve_now: false, expected_net: 0, loan_cut: 50000, excess_deductions: 20000,
+        summary: { basic: 53333, basic_note: 'نهاية خدمة: 2 يوم دوام', earnings: 0, deductions: 73333, loans: 50000, net: -70000, pending_count: 1 } },
+    ],
+  };
+  it('explains every period in plain words', () => {
+    const [oct, nov] = endOfServiceBlocks(preview);
+    expect(oct.title).toContain('الشهر العاشر 2026');
+    expect(oct.lines[0]).toBe('راتب المسير كامل: 800,000 د.ع');
+    expect(oct.net).toBe('800,000 د.ع');
+    expect(nov.lines).toContain('نهاية خدمة: 2 يوم دوام');
+    expect(nov.lines.some((l) => l.includes('ينخصم منه 0 د.ع بس'))).toBe(true);
+    expect(nov.lines.some((l) => l.includes('خارج النظام'))).toBe(true);
+    expect(nov.lines.some((l) => l.includes('تنتظر قرارك'))).toBe(true);
+    // آخر يوم 28 بعد يوم القطع 26: المسير الأول ينعتمد بعد نهايته، والثاني بعد آخر يوم
+    expect(oct.when).toContain('26/10');
+    expect(nov.when).toContain('28/10');
   });
 });

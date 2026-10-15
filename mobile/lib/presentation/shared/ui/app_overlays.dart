@@ -78,6 +78,8 @@ Future<bool> showAppConfirm(
     builder: (ctx) => AlertDialog(
       title: Text(title),
       content: message == null ? null : Text(message),
+      // رسالة طويلة (مثل معاينة آخر راتب) تنسحب بدل ما تطلع برا الشاشة
+      scrollable: true,
       actionsPadding: const EdgeInsets.fromLTRB(AppSpace.lg, 0, AppSpace.lg, AppSpace.lg),
       actions: [
         AppButton.ghost(label: cancelLabel, onPressed: () => Navigator.pop(ctx, false)),
