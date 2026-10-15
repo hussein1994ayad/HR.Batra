@@ -163,18 +163,33 @@ test.describe('workflows', () => {
   });
 
   test('payroll is calculated with the "calculate" button', async ({ page }) => {
-    const api = await mockSupabase(page);
+    // 25 موظف = 3 طلبات صغيرة (10 + 10 + 5)، كل وحدة تكمل من آخر موظف انحسب (تدقيق 14/10 BUG-018)
+    const batch = (body: { p_after: string | null }) => {
+      const done = body.p_after === null ? 10 : body.p_after === 'e10' ? 20 : 25;
+      return { total: 25, done, last_id: `e${done}`, finished: done === 25 };
+    };
+    const api = await mockSupabase(page, { rpc: { calculate_payroll_batch: batch } });
     await page.goto('/dashboard/payroll');
     await expect(page.locator('tr', { hasText: 'زينب علي' })).toContainText('830,000 د.ع');
-    expect(api.writes('rpc:calculate_payroll', 'POST')).toHaveLength(0); // فتح الصفحة ما يحسب
+    expect(api.writes('rpc:calculate_payroll_batch', 'POST')).toHaveLength(0); // فتح الصفحة ما يحسب
     await page.getByRole('button', { name: 'احتساب الرواتب' }).click();
-    await expect.poll(() => api.writes('rpc:calculate_payroll', 'POST').length).toBe(1);
+    await expect.poll(() => api.writes('rpc:calculate_payroll_batch', 'POST').length).toBe(3);
+    expect(api.writes('rpc:calculate_payroll_batch', 'POST').map((c) => (c.body as { p_after: string | null }).p_after)).toEqual([null, 'e10', 'e20']);
+    expect(api.writes('rpc:calculate_payroll', 'POST')).toHaveLength(0);
     // بعد الاحتساب تطلع النتيجة: الصافي والقرارات المعلّقة
     const result = page.getByRole('dialog');
     await expect(result).toContainText('نتيجة احتساب رواتب الشهر');
     await expect(result).toContainText('الصافي اللي ينصرف للموظفين');
     await result.getByRole('button', { name: 'تمام' }).click();
     await expect(result).toBeHidden();
+  });
+
+  test('before the database update, the calculate button still works in one request', async ({ page }) => {
+    const api = await mockSupabase(page, { rpc: { calculate_payroll_batch: { __error: { code: 'PGRST202', message: 'function not found' } } } });
+    await page.goto('/dashboard/payroll');
+    await page.getByRole('button', { name: 'احتساب الرواتب' }).click();
+    await expect.poll(() => api.writes('rpc:calculate_payroll', 'POST').length).toBe(1);
+    await expect(page.getByRole('dialog')).toContainText('نتيجة احتساب رواتب الشهر');
   });
 
   test('approval waits for the end of the payroll period', async ({ page }) => {

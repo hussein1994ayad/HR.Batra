@@ -15,10 +15,38 @@ export interface PayrollDataset {
   attendanceEmployeeIds: string[];
 }
 
-/** «احتساب الرواتب»: السيرفر يحسب المسير كله (غياب بدون بصمة، بصمات ناقصة...) ويسجّل وقت الاحتساب. */
-export async function calculatePayroll(month: string): Promise<void> {
-  const { error } = await supabase.rpc('calculate_payroll', { p_month: month });
-  if (error) throw error;
+/** موظفين بكل طلب احتساب: كل طلب يخلص بأقل من ثانية حتى لو صاروا مئات (حد القاعدة 8 ثواني للطلب). */
+export const CALC_BATCH = 10;
+
+interface CalcBatch {
+  total: number;
+  done: number;
+  last_id: string | null;
+  finished: boolean;
+}
+
+/**
+ * «احتساب الرواتب»: السيرفر يحسب المسير (غياب بدون بصمة، بصمات ناقصة...) [CALC_BATCH] موظفين بكل طلب
+ * ويبلّغ التقدم، وآخر دفعة تسجّل وقت الاحتساب (تدقيق 14/10 BUG-018).
+ * سيرفر قبل تحديث 20261022000000: طلب واحد للكل مثل قبل.
+ */
+export async function calculatePayroll(month: string, onProgress?: (done: number, total: number) => void): Promise<void> {
+  let after: string | null = null;
+  for (let call = 0; call < 1000; call++) {
+    const { data, error } = await supabase.rpc('calculate_payroll_batch', { p_month: month, p_after: after, p_limit: CALC_BATCH });
+    if (error) {
+      if (error.code === 'PGRST202' && after === null) {
+        const { error: oneShot } = await supabase.rpc('calculate_payroll', { p_month: month });
+        if (oneShot) throw oneShot;
+        return;
+      }
+      throw error;
+    }
+    const batch = data as CalcBatch;
+    onProgress?.(batch.done, batch.total);
+    if (batch.finished || !batch.last_id) return;
+    after = batch.last_id;
+  }
 }
 
 /** مسير شهر (YYYY-MM) كما هو (بدون إعادة حساب؛ الحساب بزر «احتساب الرواتب» والتحديث الليلي). */

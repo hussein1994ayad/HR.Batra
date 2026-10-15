@@ -114,6 +114,7 @@ export default function PayrollPage() {
           approvableCount={p.approvableRows.length}
           calculatedAt={p.period?.calculated_at}
           calculating={p.actionLoading === 'calculate'}
+          calcProgress={p.calcProgress}
           onCalculate={() => void p.calculate()}
           approveFrom={p.endDate}
           onOpenBulk={() => setShowBulkModal(true)}
