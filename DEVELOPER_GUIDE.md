@@ -121,7 +121,7 @@ HR.Batra/
 │
 ├── supabase/
 │   ├── migrations/                  ← لا تعدّل ملف مطبّق أبداً؛ أضف ملف جديد
-│   ├── schema/current_functions.sql ← النسخة الحالية من كل دالة و trigger (للقراءة؛ أعد توليدها: node supabase/schema/generate.mjs)
+│   ├── schema/current_functions.sql ← النسخة الحالية من كل دالة و trigger (للقراءة؛ تتولد من ملفات migrations: node supabase/schema/generate.mjs، والفحص التلقائي يتأكد إنها محدّثة)
 │   ├── functions/                   ← Edge Functions: push-notification، daily-cleanup
 │   └── tests/                       ← اختبارات قاعدة البيانات (PGlite: npm test)
 │

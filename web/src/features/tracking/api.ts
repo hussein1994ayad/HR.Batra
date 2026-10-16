@@ -1,6 +1,7 @@
 // استعلامات Supabase الخاصة بصفحة المراقبة والانضباط.
 
 import { supabase } from '@/lib/supabase';
+import { ensureChanged } from '@/lib/write-guard';
 import type { AttendanceRecord, Branch, LeaveRequest, LocationPoint, WorkSchedule } from '@/lib/db-types';
 import type { MockGpsAttempt, RawZone, TrackedEmployee } from './types';
 import { fetchAllRows } from '@/lib/fetch-all';
@@ -140,7 +141,7 @@ const toIso = (date: string, time: string) => (time ? baghdadIso(date, time) : n
 export async function updateAttendanceTimes(record: AttendanceRecord, checkIn: string, checkOut: string, fallbackDate: string, status?: 'present' | 'late') {
   const workDate = record.work_date || fallbackDate;
   const checkOutISO = toIso(workDate, checkOut);
-  const { error } = await supabase
+  await ensureChanged(supabase
     .from('attendance')
     .update({
       check_in_time: toIso(workDate, checkIn),
@@ -148,8 +149,8 @@ export async function updateAttendanceTimes(record: AttendanceRecord, checkIn: s
       // الحالة من وقت الدخول والجدول (كان يصير "حاضر" بمجرد وجود انصراف حتى لو متأخر)
       status: status ?? (checkOutISO ? 'present' : record.status),
     })
-    .eq('id', record.id);
-  if (error) throw error;
+    .eq('id', record.id)
+    .select('id'));
 }
 
 /** حضور يدوي: يحدّث سجل اليوم إن وُجد أو ينشئ سجلاً جديداً. */
@@ -175,9 +176,11 @@ export async function saveManualAttendance(entry: {
     .maybeSingle();
   if (findErr) throw findErr;
 
-  const { error } = existing
-    ? await supabase.from('attendance').update(values).eq('id', existing.id)
-    : await supabase.from('attendance').insert({ ...values, employee_id: entry.employeeId, work_date: entry.date });
+  if (existing) {
+    await ensureChanged(supabase.from('attendance').update(values).eq('id', existing.id).select('id'));
+    return;
+  }
+  const { error } = await supabase.from('attendance').insert({ ...values, employee_id: entry.employeeId, work_date: entry.date });
   if (error) throw error;
 }
 
@@ -189,11 +192,11 @@ export async function markOfflinePunchReviewed(recordId: string) {
 
 /** تسجيل خروج الآن. الحالة تبقى كما هي (كانت تُضبط على 'completed' وهي قيمة يرفضها القيد). */
 export async function forceCheckout(recordId: string) {
-  const { error } = await supabase
+  await ensureChanged(supabase
     .from('attendance')
     .update({ check_out_time: new Date().toISOString() })
-    .eq('id', recordId);
-  if (error) throw error;
+    .eq('id', recordId)
+    .select('id'));
 }
 
 type EventAmountRow = { employee_id: string; event_date: string; event_type: string; amount: number };
@@ -301,16 +304,18 @@ export async function saveDecision(decision: {
     if (findErr) throw findErr;
 
     const values = { status: 'absent', deduction_status: status, deduction_reason: reason, branch_id: branchId };
-    const { error } = existing
-      ? await supabase.from('attendance').update(values).eq('id', existing.id)
-      : await supabase.from('attendance').insert({ ...values, employee_id: employee.id, work_date: date });
-    if (error) throw error;
+    if (existing) {
+      await ensureChanged(supabase.from('attendance').update(values).eq('id', existing.id).select('id'));
+    } else {
+      const { error } = await supabase.from('attendance').insert({ ...values, employee_id: employee.id, work_date: date });
+      if (error) throw error;
+    }
   } else {
-    const { error } = await supabase
+    await ensureChanged(supabase
       .from('attendance')
       .update({ deduction_status: status, deduction_reason: reason })
-      .eq('id', recordId);
-    if (error) throw error;
+      .eq('id', recordId)
+      .select('id'));
   }
 
   // الإشعار: بس عند تسجيل غياب بخصم. الإعفاء ما يوصل بيه إشعار (الموظف ما تبلّغ بالتأخير أصلاً)،

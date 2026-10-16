@@ -15,6 +15,9 @@ mobile/android/key.properties
 
 # لقطات الشاشة المؤقتة أثناء العمل
 mobile/design/screenshots/wip/
+# مخرجات بناء أندرويد (تتولد مع كل APK)
+mobile/android/build/
+
 # ملفات Supabase CLI المحلية
 supabase/.temp/
 

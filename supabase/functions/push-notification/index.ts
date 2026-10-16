@@ -123,33 +123,8 @@ Deno.serve(async (req: Request) => {
 
     const tokens: string[] = [];
 
-    // 1. Get employee FCM token from employees table (column fcm_token)
-    try {
-      const empRes = await fetch(
-        `${supabaseUrl}/rest/v1/employees?id=eq.${record.employee_id}&select=fcm_token`,
-        {
-          headers: {
-            apikey: supabaseKey,
-            Authorization: `Bearer ${supabaseKey}`,
-          },
-        }
-      );
-      if (empRes.ok) {
-        const empData = await empRes.json();
-        if (empData && empData.length > 0 && empData[0].fcm_token) {
-          const t = empData[0].fcm_token.trim();
-          if (t && !tokens.includes(t)) {
-            tokens.push(t);
-          }
-        }
-      } else {
-        console.error("Failed to query employees table:", empRes.status, await empRes.text());
-      }
-    } catch (err) {
-      console.error("Error fetching fcm_token from employees table:", err);
-    }
-
-    // 2. Get tokens from fcm_tokens table
+    // Tokens live in one place: fcm_tokens (audit 14/10 CODE-007). Old app builds that still write
+    // employees.fcm_token / device_tokens are copied into it by a database trigger.
     try {
       const tokensRes = await fetch(
         `${supabaseUrl}/rest/v1/fcm_tokens?employee_id=eq.${record.employee_id}&select=token`,
@@ -283,15 +258,8 @@ Deno.serve(async (req: Request) => {
     if (deadTokens.length > 0) {
       const inList = deadTokens.map((t) => `"${t.replace(/"/g, "")}"`).join(",");
       const headers = { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}`, "Content-Type": "application/json" };
-      await Promise.allSettled([
-        fetch(`${supabaseUrl}/rest/v1/fcm_tokens?token=in.(${encodeURIComponent(inList)})`, { method: "DELETE", headers }),
-        fetch(`${supabaseUrl}/rest/v1/device_tokens?token=in.(${encodeURIComponent(inList)})`, { method: "DELETE", headers }),
-        fetch(`${supabaseUrl}/rest/v1/employees?id=eq.${record.employee_id}&fcm_token=in.(${encodeURIComponent(inList)})`, {
-          method: "PATCH",
-          headers,
-          body: JSON.stringify({ fcm_token: null }),
-        }),
-      ]);
+      await fetch(`${supabaseUrl}/rest/v1/fcm_tokens?token=in.(${encodeURIComponent(inList)})`, { method: "DELETE", headers })
+        .catch((err) => console.error("Failed to remove dead tokens:", err));
       console.log(`Removed ${deadTokens.length} unregistered token(s) for employee ${record.employee_id}`);
     }
 

@@ -2,6 +2,7 @@
 
 import { imageCompression } from '@/lib/lazy';
 import { supabase } from '@/lib/supabase';
+import { ensureChanged } from '@/lib/write-guard';
 import { EMPLOYEE_COLUMNS, fetchEmployeePay } from '@/lib/employeePay';
 import type { ArchivedEmployee, Department, Employee, EmployeeDevice } from '@/lib/db-types';
 import { documentList, documentPathFromUrl, salaryUpdateFields } from './logic';
@@ -61,8 +62,7 @@ export async function fetchArchivedEmployees(): Promise<ArchivedEmployee[]> {
 // ------------------------------------------------------------------
 
 export async function setDeviceLock(employeeId: string, lock: string | null) {
-  const { error } = await supabase.from('employees').update({ device_id_lock: lock }).eq('id', employeeId);
-  if (error) throw error;
+  await ensureChanged(supabase.from('employees').update({ device_id_lock: lock }).eq('id', employeeId).select('id'));
 }
 
 /** يمسح أجهزة الموظف المسجلة ويفعّل القفل ليُربط أول هاتف يدخل منه. */
@@ -74,11 +74,11 @@ export async function resetDeviceBinding(employeeId: string) {
 
 /** اعتماد طلب جهاز: يُقفل حساب الموظف على هذا الجهاز ويُرسل له إشعاراً. */
 export async function approveDeviceRequest(request: Pick<EmployeeDevice, 'id' | 'employee_id' | 'device_id'>) {
-  const { error } = await supabase
+  await ensureChanged(supabase
     .from('employee_devices')
     .update({ is_approved: true, approved_at: new Date().toISOString() })
-    .eq('id', request.id);
-  if (error) throw error;
+    .eq('id', request.id)
+    .select('id'));
 
   await setDeviceLock(request.employee_id, request.device_id);
 
@@ -91,8 +91,7 @@ export async function approveDeviceRequest(request: Pick<EmployeeDevice, 'id' | 
 }
 
 export async function rejectDeviceRequest(requestId: string) {
-  const { error } = await supabase.from('employee_devices').delete().eq('id', requestId);
-  if (error) throw error;
+  await ensureChanged(supabase.from('employee_devices').delete().eq('id', requestId).select('id'));
 }
 
 // ------------------------------------------------------------------

@@ -1,6 +1,7 @@
 // بيانات صفحة الفروع: الفروع + حضور اليوم (لمعرفة من بصم بكل فرع)، مع كاش محلي يظهر فوراً.
 
 import { supabase } from '@/lib/supabase';
+import { ensureChanged } from '@/lib/write-guard';
 import { writeCache } from '@/lib/useQuery';
 import { localDateStr } from '@/lib/format';
 import type { Attendance, Branch } from '@/lib/db-types';
@@ -27,8 +28,7 @@ export async function fetchGeofences(): Promise<GeofencesData> {
 }
 
 export async function deleteBranch(id: string): Promise<void> {
-  const { error } = await supabase.from('branches').delete().eq('id', id);
-  if (error) throw error;
+  await ensureChanged(supabase.from('branches').delete().eq('id', id).select('id'));
 }
 
 /** إضافة فرع (بدون id) أو تحديثه. ترمي عند الخطأ. */
@@ -37,8 +37,7 @@ export async function saveBranch(
   id?: string,
 ): Promise<void> {
   if (id) {
-    const { error } = await supabase.from('branches').update(payload).eq('id', id);
-    if (error) throw error;
+    await ensureChanged(supabase.from('branches').update(payload).eq('id', id).select('id'));
   } else {
     const { error } = await supabase.from('branches').insert(payload);
     if (error) throw error;

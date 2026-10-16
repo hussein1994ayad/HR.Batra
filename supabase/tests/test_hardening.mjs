@@ -21,9 +21,9 @@ await expectOk('admin can change any salary', as(db, 'admin',
   `UPDATE employees SET monthly_salary_iqd = 1200000 WHERE id = $1 RETURNING id`, [IDS.emp]));
 
 // ---------------- 2) لا كلمات سر مقروءة ----------------
-await db.exec(`UPDATE employees SET plain_password = 'Secret123' WHERE id = '${IDS.emp}'`);
-const pw = (await db.query(`SELECT plain_password FROM employees WHERE id = $1`, [IDS.emp])).rows[0].plain_password;
-check('plain passwords are never stored', pw === null, String(pw));
+// تدقيق 14/10 CODE-006: العمود نفسه انشال (جان ينمسح دائماً)، فما يصير ينحفظ بيه شي
+const pwCol = await db.query(`SELECT 1 FROM information_schema.columns WHERE table_name = 'employees' AND column_name = 'plain_password'`);
+check('plain passwords are never stored (no such column)', pwCol.rows.length === 0);
 
 // ---------------- 3) الإجازات ----------------
 const leave = (start, end, type = 'annual', extra = '') =>

@@ -214,6 +214,11 @@ export async function mockSupabase(page: Page, options: MockOptions = {}) {
         body = req.postData();
       }
       calls.push({ method, table, url: req.url(), body });
+      // .select() بعد التعديل/الحذف = السيرفر يرجّع السطور اللي تأثرت (الموقع يتأكد إن شي تغيّر)
+      if ((req.headers()['prefer'] ?? '').includes('return=representation') && method !== 'POST') {
+        const matched = applyFilters(fixtures[table] ?? [], url);
+        return route.fulfill({ status: 200, headers: cors, json: matched.length > 0 ? matched : [{ id: 'mock-row' }] });
+      }
       return route.fulfill({ status: method === 'POST' ? 201 : 204, headers: cors, body: '' });
     }
 
