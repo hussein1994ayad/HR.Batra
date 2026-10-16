@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import type { AttendanceRecord, Branch, LeaveRequest, LocationPoint, WorkSchedule } from '@/lib/db-types';
 import type { MockGpsAttempt, RawZone, TrackedEmployee } from './types';
 import { fetchAllRows } from '@/lib/fetch-all';
+import { baghdadDayEndIso, baghdadDayStartIso, baghdadIso } from '@/lib/dates';
 
 export interface TrackingDataset {
   geofenceZones: RawZone[];
@@ -64,8 +65,8 @@ export async function fetchTrackingDataset(filters: {
       fetchAllRows<AttendanceRecord>(attendancePage),
       // محاولات الموقع الوهمي للفترة المختارة فقط (كانت تُجلب كلها منذ أول يوم)
       supabase.from('mock_gps_attempts').select('*, employees(full_name)')
-        .gte('timestamp', new Date(`${startDate}T00:00:00`).toISOString())
-        .lte('timestamp', new Date(`${endDate}T23:59:59.999`).toISOString())
+        .gte('timestamp', baghdadDayStartIso(startDate))
+        .lte('timestamp', baghdadDayEndIso(endDate))
         .order('timestamp', { ascending: false }),
       // مبالغ الحركات للأدمن بس (تدقيق 14/10: المبالغ تكشف الراتب). الأيام قبل نظام المسيرات ليس لها حركات؛
       // خطأ هنا لا يمنع عرض الصفحة
@@ -111,8 +112,8 @@ export async function fetchTrailPoints(employeeId: string, dateStr: string) {
     .from('location_tracking')
     .select('latitude, longitude, timestamp')
     .eq('employee_id', employeeId)
-    .gte('timestamp', new Date(`${dateStr}T00:00:00`).toISOString())
-    .lte('timestamp', new Date(`${dateStr}T23:59:59.999`).toISOString())
+    .gte('timestamp', baghdadDayStartIso(dateStr))
+    .lte('timestamp', baghdadDayEndIso(dateStr))
     .order('timestamp', { ascending: true });
   if (error) throw error;
   return data ?? [];
@@ -133,7 +134,8 @@ export function subscribeToEmployeeLocations(employeeId: string, onPoint: (point
   };
 }
 
-const toIso = (date: string, time: string) => (time ? new Date(`${date}T${time}:00`).toISOString() : null);
+// الوقت اللي يكتبه الأدمن بتوقيت بغداد (كان يتفسر بتوقيت كمبيوتره)
+const toIso = (date: string, time: string) => (time ? baghdadIso(date, time) : null);
 
 export async function updateAttendanceTimes(record: AttendanceRecord, checkIn: string, checkOut: string, fallbackDate: string, status?: 'present' | 'late') {
   const workDate = record.work_date || fallbackDate;

@@ -2,6 +2,7 @@
 
 import { isDateInRange, weekdayOf, workDaysFor } from '@/lib/attendance';
 import { resolveWorkSchedule } from '@/lib/schedules';
+import { getLocalDateStr } from '@/lib/dates';
 import type { Attendance, Employee, GeofenceViolation, LeaveRequest, MockGpsAttempt, WorkSchedule } from '@/lib/db-types';
 
 export type DirectoryEmployee = Pick<Employee, 'id' | 'full_name' | 'branch_id' | 'department_id'>;
@@ -86,8 +87,8 @@ export function buildSecurityLogs(mockAttempts: MockGpsAttempt[], geoViolations:
 export function formatLogTime(ts: string) {
   const d = new Date(ts);
   if (isNaN(d.getTime())) return 'غير محدد';
-  const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-  return d.toDateString() === new Date().toDateString()
+  const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'Asia/Baghdad' });
+  return getLocalDateStr(d) === getLocalDateStr()
     ? time
-    : `${d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' })} · ${time}`;
+    : `${d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', timeZone: 'Asia/Baghdad' })} · ${time}`;
 }

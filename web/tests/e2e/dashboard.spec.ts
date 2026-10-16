@@ -371,7 +371,10 @@ test.describe('workflows', () => {
       bytes: { settled_rows: 2000, settled_files: 130000, requests_rows: 0, requests_files: 0 },
       archived_total: 3,
     };
-    const api = await mockSupabase(page, { rpc: {
+    // أول مسير بالقاعدة 2026-09 حتى قائمة التنظيف تبين أيلول (القائمة تبدي من أول مسير — تدقيق 14/10 BUG-017)
+    const fixtures = defaultFixtures();
+    (fixtures as Record<string, unknown[]>).payroll_periods = [{ period_month: '2026-09' }];
+    const api = await mockSupabase(page, { fixtures, rpc: {
       payroll_cleanup_preview: preview, payroll_cleanup_run: { success: true, tracking_deleted: 5400, stops_deleted: 30, violations_deleted: 2 },
       loans_cleanup_preview: loans, loans_cleanup_run: { success: true, loans_archived: 1, loan_requests_deleted: null, pledge_urls: [] },
     } });
@@ -458,7 +461,7 @@ test.describe('workflows', () => {
       { date: '2026-01-01', kind: 'join', text: 'باشر بالعمل بفرع الكرادة' },
       { date: '2026-09-01', kind: 'transfer', text: 'انتقل من فرع الكرادة إلى فرع المنصور' },
     ];
-    const api = await mockSupabase(page, { fixtures, rpc: { reactivate_employee: { gap_days: 6, warnings: [] }, get_employee_history: history } });
+    const api = await mockSupabase(page, { fixtures, rpc: { restore_archived_employee: { gap_days: 6, warnings: [] }, get_employee_history: history } });
     await page.goto('/dashboard/employees');
     await page.getByRole('tab', { name: /الأرشيف/ }).click();
     await page.getByRole('button', { name: 'تفعيل', exact: true }).click();
@@ -466,9 +469,10 @@ test.describe('workflows', () => {
     await expect(dialog.getByLabel('تاريخ الرجوع للعمل')).toBeVisible();
     await dialog.getByLabel('تاريخ الرجوع للعمل').fill('2026-10-12');
     await dialog.getByRole('button', { name: 'استعادة' }).click();
-    await expect.poll(() => api.calls.filter((c) => c.table === 'rpc:reactivate_employee').length).toBe(1);
-    expect(api.calls.find((c) => c.table === 'rpc:reactivate_employee')?.body).toEqual({ p_employee_id: 'e9', p_return_date: '2026-10-12' });
-    await expect.poll(() => api.writes('archived_employees', 'DELETE').length).toBe(1);
+    // خطوة وحدة بالسيرفر: التفعيل بتاريخ الرجوع + شيل سجل الأرشيف (تدقيق 14/10 CODE-005)
+    await expect.poll(() => api.calls.filter((c) => c.table === 'rpc:restore_archived_employee').length).toBe(1);
+    expect(api.calls.find((c) => c.table === 'rpc:restore_archived_employee')?.body).toEqual({ p_archive_id: 'ar1', p_return_date: '2026-10-12' });
+    expect(api.writes('archived_employees', 'DELETE')).toHaveLength(0);
     await expect(page.getByText('6 يوم انقطاع ما تنحسب غياب')).toBeVisible();
 
     await page.getByRole('tab', { name: /دليل الموظفين/ }).click();
@@ -476,6 +480,50 @@ test.describe('workflows', () => {
     const historyBox = page.getByTestId('employee-history');
     await expect(historyBox).toContainText('انتقل من فرع الكرادة إلى فرع المنصور');
     await expect(historyBox).toContainText('مباشرة');
+  });
+
+  test('editing an employee is one server step, and removed documents are not deleted from the browser', async ({ page }) => {
+    const fixtures = defaultFixtures();
+    const docUrl = 'https://jgjlmddphhncatrhqrej.supabase.co/storage/v1/object/public/employee-documents/e1/old.jpg';
+    fixtures.employees = fixtures.employees.map((e) => (e.id === 'e1' ? { ...e, join_date: '2026-01-01', document_urls: [docUrl] } : e));
+    const api = await mockSupabase(page, { fixtures });
+    await page.goto('/dashboard/employees');
+    await page.locator('tr', { hasText: 'زينب علي' }).getByRole('button', { name: 'تعديل بيانات الموظف' }).click();
+    const dialog = page.getByRole('dialog');
+    await dialog.getByLabel('الاسم الكامل').fill('زينب علي حسن');
+    await dialog.getByRole('button', { name: 'إزالة' }).first().click();
+    await dialog.getByRole('button', { name: 'حفظ التعديلات' }).click();
+    await expect.poll(() => api.calls.filter((c) => c.table === 'rpc:save_employee').length).toBe(1);
+    const body = api.calls.find((c) => c.table === 'rpc:save_employee')?.body as { p_employee_id: string; p_changes: Record<string, unknown> };
+    expect(body.p_employee_id).toBe('e1');
+    expect(body.p_changes).toMatchObject({ full_name: 'زينب علي حسن', document_urls: [] });
+    // المستمسك المشال تحطه القاعدة بالسلة بعد الحفظ؛ المتصفح ما يحذف ملفات ولا يكتب بالجدول مباشرة
+    expect(api.calls.filter((c) => c.method === 'DELETE' && c.url.includes('/storage/'))).toHaveLength(0);
+    expect(api.writes('employees', 'PATCH')).toHaveLength(0);
+    expect(api.calls.filter((c) => c.table === 'rpc:update_employee_credentials')).toHaveLength(0);
+  });
+
+  test('archiving (the default end-of-service option) is one server step', async ({ page }) => {
+    const api = await mockSupabase(page, { rpc: { end_of_service_preview: { last_day: '2026-10-10', periods: [], total_net: 0, loans_left_after: 0 } } });
+    await page.goto('/dashboard/employees');
+    await page.locator('tr', { hasText: 'زينب علي' }).getByRole('button', { name: 'إنهاء خدمات الموظف' }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'تأكيد وتنفيذ' }).click();
+    await expect.poll(() => api.calls.filter((c) => c.table === 'rpc:end_employee_service').length).toBe(1);
+    expect(api.calls.find((c) => c.table === 'rpc:end_employee_service')?.body).toMatchObject({ p_employee_id: 'e1', p_type: 'archive' });
+    expect(api.writes('employees', 'PATCH')).toHaveLength(0);
+    expect(api.writes('archived_employees', 'POST')).toHaveLength(0);
+  });
+
+  test('the payroll month list starts at the first real payroll period', async ({ page }) => {
+    const fixtures = defaultFixtures();
+    const month = new Date().toISOString().slice(0, 7);
+    (fixtures as Record<string, unknown[]>).payroll_periods = [{ period_month: month }];
+    await mockSupabase(page, { fixtures });
+    await page.goto('/dashboard/payroll');
+    const select = page.getByLabel('مسير الشهر');
+    await expect(select).toBeVisible();
+    await expect.poll(async () => (await select.locator('option').evaluateAll((os) => os.map((o) => (o as HTMLOptionElement).value)))
+      .every((v) => v >= month)).toBe(true);
   });
 
   test('saves settings', async ({ page }) => {

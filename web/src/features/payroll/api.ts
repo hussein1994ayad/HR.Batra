@@ -15,6 +15,13 @@ export interface PayrollDataset {
   attendanceEmployeeIds: string[];
 }
 
+/** أول مسير بالقاعدة (YYYY-MM)؛ null = ماكو مسيرات بعد. */
+export async function fetchFirstPayrollMonth(): Promise<string | null> {
+  const { data, error } = await supabase.from('payroll_periods').select('period_month').order('period_month', { ascending: true }).limit(1);
+  if (error) throw error;
+  return (data?.[0] as { period_month?: string } | undefined)?.period_month ?? null;
+}
+
 /** موظفين بكل طلب احتساب: كل طلب يخلص بأقل من ثانية حتى لو صاروا مئات (حد القاعدة 8 ثواني للطلب). */
 export const CALC_BATCH = 10;
 

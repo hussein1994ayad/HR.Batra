@@ -47,11 +47,31 @@ export function formatLateDurationArabic(minutes: number): string {
   return hrsStr || minsStr;
 }
 
-/** تاريخ اليوم المحلي بصيغة YYYY-MM-DD. */
+// ---------------------------------------------------------------------
+// توقيت بغداد (تدقيق 14/10 BUG-007): كل وقت ينكتب وينعرض بتوقيت بغداد، مهما كان توقيت كمبيوتر الأدمن.
+// العراق ما بيه توقيت صيفي، فالفرق ثابت +3.
+// ---------------------------------------------------------------------
+export const BAGHDAD_OFFSET = '+03:00';
+const BAGHDAD_MS = 3 * 3600 * 1000;
+
+/** تاريخ (YYYY-MM-DD) + ساعة (HH:MM) بتوقيت بغداد ← ISO. */
+export function baghdadIso(date: string, time: string): string {
+  return new Date(`${date}T${time.length === 5 ? `${time}:00` : time}${BAGHDAD_OFFSET}`).toISOString();
+}
+
+/** بداية ونهاية يوم بغداد (لفلترة الأوقات بيوم معيّن). */
+export const baghdadDayStartIso = (date: string) => baghdadIso(date, '00:00:00');
+export const baghdadDayEndIso = (date: string) => baghdadIso(date, '23:59:59.999');
+
+/** الساعة والدقيقة بتوقيت بغداد لوقت معيّن. */
+export function baghdadHM(value: string | number | Date): { h: number; m: number } {
+  const d = new Date(new Date(value).getTime() + BAGHDAD_MS);
+  return { h: d.getUTCHours(), m: d.getUTCMinutes() };
+}
+
+/** تاريخ يوم بغداد (YYYY-MM-DD) لوقت معيّن، والافتراضي اليوم (كان تاريخ كمبيوتر الأدمن). */
 export function getLocalDateStr(date: Date = new Date()): string {
-  const d = new Date(date);
-  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-  return d.toISOString().split('T')[0];
+  return new Date(new Date(date).getTime() + BAGHDAD_MS).toISOString().slice(0, 10);
 }
 
 /** يضيف أياماً لتاريخ YYYY-MM-DD ويرجع YYYY-MM-DD (حساب تقويمي بدون منطقة زمنية). */

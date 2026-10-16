@@ -122,6 +122,7 @@ export async function uploadEmployeeDocuments(employeeId: string, files: File[])
   return { urls, failed };
 }
 
+/** حذف مباشر من التخزين: بس لملفات انرفعت هسه وما انحفظت (التعديل فشل)، أو سيرفر قبل تحديث 20261023000000. */
 async function removeEmployeeDocuments(urls: string[]) {
   const paths = urls.map(documentPathFromUrl).filter((p): p is string => !!p);
   if (paths.length === 0) return;
@@ -146,7 +147,7 @@ export async function createEmployee(values: EmployeeFormValues, documents: File
   const employeeId = newUuid();
   const { urls, failed } = await uploadEmployeeDocuments(employeeId, documents);
 
-  const { error } = await supabase.rpc('create_employee_secure', {
+  const create = (code: string | null) => supabase.rpc('create_employee_secure', {
     p_email: values.email,
     p_password: values.password,
     p_full_name: values.fullName,
@@ -155,12 +156,19 @@ export async function createEmployee(values: EmployeeFormValues, documents: File
     p_branch_id: values.branchId || null,
     p_monthly_salary_iqd: values.monthlySalary || 0,
     p_document_urls: urls,
-    p_employee_code: `EMP-${Math.floor(1000 + Math.random() * 9000)}`,
+    // رقم الموظف بالتسلسل من السيرفر (EMP-003، EMP-004...) بدل رقم عشوائي يتكرر (تدقيق 14/10 BUG-010)
+    p_employee_code: code,
     p_employee_id: employeeId,
     p_join_date: values.joinDate,
     p_department_id: values.departmentId || null,
   });
-  if (error) throw error;
+  let { error } = await create(null);
+  // سيرفر قبل تحديث 20261023000000: الرقم إجباري
+  if (error?.code === '23502') ({ error } = await create(`EMP-${Math.floor(1000 + Math.random() * 9000)}`));
+  if (error) {
+    await removeEmployeeDocuments(urls);
+    throw error;
+  }
   return { failedUploads: failed };
 }
 
@@ -170,6 +178,31 @@ export async function updateEmployee(
   keptDocuments: string[],
   newDocuments: File[],
 ) {
+  const { urls, failed } = await uploadEmployeeDocuments(employee.id, newDocuments);
+  const changes = {
+    full_name: values.fullName,
+    role: values.role,
+    branch_id: values.branchId || null,
+    department_id: values.departmentId || null,
+    ...salaryUpdateFields(values, currentPayrollMonth()),
+    document_urls: [...keptDocuments, ...urls],
+    join_date: values.joinDate,
+  };
+  // خطوة وحدة بالسيرفر (تدقيق 14/10 CODE-005): الإيميل وكلمة السر والبيانات يا كلها تنحفظ يا ولا شي.
+  // المستمسكات المشالة تروح للسلة بس بعد ما ينحفظ التعديل (BUG-009؛ كانت تنحذف قبل الحفظ)
+  const { error } = await supabase.rpc('save_employee', {
+    p_employee_id: employee.id,
+    p_email: values.email,
+    p_password: values.password,
+    p_phone: values.phone || '',
+    p_changes: changes,
+  });
+  if (!error) return { failedUploads: failed };
+  if (error.code !== 'PGRST202') {
+    await removeEmployeeDocuments(urls); // انرفعت هسه وما انحفظت
+    throw error;
+  }
+  // سيرفر قبل التحديث: نفس الخطوات القديمة، بس الحذف بعد ما ينحفظ السطر
   const { error: rpcErr } = await supabase.rpc('update_employee_credentials', {
     p_employee_id: employee.id,
     p_email: values.email,
@@ -177,23 +210,9 @@ export async function updateEmployee(
     p_phone: values.phone || '',
   });
   if (rpcErr) throw rpcErr;
-
+  const { error: updErr } = await supabase.from('employees').update(changes).eq('id', employee.id);
+  if (updErr) throw updErr;
   await removeEmployeeDocuments(documentList(employee.document_urls).filter(url => !keptDocuments.includes(url)));
-  const { urls, failed } = await uploadEmployeeDocuments(employee.id, newDocuments);
-
-  const { error } = await supabase
-    .from('employees')
-    .update({
-      full_name: values.fullName,
-      role: values.role,
-      branch_id: values.branchId || null,
-      department_id: values.departmentId || null,
-      ...salaryUpdateFields(values, currentPayrollMonth()),
-      document_urls: [...keptDocuments, ...urls],
-      join_date: values.joinDate,
-    })
-    .eq('id', employee.id);
-  if (error) throw error;
   return { failedUploads: failed };
 }
 
@@ -201,14 +220,25 @@ export async function updateEmployee(
 // الأرشفة والحذف
 // ------------------------------------------------------------------
 
+// القاعدة تقبل 'archived' (كان 'archive' فيفشل الخيار الافتراضي «أرشفة» بعد ما يعطّل الموظف)
 const ARCHIVE_TYPES: Record<DeleteType, { type: string; reason: string }> = {
   immediate: { type: 'permanent', reason: 'حذف فوري نهائي من لوحة التحكم' },
-  archive: { type: 'archive', reason: 'أرشفة وتعطيل الحساب الإداري للموظف' },
+  archive: { type: 'archived', reason: 'أرشفة وتعطيل الحساب الإداري للموظف' },
   scheduled: { type: 'scheduled_deletion', reason: 'حذف مجدول بعد 30 يوماً من لوحة التحكم' },
 };
 
-/** حذف فوري (RPC) أو تعطيل الحساب، ثم تسجيل الإجراء في الأرشيف. */
+/** إنهاء الخدمات: آخر يوم + تعطيل (أو حذف فوري) + سجل الأرشيف، بخطوة وحدة بالسيرفر (تدقيق 14/10 CODE-005). */
 export async function archiveOrDeleteEmployee(employee: Employee, deleteType: DeleteType, reason: string, lastDay?: string) {
+  const { error: rpcError } = await supabase.rpc('end_employee_service', {
+    p_employee_id: employee.id,
+    p_type: deleteType,
+    p_reason: reason || null,
+    p_last_day: lastDay || null,
+  });
+  if (!rpcError) return;
+  if (rpcError.code !== 'PGRST202') throw rpcError;
+
+  // سيرفر قبل تحديث 20261023000000: الخطوات القديمة
   const { data: { session } } = await supabase.auth.getSession();
 
   if (deleteType === 'immediate') {
@@ -260,6 +290,11 @@ export async function reactivateEmployee(employeeId: string, returnDate: string)
 }
 
 export async function restoreArchivedEmployee(record: ArchivedEmployee, returnDate: string): Promise<ReactivateResult> {
+  // خطوة وحدة بالسيرفر: التفعيل بتاريخ الرجوع + شيل سجل الأرشيف (تدقيق 14/10 CODE-005)
+  const { data, error: rpcError } = await supabase.rpc('restore_archived_employee', { p_archive_id: record.id, p_return_date: returnDate });
+  if (!rpcError) return (data ?? { gap_days: 0, warnings: [] }) as ReactivateResult;
+  if (rpcError.code !== 'PGRST202') throw rpcError;
+
   let result: ReactivateResult = { gap_days: 0, warnings: [] };
   try {
     result = await reactivateEmployee(record.employee_id, returnDate);
@@ -283,6 +318,11 @@ export async function fetchEmployeeHistory(employeeId: string): Promise<Employee
 }
 
 export async function destroyArchivedEmployee(record: ArchivedEmployee) {
+  // خطوة وحدة بالسيرفر (تدقيق 14/10 CODE-005)؛ مستمسكاته وصورته تروح للسلة 30 يوم (BUG-008)
+  const { error: oneStep } = await supabase.rpc('destroy_archived_employee', { p_archive_id: record.id });
+  if (!oneStep) return;
+  if (oneStep.code !== 'PGRST202') throw oneStep;
+
   const { error: rpcErr } = await supabase.rpc('hard_delete_employee', { p_employee_id: record.employee_id });
   if (rpcErr) throw rpcErr;
   const { error } = await supabase

@@ -38,8 +38,8 @@ export function previewPayrollPeriod(month: string, cutoffDay: number, paymentDa
   };
 }
 
-/** أول مسير في محرّك الرواتب (قبله كشوف قديمة بالأشهر الكاملة). */
-export const FIRST_ENGINE_MONTH = '2026-09';
+/** أول مسير معروف (احتياط لحد ما يوصل أول مسير من القاعدة؛ بعد التصفير = 2026-10). */
+export const FIRST_ENGINE_MONTH = '2026-10';
 
 const addMonths = (month: string, n: number) => {
   const [y, m] = month.split('-').map(Number);
@@ -51,11 +51,13 @@ const addMonths = (month: string, n: number) => {
  * قائمة المسيرات بالتسلسل (الأقدم ← الأحدث) حول المسير الحالي: "رواتب الشهر العاشر 2026"
  * (فترة الدوام تنكتب تحت العنوان بجملة واضحة).
  */
-export function payrollMonthOptions(current: string, before = 12, after = 3) {
+export function payrollMonthOptions(current: string, before = 12, after = 3, firstMonth: string | null = null) {
   const out: { value: string; label: string }[] = [];
   for (let i = -before; i <= after; i++) {
     const month = addMonths(current, i);
-    out.push({ value: month, label: `رواتب ${payrollMonthName(month)}${month < FIRST_ENGINE_MONTH ? ' (كشوف قديمة)' : ''}` });
+    // أشهر قبل أول مسير بالقاعدة ما بيها شي (تدقيق 14/10 BUG-017)
+    if (firstMonth && month < firstMonth) continue;
+    out.push({ value: month, label: `رواتب ${payrollMonthName(month)}${month < (firstMonth ?? FIRST_ENGINE_MONTH) ? ' (كشوف قديمة)' : ''}` });
   }
   return out;
 }

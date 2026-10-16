@@ -79,7 +79,7 @@ export function InstallmentScheduleModal({ s }: { s: LoansState }) {
                   {inst.is_paid ? (
                     <Badge tone={inst.payment_type === 'cash' ? 'emerald' : 'sky'} dot>
                       {inst.payment_type === 'cash' ? 'نقداً' : 'استقطاع راتب'}
-                      {inst.paid_at ? ` · ${new Date(inst.paid_at).toLocaleDateString('en-GB')}` : ''}
+                      {inst.paid_at ? ` · ${new Date(inst.paid_at).toLocaleDateString('en-GB', { timeZone: 'Asia/Baghdad' })}` : ''}
                     </Badge>
                   ) : (
                     <Badge tone="slate">غير مدفوع</Badge>

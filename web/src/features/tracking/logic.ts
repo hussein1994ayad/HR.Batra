@@ -3,7 +3,7 @@
 // =========================================================================
 
 import type { AttendanceRecord, LeaveRequest, WorkSchedule } from '@/lib/db-types';
-import { formatLateDurationArabic, getLocalDateStr } from '@/lib/dates';
+import { baghdadHM, formatLateDurationArabic, getLocalDateStr } from '@/lib/dates';
 import { formatClock } from '@/lib/format';
 import { resolveWorkSchedule } from '@/lib/schedules';
 import { DEFAULT_GRACE_MINUTES } from '@/lib/attendance';
@@ -384,12 +384,11 @@ export const formatHours = (checkIn?: string | null, checkOut?: string | null) =
 };
 
 /** قيمة حقل <input type="time"> من طابع زمني. */
+/** وقت البصمة لخانة التعديل (HH:MM) بتوقيت بغداد. */
 export const formatTimeInputValue = (dateString?: string | null) => {
   if (!dateString) return '';
-  const d = new Date(dateString);
-  const h = d.getHours().toString().padStart(2, '0');
-  const m = d.getMinutes().toString().padStart(2, '0');
-  return `${h}:${m}`;
+  const { h, m } = baghdadHM(dateString);
+  return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
 };
 
 /** مفتاح صف القرار (يُستعمل لحفظ المبلغ والسبب المعدّلين). */

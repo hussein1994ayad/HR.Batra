@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { readCache, useQuery } from '@/lib/useQuery';
 import { errorMessage, formatBytes, timeAgo } from '@/lib/format';
+import { baghdadHM } from '@/lib/dates';
 import { Card, CardHeader, EmptyState, TONE_CHIP, cn, type Tone } from '@/components/ui';
 import { DASHBOARD_CACHE_KEY, fetchDashboard, isDashboardData, type DashboardData } from '@/features/overview/api';
 import { AnnouncementModal } from '@/features/overview/components/AnnouncementModal';
@@ -81,7 +82,7 @@ export default function DashboardPage() {
   const tracked = stats.presentToday + stats.absentToday;
   const attendanceRate = tracked > 0 ? Math.round((stats.presentToday / tracked) * 100) : 0;
   const firstName = adminName.trim().split(/\s+/)[0];
-  const greeting = new Date(now).getHours() < 12 ? 'صباح الخير' : 'مساء الخير';
+  const greeting = baghdadHM(now).h < 12 ? 'صباح الخير' : 'مساء الخير';
   const pendingTotal = stats.pendingLeaves + stats.pendingLoans + stats.pendingDevices;
   const heroSummary = [
     pendingTotal > 0 ? `لديك ${pendingTotal} طلب بانتظار قرارك` : 'لا توجد طلبات معلقة حالياً',

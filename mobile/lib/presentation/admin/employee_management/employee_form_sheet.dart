@@ -74,7 +74,8 @@ class _EmployeeFormState extends State<_EmployeeForm> {
     try {
       final newEmpId = const Uuid().v4();
       final uploadedDocs = _documents.isEmpty ? <String>[] : await uploadEmployeeDocuments(_documents, newEmpId);
-      final empCode = _code.text.trim().isNotEmpty ? _code.text.trim() : 'EMP-${DateTime.now().millisecondsSinceEpoch % 10000}';
+      // بدون كود = السيرفر يعطي الرقم التالي بالتسلسل (تدقيق 14/10 BUG-010؛ كان رقم عشوائي يتكرر)
+      final empCode = _code.text.trim().isNotEmpty ? _code.text.trim() : null;
 
       await EmployeeAdminRepository().createEmployee({
         'p_email': _email.text.trim(),

@@ -183,22 +183,24 @@ class _DocumentsEditorState extends State<_DocumentsEditor> {
 
   Future<void> _save() async {
     setState(() => _saving = true);
+    var newUrls = <String>[];
     try {
-      // حذف الوثائق المزالة من التخزين
-      for (final url in _original.where((u) => !_existing.contains(u))) {
-        try {
-          final match = RegExp(r'/employee-documents/(.+)').firstMatch(url);
-          if (match != null) {
-            await EmployeeAdminRepository().removeDocumentObject(match.group(1)!);
-          }
-        } catch (e) {
-          appLog('تعذر حذف المستند القديم من التخزين: $e');
-        }
-      }
-      final newUrls = _new.isEmpty ? <String>[] : await uploadEmployeeDocuments(_new, widget.emp.id);
+      // المستمسكات المشالة ما تنحذف من هنا: القاعدة تحطها بالسلة (30 يوم) بس بعد ما ينحفظ التعديل
+      // (تدقيق 14/10 BUG-009؛ كانت تنحذف قبل الحفظ، فإذا فشل الحفظ تضيع)
+      newUrls = _new.isEmpty ? <String>[] : await uploadEmployeeDocuments(_new, widget.emp.id);
       await EmployeeAdminRepository().updateDocumentUrls(widget.emp.id, [..._existing, ...newUrls]);
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
+      // الملفات اللي انرفعت هسه وما انحفظت
+      for (final url in newUrls) {
+        final match = RegExp(r'/employee-documents/([^?]+)').firstMatch(url);
+        if (match == null) continue;
+        try {
+          await EmployeeAdminRepository().removeDocumentObject(match.group(1)!);
+        } catch (err) {
+          appLog('تعذر حذف ملف ما انحفظ: $err');
+        }
+      }
       if (mounted) {
         setState(() => _saving = false);
         AppSnack.error(context, 'تعذّر الحفظ: $e');

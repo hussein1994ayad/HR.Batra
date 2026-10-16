@@ -8,7 +8,7 @@ import toast from 'react-hot-toast';
 import { Send } from 'lucide-react';
 import { confetti } from '@/lib/lazy';
 import { errorMessage } from '@/lib/format';
-import { addDaysStr, getLocalDateStr } from '@/lib/dates';
+import { addDaysStr, baghdadDayStartIso, baghdadIso, getLocalDateStr } from '@/lib/dates';
 import { Field, Input, Modal, ModalFooter, SearchInput, Select, SegmentedTabs, Textarea, cn } from '@/components/ui';
 import { publishAnnouncement, type DashboardData } from '../api';
 import type { DirectoryEmployee } from '../logic';
@@ -53,8 +53,8 @@ export function AnnouncementModal({
       const sent = await publishAnnouncement({
         p_title: title.trim(),
         p_content: text.trim(),
-        p_starts_at: startDate === today ? null : new Date(`${startDate}T00:00:00`).toISOString(),
-        p_ends_at: endDate ? new Date(`${endDate}T23:59:59`).toISOString() : null,
+        p_starts_at: startDate === today ? null : baghdadDayStartIso(startDate),
+        p_ends_at: endDate ? baghdadIso(endDate, '23:59:59') : null,
         p_target: targetType === 'employee' ? 'employees' : targetType,
         p_branch_id: targetType === 'branch' ? branchId : null,
         p_employee_ids: targetType === 'employee' ? employeeIds : null,

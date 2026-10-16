@@ -54,4 +54,28 @@ void main() {
     expect(calls.last, 'PATCH /rest/v1/employees');
     expect(await repo.employeeHistory('e1'), isNull);
   });
+
+  test('a new employee without a code gets the next number from the server; an older server still works', () async {
+    final codes = <Object?>[];
+    var oldServer = false;
+    final client = SupabaseClient('https://fake.supabase.test', 'anon', httpClient: MockClient((req) async {
+      const json = {'content-type': 'application/json'};
+      final code = (jsonDecode(req.body) as Map<String, dynamic>)['p_employee_code'];
+      codes.add(code);
+      if ((oldServer && code == null) || code == 'BAD') {
+        return http.Response(jsonEncode({'code': '23502', 'message': 'null value in column "employee_code"'}), 400, headers: json, request: req);
+      }
+      return http.Response('null', 200, headers: json, request: req);
+    }));
+    final repo = EmployeeAdminRepository(client: client);
+    await repo.createEmployee({'p_full_name': 'جديد', 'p_employee_code': null});
+    expect(codes, [null]); // تدقيق 14/10 BUG-010: السيرفر يعطي EMP-003، EMP-004...
+    oldServer = true;
+    codes.clear();
+    await repo.createEmployee({'p_full_name': 'جديد', 'p_employee_code': null});
+    expect(codes.first, isNull);
+    expect(codes.last, matches(RegExp(r'^EMP-\d+$')));
+    // كود كتبه الأدمن وفشل: الخطأ يطلع مثل ما هو (ما ينبدل برقم ثاني)
+    await expectLater(repo.createEmployee({'p_full_name': 'جديد', 'p_employee_code': 'BAD'}), throwsA(isA<PostgrestException>()));
+  });
 }

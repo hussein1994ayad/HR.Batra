@@ -7,6 +7,7 @@ import { useConfirm } from '@/components/confirm';
 import { Button, Card, CardHeader, Field, InfoNote, Select, Toggle } from '@/components/ui';
 import { errorMessage, formatDate } from '@/lib/format';
 import { FIRST_ENGINE_MONTH, arabicDate, currentPayrollMonth, payrollMonthName, shiftPayrollMonth } from '@/features/payroll/period';
+import { useFirstPayrollMonth } from '@/features/payroll/useFirstPayrollMonth';
 import { fetchCleanupPreview, fetchLoansCleanupPreview, runPayrollCleanup } from '../api';
 import { downloadCleanupReport } from '../cleanupReport';
 import { attendanceBlockers, cleanupSummary, formatBytes } from '../logic';
@@ -24,12 +25,15 @@ const n = (v: number | null | undefined) => Number(v ?? 0).toLocaleString('en-US
 export function PayrollCleanupSection() {
   const confirm = useConfirm();
   // المسيرات من قبل الحالي ورجوع (الحالي مفتوح فما ينظف)
+  const firstMonth = useFirstPayrollMonth() ?? FIRST_ENGINE_MONTH;
   const months = useMemo(() => {
     const out: string[] = [];
-    for (let m = shiftPayrollMonth(currentPayrollMonth(), -1); m >= FIRST_ENGINE_MONTH && out.length < 24; m = shiftPayrollMonth(m, -1)) out.push(m);
+    for (let m = shiftPayrollMonth(currentPayrollMonth(), -1); m >= firstMonth && out.length < 24; m = shiftPayrollMonth(m, -1)) out.push(m);
     return out;
-  }, []);
-  const [month, setMonth] = useState(months[0] ?? '');
+  }, [firstMonth]);
+  // المسير المختار؛ لحد ما يختار الأدمن = أول مسير بالقائمة (القائمة تكمل بعد ما يوصل أول مسير من القاعدة)
+  const [picked, setMonth] = useState('');
+  const month = months.includes(picked) ? picked : (months[0] ?? '');
   const [preview, setPreview] = useState<CleanupPreview | null>(null);
   const [loadError, setLoadError] = useState('');
   const [pick, setPick] = useState<CleanupSelection>(NONE);

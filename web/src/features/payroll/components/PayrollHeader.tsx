@@ -2,6 +2,7 @@ import { Archive, Banknote, CheckCircle2, ChevronLeft, ChevronRight, HandCoins, 
 import { Badge, Button, StatTile } from '@/components/ui';
 import { formatIQD } from '@/lib/format';
 import { arabicDate, currentPayrollMonth, payrollMonthName, payrollMonthOptions, shiftPayrollMonth } from '../period';
+import { useFirstPayrollMonth } from '../useFirstPayrollMonth';
 
 type Props = {
   isMonthArchived: boolean;
@@ -34,7 +35,8 @@ export function PayrollHeader({
   const allIssued = issuedCount === rowCount && rowCount > 0;
   const selectedMonth = `${currentYearVal}-${currentMonthVal}`;
   // المسيرات بالتسلسل حول مسير اليوم، وتشمل المختار دائماً
-  const options = payrollMonthOptions(currentPayrollMonth());
+  const firstMonth = useFirstPayrollMonth();
+  const options = payrollMonthOptions(currentPayrollMonth(), 12, 3, firstMonth);
   const monthOptions = options.some((o) => o.value === selectedMonth)
     ? options
     : [...options, ...payrollMonthOptions(selectedMonth, 0, 0)].sort((a, b) => a.value.localeCompare(b.value));

@@ -1,5 +1,7 @@
 // Small, dependency-free formatting helpers shared by dashboard pages.
 
+import { baghdadHM, getLocalDateStr } from './dates';
+
 /** Formats an amount in Iraqi dinars, e.g. `1,250,000 د.ع`. */
 export function formatIQD(value: number | string | null | undefined): string {
   const n = Math.round(Number(value) || 0);
@@ -19,12 +21,13 @@ export function formatBytes(bytes: number | null | undefined): string {
   return `${value.toFixed(i === 0 ? 0 : i >= 3 ? 2 : 1)} ${units[i]}`;
 }
 
-/** `9:05 AM` style clock for an ISO timestamp, or `-` when missing/invalid. */
+/** «9:05 ص» لوقت ISO بتوقيت بغداد (مو توقيت الكمبيوتر)، أو `-`. */
 export function formatClock(iso: string | null | undefined): string {
   if (!iso) return '-';
   const d = new Date(iso);
   if (isNaN(d.getTime())) return '-';
-  return arabicClock(d.getHours(), d.getMinutes());
+  const { h, m } = baghdadHM(d);
+  return arabicClock(h, m);
 }
 
 /** "9:05 ص" / "2:30 م" — نفس صيغة التطبيق. */
@@ -48,7 +51,7 @@ export function formatDate(iso: string | null | undefined): string {
   if (!iso) return '-';
   const d = new Date(iso);
   if (isNaN(d.getTime())) return '-';
-  return d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  return d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Asia/Baghdad' });
 }
 
 export function formatDateTime(iso: string | null | undefined): string {
@@ -83,12 +86,9 @@ export function daysUntil(iso: string, now: number = Date.now()): number {
   return Math.ceil((new Date(iso).getTime() - now) / 86_400_000);
 }
 
-/** Today's date as `YYYY-MM-DD` in the browser's local timezone. */
+/** تاريخ يوم بغداد (YYYY-MM-DD)، والافتراضي اليوم (كان تاريخ كمبيوتر الأدمن). */
 export function localDateStr(d: Date = new Date()): string {
-  const y = d.getFullYear();
-  const m = (d.getMonth() + 1).toString().padStart(2, '0');
-  const day = d.getDate().toString().padStart(2, '0');
-  return `${y}-${m}-${day}`;
+  return getLocalDateStr(d);
 }
 
 export function initials(name: string | null | undefined): string {
