@@ -106,8 +106,16 @@ class EmployeeAdminRepository {
     ensureChanged(await _db.from('employees').update({'device_id_lock': 'force_lock_active'}).eq('id', employeeId).select('id'));
   }
 
+  /// إنشاء موظف بحسابه. بدون كود = السيرفر يعطي الرقم التالي (EMP-003، EMP-004... — تدقيق 14/10 BUG-010).
   Future<void> createEmployee(Map<String, dynamic> params) async {
-    await _db.rpc<dynamic>('create_employee_secure', params: params);
+    try {
+      await _db.rpc<dynamic>('create_employee_secure', params: params);
+    } on PostgrestException catch (e) {
+      // سيرفر قبل تحديث 20261023000000: الكود إجباري
+      if (e.code != '23502' || params['p_employee_code'] != null) rethrow;
+      await _db.rpc<dynamic>('create_employee_secure',
+          params: {...params, 'p_employee_code': 'EMP-${DateTime.now().millisecondsSinceEpoch % 10000}'});
+    }
   }
 
   /// يضغط الصور ويرفعها إلى bucket 'employee-documents' ويرجع روابطها (الملف اللي يفشل يُتخطى).
@@ -127,6 +135,8 @@ class EmployeeAdminRepository {
     return uploadedUrls;
   }
 
+  /// حذف مباشر من التخزين: بس لملفات انرفعت هسه وما انحفظت (الحفظ فشل).
+  /// المستمسك المشال من القائمة تحطه القاعدة بالسلة بعد ما ينحفظ (تدقيق 14/10 BUG-009).
   Future<void> removeDocumentObject(String path) async {
     await _db.storage.from('employee-documents').remove([path]);
   }

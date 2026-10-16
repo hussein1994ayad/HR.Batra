@@ -18,8 +18,8 @@ export function PayrollPrintHeader({ currentMonthName, currentYearVal, startDate
             <p className="text-xs text-slate-500 font-bold">كشف رواتب الموظفين التفصيلي الشهري</p>
           </div>
           <div className="text-left font-mono text-[10px]">
-            <p>تاريخ الطباعة: {new Date().toLocaleDateString('ar-IQ')}</p>
-            <p>الوقت: {new Date().toLocaleTimeString('ar-IQ')}</p>
+            <p>تاريخ الطباعة: {new Date().toLocaleDateString('ar-IQ', { timeZone: 'Asia/Baghdad' })}</p>
+            <p>الوقت: {new Date().toLocaleTimeString('ar-IQ', { timeZone: 'Asia/Baghdad' })}</p>
           </div>
         </div>
         

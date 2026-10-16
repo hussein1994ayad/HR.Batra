@@ -16,7 +16,7 @@ export function LoanStatementPrint({ selectedLoanForInstallments }: LoanStatemen
       <div className="text-center border-b-2 border-slate-950 pb-6 mb-6">
         <h1 className="text-2xl font-black mb-2">كشف حساب أقساط وسلف الموظفين</h1>
         <h2 className="text-lg font-bold text-slate-700">قسم ادارة موظفين شركة بترى</h2>
-        <p className="text-[10px] text-slate-500 mt-1">تاريخ استخراج الكشف: {new Date().toLocaleDateString('ar-IQ')} {new Date().toLocaleTimeString('ar-IQ')}</p>
+        <p className="text-[10px] text-slate-500 mt-1">تاريخ استخراج الكشف: {new Date().toLocaleDateString('ar-IQ', { timeZone: 'Asia/Baghdad' })} {new Date().toLocaleTimeString('ar-IQ', { timeZone: 'Asia/Baghdad' })}</p>
       </div>
 
       {/* Employee & Loan info details */}
@@ -81,7 +81,7 @@ export function LoanStatementPrint({ selectedLoanForInstallments }: LoanStatemen
                   }
                 </td>
                 <td className="border border-slate-400 p-2">
-                  {inst.paid_at ? new Date(inst.paid_at).toLocaleDateString('ar-IQ') : '-'}
+                  {inst.paid_at ? new Date(inst.paid_at).toLocaleDateString('ar-IQ', { timeZone: 'Asia/Baghdad' }) : '-'}
                 </td>
                 <td className="border border-slate-400 p-2 text-slate-700">
                   {[installmentOrigin(inst), inst.payment_note].filter(Boolean).join(' · ') || '-'}

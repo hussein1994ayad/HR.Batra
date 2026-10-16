@@ -3,8 +3,9 @@
 // =========================================================================
 // تستدعيها مهمة pg_cron اليومية (daily_trash_storage_cleanup) بعد perform_daily_cleanup.
 // تُنشر بـ --no-verify-jwt مثل push-notification لأن المهمة لا تحمل مفتاحاً.
-// آمنة حتى لو استدعاها أي أحد: تحذف فقط الملفات التي تجاوزت موعد حذفها المجدول
-// (30 يوماً في السلة) ولم تُسترجع — نفس ما كانت ستحذفه المهمة على أي حال.
+// (تدقيق 14/10 BUG-019) تشتغل بس بكود مؤقت تصدره المهمة نفسها بكل تشغيلة (issue_cleanup_token)
+// بترويسة x-cleanup-token: الكود ينفع مرة وحدة وخلال ساعة. ماكو كلمة سر تنحفظ بمكان.
+// تحذف فقط الملفات التي تجاوزت موعد حذفها المجدول (30 يوماً في السلة) ولم تُسترجع.
 // =========================================================================
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
@@ -30,6 +31,18 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
     );
+
+    // الكود المؤقت من المهمة المجدولة: ينمسح أول ما ينستعمل (ما ينفع مرتين)
+    const token = req.headers.get("x-cleanup-token") ?? "";
+    if (!/^[0-9a-f-]{36}$/i.test(token)) return json({ error: "unauthorized" }, 401);
+    const { data: used, error: tokenError } = await supabase
+      .from("cleanup_run_tokens")
+      .delete()
+      .eq("token", token)
+      .gt("created_at", new Date(Date.now() - 3600_000).toISOString())
+      .select("token");
+    if (tokenError) throw tokenError;
+    if (!used || used.length === 0) return json({ error: "unauthorized" }, 401);
 
     const { data: expired, error } = await supabase
       .from("deleted_files")

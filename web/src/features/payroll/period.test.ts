@@ -23,7 +23,11 @@ describe('payroll month in plain words', () => {
     expect(payrollMonthName('2026-12')).toBe('الشهر الثاني عشر 2026');
     expect(arabicDate('2026-09-27')).toBe('الأحد 27/9');
     expect(arabicDate('2026-10-26', true)).toBe('الاثنين 26/10/2026');
-    expect(payrollMonthOptions('2026-10', 1, 1).map((o) => o.label)).toEqual(['رواتب الشهر التاسع 2026', 'رواتب الشهر العاشر 2026', 'رواتب الشهر الحادي عشر 2026']);
+    expect(payrollMonthOptions('2026-10', 1, 1, '2026-09').map((o) => o.label)).toEqual(['رواتب الشهر التاسع 2026', 'رواتب الشهر العاشر 2026', 'رواتب الشهر الحادي عشر 2026']);
+    // تدقيق 14/10 BUG-017: الأشهر قبل أول مسير بالقاعدة ما تطلع بالقائمة
+    expect(payrollMonthOptions('2026-10', 3, 1, '2026-10').map((o) => o.value)).toEqual(['2026-10', '2026-11']);
+    // قبل ما يوصل أول مسير من القاعدة: الأشهر قبل 2026-10 «كشوف قديمة»
+    expect(payrollMonthOptions('2026-10', 1, 0)[0].label).toBe('رواتب الشهر التاسع 2026 (كشوف قديمة)');
   });
 
   it('an installment belongs to the payroll month by the cutoff day (like the server)', () => {
