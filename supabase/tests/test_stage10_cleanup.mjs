@@ -22,10 +22,12 @@ const gone = await one(`SELECT to_regclass('public.tracking_schedules') a, to_re
   to_regclass('public.device_tokens') c`);
 check('2) old tracking schedules, geofence assignments and the second token copy are gone', gone.a === null && gone.b === null && gone.c === null, JSON.stringify(gone));
 
-// العمود القديم يبقى للنسخة الحالية من التطبيق، ونقله للمكان الواحد يشتغل
-await db.query(`UPDATE employees SET fcm_token = 'tok-current-app' WHERE id = $1`, [IDS.emp]);
-check('   the legacy token column still lands in the one place (until part 3)',
-  (await db.query(`SELECT 1 FROM fcm_tokens WHERE employee_id = $1 AND token = 'tok-current-app'`, [IDS.emp])).rows.length === 1);
+// الجزء الثالث: عمود الرمز القديم والـ trigger والدالة اللي تنقل منه انحذفوا
+const legacy = await one(`SELECT
+  (SELECT count(*) FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'employees' AND column_name = 'fcm_token')::int c,
+  (SELECT count(*) FROM pg_trigger WHERE tgname = 'trg_copy_legacy_push_token')::int t,
+  to_regprocedure('public.copy_legacy_push_token()') f`);
+check('   part 3: the legacy token column, its trigger and its copy function are gone', legacy.c === 0 && legacy.t === 0 && legacy.f === null, JSON.stringify(legacy));
 
 // إخفاء هوية موظف محذوف ما يعتمد على الجدول المحذوف
 await db.query(`INSERT INTO fcm_tokens (employee_id, token) VALUES ($1, 'tok-e2')`, [IDS.emp2]);
@@ -57,5 +59,17 @@ await t2.exec(`${seed}
 await t2.exec(fs.readFileSync(cleanup, 'utf8'));
 const moved = (await t2.query(`SELECT device_platform p FROM fcm_tokens WHERE employee_id = $1 AND token = 'tok-left-behind'`, [IDS.emp])).rows[0];
 check('   a token left in the old table moves to the one place before the table is dropped', moved?.p === 'android', JSON.stringify(moved));
+
+// الجزء الثالث: رمز باقي بالعمود القديم ينتقل قبل حذف العمود
+const partC = files.find((f) => f.pathname.endsWith('_drop_employees_legacy_fcm_token.sql'));
+const t3 = await buildFromFiles(files.filter((f) => f.pathname < partC.pathname));
+await t3.exec(`${seed}
+  ALTER TABLE employees DISABLE TRIGGER trg_copy_legacy_push_token;
+  UPDATE employees SET fcm_token = 'tok-in-old-column' WHERE id = '${IDS.emp}';`);
+await t3.exec(fs.readFileSync(partC, 'utf8'));
+check('4) a token left in the old employee column moves to the one place before the column is dropped',
+  (await t3.query(`SELECT 1 FROM fcm_tokens WHERE employee_id = $1 AND token = 'tok-in-old-column'`, [IDS.emp])).rows.length === 1);
+await t3.exec(fs.readFileSync(partC, 'utf8'));
+check('   running it again changes nothing (safe to repeat)', true);
 
 done();

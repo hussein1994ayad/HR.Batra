@@ -38,12 +38,7 @@ await expectOk('   changing a login password still works', as(db, 'admin', `SELE
 // tracking_schedules و employee_geofence_assignments انحذفن بالمرحلة 10 (test_stage10_cleanup.mjs)
 
 // ---------------- CODE-007 ----------------
-await q(`UPDATE employees SET fcm_token = 'tok-old-app' WHERE id = $1`, [IDS.emp]);
-check('4) an old app saving its code on the employee row also lands in the one place (fcm_tokens)',
-  (await q(`SELECT 1 FROM fcm_tokens WHERE employee_id = $1 AND token = 'tok-old-app'`, [IDS.emp])).length === 1);
-// المكان القديم الثاني (device_tokens) انحذف بالمرحلة 10 (test_stage10_cleanup.mjs)
-await q(`UPDATE employees SET fcm_token = 'tok-old-app', full_name = full_name WHERE id = $1`, [IDS.emp]);
-check('   no duplicates', (await one(`SELECT count(*)::int c FROM fcm_tokens WHERE employee_id = $1 AND token = 'tok-old-app'`, [IDS.emp])).c === 1);
+// المكانين القدامى لرمز الإشعارات (device_tokens و employees.fcm_token) انحذفوا بالمرحلة 10 (test_stage10_cleanup.mjs)
 
 // ---------------- CODE-003 ----------------
 for (const fn of ['_payroll_day_attendance_events', '_payroll_day_leave_events', '_payroll_day_hourly_leaves', '_payroll_day_apply']) {
