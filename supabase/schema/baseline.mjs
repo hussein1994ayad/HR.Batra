@@ -8,7 +8,8 @@
 //   node supabase/schema/baseline.mjs           ← يكتب الملف
 //   node supabase/schema/baseline.mjs --check   ← (الفحص التلقائي) يفشل إذا الملف مو نفس اللي يطلع من الأرشيف،
 //                                                 أو إذا قاعدة مبنية منه تختلف عن الأرشيف بأي شي
-//   node supabase/schema/baseline.mjs --live    ← يقارن قاعدة الأساس ويا القاعدة الحية (قراءة بس، بعد supabase link)
+//   node supabase/schema/baseline.mjs --live    ← يقارن القاعدة من كل ملفات migrations (الأساس وبعده) ويا القاعدة الحية
+//                                                 (قراءة بس، بعد supabase link): الفرق = اللي بعده ما انطبق + أشياء منصة Supabase
 // يحتاج: cd supabase/tests && npm ci
 
 import { execSync } from 'node:child_process';
@@ -257,7 +258,7 @@ if (mode === 'write') {
   ok = diff('data: archive vs baseline', await dataRows(a), await dataRows(b)) && ok;
   process.exit(ok ? 0 : 1);
 } else {
-  const b = await baselineDb();
-  const ok = diff('schema: baseline vs LIVE', await lib.snapshot(b), liveSnapshot());
+  const b = await lib.buildSchema();
+  const ok = diff('schema: migrations vs LIVE', await lib.snapshot(b), liveSnapshot());
   process.exit(ok ? 0 : 1);
 }

@@ -35,17 +35,14 @@ check('   the plain-password column and the unused leave columns are gone', cols
 const bal = (await as(db, 'emp', `SELECT get_leave_balance($1) b`, [IDS.emp])).rows[0].b;
 check('   the leave balance still works (it is counted from the requests)', bal?.annual?.entitlement !== undefined, JSON.stringify(bal));
 await expectOk('   changing a login password still works', as(db, 'admin', `SELECT update_employee_credentials($1, 'e@x', 'NewPass9', '0770')`, [IDS.emp]));
-check('   tracking schedules and geofence assignments stay until every phone has the new app',
-  (await one(`SELECT to_regclass('public.tracking_schedules') a, to_regclass('public.employee_geofence_assignments') b`)).a !== null);
+// tracking_schedules و employee_geofence_assignments انحذفن بالمرحلة 10 (test_stage10_cleanup.mjs)
 
 // ---------------- CODE-007 ----------------
 await q(`UPDATE employees SET fcm_token = 'tok-old-app' WHERE id = $1`, [IDS.emp]);
 check('4) an old app saving its code on the employee row also lands in the one place (fcm_tokens)',
   (await q(`SELECT 1 FROM fcm_tokens WHERE employee_id = $1 AND token = 'tok-old-app'`, [IDS.emp])).length === 1);
-await q(`INSERT INTO device_tokens (employee_id, token, platform) VALUES ($1, 'tok-device', 'android')`, [IDS.emp2]);
-check('   ...and so does the old second copy', (await one(`SELECT device_platform p FROM fcm_tokens WHERE employee_id = $1 AND token = 'tok-device'`, [IDS.emp2]))?.p === 'android');
+// المكان القديم الثاني (device_tokens) انحذف بالمرحلة 10 (test_stage10_cleanup.mjs)
 await q(`UPDATE employees SET fcm_token = 'tok-old-app', full_name = full_name WHERE id = $1`, [IDS.emp]);
-await q(`INSERT INTO device_tokens (employee_id, token, platform) VALUES ($1, 'tok-old-app', 'android')`, [IDS.emp]);
 check('   no duplicates', (await one(`SELECT count(*)::int c FROM fcm_tokens WHERE employee_id = $1 AND token = 'tok-old-app'`, [IDS.emp])).c === 1);
 
 // ---------------- CODE-003 ----------------

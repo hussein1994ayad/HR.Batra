@@ -28,11 +28,13 @@ for (const table of Object.keys(HIDDEN)) {
     '؛ وإذا مخفي: أضفه لقائمة HIDDEN بهذا الفحص.');
 }
 
-// قائمة الأعمدة بالموقع والتطبيق = نفس المسموح بالقاعدة (وإلا الشاشة تطلب عمود ممنوع أو تنسى عمود)
+// قائمة الأعمدة بالموقع والتطبيق = نفس المسموح بالقاعدة (وإلا الشاشة تطلب عمود ممنوع أو تنسى عمود).
+// LEGACY: مسموح بالقاعدة بس للنسخ القديمة من التطبيق، والكود الحالي ما يطلبه (ينحذف بالمرحلة 10 الجزء الثالث).
+const LEGACY = { employees: ['fcm_token'] };
 const listOf = (src, re) => (src.match(re)?.[1] ?? '').replace(/['+\s\n]/g, '').split(',').filter(Boolean).sort();
 const webCols = listOf(read('web/src/lib/employeePay.ts'), /EMPLOYEE_COLUMNS\s*=\s*([\s\S]*?);/);
 const appCols = listOf(read('mobile/lib/data/repositories/employee_pay.dart'), /kEmployeeColumns\s*=\s*([\s\S]*?);/);
-const dbCols = [...granted.employees].sort();
+const dbCols = granted.employees.filter((c) => !LEGACY.employees.includes(c)).sort();
 check('the website employee columns match the database', JSON.stringify(webCols) === JSON.stringify(dbCols), `web=${webCols} db=${dbCols}`);
 check('the app employee columns match the database', JSON.stringify(appCols) === JSON.stringify(dbCols), `app=${appCols} db=${dbCols}`);
 

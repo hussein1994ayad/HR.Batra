@@ -101,13 +101,13 @@ employees ─┬─→ employee_devices
            ├─→ salary_slips, bonuses_deductions
            ├─→ loans → loan_installments
            ├─→ documents
-           ├─→ notifications, device_tokens, fcm_tokens
-           └─→ geofence_zones ← employee_geofence_assignments
+           ├─→ notifications, fcm_tokens
+           └─→ geofence_zones
                                                     └─ geofence_violations
                                                     └─ mock_gps_attempts
 ```
 
-- **45 جدول** (تحديث 17/10/2026، بعد حذف الجداول الميتة بالمرحلة 9 من تدقيق 14/10) ومنها `audit_log` للتدقيق و`archived_employees` للأرشفة
+- **42 جدول** (تحديث 17/10/2026، بعد حذف الجداول الميتة بالمرحلتين 9 و10 من تدقيق 14/10) ومنها `audit_log` للتدقيق و`archived_employees` للأرشفة
 - **~205 دالة** — النسخة الحالية من كل دالة و trigger بـ `supabase/schema/current_functions.sql` (تتولد من ملفات migrations بـ
   `node supabase/schema/generate.mjs`، والفحص التلقائي يفشل إذا الملف مو محدّث)
 - **ملف أساس واحد** (المرحلة 10، 17/10/2026): `supabase/migrations` يبدي بـ `20261025000000_create_baseline_schema.sql` (~15 ألف سطر بدل

@@ -21,12 +21,10 @@ export const TABLE_LABELS: Record<string, string> = {
   tracked_stops: 'الوقفات المرصودة',
   geofence_violations: 'مخالفات السياج الجغرافي',
   geofence_zones: 'مناطق السياج الجغرافي',
-  employee_geofence_assignments: 'تعيينات السياج للموظفين',
   mock_gps_attempts: 'محاولات GPS المزيف',
   departments: 'الأقسام',
   branches: 'الفروع',
   work_schedules: 'جداول العمل',
-  tracking_schedules: 'جداول التتبع',
   company_settings: 'إعدادات الشركة',
   system_settings: 'إعدادات النظام',
   announcements: 'الإعلانات',
@@ -35,14 +33,13 @@ export const TABLE_LABELS: Record<string, string> = {
   archived_employees: 'الموظفين المؤرشفين',
   archived_months: 'الأشهر المؤرشفة',
   fcm_tokens: 'رموز الإشعارات FCM',
-  device_tokens: 'رموز الأجهزة',
   employee_devices: 'أجهزة الموظفين',
   app_versions: 'إصدارات التطبيق',
 };
 
 // Color assignment based on table category
 export const getTableColor = (name: string): string => {
-  if (['location_tracking', 'tracked_stops', 'geofence_violations', 'mock_gps_attempts', 'geofence_zones', 'employee_geofence_assignments'].includes(name)) return 'bg-red-500';
+  if (['location_tracking', 'tracked_stops', 'geofence_violations', 'mock_gps_attempts', 'geofence_zones'].includes(name)) return 'bg-red-500';
   if (['attendance'].includes(name)) return 'bg-amber-500';
   if (['notifications', 'announcements'].includes(name)) return 'bg-blue-500';
   if (['salary_slips', 'loans', 'loan_installments', 'bonuses_deductions'].includes(name)) return 'bg-emerald-500';
@@ -52,7 +49,7 @@ export const getTableColor = (name: string): string => {
 };
 
 export const getTableDotColor = (name: string): string => {
-  if (['location_tracking', 'tracked_stops', 'geofence_violations', 'mock_gps_attempts', 'geofence_zones', 'employee_geofence_assignments'].includes(name)) return 'bg-red-400';
+  if (['location_tracking', 'tracked_stops', 'geofence_violations', 'mock_gps_attempts', 'geofence_zones'].includes(name)) return 'bg-red-400';
   if (['attendance'].includes(name)) return 'bg-amber-400';
   if (['notifications', 'announcements'].includes(name)) return 'bg-blue-400';
   if (['salary_slips', 'loans', 'loan_installments', 'bonuses_deductions'].includes(name)) return 'bg-emerald-400';
