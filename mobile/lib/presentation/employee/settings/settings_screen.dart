@@ -215,7 +215,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: SignedNetworkImage(
                 url,
                 fit: BoxFit.contain,
-                errorBuilder: (_, __, ___) =>
+                errorBuilder: (_, _, _) =>
                     const EmptyView(title: 'ملف PDF أو مستند', icon: Icons.picture_as_pdf_rounded, tone: AppTone.accent, compact: true),
               ),
             ),

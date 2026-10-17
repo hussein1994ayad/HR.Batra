@@ -19,7 +19,7 @@ class AnimatedNumber extends StatelessWidget {
       tween: Tween(end: value.toDouble()),
       duration: AppMotion.of(context, AppMotion.slow),
       curve: AppMotion.standard,
-      builder: (_, v, __) => Text(fmt(v), style: style, maxLines: 1, overflow: TextOverflow.ellipsis),
+      builder: (_, v, _) => Text(fmt(v), style: style, maxLines: 1, overflow: TextOverflow.ellipsis),
     );
   }
 
@@ -103,7 +103,7 @@ class MiniBarChart extends StatelessWidget {
                           tween: Tween(begin: 0, end: values[i] / maxV),
                           duration: AppMotion.of(context, AppMotion.slow),
                           curve: AppMotion.emphasized,
-                          builder: (_, f, __) => FractionallySizedBox(
+                          builder: (_, f, _) => FractionallySizedBox(
                             heightFactor: f.clamp(0.04, 1.0),
                             alignment: Alignment.bottomCenter,
                             child: Container(
@@ -151,7 +151,7 @@ class AppProgressBar extends StatelessWidget {
         tween: Tween(end: value.clamp(0, 1)),
         duration: AppMotion.of(context, AppMotion.slow),
         curve: AppMotion.standard,
-        builder: (_, v, __) => LinearProgressIndicator(value: v, minHeight: height, color: tone.color, backgroundColor: AppColors.surface3),
+        builder: (_, v, _) => LinearProgressIndicator(value: v, minHeight: height, color: tone.color, backgroundColor: AppColors.surface3),
       ),
     );
   }

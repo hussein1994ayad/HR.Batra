@@ -57,7 +57,7 @@ class NotificationService {
       }
 
       await _localNotifications.initialize(
-        const InitializationSettings(
+        settings: const InitializationSettings(
           android: AndroidInitializationSettings('@mipmap/launcher_icon'),
           // لا نطلب الإذن عند التشغيل: الافتراضي يعرض نافذة النظام قبل أول شاشة ويوقف
           // التطبيق لحد ما يجاوب المستخدم. الإذن ينطلب بعد تسجيل الدخول (requestPermissionAndSaveToken).
@@ -83,9 +83,9 @@ class NotificationService {
           // القنوات القديمة أُنشئت بدون صوت (كان الملف يُحذف من نسخة الإصدار)، وأندرويد
           // لا يغيّر صوت قناة بعد إنشائها؛ لذلك قنوات جديدة وحذف القديمة.
           for (final old in ['hr_pro_channel_v5', 'hr_pro_channel_v6', 'hr_pro_channel_v7', 'hr_pro_attendance_reminders_v1', 'hr_pro_attendance_reminders_v2']) {
-            await androidPlugin.deleteNotificationChannel(old);
+            await androidPlugin.deleteNotificationChannel(channelId: old);
           }
-          await androidPlugin.deleteNotificationChannel('hrpro_location_service');
+          await androidPlugin.deleteNotificationChannel(channelId: 'hrpro_location_service');
         } catch (_) {}
 
         // 1) قناة الإشعارات العامة
@@ -134,10 +134,10 @@ class NotificationService {
         FirebaseMessaging.onMessage.listen((RemoteMessage message) {
         if (message.notification == null || Platform.isIOS) return;
         _localNotifications.show(
-          message.hashCode,
-          message.notification!.title,
-          message.notification!.body,
-          NotificationDetails(
+          id: message.hashCode,
+          title: message.notification!.title,
+          body: message.notification!.body,
+          notificationDetails: NotificationDetails(
             android: AndroidNotificationDetails(
               channelId,
               channelName,
@@ -177,8 +177,11 @@ class NotificationService {
           final hasPermission = await isPermissionGranted();
           final user = Supabase.instance.client.auth.currentUser;
           if (_firebaseReady && hasPermission && user != null) {
+            // رمز FCM القديم (deprecated بـ firebase_messaging 17): دالة الإرسال بالسيرفر ترسل بهذا الرمز؛ البديل (FID) يحتاج تغيير السيرفر
+            // ignore: deprecated_member_use
             final token = await _firebaseMessaging.getToken();
             if (token != null) await _saveTokenToSupabase(token);
+            // ignore: deprecated_member_use
             _firebaseMessaging.onTokenRefresh.listen(_saveTokenToSupabase);
           }
           if (user != null) {
@@ -226,8 +229,10 @@ class NotificationService {
           settings.authorizationStatus != AuthorizationStatus.provisional) {
         return false;
       }
+      // ignore: deprecated_member_use
       final token = await _firebaseMessaging.getToken();
       if (token != null) await _saveTokenToSupabase(token);
+      // ignore: deprecated_member_use
       _firebaseMessaging.onTokenRefresh.listen(_saveTokenToSupabase);
 
       // إعادة جدولة التذكيرات بعد منح الصلاحيات
@@ -249,10 +254,10 @@ class NotificationService {
     try {
       final targetChannel = channel ?? channelId;
       await _localNotifications.show(
-        DateTime.now().millisecondsSinceEpoch ~/ 1000,
-        title,
-        body,
-        NotificationDetails(
+        id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+        title: title,
+        body: body,
+        notificationDetails: NotificationDetails(
           android: AndroidNotificationDetails(
             targetChannel,
             targetChannel == reminderChannelId ? reminderChannelName : channelName,
@@ -295,14 +300,14 @@ class NotificationService {
   static Future<void> cancelAllAttendanceReminders() async {
     for (int day = 0; day <= 6; day++) {
       try {
-        await _localNotifications.cancel(1000 + day);
-        await _localNotifications.cancel(2000 + day);
+        await _localNotifications.cancel(id: 1000 + day);
+        await _localNotifications.cancel(id: 2000 + day);
       } catch (_) {}
     }
     for (int day = 0; day < kLocalReminderDays; day++) {
       try {
-        await _localNotifications.cancel(kLocalCheckInReminderBase + day);
-        await _localNotifications.cancel(kLocalCheckOutReminderBase + day);
+        await _localNotifications.cancel(id: kLocalCheckInReminderBase + day);
+        await _localNotifications.cancel(id: kLocalCheckOutReminderBase + day);
       } catch (_) {}
     }
   }
@@ -361,11 +366,11 @@ class NotificationService {
       );
       for (final r in plan) {
         await _localNotifications.zonedSchedule(
-          r.id,
-          r.title,
-          r.body,
-          tzz.TZDateTime(location, r.at.year, r.at.month, r.at.day, r.at.hour, r.at.minute),
-          const NotificationDetails(
+          id: r.id,
+          title: r.title,
+          body: r.body,
+          scheduledDate: tzz.TZDateTime(location, r.at.year, r.at.month, r.at.day, r.at.hour, r.at.minute),
+          notificationDetails: const NotificationDetails(
             android: AndroidNotificationDetails(reminderChannelId, reminderChannelName, importance: Importance.max, priority: Priority.max),
             iOS: DarwinNotificationDetails(
               presentAlert: true,
@@ -375,7 +380,6 @@ class NotificationService {
             ),
           ),
           androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-          uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
         );
       }
       appLog('Local attendance reminders scheduled: ${plan.length}');
@@ -392,6 +396,7 @@ class NotificationService {
     final user = Supabase.instance.client.auth.currentUser;
     if (!_firebaseReady) return;
     try {
+      // ignore: deprecated_member_use
       final token = await _firebaseMessaging.getToken().timeout(const Duration(seconds: 5));
       if (token != null && user != null) {
         final db = Supabase.instance.client;
@@ -402,6 +407,7 @@ class NotificationService {
       appLog('unregisterDevice: server cleanup failed: $e');
     }
     try {
+      // ignore: deprecated_member_use
       await _firebaseMessaging.deleteToken();
     } catch (e) {
       appLog('unregisterDevice: deleteToken failed: $e');

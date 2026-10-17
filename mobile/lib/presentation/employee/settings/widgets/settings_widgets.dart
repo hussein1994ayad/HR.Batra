@@ -145,7 +145,7 @@ class SettingsDocumentsCard extends StatelessWidget {
                           url,
                           fit: BoxFit.cover,
                           cacheWidth: 216,
-                          errorBuilder: (_, __, ___) => const Icon(Icons.picture_as_pdf_rounded, color: AppColors.accent),
+                          errorBuilder: (_, _, _) => const Icon(Icons.picture_as_pdf_rounded, color: AppColors.accent),
                         ),
                       ),
                     ),

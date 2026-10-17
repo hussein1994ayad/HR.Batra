@@ -2,6 +2,7 @@
 // من بيانات fixtures.dart، ولا يتصل بالإنترنت أبداً.
 
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -188,6 +189,8 @@ class FakeBackend {
     _initialized = true;
   }
 
+  static final Directory _testCacheDir = Directory.systemTemp.createTempSync('hr_pro_test_cache');
+
   /// قنوات المنصّة (الموقع، الجهاز، الإشعارات...) ترجع null في الاختبار بدل الاستثناء.
   static void _mockPlatformChannels() {
     final messenger = TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
@@ -207,6 +210,8 @@ class FakeBackend {
     ]) {
       messenger.setMockMethodCallHandler(MethodChannel(name), (call) async {
         if (call.method == 'getAll') return <String, dynamic>{};
+        // flutter_map 8 يخزّن صور الخريطة بمجلد الكاش (بالموبايل موجود): بالاختبار مجلد مؤقت
+        if (call.method == 'getApplicationCacheDirectory') return _testCacheDir.path;
         if (call.method == 'checkPermission' || call.method == 'checkPermissionStatus') return 1;
         return null;
       });
@@ -221,7 +226,7 @@ class FakeBackend {
       'flutter.baseflow.com/geolocator_service_updates_android',
       'flutter.baseflow.com/geolocator_service_updates_apple',
     ]) {
-      messenger.setMockStreamHandler(EventChannel(name), MockStreamHandler.inline(onListen: (_, __) {}));
+      messenger.setMockStreamHandler(EventChannel(name), MockStreamHandler.inline(onListen: (_, _) {}));
     }
   }
 }

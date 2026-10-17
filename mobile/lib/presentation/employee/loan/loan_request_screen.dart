@@ -342,7 +342,7 @@ class _LoanRequestScreenState extends State<LoanRequestScreen> with SingleTicker
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(AppSpace.page, AppSpace.lg, AppSpace.page, AppSpace.x4),
         itemCount: _loansHistory.length,
-        separatorBuilder: (_, __) => const SizedBox(height: AppSpace.md),
+        separatorBuilder: (_, _) => const SizedBox(height: AppSpace.md),
         itemBuilder: (context, index) => FadeSlideIn(index: index, child: ContentWidth(child: MyLoanCard(loan: _loansHistory[index], onCancel: _cancelLoan))),
       ),
     );

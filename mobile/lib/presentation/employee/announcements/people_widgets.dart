@@ -99,7 +99,7 @@ class OnLeaveStrip extends StatelessWidget {
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: people.length,
-        separatorBuilder: (_, __) => const SizedBox(width: AppSpace.md),
+        separatorBuilder: (_, _) => const SizedBox(width: AppSpace.md),
         itemBuilder: (context, i) => FadeSlideIn(index: i, child: _OnLeaveCard(people[i])),
       ),
     );
@@ -203,7 +203,7 @@ class LateStrip extends StatelessWidget {
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: people.length,
-        separatorBuilder: (_, __) => const SizedBox(width: AppSpace.md),
+        separatorBuilder: (_, _) => const SizedBox(width: AppSpace.md),
         itemBuilder: (context, i) => FadeSlideIn(index: i, child: _LateCard(people[i])),
       ),
     );

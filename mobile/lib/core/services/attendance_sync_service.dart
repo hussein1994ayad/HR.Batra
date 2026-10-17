@@ -129,12 +129,12 @@ class AttendanceSyncService {
       'p_device_id': await DeviceService.getDeviceUUID(),
       'p_is_mocked': isMocked,
       // دقة الـ GPS: السيرفر يرفض الموقع التقريبي/الضعيف
-      if (accuracy != null) 'p_accuracy': accuracy,
+      'p_accuracy': ?accuracy,
       if (offlineTime != null) 'p_client_time': offlineTime.toIso8601String(),
     };
     final timeParams = {
       if (trustedTime != null) 'p_trusted_time': trustedTime.toIso8601String(),
-      if (timeCheck != null) 'p_time_check': timeCheck,
+      'p_time_check': ?timeCheck,
     };
     dynamic response;
     try {

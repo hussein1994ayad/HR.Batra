@@ -130,7 +130,7 @@ class SectionHeader extends StatelessWidget {
         child: Row(
           children: [
             Expanded(child: Text(title, style: AppText.subtitle.copyWith(fontSize: 16))),
-            if (trailing != null) trailing!,
+            ?trailing,
             if (actionLabel != null)
               TextButton(onPressed: onAction, style: TextButton.styleFrom(minimumSize: const Size(48, 40)), child: Text(actionLabel!)),
           ],

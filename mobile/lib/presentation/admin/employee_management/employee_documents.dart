@@ -54,7 +54,7 @@ Future<void> previewEmployeeDocument(BuildContext context, String url, String ti
                       url,
                       fit: BoxFit.contain,
                       loadingBuilder: (_, child, p) => p == null ? child : const Skeleton(height: 240, radius: 0),
-                      errorBuilder: (_, __, ___) => const EmptyView(title: 'تعذّر تحميل الصورة', icon: Icons.broken_image_rounded, tone: AppTone.danger, compact: true),
+                      errorBuilder: (_, _, _) => const EmptyView(title: 'تعذّر تحميل الصورة', icon: Icons.broken_image_rounded, tone: AppTone.danger, compact: true),
                     ),
                   ),
           ),
@@ -125,7 +125,7 @@ class DocumentsGrid extends StatelessWidget {
       children: [
         for (var i = 0; i < urls.length; i++)
           _thumb(
-            SignedNetworkImage(urls[i], fit: BoxFit.cover, cacheWidth: 216, errorBuilder: (_, __, ___) => const ColoredBox(color: AppColors.surface2, child: Icon(Icons.description_rounded, color: AppColors.accent))),
+            SignedNetworkImage(urls[i], fit: BoxFit.cover, cacheWidth: 216, errorBuilder: (_, _, _) => const ColoredBox(color: AppColors.surface2, child: Icon(Icons.description_rounded, color: AppColors.accent))),
             onRemoveUrl == null ? null : () => onRemoveUrl!(i),
           ),
         for (var i = 0; i < files.length; i++) _thumb(Image.file(files[i], fit: BoxFit.cover, cacheWidth: 216), () => onRemoveFile(i)),
