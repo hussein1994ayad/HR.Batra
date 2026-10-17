@@ -184,9 +184,14 @@ Deno.serve(async (req: Request) => {
 
     const results = await Promise.allSettled(
       tokens.map(async (fcmToken) => {
-        const fcmPayload = {
+        // fcm_tokens holds either an old registration token ("<FID>:APA91b…") or, from the app that uses
+        // FCM's FID registration (firebase_messaging 17 register()/onRegistered), the installation ID itself
+        // (no ":"). FIDs go in the new `fid` field; Firebase says the `token` field also accepts FIDs during the
+        // migration, so if `fid` is rejected (400) the same ID is sent once more as `token`.
+        const isFid = !fcmToken.includes(":");
+        const buildPayload = (target: Record<string, string>) => ({
           message: {
-            token: fcmToken,
+            ...target,
             notification: {
               title: notificationTitle,
               body: notificationBody,
@@ -227,23 +232,29 @@ Deno.serve(async (req: Request) => {
               click_action: "FLUTTER_NOTIFICATION_CLICK",
             },
           },
+        });
+
+        const send = async (target: Record<string, string>) => {
+          const fcmRes = await fetch(
+            `https://fcm.googleapis.com/v1/projects/${serviceAccount.project_id}/messages:send`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${accessToken}`,
+              },
+              body: JSON.stringify(buildPayload(target)),
+            }
+          );
+          const fcmResult = await fcmRes.json();
+          const field = Object.keys(target)[0];
+          console.log(`FCM Send result (${field}) for ${fcmToken.substring(0, 15)}...:`, fcmRes.status, JSON.stringify(fcmResult));
+          return { status: fcmRes.status, result: fcmResult, field };
         };
 
-        const fcmRes = await fetch(
-          `https://fcm.googleapis.com/v1/projects/${serviceAccount.project_id}/messages:send`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${accessToken}`,
-            },
-            body: JSON.stringify(fcmPayload),
-          }
-        );
-
-        const fcmResult = await fcmRes.json();
-        console.log(`FCM Send result for token ${fcmToken.substring(0, 15)}...:`, fcmRes.status, JSON.stringify(fcmResult));
-        return { status: fcmRes.status, result: fcmResult };
+        let sent = await send(isFid ? { fid: fcmToken } : { token: fcmToken });
+        if (isFid && sent.status === 400) sent = await send({ token: fcmToken });
+        return sent;
       })
     );
 
