@@ -3,13 +3,12 @@
 // =========================================================================
 
 import '../design/formatters.dart';
+import '../logic/payroll_settings.dart';
 import '../utils/json_map.dart';
 
-/// يوم قطع الرواتب (سياسة payroll_policy.cutoff_day).
-const int kPayrollCutoffDay = 26;
-
-/// شهر الرواتب اللي يتبعه تاريخ: لحد يوم القطع نفس الشهر، وبعده الشهر الجاي.
-DateTime payrollMonthOf(DateTime d) => d.day <= kPayrollCutoffDay ? DateTime(d.year, d.month) : DateTime(d.year, d.month + 1);
+/// شهر الرواتب اللي يتبعه تاريخ: لحد يوم القطع (من إعدادات السيرفر) نفس الشهر، وبعده الشهر الجاي.
+DateTime payrollMonthOf(DateTime d, {int? cutoffDay}) =>
+    d.day <= (cutoffDay ?? PayrollSettings.cutoffDay) ? DateTime(d.year, d.month) : DateTime(d.year, d.month + 1);
 
 class LoanInstallment {
   final String id;

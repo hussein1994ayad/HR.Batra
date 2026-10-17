@@ -2,12 +2,13 @@
 
 import 'package:flutter/material.dart';
 
+import '../../../../core/utils/company_time.dart';
 import '../../../shared/ui/ui.dart';
 import 'report_record_card.dart';
 
 TimeOfDay? _timeOf(Object? v) {
   if (v == null) return null;
-  final dt = DateTime.tryParse(v.toString())?.toLocal();
+  final dt = parseServerTime(v);
   if (dt != null) return TimeOfDay(hour: dt.hour, minute: dt.minute);
   final p = v.toString().split(':');
   if (p.length < 2) return null;

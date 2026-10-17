@@ -6,8 +6,12 @@
 // =========================================================================
 
 import '../utils/arabic_format.dart';
+import '../utils/company_time.dart';
 
 abstract final class Fmt {
+  /// لحظة UTC (من السيرفر) ← ساعة بغداد؛ الوقت المحلي بالتطبيق أصلاً ساعة بغداد.
+  static DateTime _wall(DateTime t) => t.isUtc ? toCompanyTime(t) : t;
+
   /// ترتيب الأشهر: نكتب «الشهر العاشر» بدل «تشرين الأول» (نفس الموقع).
   static const List<String> monthOrdinals = [
     'الأول', 'الثاني', 'الثالث', 'الرابع', 'الخامس', 'السادس',
@@ -27,7 +31,7 @@ abstract final class Fmt {
   /// "8:05 ص" / "4:30 م"
   static String time(DateTime? t) {
     if (t == null) return '--:--';
-    final l = t.toLocal();
+    final l = _wall(t);
     final h = l.hour % 12 == 0 ? 12 : l.hour % 12;
     return '$h:${l.minute.toString().padLeft(2, '0')} ${l.hour >= 12 ? 'م' : 'ص'}';
   }
@@ -44,13 +48,13 @@ abstract final class Fmt {
   /// "26/9" أو "26/9/2026" إذا ليست السنة الحالية (بالأرقام، بدون أسماء الأشهر)
   static String date(DateTime? d, {bool withYear = false}) {
     if (d == null) return '—';
-    final l = d.toLocal();
-    final y = withYear || l.year != DateTime.now().year ? '/${l.year}' : '';
+    final l = _wall(d);
+    final y = withYear || l.year != companyNow().year ? '/${l.year}' : '';
     return '${l.day}/${l.month}$y';
   }
 
   /// "الخميس 26/9"
-  static String dateWithDay(DateTime? d) => d == null ? '—' : '${weekdays[d.toLocal().weekday - 1]} ${date(d)}';
+  static String dateWithDay(DateTime? d) => d == null ? '—' : '${weekdays[_wall(d).weekday - 1]} ${date(d)}';
 
   /// مدة بالدقائق: "45 د" / "2 س" / "2 س 45 د"
   static String minutesLabel(int m) {
@@ -70,8 +74,8 @@ abstract final class Fmt {
   /// "قبل 5 دقائق"، "قبل ساعتين"، "أمس"، أو التاريخ.
   static String relative(DateTime? t, {DateTime? now}) {
     if (t == null) return '';
-    final n = now ?? DateTime.now();
-    final diff = n.difference(t.toLocal());
+    final n = now ?? companyNow();
+    final diff = n.difference(_wall(t));
     if (diff.isNegative || diff.inSeconds < 60) return 'الآن';
     if (diff.inMinutes < 60) return 'قبل ${_count(diff.inMinutes, 'دقيقة', 'دقيقتين', 'دقائق')}';
     if (diff.inHours < 24) return 'قبل ${_count(diff.inHours, 'ساعة', 'ساعتين', 'ساعات')}';
@@ -95,7 +99,7 @@ abstract final class Fmt {
 
   /// تحية حسب الوقت.
   static String greeting([DateTime? now]) {
-    final h = (now ?? DateTime.now()).hour;
+    final h = (now ?? companyNow()).hour;
     if (h >= 5 && h < 12) return 'صباح الخير';
     if (h >= 12 && h < 17) return 'نهارك سعيد';
     return 'مساء الخير';

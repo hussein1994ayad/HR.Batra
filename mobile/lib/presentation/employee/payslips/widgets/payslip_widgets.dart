@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/models/models.dart';
+import '../../../../core/utils/company_time.dart';
 import '../../../shared/ui/ui.dart';
 
 /// راتب الشهر الحالي قبل الاعتماد: الأساسي، الإضافات، الخصومات، الأقساط، والمتوقع،
@@ -22,7 +23,7 @@ class CurrentPayrollCard extends StatelessWidget {
     final events = preview.events;
     final month = preview.periodMonth.split('-');
     final m = month.length == 2 ? int.tryParse(month[1]) ?? 1 : 1;
-    final y = int.tryParse(month.first) ?? DateTime.now().year;
+    final y = int.tryParse(month.first) ?? companyNow().year;
     final issued = preview.issued;
     final pending = events.where((e) => e.status == 'pending' && e.eventType != 'missing_punch').length;
 

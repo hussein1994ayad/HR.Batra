@@ -15,6 +15,7 @@ import '../../../core/models/models.dart';
 import '../../../core/services/supabase_service.dart';
 import '../../../core/utils/app_log.dart';
 import '../../../core/utils/arabic_format.dart';
+import '../../../core/utils/company_time.dart';
 import '../../../core/utils/error_text.dart';
 import '../../../data/repositories/employee_admin_repository.dart';
 import '../../../data/repositories/role_repository.dart';
@@ -108,7 +109,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
       );
       if (!ok || !mounted) return;
       // تاريخ الرجوع (تدقيق 14/10 PAY-009): الافتراضي اليوم، وما يكون بالمستقبل
-      final now = DateTime.now();
+      final now = companyNow();
       final returnDate = await showDatePicker(
         context: context,
         initialDate: now,
@@ -157,13 +158,13 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
       lastPunch = await _repo.lastPunchDate(emp.id);
     } catch (_) {}
     if (!mounted) return null;
-    final now = DateTime.now();
+    final now = companyNow();
     final suggested = lastPunch != null && lastPunch.isBefore(now) && now.difference(lastPunch).inDays < 120 ? lastPunch : now;
     return showDatePicker(
       context: context,
       initialDate: suggested,
-      firstDate: DateTime.now().subtract(const Duration(days: 120)),
-      lastDate: DateTime.now().add(const Duration(days: 60)),
+      firstDate: companyNow().subtract(const Duration(days: 120)),
+      lastDate: companyNow().add(const Duration(days: 60)),
       helpText: 'آخر يوم عمل',
     );
   }

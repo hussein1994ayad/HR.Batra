@@ -4,6 +4,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/models/models.dart';
+import '../../../core/utils/company_time.dart';
 import '../../shared/ui/ui.dart';
 
 bool _sameDay(DateTime a, DateTime b) => a.year == b.year && a.month == b.month && a.day == b.day;
@@ -15,7 +16,7 @@ String onLeaveUntil(OnLeavePerson p, {DateTime? now}) {
   }
   final to = p.toDate;
   if (to == null) return 'مجاز اليوم';
-  final today = now ?? DateTime.now();
+  final today = now ?? companyNow();
   if (_sameDay(to, today)) return 'آخر يوم اليوم';
   return 'حتى ${Fmt.date(to)}';
 }
@@ -25,7 +26,7 @@ String? onLeaveReturn(OnLeavePerson p, {DateTime? now}) {
   if (p.isHourly) return null;
   final to = p.toDate;
   if (to == null) return null;
-  final today = now ?? DateTime.now();
+  final today = now ?? companyNow();
   final days = DateTime(to.year, to.month, to.day).difference(DateTime(today.year, today.month, today.day)).inDays + 1;
   if (days <= 1) return 'يعود غداً';
   if (days == 2) return 'يعود بعد يومين';

@@ -11,6 +11,7 @@ import 'package:uuid/uuid.dart';
 import '../../core/models/models.dart';
 import '../../core/services/file_upload_service.dart';
 import '../../core/services/supabase_service.dart';
+import 'write_guard.dart';
 
 class LeaveRepository {
   LeaveRepository({SupabaseClient? client}) : _db = client ?? SupabaseService.client;
@@ -43,6 +44,7 @@ class LeaveRepository {
 
   /// إلغاء طلب ما زال قيد المراجعة فقط.
   Future<void> cancelPending(String id) async {
-    await _db.from('leave_requests').update({'status': 'cancelled'}).eq('id', id).eq('status', 'pending');
+    // انقرر قبل الإلغاء (اعتماد أو رفض) = ما يتغير شي، فخطأ واضح بدل نجاح صامت
+    ensureChanged(await _db.from('leave_requests').update({'status': 'cancelled'}).eq('id', id).eq('status', 'pending').select('id'));
   }
 }

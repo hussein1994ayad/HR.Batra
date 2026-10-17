@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:syncfusion_flutter_xlsio/xlsio.dart' as xlsio;
 
 import '../../logic/attendance_report.dart';
+import '../../utils/company_time.dart';
 
 /// محتوى ملف تقرير الحضور (بدون حفظ) — قابل للاختبار.
 List<int> buildAttendanceReportExcelBytes({
@@ -69,7 +70,7 @@ List<int> buildAttendanceReportExcelBytes({
   }
 
   final period = '${dayFmt.format(from)} ← ${dayFmt.format(to)}';
-  final sub = 'الفترة: $period | $scopeLabel | استُخرج: ${DateFormat('yyyy/MM/dd hh:mm a').format(DateTime.now())}';
+  final sub = 'الفترة: $period | $scopeLabel | استُخرج: ${DateFormat('yyyy/MM/dd hh:mm a').format(companyNow())}';
 
   // ---------------- ورقة يوم بيوم ----------------
   const dailyCols = ['ت', 'التاريخ', 'اليوم', 'الموظف', 'الرمز', 'الفرع', 'الحالة', 'الحضور', 'الانصراف', 'تأخير (دقيقة)', 'خروج مبكر (دقيقة)', 'الإجازة / ملاحظات'];

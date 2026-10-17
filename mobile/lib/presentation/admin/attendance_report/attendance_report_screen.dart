@@ -16,6 +16,7 @@ import '../../../core/models/models.dart';
 import '../../../core/services/excel_export_service.dart';
 import '../../../core/services/supabase_service.dart';
 import '../../../core/utils/app_log.dart';
+import '../../../core/utils/company_time.dart';
 import '../../../core/utils/error_text.dart';
 import '../../../data/repositories/attendance_report_repository.dart';
 import '../../../data/repositories/role_repository.dart';
@@ -35,7 +36,7 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
   bool _isLoading = true;
   bool _hasError = false;
   bool _exporting = false;
-  DateTimeRange _selectedDateRange = DateTimeRange(start: DateTime.now(), end: DateTime.now());
+  DateTimeRange _selectedDateRange = DateTimeRange(start: companyNow(), end: companyNow());
 
   String? _selectedBranchId = 'all';
   String? _selectedEmployeeId = 'all';
@@ -119,7 +120,7 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
       final rows = buildDailyReport(
         from: from,
         to: to,
-        today: DateTime.now(),
+        today: companyNow(),
         employees: employees,
         schedules: _schedules,
         holidays: holidays,
@@ -202,7 +203,7 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
       context: context,
       initialDateRange: _selectedDateRange,
       firstDate: DateTime(2023),
-      lastDate: DateTime.now(),
+      lastDate: companyNow(),
       helpText: 'اختر الفترة',
     );
     if (picked != null) {
@@ -285,10 +286,10 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
       final Map<String, dynamic> updates = {};
       final dt = DateTime.parse(workDateStr);
       if (checkIn != null) {
-        updates['check_in_time'] = DateTime(dt.year, dt.month, dt.day, checkIn.hour, checkIn.minute).toUtc().toIso8601String();
+        updates['check_in_time'] = companyWallToUtc(DateTime(dt.year, dt.month, dt.day, checkIn.hour, checkIn.minute)).toIso8601String();
       }
       if (checkOut != null) {
-        updates['check_out_time'] = DateTime(dt.year, dt.month, dt.day, checkOut.hour, checkOut.minute).toUtc().toIso8601String();
+        updates['check_out_time'] = companyWallToUtc(DateTime(dt.year, dt.month, dt.day, checkOut.hour, checkOut.minute)).toIso8601String();
       }
 
       if (updates.isNotEmpty) {
@@ -312,7 +313,7 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
   String get _rangeLabel {
     final s = _selectedDateRange.start;
     final e = _selectedDateRange.end;
-    final today = DateTime.now();
+    final today = companyNow();
     if (DateUtils.isSameDay(s, e)) return DateUtils.isSameDay(s, today) ? 'اليوم' : Fmt.date(s);
     return '${Fmt.date(s)} - ${Fmt.date(e)}';
   }

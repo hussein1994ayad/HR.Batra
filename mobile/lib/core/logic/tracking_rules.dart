@@ -5,6 +5,7 @@
 
 import 'package:geolocator/geolocator.dart' show Geolocator;
 import 'package:latlong2/latlong.dart';
+import '../utils/company_time.dart';
 
 enum TrackStatus { inside, outside, checkedOut, absent }
 
@@ -52,7 +53,7 @@ class TrackedEmployee {
 
 LatLng? _point(Object? lat, Object? lng) => lat is num && lng is num ? LatLng(lat.toDouble(), lng.toDouble()) : null;
 
-DateTime? _time(Object? v) => v == null ? null : DateTime.tryParse(v.toString())?.toLocal();
+DateTime? _time(Object? v) => parseServerTime(v);
 
 double _meters(LatLng a, LatLng b) => Geolocator.distanceBetween(a.latitude, a.longitude, b.latitude, b.longitude);
 

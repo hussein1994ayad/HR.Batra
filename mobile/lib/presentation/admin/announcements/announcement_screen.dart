@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/models/models.dart';
 import '../../../core/utils/app_log.dart';
+import '../../../core/utils/company_time.dart';
 import '../../../core/utils/error_text.dart';
 import '../../../data/repositories/announcement_repository.dart';
 import '../../shared/ui/ui.dart';
@@ -41,10 +42,10 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
 
   // مدة الظهور: 'day' | '3' | '7' | '30' | 'none' | 'custom'
   String _duration = '7';
-  DateTime _startDay = DateUtils.dateOnly(DateTime.now());
+  DateTime _startDay = DateUtils.dateOnly(companyNow());
   DateTime? _customEndDay;
 
-  bool get _startsToday => DateUtils.isSameDay(_startDay, DateTime.now());
+  bool get _startsToday => DateUtils.isSameDay(_startDay, companyNow());
 
   /// آخر يوم يظهر فيه التعميم (نهاية اليوم)، أو null بدون نهاية.
   DateTime? get _endDay => switch (_duration) {
@@ -61,7 +62,7 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
   }
 
   Future<void> _pickStart() async {
-    final now = DateUtils.dateOnly(DateTime.now());
+    final now = DateUtils.dateOnly(companyNow());
     final d = await showDatePicker(context: context, initialDate: _startDay, firstDate: now, lastDate: now.add(const Duration(days: 365)));
     if (d == null) return;
     setState(() {
@@ -143,9 +144,9 @@ class _AnnouncementScreenState extends State<AnnouncementScreen> {
       final sent = await _repo.publish({
         'p_title': _titleController.text.trim(),
         'p_content': _bodyController.text.trim(),
-        'p_starts_at': _startsToday ? null : _startDay.toUtc().toIso8601String(),
-        // نهاية اليوم الأخير بتوقيت الهاتف
-        'p_ends_at': end == null ? null : DateTime(end.year, end.month, end.day, 23, 59, 59).toUtc().toIso8601String(),
+        'p_starts_at': _startsToday ? null : companyWallToUtc(_startDay).toIso8601String(),
+        // نهاية اليوم الأخير بتوقيت بغداد
+        'p_ends_at': end == null ? null : companyWallToUtc(DateTime(end.year, end.month, end.day, 23, 59, 59)).toIso8601String(),
         'p_target': _selectedTarget,
         'p_branch_id': _selectedTarget == 'branch' ? _selectedBranchId : null,
         'p_employee_ids': _selectedTarget == 'employees' ? _selectedEmployeeIds : null,

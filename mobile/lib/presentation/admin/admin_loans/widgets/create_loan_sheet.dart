@@ -7,6 +7,7 @@ import '../../../../core/logic/loan_rules.dart';
 import '../../../../core/models/models.dart';
 import '../../../../core/utils/app_log.dart';
 import '../../../../core/utils/arabic_format.dart';
+import '../../../../core/utils/company_time.dart';
 import '../../../../core/utils/error_text.dart';
 import '../../../../core/utils/input_formatters.dart';
 import '../../../../data/repositories/loan_repository.dart';
@@ -70,7 +71,7 @@ class _CreateLoanSheetState extends State<_CreateLoanSheet> {
     setState(() => _saving = true);
     try {
       final pledgeUrl = await widget.repo.uploadPledge(employeeId, pledge);
-      final now = DateTime.now();
+      final now = companyNow();
       final lastDay = DateTime(now.year, now.month + 2, 0).day;
       await widget.repo.createDirectLoan(
         employeeId: employeeId,

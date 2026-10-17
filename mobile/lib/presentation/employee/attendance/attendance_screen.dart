@@ -425,7 +425,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     );
   }
 
-  String? _punchNote(bool isCheckIn) => punchNote(isCheckIn: isCheckIn, schedule: _workSchedule, now: DateTime.now());
+  String? _punchNote(bool isCheckIn) => punchNote(isCheckIn: isCheckIn, schedule: _workSchedule, now: companyNow());
 
   bool get _hasCheckOut => _todayAttendance?['check_out_time'] != null;
   bool get _inRange => _distanceToBranch != null && _distanceToBranch! <= _branchRadius;

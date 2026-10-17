@@ -3,6 +3,7 @@
 // والمتأخرون اليوم (get_late_today) — كما تعرضها الرئيسية ولوحة التعاميم.
 // =========================================================================
 
+import '../utils/company_time.dart';
 import '../utils/json_map.dart';
 
 /// قائمة صفوف من نتيجة RPC. صارمة مثل List<Map>.from(value as List): ترمي إذا القيمة مو قائمة صفوف،
@@ -11,7 +12,7 @@ List<T> rowsStrict<T>(Object? value, T Function(JsonRow row) fromMap) => [
       for (final e in value as List) fromMap(Map<String, dynamic>.from(e as Map)),
     ];
 
-DateTime? _localDate(Object? v) => DateTime.tryParse(v?.toString() ?? '')?.toLocal();
+DateTime? _localDate(Object? v) => parseServerTime(v);
 
 class AnnouncementModel {
   final String title;
@@ -115,6 +116,6 @@ class LatePerson implements PersonCardData {
         avatarUrl: map['avatar_url']?.toString(),
         branchLabel: (map['branch_name'] ?? '—').toString(),
         lateMinutes: (map['late_minutes'] as num?)?.toInt() ?? 0,
-        checkInTime: DateTime.tryParse(map['check_in_time']?.toString() ?? ''),
+        checkInTime: parseServerTime(map['check_in_time']),
       );
 }

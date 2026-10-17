@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/services/file_upload_service.dart';
 import '../../core/services/supabase_service.dart';
+import 'write_guard.dart';
 
 class ProfileRepository {
   ProfileRepository({SupabaseClient? client}) : _db = client ?? SupabaseService.client;
@@ -24,7 +25,7 @@ class ProfileRepository {
   }
 
   Future<void> updateAvatarUrl(String userId, String url) async {
-    await _db.from('employees').update({'avatar_url': url}).eq('id', userId);
+    ensureChanged(await _db.from('employees').update({'avatar_url': url}).eq('id', userId).select('id'));
   }
 
   /// حذف الصورة القديمة من التخزين (بعد نجاح تحديث الرابط).
@@ -43,7 +44,7 @@ class ProfileRepository {
   }
 
   Future<void> updateDocumentUrls(String userId, List<String> urls) async {
-    await _db.from('employees').update({'document_urls': urls}).eq('id', userId);
+    ensureChanged(await _db.from('employees').update({'document_urls': urls}).eq('id', userId).select('id'));
   }
 
   /// مجموع المتبقي من السلف المعتمدة (طلب حذف الحساب ممنوع إذا أكبر من صفر).

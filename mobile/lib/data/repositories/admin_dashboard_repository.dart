@@ -8,6 +8,7 @@ import '../../core/logic/attendance_rules.dart';
 import '../../core/models/models.dart';
 import '../../core/services/supabase_service.dart';
 import '../../core/utils/arabic_format.dart';
+import '../../core/utils/company_time.dart';
 import 'employee_pay.dart';
 
 class DashboardFilter {
@@ -192,10 +193,10 @@ class AdminDashboardRepository {
     final employees = scopedEmployees(allEmployees, filter);
     // inFilter بقائمة فارغة يرجع كل الصفوف في بعض الإصدارات؛ معرّف وهمي يضمن نتيجة فارغة
     final ids = employees.isEmpty ? ['00000000-0000-0000-0000-000000000000'] : employees.map((e) => e.id).toList();
-    final day = filter.date ?? DateTime.now();
+    final day = filter.date ?? companyNow();
     final dayStr = isoDate(day);
-    final dayStart = DateTime(day.year, day.month, day.day).toUtc().toIso8601String();
-    final dayEnd = DateTime(day.year, day.month, day.day, 23, 59, 59).toUtc().toIso8601String();
+    final dayStart = companyWallToUtc(DateTime(day.year, day.month, day.day)).toIso8601String();
+    final dayEnd = companyWallToUtc(DateTime(day.year, day.month, day.day, 23, 59, 59)).toIso8601String();
     final date = filter.date;
 
     PostgrestFilterBuilder<List<Map<String, dynamic>>> scoped(PostgrestFilterBuilder<List<Map<String, dynamic>>> q) =>

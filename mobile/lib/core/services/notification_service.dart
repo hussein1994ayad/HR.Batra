@@ -16,6 +16,7 @@ import 'package:timezone/timezone.dart' as tzz;
 import '../../core/design/design.dart';
 import '../logic/reminder_plan.dart';
 import '../utils/app_log.dart';
+import '../utils/company_time.dart';
 import 'schedule_service.dart';
 
 @pragma('vm:entry-point')
@@ -329,14 +330,14 @@ class NotificationService {
       final results = await Future.wait<dynamic>([
         db.from('attendance').select('check_in_time, check_out_time').eq('employee_id', user.id).eq('work_date', todayStr).maybeSingle(),
         db.from('leave_requests').select('start_date, end_date').eq('employee_id', user.id).eq('status', 'approved')
-            .eq('is_hourly', false).gte('end_date', today.toUtc().toIso8601String()),
+            .eq('is_hourly', false).gte('end_date', companyWallToUtc(today).toIso8601String()),
         db.from('official_holidays').select('holiday_date').gte('holiday_date', todayStr),
       ]);
       final att = results[0] as Map<String, dynamic>?;
       final leaveDays = <DateTime>{};
       for (final l in (results[1] as List<dynamic>).cast<Map<String, dynamic>>()) {
-        final from = DateTime.tryParse(l['start_date'].toString())?.toLocal();
-        final to = DateTime.tryParse(l['end_date'].toString())?.toLocal();
+        final from = parseServerTime(l['start_date']);
+        final to = parseServerTime(l['end_date']);
         if (from == null || to == null) continue;
         for (var d = DateTime(from.year, from.month, from.day); !d.isAfter(to); d = DateTime(d.year, d.month, d.day + 1)) {
           leaveDays.add(d);
@@ -394,11 +395,8 @@ class NotificationService {
       final token = await _firebaseMessaging.getToken().timeout(const Duration(seconds: 5));
       if (token != null && user != null) {
         final db = Supabase.instance.client;
-        await Future.wait([
-          db.from('fcm_tokens').delete().eq('employee_id', user.id).eq('token', token),
-          db.from('device_tokens').delete().eq('employee_id', user.id).eq('token', token),
-          db.from('employees').update({'fcm_token': null}).eq('id', user.id).eq('fcm_token', token),
-        ]).timeout(const Duration(seconds: 8));
+        // الرمز بمكان واحد (fcm_tokens — تدقيق 14/10 CODE-007)
+        await db.from('fcm_tokens').delete().eq('employee_id', user.id).eq('token', token).timeout(const Duration(seconds: 8));
       }
     } catch (e) {
       appLog('unregisterDevice: server cleanup failed: $e');
@@ -415,14 +413,7 @@ class NotificationService {
     if (user == null) return;
     final platform = Platform.isAndroid ? 'android' : 'ios';
 
-    try {
-      await Supabase.instance.client
-          .from('employees')
-          .update({'fcm_token': token}).eq('id', user.id);
-    } catch (e) {
-      appLog('تعذّر حفظ رمز الإشعارات (fcm_token) بملف الموظف: $e');
-    }
-
+    // الرمز بمكان واحد: fcm_tokens (تدقيق 14/10 CODE-007؛ كان ينحفظ بثلاث أماكن)
     try {
       await Supabase.instance.client.from('fcm_tokens').upsert({
         'employee_id': user.id,
@@ -431,17 +422,7 @@ class NotificationService {
         'updated_at': DateTime.now().toUtc().toIso8601String(),
       }, onConflict: 'employee_id,token');
     } catch (e) {
-      appLog('تعذّر حفظ رمز الإشعارات بجدول الأجهزة: $e');
-    }
-
-    try {
-      await Supabase.instance.client.from('device_tokens').upsert({
-        'employee_id': user.id,
-        'token': token,
-        'platform': platform,
-      });
-    } catch (e) {
-      appLog('تعذّر حفظ رمز الإشعارات (المحاولة البديلة): $e');
+      appLog('تعذّر حفظ رمز الإشعارات: $e');
     }
   }
 

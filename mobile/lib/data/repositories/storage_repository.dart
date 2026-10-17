@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/models/models.dart';
 import '../../core/services/supabase_service.dart';
+import 'write_guard.dart';
 
 class StorageRepository {
   StorageRepository({SupabaseClient? client}) : _db = client ?? SupabaseService.client;
@@ -20,15 +21,15 @@ class StorageRepository {
   }
 
   Future<void> restore(String fileId) async {
-    await _db.from('deleted_files').update({
+    ensureChanged(await _db.from('deleted_files').update({
       'restored_at': DateTime.now().toUtc().toIso8601String(),
-    }).eq('id', fileId);
+    }).eq('id', fileId).select('id'));
   }
 
   /// حذف الملف من التخزين أولاً ثم من السجل.
   Future<void> deletePermanently({required String bucket, required String filePath, required String fileId}) async {
     await _db.storage.from(bucket).remove([filePath]);
-    await _db.from('deleted_files').delete().eq('id', fileId);
+    ensureChanged(await _db.from('deleted_files').delete().eq('id', fileId).select('id'));
   }
 
   /// أحجام الملفات بالسلة (غير المستعادة).

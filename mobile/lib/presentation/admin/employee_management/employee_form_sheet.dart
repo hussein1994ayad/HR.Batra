@@ -7,6 +7,7 @@ import 'package:uuid/uuid.dart';
 
 import '../../../core/models/models.dart';
 import '../../../core/utils/arabic_format.dart';
+import '../../../core/utils/company_time.dart';
 import '../../../core/utils/input_formatters.dart';
 import '../../../data/repositories/employee_admin_repository.dart';
 import '../../shared/ui/ui.dart';
@@ -43,7 +44,7 @@ class _EmployeeFormState extends State<_EmployeeForm> {
   String? _branchId;
 
   /// تاريخ المباشرة الفعلي (يحدّد نسبة راتب أول شهر) — افتراضياً اليوم ويمكن تغييره
-  DateTime _joinDate = DateTime.now();
+  DateTime _joinDate = companyNow();
   final List<File> _documents = [];
   bool _saving = false;
   bool _showPassword = true;
@@ -203,7 +204,7 @@ class _EmployeeFormState extends State<_EmployeeForm> {
                     context: context,
                     initialDate: _joinDate,
                     firstDate: DateTime(2000),
-                    lastDate: DateTime.now().add(const Duration(days: 365)),
+                    lastDate: companyNow().add(const Duration(days: 365)),
                     helpText: 'تاريخ مباشرة الموظف',
                   );
                   if (d != null) setState(() => _joinDate = d);
@@ -217,6 +218,8 @@ class _EmployeeFormState extends State<_EmployeeForm> {
                 icon: Icons.payments_outlined,
                 keyboardType: TextInputType.number,
                 inputFormatters: [DotThousandsSeparatorInputFormatter()],
+                // إجباري (تدقيق 14/10 CODE-013): القاعدة ما تحط راتب افتراضي بعد
+                validator: (v) => parseThousands(v ?? '') > 0 ? null : 'اكتب الراتب',
               ),
               const SizedBox(height: AppSpace.lg),
               Text('المستمسكات (اختياري)', style: AppText.bodySm.copyWith(fontWeight: FontWeight.w700)),

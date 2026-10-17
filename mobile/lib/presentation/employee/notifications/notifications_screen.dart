@@ -11,6 +11,7 @@ import '../../../core/routes/app_router.dart';
 import '../../../core/services/auth_service.dart';
 import '../../../core/services/supabase_service.dart';
 import '../../../core/utils/app_log.dart';
+import '../../../core/utils/company_time.dart';
 import '../../../data/repositories/notification_repository.dart';
 import '../../shared/ui/ui.dart';
 
@@ -64,7 +65,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   /// عنوان مجموعة التاريخ: اليوم، أمس، هذا الأسبوع، أو الشهر.
   static String _groupOf(DateTime? d) {
     if (d == null) return 'أقدم';
-    final now = DateTime.now();
+    final now = companyNow();
     final today = DateTime(now.year, now.month, now.day);
     final day = DateTime(d.year, d.month, d.day);
     final diff = today.difference(day).inDays;

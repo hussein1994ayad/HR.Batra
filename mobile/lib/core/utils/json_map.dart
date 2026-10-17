@@ -8,6 +8,8 @@
 //   final name = row.obj('employees')?.str('full_name') ?? 'موظف';
 // =========================================================================
 
+import './company_time.dart';
+
 typedef JsonRow = Map<String, dynamic>;
 
 /// يحوّل نتيجة select (List<dynamic>) إلى قائمة صفوف، ويتجاهل أي عنصر ليس Map.
@@ -49,11 +51,8 @@ extension JsonMap on JsonRow {
     return v is bool ? v : null;
   }
 
-  /// تاريخ/وقت ISO بالتوقيت المحلي للجهاز.
-  DateTime? date(String key) {
-    final v = str(key);
-    return v == null ? null : DateTime.tryParse(v)?.toLocal();
-  }
+  /// تاريخ/وقت ISO بساعة بغداد (مو توقيت الموبايل)؛ تاريخ بس يبقى نفس اليوم.
+  DateTime? date(String key) => parseServerTime(str(key));
 
   /// كائن مضمّن من join (قد يصل ككائن أو كمصفوفة من عنصر واحد).
   JsonRow? obj(String key) {

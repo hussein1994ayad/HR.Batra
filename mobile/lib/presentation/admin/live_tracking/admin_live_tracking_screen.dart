@@ -21,6 +21,7 @@ import '../../../core/models/models.dart';
 import '../../../core/routes/app_router.dart';
 import '../../../core/services/supabase_service.dart';
 import '../../../core/utils/app_log.dart';
+import '../../../core/utils/company_time.dart';
 import '../../../data/repositories/live_tracking_repository.dart';
 import '../../../data/repositories/role_repository.dart';
 import '../../shared/ui/ui.dart';
@@ -44,7 +45,7 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
   Timer? _autoRefreshTimer;
   RealtimeChannel? _trackingChannel;
 
-  DateTime _selectedDate = DateTime.now();
+  DateTime _selectedDate = companyNow();
   String _selectedBranchId = 'all';
   TrackStatus? _statusFilter;
   String _searchQuery = '';
@@ -95,8 +96,8 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
     final d = _selectedDate;
     return (
       DateFormat('yyyy-MM-dd').format(d),
-      DateTime(d.year, d.month, d.day).toUtc().toIso8601String(),
-      DateTime(d.year, d.month, d.day, 23, 59, 59, 999).toUtc().toIso8601String(),
+      companyWallToUtc(DateTime(d.year, d.month, d.day)).toIso8601String(),
+      companyWallToUtc(DateTime(d.year, d.month, d.day, 23, 59, 59, 999)).toIso8601String(),
     );
   }
 
@@ -153,7 +154,7 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
   /// تحديث صامت للمواقع بدون وميض: بصمات اليوم + النقاط الجديدة بس (مو كل نقاط اليوم من جديد).
   /// يوم قديم ما يتغير، فما يحتاج تحديث.
   Future<void> _refreshLocationsSilently() async {
-    if (_silentBusy || !DateUtils.isSameDay(_selectedDate, DateTime.now())) return;
+    if (_silentBusy || !DateUtils.isSameDay(_selectedDate, companyNow())) return;
     _silentBusy = true;
     _lastSilentRefresh = DateTime.now();
     try {
@@ -216,7 +217,7 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
       context: context,
       initialDate: _selectedDate,
       firstDate: DateTime(2025),
-      lastDate: DateTime.now().add(const Duration(days: 1)),
+      lastDate: companyNow().add(const Duration(days: 1)),
       locale: const Locale('ar'),
       helpText: 'يوم التتبع',
     );
@@ -246,7 +247,7 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isToday = DateUtils.isSameDay(_selectedDate, DateTime.now());
+    final isToday = DateUtils.isSameDay(_selectedDate, companyNow());
     final branchName = _branchesList.where((b) => b.id == _selectedBranchId).firstOrNull?.rawName;
     final size = MediaQuery.sizeOf(context);
     final sidePanel = size.width >= AppBreakpoints.expanded || (size.width >= AppBreakpoints.medium && size.width > size.height);

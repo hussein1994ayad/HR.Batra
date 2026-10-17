@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/models/models.dart';
+import '../../../../core/utils/company_time.dart';
 import '../../../../data/repositories/admin_dashboard_repository.dart';
 import '../../../shared/ui/ui.dart';
 
@@ -49,9 +50,9 @@ class DashboardFiltersBar extends StatelessWidget {
   Future<void> _pickDate(BuildContext context) async {
     final picked = await showDatePicker(
       context: context,
-      initialDate: filter.date ?? DateTime.now(),
+      initialDate: filter.date ?? companyNow(),
       firstDate: DateTime(2020),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
+      lastDate: companyNow().add(const Duration(days: 365)),
       locale: const Locale('ar'),
       helpText: 'اختر اليوم',
     );

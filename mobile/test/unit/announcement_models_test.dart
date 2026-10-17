@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hr_pro/core/models/models.dart';
+import 'package:hr_pro/core/utils/company_time.dart';
 import 'package:hr_pro/presentation/employee/announcements/announcement_widgets.dart';
 
 void main() {
@@ -10,12 +11,12 @@ void main() {
       final a = AnnouncementModel.fromMap({'created_at': '2026-10-01T09:00:00Z', 'body': 'نص'});
       expect(a.title, 'إعلان إداري');
       expect(a.body, 'نص');
-      expect(a.shownFrom, DateTime.parse('2026-10-01T09:00:00Z').toLocal());
+      expect(a.shownFrom, DateTime(2026, 10, 1, 12)); // 09:00 UTC = 12:00 بغداد (مهما كان توقيت الموبايل)
       expect(a.isPinned, isFalse);
     });
 
     test('remaining time wording', () {
-      AnnouncementModel ends(DateTime d) => AnnouncementModel.fromMap({'ends_at': d.toUtc().toIso8601String()});
+      AnnouncementModel ends(DateTime d) => AnnouncementModel.fromMap({'ends_at': companyWallToUtc(d).toIso8601String()});
       expect(announcementRemaining(ends(DateTime(2026, 10, 4, 20)), now: now), 'ينتهي اليوم');
       expect(announcementRemaining(ends(DateTime(2026, 10, 5, 9)), now: now), 'ينتهي غداً');
       expect(announcementRemaining(ends(DateTime(2026, 10, 9)), now: now), 'باقي 5 أيام');
@@ -24,8 +25,8 @@ void main() {
 
     test('progress is null without an end, clamped otherwise', () {
       final a = AnnouncementModel.fromMap({
-        'starts_at': DateTime(2026, 10, 2, 12).toUtc().toIso8601String(),
-        'ends_at': DateTime(2026, 10, 6, 12).toUtc().toIso8601String(),
+        'starts_at': companyWallToUtc(DateTime(2026, 10, 2, 12)).toIso8601String(),
+        'ends_at': companyWallToUtc(DateTime(2026, 10, 6, 12)).toIso8601String(),
       });
       expect(announcementProgress(a, now: now), closeTo(0.5, 0.001));
       expect(announcementProgress(AnnouncementModel.fromMap(const {}), now: now), isNull);
