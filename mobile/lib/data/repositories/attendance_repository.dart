@@ -14,16 +14,20 @@ class AttendanceRepository {
   final SupabaseClient _db;
 
   /// فرع الموظف وقسمه مع موقع الفرع ونطاقه (لرسم الدائرة وفحص المسافة قبل البصمة).
-  Future<Map<String, dynamic>?> fetchEmployeeBranch(String userId) {
-    return _db
+  /// null = الموظف بدون فرع.
+  Future<BranchModel?> fetchEmployeeBranch(String userId) async {
+    final row = await _db
         .from('employees')
         .select('branch_id, department_id, branches(id, name, latitude, longitude, radius_meters)')
         .eq('id', userId)
         .maybeSingle();
+    final branch = row?.obj('branches');
+    return branch == null ? null : BranchModel.fromMap(branch);
   }
 
-  Future<Map<String, dynamic>?> fetchTodayAttendance(String userId, String todayStr) {
-    return _db.from('attendance').select().eq('employee_id', userId).eq('work_date', todayStr).maybeSingle();
+  Future<AttendanceModel?> fetchTodayAttendance(String userId, String todayStr) async {
+    final row = await _db.from('attendance').select().eq('employee_id', userId).eq('work_date', todayStr).maybeSingle();
+    return row == null ? null : AttendanceModel.fromMap(row);
   }
 
   /// سجل الأيام السابقة (بدون اليوم) من الأحدث للأقدم.

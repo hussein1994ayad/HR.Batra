@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hr_pro/core/models/models.dart';
 import 'package:hr_pro/core/theme/app_theme.dart';
 import 'package:hr_pro/presentation/employee/attendance/attendance_logic.dart';
 import 'package:hr_pro/presentation/employee/home/widgets/home_widgets.dart';
@@ -19,7 +20,14 @@ Widget _card(DateTime now, {Map<String, dynamic>? attendance, bool onLeave = fal
         textDirection: TextDirection.rtl,
         child: Scaffold(
           body: SingleChildScrollView(
-            child: HomeTodayCard(loading: false, attendance: attendance, schedule: schedule, onLeave: onLeave, onAction: () {}, now: now),
+            child: HomeTodayCard(
+              loading: false,
+              attendance: attendance == null ? null : AttendanceModel.fromMap(attendance),
+              schedule: WorkScheduleModel.fromMap(schedule),
+              onLeave: onLeave,
+              onAction: () {},
+              now: now,
+            ),
           ),
         ),
       ),
@@ -72,7 +80,8 @@ void main() {
   });
 
   test('a check-in after the shift ended is noted as such, not as hours of lateness', () {
-    expect(punchNote(isCheckIn: true, schedule: _schedule, now: DateTime(2026, 10, 10, 21, 58)), 'بصمة حضور بعد نهاية الدوام (2:00 م)');
-    expect(punchNote(isCheckIn: true, schedule: _schedule, now: DateTime(2026, 10, 10, 9, 40)), 'متأخر 40 د عن بداية الدوام');
+    final schedule = WorkScheduleModel.fromMap(_schedule);
+    expect(punchNote(isCheckIn: true, schedule: schedule, now: DateTime(2026, 10, 10, 21, 58)), 'بصمة حضور بعد نهاية الدوام (2:00 م)');
+    expect(punchNote(isCheckIn: true, schedule: schedule, now: DateTime(2026, 10, 10, 9, 40)), 'متأخر 40 د عن بداية الدوام');
   });
 }

@@ -155,9 +155,11 @@
 - **ملف migration مطبّق لا يُعدَّل أبداً:** `db push` يتخطاه. أي تغيير = ملف جديد.
 - **الشاشات لا تكلّم Supabase مباشرة:** كل الاستعلامات في `mobile/lib/data/repositories/` (الويب: `web/src/features/<x>/api.ts`).
   الخدمات في `core/services` (البصمة، التتبع، الإشعارات، الرفع) بنية تحتية وتبقى تكلّم القاعدة.
-- **البيانات بالشاشات تبقى `Map<String, dynamic>` حالياً (النقطة 5):** النماذج الموجودة (`NotificationModel`، `LoanModel`…)
-  قيمها الافتراضية تختلف عن اللي تعرضه الشاشات (مثلاً عنوان الإشعار الفارغ = «تنبيه» بالشاشة و`''` بالنموذج)، فالتحويل
-  مو آلي ويغيّر العرض. يصير لاحقاً شاشة شاشة مع اختبار يثبت نفس العرض قبل/بعد.
+- **الشاشات تقرا البيانات من نماذج (تدقيق 14/10، CODE-014):** المستودعات ترجّع نماذج (`AttendanceModel`، `WorkScheduleModel`،
+  `BranchModel`، `DirectoryEntry`، `SalarySlipLine`، `PayslipDetail`، `LeaveTypeOption`…) والشاشات ما تقرا `row['...']` بنفسها.
+  القيم الافتراضية اللي تعرضها كل شاشة («موظف»، «القسم العام»، `--:--`) تبقى بالشاشة نفسها. المسموح يبقى خريطة:
+  البيانات اللي تنرسل للسيرفر (insert/update/rpc)، وصفوف التتبع الحي اللي تروح كما هي لـ `buildTracking` (`core/logic/tracking_rules.dart`).
+  كاش البصمة بالجهاز (`attendance_cache.json`) يبقى بنفس أعمدة الجدول، فكاش النسخ القديمة ينقرا عادي.
 - **أشياء انعملت يدوياً من لوحة Supabase** وصارت مسجّلة بـ `supabase/migrations/20261005000000_capture_dashboard_objects.sql`
   (بنفس تعريفها الحي، حتى قاعدة جديدة من الـ migrations تطلع مطابقة):
   - `geofence_zones` ← الـ triggers `trg_sync_geofences_to_branches` و`trg_sync_geofence_coordinates`: **رسم منطقة بالويب ينشئ

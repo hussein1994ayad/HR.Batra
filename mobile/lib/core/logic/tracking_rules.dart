@@ -48,6 +48,7 @@ class TrackedEmployee {
 
   String get id => employee['id'].toString();
   String get name => (employee['full_name'] ?? 'بدون اسم').toString();
+  String? get avatarUrl => employee['avatar_url']?.toString();
   bool get hasPunchedIn => checkIn != null;
 }
 

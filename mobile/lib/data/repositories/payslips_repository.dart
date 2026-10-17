@@ -30,8 +30,10 @@ class PayslipsRepository {
   final SupabaseClient _db;
 
   /// صف إعداد payroll_policy (قيمته فيها cycle_start_day و cycle_end_day).
-  Future<Map<String, dynamic>?> fetchPayrollPolicy() {
-    return _db.from('system_settings').select('value').eq('key', 'payroll_policy').maybeSingle();
+  /// قيمة payroll_policy من الإعدادات (null = ماكو).
+  Future<Object?> fetchPayrollPolicy() async {
+    final row = await _db.from('system_settings').select('value').eq('key', 'payroll_policy').maybeSingle();
+    return row?['value'];
   }
 
   /// الكشوف المعتمدة (الأحدث أولاً) واسم الموظف وفرعه — بالتوازي.
@@ -55,13 +57,13 @@ class PayslipsRepository {
   }
 
   /// أسطر كشف محرّك الرواتب حسب التاريخ.
-  Future<List<Map<String, dynamic>>> fetchSlipLines(String slipId) async {
+  Future<List<SalarySlipLine>> fetchSlipLines(String slipId) async {
     final lines = await _db.from('salary_slip_lines').select().eq('salary_slip_id', slipId).order('event_date', ascending: true);
-    return List<Map<String, dynamic>>.from(lines);
+    return rowsOf(lines).map(SalarySlipLine.fromMap).toList();
   }
 
   /// المكافآت والخصومات المسجلة للموظف خلال الدورة (للكشوف القديمة).
-  Future<List<Map<String, dynamic>>> fetchBonusesDeductions(String userId, {required String start, required String end}) async {
+  Future<List<PayslipDetail>> fetchBonusesDeductions(String userId, {required String start, required String end}) async {
     final data = await _db
         .from('bonuses_deductions')
         .select()
@@ -69,6 +71,6 @@ class PayslipsRepository {
         .gte('issue_date', start)
         .lte('issue_date', end)
         .order('issue_date', ascending: true);
-    return List<Map<String, dynamic>>.from(data);
+    return rowsOf(data).map(PayslipDetail.fromMap).toList();
   }
 }

@@ -10,6 +10,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 
+import '../../../core/models/models.dart';
 import '../../../core/services/attendance_sync_service.dart';
 import '../../../core/services/location_service.dart';
 import '../../../core/services/precise_location.dart';
@@ -48,8 +49,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   /// الحل الوحيد من إعدادات الهاتف: صلاحية الموقع مرفوضة نهائياً (بالآيفون من أول رفض) أو الموقع الدقيق مطفي.
   bool _needsAppSettings = false;
   String? _errorMessage;
-  Map<String, dynamic>? _todayAttendance;
-  Map<String, dynamic>? _workSchedule;
+  AttendanceModel? _todayAttendance;
+  WorkScheduleModel? _workSchedule;
 
   final MapController _mapController = MapController();
   final AttendanceRepository _repo = AttendanceRepository();
@@ -156,12 +157,13 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   double _distanceFromBranch(Position p) => Geolocator.distanceBetween(p.latitude, p.longitude, _branchLat, _branchLng);
 
   /// موقع الفرع ونطاقه (من الكاش أو من السيرفر).
-  void _applyBranch(Map<String, dynamic> branch) {
-    _branchId = branch['id'] as String?;
-    _branchName = (branch['name'] ?? 'فرع الشركة') as String;
-    _branchLat = (branch['latitude'] as num).toDouble();
-    _branchLng = (branch['longitude'] as num).toDouble();
-    _branchRadius = (branch['radius_meters'] as num).toDouble();
+  void _applyBranch(BranchModel branch) {
+    _branchId = branch.id.isEmpty ? null : branch.id;
+    _branchName = branch.rawName ?? 'فرع الشركة';
+    // الموقع والنطاق إجبارية بالقاعدة (NOT NULL)
+    _branchLat = branch.latitude ?? _branchLat;
+    _branchLng = branch.longitude ?? _branchLng;
+    _branchRadius = branch.radiusMeters ?? _branchRadius;
   }
 
   // تهيئة شاشة البصمة بخطوات ثابتة الترتيب: الكاش ← صلاحيات الموقع ← آخر موقع معروف ← تتبع مباشر ← السيرفر ← دمج
@@ -202,11 +204,10 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
   /// 1. الفرع والجدول من الكاش المحلي أولاً، حتى تنرسم الشاشة فوراً بدون انتظار الإنترنت.
   Future<void> _restoreCachedBranch() async {
-    final cached = await AttendanceSyncService.getCachedData();
-    if (cached != null && cached['branch'] != null) {
-      final branch = Map<String, dynamic>.from(cached['branch'] as Map);
-      _applyBranch(branch);
-      _workSchedule = cached['schedule'] as Map<String, dynamic>?;
+    final cached = await AttendanceSyncService.getCachedBranchAndSchedule();
+    if (cached != null) {
+      _applyBranch(cached.branch);
+      _workSchedule = cached.schedule;
     }
   }
 
@@ -271,17 +272,12 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             'تعذر اعتماد بصمة محفوظة بدون إنترنت. راجع الإدارة.';
       }
 
-      final List<Future<dynamic>> parallelQueries = [
+      final (branch, attendanceData) = await (
         _repo.fetchEmployeeBranch(userId),
         _repo.fetchTodayAttendance(userId, todayStr),
-      ];
+      ).wait;
 
-      final results = await Future.wait(parallelQueries);
-      final empData = results[0] as Map<String, dynamic>?;
-      final attendanceData = results[1];
-
-      if (empData != null && empData['branches'] != null) {
-        final branch = Map<String, dynamic>.from(empData['branches'] as Map);
+      if (branch != null) {
         _applyBranch(branch);
 
         final schedData = await ScheduleService.fetchEffectiveSchedule();
@@ -290,12 +286,12 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
         // تحديث الكاش المحلي
         await AttendanceSyncService.cacheBranchAndSchedule(
-          branchData: branch,
-          scheduleData: schedData,
+          branch: branch,
+          schedule: schedData,
         );
       }
 
-      _todayAttendance = attendanceData as Map<String, dynamic>?;
+      _todayAttendance = attendanceData;
     } catch (networkError) {
       appLog(' وضع الأوفلاين نشط: $networkError');
     }
@@ -307,7 +303,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     final offlinePunches = await AttendanceSyncService.getOfflinePunchesQueue();
     final combinedAttendance = mergeTodayOfflinePunches(
       serverToday: _todayAttendance,
-      offlineQueue: offlinePunches,
+      offlineQueue: offlinePunches.map(QueuedPunch.fromMap).toList(),
       userId: SupabaseService.currentUser?.id,
       todayStr: todayStr,
     );
@@ -315,13 +311,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     if (mounted) {
       setState(() {
         if (syncWarning != null) _errorMessage = syncWarning;
-        if (combinedAttendance.isNotEmpty) {
-          _todayAttendance = combinedAttendance;
-          _selectedPunchType = nextPunchType(combinedAttendance);
-        } else {
-          _todayAttendance = null;
-          _selectedPunchType = 'check_in';
-        }
+        _todayAttendance = combinedAttendance;
+        _selectedPunchType = nextPunchType(combinedAttendance);
 
         if (_currentPosition != null) {
           _distanceToBranch = _distanceFromBranch(_currentPosition!);
@@ -427,7 +418,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
   String? _punchNote(bool isCheckIn) => punchNote(isCheckIn: isCheckIn, schedule: _workSchedule, now: companyNow());
 
-  bool get _hasCheckOut => _todayAttendance?['check_out_time'] != null;
+  bool get _hasCheckOut => _todayAttendance?.hasCheckOut ?? false;
   bool get _inRange => _distanceToBranch != null && _distanceToBranch! <= _branchRadius;
 
   @override

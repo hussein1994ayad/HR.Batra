@@ -13,26 +13,14 @@ String formatLeaveMinutes(int m) {
 }
 
 /// أنواع الإجازات من صف leave_policy (value.active_types). فارغة = تبقى الأنواع الافتراضية.
-List<Map<String, String>> parseActiveLeaveTypes(Map<String, dynamic>? row) {
-  final List<Map<String, String>> mappedTypes = [];
-  if (row != null && row['value'] != null) {
-    final policy = row['value'] as Map<String, dynamic>;
-    if (policy['active_types'] != null) {
-      final typesList = policy['active_types'] as List<dynamic>;
-      for (final t in typesList) {
-        final typeMap = t as Map<String, dynamic>;
-        mappedTypes.add({'id': typeMap['id']?.toString() ?? '', 'name': typeMap['name']?.toString() ?? ''});
-      }
-    }
-  }
-  return mappedTypes;
-}
+List<LeaveTypeOption> parseActiveLeaveTypes(JsonRow? row) =>
+    [for (final t in row?.obj('value')?.list('active_types') ?? const <JsonRow>[]) LeaveTypeOption.fromMap(t)];
 
 /// اسم نوع الطلب للعرض: من السياسة أولاً، وإلا الأسماء الثابتة.
-String leaveTypeLabel(Object? type, List<Map<String, String>> leaveTypes) {
+String leaveTypeLabel(Object? type, List<LeaveTypeOption> leaveTypes) {
   final id = (type ?? 'other').toString();
-  final fromPolicy = leaveTypes.where((t) => t['id'] == id);
-  if (fromPolicy.isNotEmpty) return bareLeaveTypeName(fromPolicy.first['name']!);
+  final fromPolicy = leaveTypes.where((t) => t.id == id);
+  if (fromPolicy.isNotEmpty) return bareLeaveTypeName(fromPolicy.first.name);
   return switch (id) {
     'annual' => 'اعتيادية',
     'sick' => 'مرضية',

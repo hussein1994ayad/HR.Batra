@@ -53,12 +53,12 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
 
   List<LeaveRequestModel> _leaveHistory = [];
 
-  List<Map<String, String>> _leaveTypes = [
-    {'id': 'annual', 'name': 'اعتيادية'},
-    {'id': 'sick', 'name': 'مرضية'},
-    {'id': 'emergency', 'name': 'طارئة'},
-    {'id': 'maternity', 'name': 'أمومة'},
-    {'id': 'other', 'name': 'أخرى'},
+  List<LeaveTypeOption> _leaveTypes = const [
+    LeaveTypeOption('annual', 'اعتيادية'),
+    LeaveTypeOption('sick', 'مرضية'),
+    LeaveTypeOption('emergency', 'طارئة'),
+    LeaveTypeOption('maternity', 'أمومة'),
+    LeaveTypeOption('other', 'أخرى'),
   ];
 
   @override
@@ -120,8 +120,8 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
       if (mappedTypes.isNotEmpty && mounted) {
         setState(() {
           _leaveTypes = mappedTypes;
-          if (!_leaveTypes.any((t) => t['id'] == _leaveType)) {
-            _leaveType = _leaveTypes.first['id']!;
+          if (!_leaveTypes.any((t) => t.id == _leaveType)) {
+            _leaveType = _leaveTypes.first.id;
           }
         });
       }
@@ -147,7 +147,7 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
   /// مدة الإجازة الساعية بالدقائق.
   int get _hourlyMinutes => (_endHour.hour * 60 + _endHour.minute) - (_startHour.hour * 60 + _startHour.minute);
 
-  String get _typeName => bareLeaveTypeName(_leaveTypes.firstWhere((t) => t['id'] == _leaveType, orElse: () => {'name': _leaveType})['name']!);
+  String get _typeName => bareLeaveTypeName(_leaveTypes.where((t) => t.id == _leaveType).firstOrNull?.name ?? _leaveType);
 
   String get _durationSummary {
     if (_isHourly) {
@@ -250,7 +250,7 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
       _attachmentFile = null;
       _isHourly = false;
       _isPaid = true;
-      _leaveType = _leaveTypes.any((t) => t['id'] == 'annual') ? 'annual' : _leaveTypes.first['id']!;
+      _leaveType = _leaveTypes.any((t) => t.id == 'annual') ? 'annual' : _leaveTypes.first.id;
       _startDate = companyNow();
       _endDate = companyNow().add(const Duration(days: 1));
     });
@@ -320,7 +320,7 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
           AppChoiceChips<String>(
             label: 'نوع الإجازة',
             value: _leaveType,
-            options: [for (final t in _leaveTypes) (t['id']!, t['name']!, null)],
+            options: [for (final t in _leaveTypes) (t.id, t.name, null)],
             onChanged: (v) => setState(() => _leaveType = v),
           ),
           const SizedBox(height: AppSpace.lg),

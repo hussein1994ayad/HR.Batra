@@ -6,6 +6,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../core/logic/payroll_settings.dart';
 import '../../../core/models/models.dart';
 import '../../../core/services/pdf_export_service.dart';
 import '../../../core/services/supabase_service.dart';
@@ -44,14 +45,13 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
 
   Future<void> _loadPayrollPolicy() async {
     try {
-      final data = await _repo.fetchPayrollPolicy();
+      final cycle = PayrollSettings.cycleDaysFrom(await _repo.fetchPayrollPolicy());
 
-      if (data != null && data['value'] != null) {
-        final policy = data['value'] as Map<String, dynamic>;
+      if (cycle != null) {
         if (!mounted) return;
         setState(() {
-          _cycleStartDay = policy['cycle_start_day'] != null ? int.parse(policy['cycle_start_day'].toString()) : 25;
-          _cycleEndDay = policy['cycle_end_day'] != null ? int.parse(policy['cycle_end_day'].toString()) : 24;
+          _cycleStartDay = cycle.start;
+          _cycleEndDay = cycle.end;
         });
       }
     } catch (e) {

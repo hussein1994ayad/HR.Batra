@@ -1,5 +1,7 @@
 // منطق شاشتي التخزين وسلة المحذوفات بدون واجهة.
 
+import '../../../core/utils/json_map.dart';
+
 /// الـ bucket حسب نوع الملف المحذوف.
 String bucketForFileType(String fileType) {
   switch (fileType) {
@@ -17,12 +19,10 @@ String bucketForFileType(String fileType) {
 }
 
 /// مجموع أحجام ملفات السلة (الصفوف بلا حجم تُهمل).
-double sumTrashBytes(List<Map<String, dynamic>> rows) {
+double sumTrashBytes(List<JsonRow> rows) {
   double totalTrash = 0;
   for (final row in rows) {
-    if (row['file_size_bytes'] != null) {
-      totalTrash += (row['file_size_bytes'] as num).toDouble();
-    }
+    totalTrash += row.dbl('file_size_bytes') ?? 0;
   }
   return totalTrash;
 }
@@ -34,20 +34,17 @@ double sumTrashBytes(List<Map<String, dynamic>> rows) {
   double pledges = 0;
   double others = 0;
 
-  if (statsData != null && statsData is List) {
-    for (final raw in statsData) {
-      final stat = Map<String, dynamic>.from(raw as Map);
-      final bucket = stat['bucket_name']?.toString();
-      final size = (stat['total_size'] as num?)?.toDouble() ?? 0.0;
-      if (bucket == 'avatars') {
-        avatars += size;
-      } else if (bucket == 'employee-documents' || bucket == 'documents') {
-        documents += size;
-      } else if (bucket == 'loan-pledges') {
-        pledges += size;
-      } else {
-        others += size;
-      }
+  for (final stat in rowsOf(statsData)) {
+    final bucket = stat.str('bucket_name');
+    final size = stat.dbl('total_size') ?? 0.0;
+    if (bucket == 'avatars') {
+      avatars += size;
+    } else if (bucket == 'employee-documents' || bucket == 'documents') {
+      documents += size;
+    } else if (bucket == 'loan-pledges') {
+      pledges += size;
+    } else {
+      others += size;
     }
   }
   return (avatars: avatars, documents: documents, pledges: pledges, others: others);

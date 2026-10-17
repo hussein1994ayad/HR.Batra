@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hr_pro/core/models/models.dart';
 import 'package:hr_pro/presentation/employee/payslips/payslips_logic.dart';
 
 void main() {
@@ -37,7 +38,7 @@ void main() {
       {'id': 'before', 'reason': 'before', 'created_at': '2026-09-30T10:00:00Z'},
       {'id': 'after', 'reason': 'after', 'created_at': '2026-10-02T10:00:00Z'},
       {'id': 'no-date', 'reason': 'no-date'},
-    ];
+    ].map(PayslipDetail.fromMap).toList();
     final kept = itemsIncludedInSlip(rows, slipId: 's1', slipCreated: slipCreated).map((r) => r.reason).toList();
     expect(kept, ['linked', 'before', 'no-date']);
     expect(itemsIncludedInSlip(rows, slipId: 's1', slipCreated: null).length, 4);

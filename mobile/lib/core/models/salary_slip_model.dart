@@ -76,19 +76,53 @@ class PayslipDetail {
   /// 'bonus' | 'deduction'
   final String? type;
 
-  const PayslipDetail({this.reason, this.amount, this.issueDate, this.type});
+  /// بنود bonuses_deductions القديمة: الكشف المرتبط بيه (null = يدوي) ووقت التسجيل.
+  final String? salarySlipId;
+  final DateTime? createdAt;
+
+  const PayslipDetail({this.reason, this.amount, this.issueDate, this.type, this.salarySlipId, this.createdAt});
 
   factory PayslipDetail.fromMap(JsonRow map) => PayslipDetail(
         reason: map.str('reason'),
         amount: map.dbl('amount'),
         issueDate: map.str('issue_date'),
         type: map.str('type'),
+        salarySlipId: map.str('salary_slip_id'),
+        createdAt: map.date('created_at'),
       );
 
   bool get isBonus => type == 'bonus';
 
   /// الشكل اللي تقراه خدمة الـ PDF.
   Map<String, dynamic> toMap() => {'reason': reason, 'amount': amount, 'issue_date': issueDate, 'type': type};
+}
+
+/// سطر بكشف محرّك الرواتب — الجدول: public.salary_slip_lines.
+class SalarySlipLine {
+  /// نوع الحركة (absence، late، bonus، loan، rounding، excess_deduction...)
+  final String? lineType;
+  final double amount;
+
+  /// موجب = إضافة، سالب = خصم (بدون قيمة = خصم)
+  final double direction;
+  final double minutes;
+  final String? notes;
+  final String? eventDate;
+
+  /// الشهر اللي ترحّلت منه الحركة (فارغ = من نفس الشهر)
+  final String? carriedFrom;
+
+  const SalarySlipLine({this.lineType, this.amount = 0, this.direction = -1, this.minutes = 0, this.notes, this.eventDate, this.carriedFrom});
+
+  factory SalarySlipLine.fromMap(JsonRow map) => SalarySlipLine(
+        lineType: map.str('line_type'),
+        amount: map.dbl('amount') ?? 0,
+        direction: map.dbl('direction') ?? -1,
+        minutes: map.dbl('minutes') ?? 0,
+        notes: map.str('notes'),
+        eventDate: map.str('event_date'),
+        carriedFrom: map.str('carried_from'),
+      );
 }
 
 /// حركة بمسير الشهر الحالي (غياب، تأخير، مكافأة...).

@@ -15,7 +15,10 @@ import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../models/branch_model.dart';
+import '../models/work_schedule_model.dart';
 import '../utils/app_log.dart';
+import '../utils/json_map.dart';
 import 'device_service.dart';
 import 'notification_service.dart';
 import 'supabase_service.dart';
@@ -158,14 +161,14 @@ class AttendanceSyncService {
 
   /// حفظ تفاصيل الفرع والجدول محلياً للعمل دون اتصال بالإنترنت
   static Future<void> cacheBranchAndSchedule({
-    required Map<String, dynamic> branchData,
-    required Map<String, dynamic>? scheduleData,
+    required BranchModel branch,
+    required WorkScheduleModel? schedule,
   }) async {
     try {
       final file = await _cacheFile;
       final data = {
-        'branch': branchData,
-        'schedule': scheduleData,
+        'branch': branch.toMap(),
+        'schedule': schedule?.toMap(),
         'cached_at': DateTime.now().toUtc().toIso8601String(),
       };
       await file.writeAsString(jsonEncode(data));
@@ -174,14 +177,18 @@ class AttendanceSyncService {
     }
   }
 
-  /// قراءة تفاصيل الفرع والجدول من الكاش المحلي
-  static Future<Map<String, dynamic>?> getCachedData() async {
+  /// الفرع والجدول من الكاش المحلي (null = ماكو فرع محفوظ). كاش النسخ القديمة بنفس الأعمدة، فينقرا عادي.
+  static Future<({BranchModel branch, WorkScheduleModel? schedule})?> getCachedBranchAndSchedule() async {
     try {
       final file = await _cacheFile;
       if (file.existsSync()) {
         final content = await file.readAsString();
         if (content.isNotEmpty) {
-          return jsonDecode(content) as Map<String, dynamic>;
+          final data = rowOf(jsonDecode(content));
+          final branch = data?.obj('branch');
+          if (data == null || branch == null) return null;
+          final schedule = data.obj('schedule');
+          return (branch: BranchModel.fromMap(branch), schedule: schedule == null ? null : WorkScheduleModel.fromMap(schedule));
         }
       }
     } catch (e) {

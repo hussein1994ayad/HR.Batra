@@ -48,12 +48,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /// اليوم عطلة رسمية (من الإعدادات) — الكارد يگول "اليوم عطلة" بدل "لم تسجّل بعد"
   bool _isHolidayToday = false;
-  Map<String, dynamic>? _todayAttendance;
+  AttendanceModel? _todayAttendance;
   String _userRole = 'employee';
   int _unreadNotificationsCount = 0;
   dynamic _realtimeSubscription;
   dynamic _attendanceSubscription;
-  Map<String, dynamic>? _workSchedule;
+  WorkScheduleModel? _workSchedule;
   final HomeRepository _repo = HomeRepository();
 
   @override
@@ -99,8 +99,8 @@ class _HomeScreenState extends State<HomeScreen> {
       // the user is on another tab. FCM push handles this when the
       // app is in the background; this covers the in-app case.
       await NotificationService.showLocalNotification(
-        title: (data['title'] ?? 'تنبيه جديد').toString(),
-        body: (data['body'] ?? '').toString(),
+        title: data.str('title') ?? 'تنبيه جديد',
+        body: data.str('body') ?? '',
       );
     });
   }
@@ -136,16 +136,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
     _attendanceSubscription = _repo.subscribeToAttendance(user.id, (payload) {
       if (!mounted) return;
-      final rec = payload.newRecord;
+      final rec = AttendanceModel.fromMap(payload.newRecord);
       // نتحقق إن السجل ليوم اليوم فقط
-      if (rec['work_date'] == todayStr) {
+      if (rec.workDate == todayStr) {
         setState(() {
-          _todayAttendance = Map<String, dynamic>.from(rec);
+          _todayAttendance = rec;
         });
         // تحديث التتبع بناءً على حالة الحضور الجديدة
-        if (rec['check_in_time'] != null && rec['check_out_time'] == null) {
+        if (rec.hasCheckIn && !rec.hasCheckOut) {
           LocationService.startTracking(employeeId: user.id);
-        } else if (rec['check_out_time'] != null) {
+        } else if (rec.hasCheckOut) {
           LocationService.stopTracking();
         }
       }
@@ -171,16 +171,16 @@ class _HomeScreenState extends State<HomeScreen> {
     if (user == null) return;
 
     try {
-      final empData = await _repo.fetchProfile(user.id);
+      final me = await _repo.fetchProfile(user.id);
 
-      if (empData != null) {
+      if (me != null) {
         setState(() {
-          _employeeName = (empData['full_name'] ?? _employeeName) as String;
-          final String deptName = (empData['department_name'] ?? 'القسم العام') as String;
-          final String branchName = (empData['branch_name'] ?? 'الفرع العام') as String;
+          _employeeName = me.fullName ?? _employeeName;
+          final deptName = me.departmentName ?? 'القسم العام';
+          final branchName = me.branchName ?? 'الفرع العام';
           _departmentName = '$deptName • $branchName';
-          _avatarUrl = (empData['avatar_url'] ?? '') as String;
-          _userRole = (empData['role'] ?? 'employee') as String;
+          _avatarUrl = me.avatarUrl ?? '';
+          _userRole = me.role ?? 'employee';
         });
       }
 
@@ -196,9 +196,9 @@ class _HomeScreenState extends State<HomeScreen> {
         _repo.fetchUnreadNotificationIds(user.id),
       ]);
 
-      final schedData = results[0];
+      final schedData = results[0] as WorkScheduleModel?;
       final announcementsData = results[1] as List<dynamic>;
-      final attendanceData = results[2];
+      final attendanceData = results[2] as AttendanceModel?;
       final unreadRes = results[3] as List<dynamic>;
 
       unawaited(_loadOnLeave());
@@ -207,18 +207,17 @@ class _HomeScreenState extends State<HomeScreen> {
       unawaited(NotificationService.refreshLocalAttendanceReminders());
 
       setState(() {
-        _workSchedule = schedData != null ? schedData as Map<String, dynamic> : null;
+        _workSchedule = schedData;
         _announcements = rowsStrict(announcementsData, AnnouncementModel.fromMap);
-        _todayAttendance = attendanceData != null ? attendanceData as Map<String, dynamic> : null;
+        _todayAttendance = attendanceData;
         _unreadNotificationsCount = unreadRes.length;
       });
 
 
-      if (_todayAttendance != null &&
-          _todayAttendance!['check_in_time'] != null &&
-          _todayAttendance!['check_out_time'] == null) {
+      final today = _todayAttendance;
+      if (today != null && today.hasCheckIn && !today.hasCheckOut) {
         unawaited(LocationService.startTracking(employeeId: user.id));
-      } else if (_todayAttendance != null && _todayAttendance!['check_out_time'] != null) {
+      } else if (today != null && today.hasCheckOut) {
         unawaited(LocationService.stopTracking());
       } else {
         unawaited(LocationService.stopTracking());

@@ -51,9 +51,10 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
   String _searchQuery = '';
 
   List<BranchModel> _branchesList = [];
-  List<Map<String, dynamic>> _employeesList = [];
-  List<Map<String, dynamic>> _attendanceList = [];
-  List<Map<String, dynamic>> _locationTrackingList = [];
+  // صفوف كما تصل؛ يقراها buildTracking (core/logic/tracking_rules.dart)
+  List<JsonRow> _employeesList = [];
+  List<JsonRow> _attendanceList = [];
+  List<JsonRow> _locationTrackingList = [];
   List<TrackedEmployee> _tracked = [];
 
   String? _focusedId;
@@ -132,10 +133,10 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
       ]);
 
       _branchesList = results[0] as List<BranchModel>;
-      _employeesList = List<Map<String, dynamic>>.from(results[1] as Iterable<dynamic>);
+      _employeesList = rowsOf(results[1]);
       final day = results[2] as List<dynamic>;
-      _attendanceList = List<Map<String, dynamic>>.from(day[0] as Iterable<dynamic>);
-      _locationTrackingList = List<Map<String, dynamic>>.from(day[1] as Iterable<dynamic>);
+      _attendanceList = rowsOf(day[0]);
+      _locationTrackingList = rowsOf(day[1]);
       _process();
       _centerMapOnSelectedBranch();
     } catch (e) {
@@ -159,7 +160,7 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
     _lastSilentRefresh = DateTime.now();
     try {
       final (dateStr, start, end) = _dayRange;
-      final results = await Future.wait<List<Map<String, dynamic>>>([
+      final results = await Future.wait<List<JsonRow>>([
         _repo.fetchDayAttendance(dateStr),
         _repo.fetchDayLocations(start, end, createdAfter: latestCreatedAt(_locationTrackingList)),
       ]);
@@ -416,7 +417,7 @@ class _AdminLiveTrackingScreenState extends State<AdminLiveTrackingScreen> {
                 ];
                 return AppListTile(
                   dense: true,
-                  leading: AppAvatar(name: t.name, url: t.employee['avatar_url']?.toString(), size: 40, tone: tone),
+                  leading: AppAvatar(name: t.name, url: t.avatarUrl, size: 40, tone: tone),
                   title: t.name,
                   subtitle: parts.join(' · '),
                   trailing: Row(

@@ -6,6 +6,7 @@ import 'dart:io';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/models/models.dart';
 import '../../core/services/file_upload_service.dart';
 import '../../core/services/supabase_service.dart';
 import 'write_guard.dart';
@@ -15,8 +16,9 @@ class ProfileRepository {
   final SupabaseClient _db;
 
   /// معلومات الموظف من الـ view الآمن.
-  Future<Map<String, dynamic>?> fetchProfile(String userId) {
-    return _db.from('v_employee_directory').select().eq('id', userId).maybeSingle();
+  Future<DirectoryEntry?> fetchProfile(String userId) async {
+    final row = await _db.from('v_employee_directory').select().eq('id', userId).maybeSingle();
+    return row == null ? null : DirectoryEntry.fromMap(row);
   }
 
   /// يرفع الصورة الشخصية الجديدة (مع الضغط) إلى avatars/[remotePath] ويرجع رابطها.

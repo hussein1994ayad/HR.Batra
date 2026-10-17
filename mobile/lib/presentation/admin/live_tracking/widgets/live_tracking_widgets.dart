@@ -178,7 +178,7 @@ class TrackingFocusCard extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  AppAvatar(name: item.name, url: item.employee['avatar_url']?.toString(), size: 40, tone: tone),
+                  AppAvatar(name: item.name, url: item.avatarUrl, size: 40, tone: tone),
                   const SizedBox(width: AppSpace.md),
                   Expanded(
                     child: Column(

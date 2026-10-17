@@ -45,4 +45,15 @@ class BranchModel {
   String get name => rawName ?? 'فرع';
 
   bool get hasLocation => latitude != null && longitude != null;
+
+  /// نفس أعمدة الجدول (للكاش المحلي بالجهاز؛ [BranchModel.fromMap] يقراه).
+  JsonRow toMap() => {
+        'id': id,
+        'name': rawName,
+        'latitude': latitude,
+        'longitude': longitude,
+        'radius_meters': radiusMeters,
+        'address': address,
+        'created_at': createdAt?.toIso8601String(),
+      };
 }

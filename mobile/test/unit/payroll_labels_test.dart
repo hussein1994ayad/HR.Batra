@@ -12,11 +12,11 @@ void main() {
   });
 
   test('slip lines use the shared labels and keep the "بند" fallback for unknown types', () {
-    final details = slipLinesToDetails([
+    final details = slipLinesToDetails(<JsonRow>[
       {'line_type': 'allowance', 'event_date': '2026-10-01', 'amount': 5000, 'direction': 1},
       {'line_type': 'other', 'event_date': '2026-10-02', 'amount': 1000, 'direction': -1},
       {'line_type': 'something_new', 'event_date': '2026-10-03', 'amount': 1000, 'direction': -1},
-    ]);
+    ].map(SalarySlipLine.fromMap).toList());
     expect(details.map((d) => d.reason), ['مخصصات', 'أخرى', 'بند']);
   });
 }
