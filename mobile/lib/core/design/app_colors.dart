@@ -11,7 +11,7 @@
 // كل ألوان النص تحقق تباين WCAG AA (4.5:1 أو أكثر) على bg وsurface1.
 // =========================================================================
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 abstract final class AppColors {
   // ── الخلفية والسطوح ─────────────────────────────────────────────────────

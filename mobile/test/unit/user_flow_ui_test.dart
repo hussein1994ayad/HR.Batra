@@ -1,11 +1,11 @@
 // واجهة مسارات المستخدم: راتب الشهر الحالي قبل الاعتماد.
 
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hr_pro/core/models/models.dart';
 import 'package:hr_pro/core/theme/app_theme.dart';
 import 'package:hr_pro/presentation/employee/payslips/widgets/payslip_widgets.dart';
 import 'package:hr_pro/presentation/shared/ui/ui.dart';
+import 'package:material_ui/material_ui.dart';
 
 void main() {
   testWidgets('current payroll card shows expected net and each movement with its status', (tester) async {

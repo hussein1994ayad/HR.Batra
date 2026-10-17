@@ -7,7 +7,6 @@
 
 import 'dart:io' show Platform;
 
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:geolocator/geolocator.dart';
@@ -15,6 +14,7 @@ import 'package:hr_pro/core/services/location_service.dart';
 import 'package:hr_pro/core/services/precise_location.dart';
 import 'package:hr_pro/main.dart' as app;
 import 'package:integration_test/integration_test.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// موقع المحاكي (يضبطه سكربت CI بـ simctl location).
 final _simLat = double.parse(const String.fromEnvironment('SIM_LAT', defaultValue: '33.3128'));

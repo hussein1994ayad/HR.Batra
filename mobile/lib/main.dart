@@ -7,11 +7,10 @@ import 'dart:ui';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'core/providers/app_container.dart';
 import 'core/routes/app_router.dart';
@@ -146,11 +145,8 @@ class HRProApp extends StatelessWidget {
         Locale('ar', 'IQ'),
         Locale('ar', ''),
       ],
-      localizationsDelegates: const [
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-      ],
+      // ترجمات الأزرار والنوافذ الجاهزة (Material و Cupertino و Widgets) من حزم التصميم الجديدة
+      localizationsDelegates: GlobalMaterialLocalizations.delegates,
       theme: AppTheme.darkTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: ThemeMode.dark,

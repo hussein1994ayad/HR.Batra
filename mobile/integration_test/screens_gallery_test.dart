@@ -4,8 +4,6 @@
 
 import 'dart:io' show Platform;
 
-import 'package:flutter/material.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -14,6 +12,7 @@ import 'package:hr_pro/core/providers/app_container.dart';
 import 'package:hr_pro/core/providers/auth_provider.dart';
 import 'package:hr_pro/core/theme/app_theme.dart';
 import 'package:integration_test/integration_test.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../test/support/fake_backend.dart';
@@ -42,11 +41,7 @@ void main() {
           debugShowCheckedModeBanner: false,
           locale: const Locale('ar', 'IQ'),
           supportedLocales: const [Locale('ar', 'IQ'), Locale('ar', '')],
-          localizationsDelegates: const [
-            GlobalMaterialLocalizations.delegate,
-            GlobalWidgetsLocalizations.delegate,
-            GlobalCupertinoLocalizations.delegate,
-          ],
+          localizationsDelegates: GlobalMaterialLocalizations.delegates,
           theme: AppTheme.darkTheme,
           darkTheme: AppTheme.darkTheme,
           themeMode: ThemeMode.dark,

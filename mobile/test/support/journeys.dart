@@ -6,8 +6,7 @@
 import 'dart:io';
 import 'dart:ui' as ui;
 
-import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
+import 'package:cupertino_ui/cupertino_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -17,6 +16,7 @@ import 'package:hr_pro/core/routes/app_router.dart';
 import 'package:hr_pro/main.dart' show HRProApp;
 import 'package:hr_pro/presentation/shared/ui/ui.dart';
 import 'package:image_picker_platform_interface/image_picker_platform_interface.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show Supabase;
 
 import 'fake_backend.dart';

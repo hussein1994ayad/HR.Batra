@@ -5,7 +5,7 @@
 // تابلت/شاشة عريضة (≥ 600dp): شريط جانبي NavigationRail
 // =========================================================================
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../../../core/design/design.dart';
 

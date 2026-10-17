@@ -2,7 +2,6 @@
 
 import 'dart:typed_data';
 
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hr_pro/core/models/models.dart';
 import 'package:hr_pro/core/services/auth_service.dart';
@@ -11,6 +10,7 @@ import 'package:hr_pro/data/repositories/assistant_repository.dart';
 import 'package:hr_pro/presentation/admin/assistant/assistant_logic.dart';
 import 'package:hr_pro/presentation/admin/assistant/assistant_screen.dart';
 import 'package:hr_pro/presentation/admin/assistant/assistant_voice.dart';
+import 'package:material_ui/material_ui.dart';
 
 class _FakeRepo implements AssistantRepository {
   _FakeRepo(this.answer);

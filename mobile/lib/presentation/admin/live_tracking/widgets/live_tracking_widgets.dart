@@ -1,8 +1,8 @@
 // أجزاء عرض التتبع الحي: عدّاد الحالات، الخريطة، كارت الموظف المختار.
 
-import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../../../../core/logic/tracking_rules.dart';
 import '../../../../core/models/models.dart';

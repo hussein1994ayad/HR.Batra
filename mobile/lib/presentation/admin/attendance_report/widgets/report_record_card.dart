@@ -1,6 +1,6 @@
 // كارت يوم موظف بتقرير الحضور: الحالة، الملاحظة، وأوقات البصمة مع موقعها وزر التعديل.
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../../../../core/logic/attendance_report.dart';
 import '../../../shared/ui/ui.dart';

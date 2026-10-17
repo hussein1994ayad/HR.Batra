@@ -5,7 +5,7 @@
 // Theme.of(context).textTheme.titleMedium ... أو AppText.* مباشرة.
 // =========================================================================
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'app_colors.dart';
 

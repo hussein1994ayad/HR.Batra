@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../../../../core/logic/attendance_rules.dart';
 import '../../../../core/logic/decision_reasons.dart';

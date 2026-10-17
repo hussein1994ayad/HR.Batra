@@ -1,7 +1,7 @@
 // سجل دوام الموظف لآخر 30 يوم: الحضور والانصراف والحالة لكل يوم.
 // كان زر "سجل الدوام" بالرئيسية يفتح شاشة البصمة فقط، وماكو مكان يشوف بيه الموظف أيامه السابقة.
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../../../../core/models/models.dart';
 import '../../../../core/services/supabase_service.dart';

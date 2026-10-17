@@ -1,10 +1,10 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hr_pro/core/logic/loan_rules.dart';
 import 'package:hr_pro/core/models/models.dart';
 import 'package:hr_pro/core/theme/app_theme.dart';
 import 'package:hr_pro/presentation/employee/loan/loan_request_logic.dart';
 import 'package:hr_pro/presentation/employee/loan/widgets/loan_widgets.dart';
+import 'package:material_ui/material_ui.dart';
 
 void main() {
   test('installmentPlan rounds down and puts the remainder on the last installment (like the server)', () {
