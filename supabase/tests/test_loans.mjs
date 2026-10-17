@@ -202,7 +202,7 @@ for (let i = 0; i < 13; i++) {
     [BAD, i, i === 12 ? 710261 : 710256]);
 }
 await db.query(`SELECT set_config('loans.skip_rebalance', 'off', false)`);
-const migration = fs.readFileSync(new URL('../migrations/20261009000000_smart_loan_installments.sql', import.meta.url), 'utf8');
+const migration = fs.readFileSync(new URL('../migrations_archive/20261009000000_smart_loan_installments.sql', import.meta.url), 'utf8');
 await expectOk('the repair runs', db.exec(migration));
 const fixed = await rows(BAD);
 const fixedLoan = (await db.query('SELECT remaining_amount::int r, installment_count c FROM loans WHERE id=$1', [BAD])).rows[0];

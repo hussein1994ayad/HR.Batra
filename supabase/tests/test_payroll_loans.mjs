@@ -106,7 +106,7 @@ await db.query(`SELECT set_config('loans.skip_rebalance', 'on', false)`);
 await db.query(`INSERT INTO loan_installments (loan_id, due_date, amount, is_paid, paid_at, payment_type) VALUES
   ($1, '2026-10-01', 100000, true, now(), 'salary_deduction'), ($1, '2026-11-01', 400000, false, NULL, 'salary_deduction')`, [ml]);
 await db.query(`SELECT set_config('loans.skip_rebalance', 'off', false)`);
-const migration = fs.readFileSync(new URL('../migrations/20261010000000_payroll_loans_clarity.sql', import.meta.url), 'utf8');
+const migration = fs.readFileSync(new URL('../migrations_archive/20261010000000_payroll_loans_clarity.sql', import.meta.url), 'utf8');
 await expectOk('the repair runs', db.exec(migration));
 const fixed = await q(`SELECT to_char(due_date, 'YYYY-MM-DD') d, amount::int a, is_paid p, amount_locked l, origin_kind k, to_char(origin_month, 'YYYY-MM-DD') o
   FROM loan_installments WHERE loan_id = $1 ORDER BY due_date`, [ml]);

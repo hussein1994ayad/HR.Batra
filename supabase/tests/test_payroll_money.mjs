@@ -6,7 +6,7 @@ import { setup, as, IDS, expectOk, expectError, check, done } from './lib.mjs';
 const db = await setup();
 const q = async (sql, p = []) => (await db.query(sql, p)).rows;
 const one = async (sql, p = []) => (await q(sql, p))[0];
-const migration = fs.readFileSync(new URL('../migrations/20261011000000_payroll_money_fixes.sql', import.meta.url), 'utf8');
+const migration = fs.readFileSync(new URL('../migrations_archive/20261011000000_payroll_money_fixes.sql', import.meta.url), 'utf8');
 
 await db.exec(`UPDATE employees SET join_date = '2026-01-01'`);
 const today = (await one(`SELECT (now() AT TIME ZONE 'Asia/Baghdad')::date::text d`)).d;

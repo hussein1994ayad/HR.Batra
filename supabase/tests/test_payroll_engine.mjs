@@ -404,8 +404,9 @@ await expectError('employee cannot write payroll events',
   'row-level security');
 
 // Supabase يفعّل pg_safeupdate لطلبات الـ API (PGlite لا يفعّله): DELETE/UPDATE بدون WHERE يفشل هناك
-const migDir = new URL('../migrations/', import.meta.url);
-const unsafe = fs.readdirSync(migDir).filter((f) => f.endsWith('.sql')).flatMap((f) =>
+// الملفات القديمة (الأرشيف) + ملف الأساس وأي ملف بعده — المرحلة 10
+const unsafe = ['../migrations_archive/', '../migrations/'].map((d) => new URL(d, import.meta.url)).flatMap((migDir) =>
+  fs.readdirSync(migDir).filter((f) => f.endsWith('.sql')).map((f) => [migDir, f])).flatMap(([migDir, f]) =>
   fs.readFileSync(new URL(f, migDir), 'utf8').split('\n').map((l, i) => [f, i + 1, l])
     .filter(([, , l]) => /^\s*DELETE\s+FROM\s+[\w.]+\s*;/i.test(l)).map(([file, n]) => `${file}:${n}`));
 check('no DELETE without WHERE in migrations (rejected by pg_safeupdate on Supabase)', unsafe.length === 0, unsafe.join(', '));

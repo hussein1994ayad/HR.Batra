@@ -153,6 +153,11 @@
 - **التذكيرات:** أندرويد من السيرفر (cron → FCM)، الآيفون محلية (`flutter_local_notifications`).
 - **إذن الإشعارات بالآيفون يُطلب بعد تسجيل الدخول** وليس عند التشغيل (كان يوقف أول شاشة).
 - **ملف migration مطبّق لا يُعدَّل أبداً:** `db push` يتخطاه. أي تغيير = ملف جديد.
+- **ملف أساس واحد بدل 95 ملف (المرحلة 10، CODE-002):** `supabase/migrations/20261025000000_create_baseline_schema.sql` = القاعدة مثل ما تطلع
+  من الملفات القديمة بالضبط (بـ `supabase/migrations_archive` للقراءة بس). مولّد بـ `node supabase/schema/baseline.mjs`، والفحص التلقائي
+  (`--check`) يتأكد إنه نفس الأرشيف بكل شي (3469 عنصر + البيانات). يبدي بقفل: على قاعدة موجودة يوكف، فعلى السيرفر الحي ينسجل كمطبّق بـ
+  `supabase migration repair` وما يشتغل. الملفات الجديدة تنكتب بعده بـ `supabase/migrations` مثل قبل. **أمر تحديث القاعدة يشتغل بس من
+  مجلد المشروع المحدّث** (نسخة قديمة فيها الـ 95 ملف ممكن تحاول تعيدها). المقارنة ويا الحية: `node supabase/schema/baseline.mjs --live`.
 - **الشاشات لا تكلّم Supabase مباشرة:** كل الاستعلامات في `mobile/lib/data/repositories/` (الويب: `web/src/features/<x>/api.ts`).
   الخدمات في `core/services` (البصمة، التتبع، الإشعارات، الرفع) بنية تحتية وتبقى تكلّم القاعدة.
 - **الشاشات تقرا البيانات من نماذج (تدقيق 14/10، CODE-014):** المستودعات ترجّع نماذج (`AttendanceModel`، `WorkScheduleModel`،
@@ -160,7 +165,7 @@
   القيم الافتراضية اللي تعرضها كل شاشة («موظف»، «القسم العام»، `--:--`) تبقى بالشاشة نفسها. المسموح يبقى خريطة:
   البيانات اللي تنرسل للسيرفر (insert/update/rpc)، وصفوف التتبع الحي اللي تروح كما هي لـ `buildTracking` (`core/logic/tracking_rules.dart`).
   كاش البصمة بالجهاز (`attendance_cache.json`) يبقى بنفس أعمدة الجدول، فكاش النسخ القديمة ينقرا عادي.
-- **أشياء انعملت يدوياً من لوحة Supabase** وصارت مسجّلة بـ `supabase/migrations/20261005000000_capture_dashboard_objects.sql`
+- **أشياء انعملت يدوياً من لوحة Supabase** وصارت مسجّلة بـ `supabase/migrations_archive/20261005000000_capture_dashboard_objects.sql`
   (بنفس تعريفها الحي، حتى قاعدة جديدة من الـ migrations تطلع مطابقة):
   - `geofence_zones` ← الـ triggers `trg_sync_geofences_to_branches` و`trg_sync_geofence_coordinates`: **رسم منطقة بالويب ينشئ
     أو يعدّل أو يحذف فرعاً بنفس المعرّف** بجدول `branches` (القيم الافتراضية: بغداد، نطاق 150 م).

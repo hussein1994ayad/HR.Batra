@@ -1,4 +1,4 @@
-// أدوات المساعد: كل أداة = دالة قراءة بالقاعدة (supabase/migrations/20261008000000_hr_assistant.sql) تُنادى بتوكن الأدمن
+// أدوات المساعد: كل أداة = دالة قراءة بالقاعدة (supabase/migrations_archive/20261008000000_hr_assistant.sql) تُنادى بتوكن الأدمن
 // نفسه، فصلاحيات القاعدة تنطبق. ماكو أي أداة كتابة (القرارات والمسودات بطاقات يأكدها الأدمن بنفسه). أدوات الملفات ترجّع مرفقاً للشاشة، والذكاء يشوف ملخصاً فقط.
 
 import type { AttendanceLog, BranchAttendance, EmployeeProfile, PayrollDetails, PayrollRun } from "./excel.ts";
