@@ -26,3 +26,13 @@
 -dontwarn com.google.android.play.core.splitinstall.**
 -dontwarn com.google.android.play.core.tasks.**
 
+# مكتبات JNI (shared_preferences_android 2.5 / Pigeon JNI) تدوّر على دوال Kotlin بالاسم الكامل لتواقيعها،
+# فلازم R8 ما يغيّر أسماء أنواع Kotlin الأساسية. بدونها نسخة الإصدار بس تفشل بـ NoSuchMethodError:
+# الجلسة ما تنحفظ (يطلع من الحساب كل ما يتسكر التطبيق) وخدمة الموقع بالخلفية ما تشتغل.
+-keep class kotlin.coroutines.Continuation { *; }
+-keep class kotlin.coroutines.intrinsics.** { *; }
+-keep class kotlin.Unit { *; }
+-keep class kotlin.Result { *; }
+-keep class kotlin.Result$Failure { *; }
+-keep class kotlin.jvm.internal.DefaultConstructorMarker { *; }
+-keep class kotlin.enums.EnumEntries { *; }
