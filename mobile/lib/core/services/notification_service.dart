@@ -9,14 +9,17 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tzz;
 
 import '../../core/design/design.dart';
+import '../logic/push_registration.dart';
 import '../logic/reminder_plan.dart';
 import '../utils/app_log.dart';
 import '../utils/company_time.dart';
+import '../utils/json_map.dart';
 import 'schedule_service.dart';
 
 @pragma('vm:entry-point')
@@ -177,12 +180,7 @@ class NotificationService {
           final hasPermission = await isPermissionGranted();
           final user = Supabase.instance.client.auth.currentUser;
           if (_firebaseReady && hasPermission && user != null) {
-            // رمز FCM القديم (deprecated بـ firebase_messaging 17): دالة الإرسال بالسيرفر ترسل بهذا الرمز؛ البديل (FID) يحتاج تغيير السيرفر
-            // ignore: deprecated_member_use
-            final token = await _firebaseMessaging.getToken();
-            if (token != null) await _saveTokenToSupabase(token);
-            // ignore: deprecated_member_use
-            _firebaseMessaging.onTokenRefresh.listen(_saveTokenToSupabase);
+            await _registerForPush();
           }
           if (user != null) {
             unawaited(refreshLocalAttendanceReminders());
@@ -229,11 +227,7 @@ class NotificationService {
           settings.authorizationStatus != AuthorizationStatus.provisional) {
         return false;
       }
-      // ignore: deprecated_member_use
-      final token = await _firebaseMessaging.getToken();
-      if (token != null) await _saveTokenToSupabase(token);
-      // ignore: deprecated_member_use
-      _firebaseMessaging.onTokenRefresh.listen(_saveTokenToSupabase);
+      await _registerForPush();
 
       // إعادة جدولة التذكيرات بعد منح الصلاحيات
       await refreshLocalAttendanceReminders();
@@ -395,41 +389,85 @@ class NotificationService {
     await cancelAllAttendanceReminders();
     final user = Supabase.instance.client.auth.currentUser;
     if (!_firebaseReady) return;
+    final fid = await _knownPushId();
     try {
-      // ignore: deprecated_member_use
-      final token = await _firebaseMessaging.getToken().timeout(const Duration(seconds: 5));
-      if (token != null && user != null) {
-        final db = Supabase.instance.client;
-        // الرمز بمكان واحد (fcm_tokens — تدقيق 14/10 CODE-007)
-        await db.from('fcm_tokens').delete().eq('employee_id', user.id).eq('token', token).timeout(const Duration(seconds: 8));
+      if (fid != null && user != null) {
+        // الرقم بمكان واحد (fcm_tokens — تدقيق 14/10 CODE-007)، ووياه رمز نفس التنصيب القديم إذا بقى
+        await _removePushIds(user.id, fid, includeSelf: true).timeout(const Duration(seconds: 8));
       }
     } catch (e) {
       appLog('unregisterDevice: server cleanup failed: $e');
     }
     try {
-      // ignore: deprecated_member_use
-      await _firebaseMessaging.deleteToken();
+      await _firebaseMessaging.unregister();
     } catch (e) {
-      appLog('unregisterDevice: deleteToken failed: $e');
+      appLog('unregisterDevice: unregister failed: $e');
+    }
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_kPushIdKey);
+    } catch (_) {}
+  }
+
+  // -----------------------------------------------------------------------
+  // التسجيل بالإشعارات: رقم التنصيب (FID) — firebase_messaging 17 (getToken صار قديم)
+  // -----------------------------------------------------------------------
+  static const String _kPushIdKey = 'push.fid';
+  static bool _listeningForRegistration = false;
+
+  /// يسجّل الموبايل: الرقم يوصل بـ onRegistered وينحفظ. ورقم محفوظ قبل (Firebase ما يعيد الحدث كل مرة)
+  /// يتثبت للمستخدم الحالي حتى بعد تبديل الحساب.
+  static Future<void> _registerForPush() async {
+    if (!_listeningForRegistration) {
+      _listeningForRegistration = true; // يبقى طول عمر التطبيق مثل onMessage
+      _firebaseMessaging.onRegistered.listen((fid) => unawaited(_savePushId(fid)));
+    }
+    final known = await _knownPushId();
+    if (known != null) await _savePushId(known);
+    await _firebaseMessaging.register();
+  }
+
+  static Future<String?> _knownPushId() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final v = prefs.getString(_kPushIdKey);
+      return v == null || v.isEmpty ? null : v;
+    } catch (_) {
+      return null;
     }
   }
 
-  static Future<void> _saveTokenToSupabase(String token) async {
+  /// يحفظ الرقم بمكان واحد (fcm_tokens — تدقيق 14/10 CODE-007)، ويحذف رمز نفس التنصيب القديم
+  /// (شكله «الرقم:باقي») حتى الإشعار ما يوصل مرتين.
+  static Future<void> _savePushId(String fid) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_kPushIdKey, fid);
+    } catch (_) {}
     final user = Supabase.instance.client.auth.currentUser;
     if (user == null) return;
     final platform = Platform.isAndroid ? 'android' : 'ios';
-
-    // الرمز بمكان واحد: fcm_tokens (تدقيق 14/10 CODE-007؛ كان ينحفظ بثلاث أماكن)
     try {
       await Supabase.instance.client.from('fcm_tokens').upsert({
         'employee_id': user.id,
-        'token': token,
+        'token': fid,
         'device_platform': platform,
         'updated_at': DateTime.now().toUtc().toIso8601String(),
       }, onConflict: 'employee_id,token');
+      await _removePushIds(user.id, fid, includeSelf: false);
     } catch (e) {
-      appLog('تعذّر حفظ رمز الإشعارات: $e');
+      appLog('تعذّر حفظ رقم الإشعارات: $e');
     }
+  }
+
+  /// يحذف رموز هذا التنصيب القديمة للموظف، والرقم نفسه إذا [includeSelf] (عند الخروج).
+  static Future<void> _removePushIds(String employeeId, String fid, {required bool includeSelf}) async {
+    final db = Supabase.instance.client;
+    final rows = await db.from('fcm_tokens').select('token').eq('employee_id', employeeId);
+    final stored = [for (final r in rowsOf(rows)) ?r.str('token')];
+    final remove = [...oldTokensOfInstall(fid, stored), if (includeSelf && stored.contains(fid)) fid];
+    if (remove.isEmpty) return;
+    await db.from('fcm_tokens').delete().eq('employee_id', employeeId).inFilter('token', remove);
   }
 
   static Future<bool> isPermissionGranted() async {
