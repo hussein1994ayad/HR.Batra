@@ -1,7 +1,7 @@
 // تقرير معاينة التنظيف (Excel) قبل التنفيذ: شنو راح ينحذف، شنو مستثنى وليش، والمساحة التقريبية.
 // ينزل من زر «تقرير المعاينة» بشاشة التنظيف حتى ينراجع أو ينحفظ قبل أي حذف.
 
-import * as XLSX from 'xlsx';
+import { downloadExcel, recordsToRows } from '@/lib/excel';
 import { payrollMonthName } from '@/features/payroll/period';
 import { loanRef } from '@/features/loans/logic';
 import { attendanceBlockers, formatBytes } from './logic';
@@ -51,11 +51,10 @@ export function cleanupReportSheets(period: CleanupPreview | null, loans: LoansC
   return sheets;
 }
 
-export function downloadCleanupReport(period: CleanupPreview | null, loans: LoansCleanupPreview | null): void {
-  const wb = XLSX.utils.book_new();
-  for (const sheet of cleanupReportSheets(period, loans)) {
-    const rows = sheet.rows.length > 0 ? sheet.rows : [{ 'ملاحظة': 'ماكو سجلات' }];
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), sheet.name);
-  }
-  XLSX.writeFile(wb, `معاينة_التنظيف_${period?.month ?? 'السلف'}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+export async function downloadCleanupReport(period: CleanupPreview | null, loans: LoansCleanupPreview | null): Promise<void> {
+  const sheets = cleanupReportSheets(period, loans).map((sheet) => ({
+    name: sheet.name,
+    data: recordsToRows(sheet.rows.length > 0 ? sheet.rows : [{ 'ملاحظة': 'ماكو سجلات' }]),
+  }));
+  await downloadExcel(`معاينة_التنظيف_${period?.month ?? 'السلف'}_${new Date().toISOString().slice(0, 10)}.xlsx`, sheets);
 }

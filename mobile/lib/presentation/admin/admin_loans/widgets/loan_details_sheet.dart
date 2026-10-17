@@ -148,7 +148,7 @@ class _PledgePreview extends StatelessWidget {
                   url,
                   fit: BoxFit.cover,
                   cacheWidth: 900,
-                  errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.broken_image_rounded, color: AppColors.textDisabled, size: 40)),
+                  errorBuilder: (_, _, _) => const Center(child: Icon(Icons.broken_image_rounded, color: AppColors.textDisabled, size: 40)),
                   loadingBuilder: (_, child, progress) => progress == null ? child : const Skeleton(height: 180, radius: 0),
                 ),
               ),
@@ -224,7 +224,7 @@ Future<void> showFullScreenImage(BuildContext context, String imageUrl, String c
               child: SignedNetworkImage(
                 imageUrl,
                 fit: BoxFit.contain,
-                errorBuilder: (_, __, ___) => const Center(child: Text('تعذّر تحميل الصورة', style: AppText.body)),
+                errorBuilder: (_, _, _) => const Center(child: Text('تعذّر تحميل الصورة', style: AppText.body)),
               ),
             ),
           ),

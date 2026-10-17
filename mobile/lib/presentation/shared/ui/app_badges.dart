@@ -109,7 +109,7 @@ class AppAvatar extends StatelessWidget {
                 url!,
                 fit: BoxFit.cover,
                 cacheWidth: (size * 3).round(),
-                errorBuilder: (_, __, ___) => fallback,
+                errorBuilder: (_, _, _) => fallback,
                 loadingBuilder: (_, child, progress) => progress == null ? child : fallback,
               )
             : fallback,

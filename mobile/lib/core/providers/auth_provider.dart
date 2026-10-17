@@ -20,6 +20,8 @@
 // =========================================================================
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+// Riverpod 3 نقل StateProvider لـ legacy.dart (نفس السلوك)
+import 'package:flutter_riverpod/legacy.dart';
 
 import '../models/roles.dart';
 

@@ -22,7 +22,8 @@ val hasReleaseKeystore = keystorePropertiesFile.exists() &&
 
 android {
     namespace = "com.batra.hrpro.hr_pro"
-    compileSdk = 36
+    // 37: permission_handler 13 يتطلبه (يبني بس؛ targetSdk يبقى 36 فسلوك التطبيق على الأجهزة ما يتغير)
+    compileSdk = 37
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -80,5 +81,5 @@ flutter {
 }
 
 dependencies {
-    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.3")
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 }

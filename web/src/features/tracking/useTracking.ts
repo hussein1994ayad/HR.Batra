@@ -171,9 +171,9 @@ export function useTracking() {
       employee: item.employee, type: item.type, date: item.date, status, recordId: item.id, reason, fallbackBranchId, amount,
     }), 'تم حفظ القرار وإرسال إشعار للموظف بنجاح! 🔔', (err) => `حدث خطأ أثناء حفظ القرار: ${errorMessage(err)}`);
 
-  const exportReport = () => {
+  const exportReport = async () => {
     try {
-      exportDisciplineReport({
+      await exportDisciplineReport({
         rows: attendanceRows, decisionsList,
         leaveRequests: data.leaveRequests, securityLogs: data.securityLogs,
         branches: data.branches, employees: data.employees,

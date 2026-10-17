@@ -12,7 +12,7 @@ import './company_time.dart';
 
 typedef JsonRow = Map<String, dynamic>;
 
-/// يحوّل نتيجة select (List<dynamic>) إلى قائمة صفوف، ويتجاهل أي عنصر ليس Map.
+/// يحوّل نتيجة select (`List<dynamic>`) إلى قائمة صفوف، ويتجاهل أي عنصر ليس Map.
 List<JsonRow> rowsOf(Object? value) {
   if (value is! List) return const [];
   return [

@@ -1,7 +1,7 @@
 // كشف السلفة ملف Excel: ينزل تلقائياً قبل حذف السلفة المسددة (الحذف يمسح الأقساط وتواريخ الدفع)،
 // حتى يبقى عندك إثبات إذا صار نزاع. الرواتب القديمة ما تتأثر بالحذف (مبلغ القسط محفوظ بالكشف نفسه).
 
-import * as XLSX from 'xlsx';
+import { downloadExcel, recordsToRows } from '@/lib/excel';
 import type { Loan, SettledLoan } from '@/lib/db-types';
 import { installmentOrigin, loanRef, monthLabel, paidAmount, sortInstallments } from './logic';
 import { payrollMonthName } from '@/features/payroll/period';
@@ -38,12 +38,12 @@ export function loanStatementFileName(loan: Loan): string {
 }
 
 /** ينزّل كشف السلفة (ملخص + الأقساط). يرمي إذا فشل، حتى ما تنحذف السلفة بدون كشف. */
-export function downloadLoanStatement(loan: Loan): void {
+export async function downloadLoanStatement(loan: Loan): Promise<void> {
   const { summary, installments } = loanStatementRows(loan);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summary), 'ملخص السلفة');
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(installments), 'الأقساط');
-  XLSX.writeFile(wb, loanStatementFileName(loan));
+  await downloadExcel(loanStatementFileName(loan), [
+    { name: 'ملخص السلفة', data: recordsToRows(summary) },
+    { name: 'الأقساط', data: recordsToRows(installments) },
+  ]);
 }
 
 /** صفوف كشف سلفة مؤرشفة من سجلها الدائم (settled_loans). */
@@ -72,11 +72,11 @@ export function settledLoanRows(loan: SettledLoan) {
 }
 
 /** ينزّل كشف سلفة مؤرشفة من سجلها الدائم. */
-export function downloadSettledLoanStatement(loan: SettledLoan): void {
+export async function downloadSettledLoanStatement(loan: SettledLoan): Promise<void> {
   const { summary, installments } = settledLoanRows(loan);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summary), 'ملخص السلفة');
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(installments), 'الاستقطاعات');
   const name = loan.employee_name.trim().replace(/[\\/:*?"<>|\s]+/g, '_');
-  XLSX.writeFile(wb, `كشف_سلفة_${loanRef(loan.loan_no)}_${name}.xlsx`);
+  await downloadExcel(`كشف_سلفة_${loanRef(loan.loan_no)}_${name}.xlsx`, [
+    { name: 'ملخص السلفة', data: recordsToRows(summary) },
+    { name: 'الاستقطاعات', data: recordsToRows(installments) },
+  ]);
 }

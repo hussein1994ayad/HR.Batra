@@ -1,4 +1,6 @@
+import { readFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
+import { strFromU8, unzipSync } from 'fflate';
 import { ADMIN, defaultFixtures, mockSupabase, payrollRunFixture } from './mock-supabase';
 
 /** مسير خلصت فترة دوامه (آخر يوم = أمس): الاعتماد متاح. */
@@ -389,6 +391,16 @@ test.describe('workflows', () => {
     // المستثنى وسببه: الحركة اللي تنتظر قرار بالاسم
     await expect(page.getByText('مستثنى: حركات تنتظر قرارك (1)')).toBeVisible();
     await expect(page.getByText(/مصطفى حسن · .*خروج مبكر/)).toBeVisible();
+    // تقرير المعاينة Excel ينزل من المتصفح فعلاً: ملف xlsx سليم بنفس الشيتات (مكتبة write-excel-file — تدقيق 14/10 CODE-012)
+    const download = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'تقرير المعاينة Excel' }).click();
+    const report = await download;
+    expect(report.suggestedFilename()).toMatch(/^معاينة_التنظيف_2026-09_\d{4}-\d{2}-\d{2}\.xlsx$/);
+    const xlsx = unzipSync(new Uint8Array(readFileSync(await report.path())));
+    const workbook = strFromU8(xlsx['xl/workbook.xml']);
+    for (const sheet of ['المسير', 'مستثنى - حركات معلّقة', 'سلف تتأرشف', 'سلف مستثناة', 'طلبات مرفوضة قديمة']) {
+      expect(workbook).toContain(`name="${sheet}"`);
+    }
     await page.getByRole('switch').nth(1).click();
     // تقدير المساحة للفئة المختارة
     await expect(page.getByText('المساحة التقريبية: 508.8 KB')).toBeVisible();

@@ -20,7 +20,7 @@ const _payKeys = ['monthly_salary_iqd', 'future_salary_iqd', 'future_salary_mont
 Future<Map<String, JsonRow>> fetchEmployeePay(SupabaseClient db, {List<String>? ids}) async {
   List<JsonRow> rows;
   try {
-    rows = rowsOf(await db.rpc<dynamic>('get_employee_pay', params: {if (ids != null) 'p_employee_ids': ids}));
+    rows = rowsOf(await db.rpc<dynamic>('get_employee_pay', params: {'p_employee_ids': ?ids}));
   } on PostgrestException catch (e) {
     // سيرفر قبل تحديث 20261018000000 (الدالة بعدها ما موجودة): الراتب ينقرا مباشرة مثل قبل
     if (e.code != 'PGRST202') rethrow;

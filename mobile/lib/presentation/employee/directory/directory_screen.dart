@@ -224,7 +224,7 @@ class _EmployeeDirectoryScreenState extends State<EmployeeDirectoryScreen> {
             child: SignedNetworkImage(
               url,
               fit: BoxFit.contain,
-              errorBuilder: (_, __, ___) => const EmptyView(title: 'مستند PDF', icon: Icons.picture_as_pdf_rounded, tone: AppTone.accent, compact: true),
+              errorBuilder: (_, _, _) => const EmptyView(title: 'مستند PDF', icon: Icons.picture_as_pdf_rounded, tone: AppTone.accent, compact: true),
             ),
           ),
         ),

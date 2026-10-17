@@ -35,7 +35,7 @@ class ProfileRepository {
     await _db.storage.from('avatars').remove([path]);
   }
 
-  /// يرفع مستمسكاً إلى employee-documents/<id>/<وقت>.<امتداد> ويرجع رابطه.
+  /// يرفع مستمسكاً إلى `employee-documents/<id>/<وقت>.<امتداد>` ويرجع رابطه.
   Future<String> uploadDocument(String userId, File file) {
     final ext = file.path.split('.').last;
     return FileUploadService.uploadFile(

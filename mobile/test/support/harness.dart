@@ -96,7 +96,7 @@ Future<void> pumpScreen(
 
   final router = GoRouter(
     initialLocation: '/__test',
-    routes: [GoRoute(path: '/__test', builder: (_, __) => screen)],
+    routes: [GoRoute(path: '/__test', builder: (_, _) => screen)],
     errorBuilder: (_, state) => Scaffold(body: Center(child: Text(state.uri.toString()))),
   );
 
@@ -138,7 +138,7 @@ Future<void> pumpScreen(
   }
 }
 
-/// يحفظ لقطة PNG للشاشة الحالية في mobile/design/screenshots/<set>/<name>.png
+/// يحفظ لقطة PNG للشاشة الحالية في `mobile/design/screenshots/<set>/<name>.png`
 Future<void> capture(WidgetTester tester, String name) async {
   if (kCaptureSet.isEmpty) return;
   await tester.runAsync(() async {

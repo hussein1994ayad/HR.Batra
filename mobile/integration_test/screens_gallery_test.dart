@@ -33,7 +33,7 @@ void main() {
       appContainer.read(currentUserRoleProvider.notifier).state = s.role;
       final router = GoRouter(
         initialLocation: '/__test',
-        routes: [GoRoute(path: '/__test', builder: (_, __) => s.build())],
+        routes: [GoRoute(path: '/__test', builder: (_, _) => s.build())],
         errorBuilder: (_, state) => Scaffold(body: Center(child: Text(state.uri.toString()))),
       );
       await tester.pumpWidget(UncontrolledProviderScope(

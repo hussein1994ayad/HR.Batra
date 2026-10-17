@@ -1,7 +1,7 @@
 // ملف Excel للشهر قبل الأرشفة: الأرشفة تحذف سجلات الحضور التفصيلية، فننزّلها مع الرواتب أولاً
 // (مرجع بالنزاعات أو التدقيق).
 
-import * as XLSX from 'xlsx';
+import { downloadExcel, recordsToRows } from '@/lib/excel';
 import { supabase } from '@/lib/supabase';
 import type { PayrollRow } from './calc';
 
@@ -20,7 +20,6 @@ export async function downloadMonthBeforeArchive(month: string, startDate: strin
     .order('work_date');
   if (error) throw error;
 
-  const wb = XLSX.utils.book_new();
   const payroll = rows.map((r) => ({
     'الموظف': r.full_name,
     'الفرع': r.branches?.name ?? '',
@@ -32,7 +31,6 @@ export async function downloadMonthBeforeArchive(month: string, startDate: strin
     'الصافي': r.netSalary,
     'معتمد': r.isIssued ? 'نعم' : 'لا',
   }));
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(payroll), 'الرواتب');
 
   type Att = {
     work_date: string; status: string; check_in_time: string | null; check_out_time: string | null;
@@ -52,6 +50,8 @@ export async function downloadMonthBeforeArchive(month: string, startDate: strin
       'السبب': a.deduction_reason ?? '',
     };
   });
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(attendance), 'الحضور');
-  XLSX.writeFile(wb, `أرشيف_رواتب_وحضور_${month}.xlsx`);
+  await downloadExcel(`أرشيف_رواتب_وحضور_${month}.xlsx`, [
+    { name: 'الرواتب', data: recordsToRows(payroll) },
+    { name: 'الحضور', data: recordsToRows(attendance) },
+  ]);
 }

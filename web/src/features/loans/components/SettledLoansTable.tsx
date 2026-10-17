@@ -3,6 +3,7 @@
 // سجل السلف المسددة (المؤرشفة): سجل مالي دائم مختصر لكل سلفة تسددت وانحذف سجلها التشغيلي — للعرض والإثبات.
 // ما يدخل بأي حساب راتب: مبلغ كل قسط محفوظ أصلاً بكشف راتبه.
 
+import toast from 'react-hot-toast';
 import { Download, Eye } from 'lucide-react';
 import { formatDate, formatIQD } from '@/lib/format';
 import { Avatar, Badge, Button, DataTable, IconButton, Modal, ModalFooter, TableEmpty } from '@/components/ui';
@@ -51,7 +52,7 @@ export function SettledLoansTable({ s }: { s: LoansState }) {
                 <td className="!text-left">
                   <div className="flex justify-end gap-1.5">
                     <Button size="sm" variant="soft" icon={Eye} onClick={() => setSettledView(loan)}>التفاصيل</Button>
-                    <IconButton icon={Download} label="تنزيل الكشف Excel" onClick={() => downloadSettledLoanStatement(loan)} />
+                    <IconButton icon={Download} label="تنزيل الكشف Excel" onClick={() => downloadSettledLoanStatement(loan).catch(() => toast.error('ما نزل الكشف'))} />
                   </div>
                 </td>
               </tr>
@@ -89,7 +90,7 @@ export function SettledLoansTable({ s }: { s: LoansState }) {
             <span className="font-extrabold text-emerald-300">{formatIQD(settledView.total_deducted)} · الباقي 0</span>
           </div>
           <ModalFooter onCancel={() => setSettledView(null)} cancelLabel="إغلاق" submitLabel="تنزيل الكشف Excel" submitIcon={Download}
-            onSubmit={() => downloadSettledLoanStatement(settledView)} />
+            onSubmit={() => downloadSettledLoanStatement(settledView).catch(() => toast.error('ما نزل الكشف'))} />
         </Modal>
       )}
     </>
