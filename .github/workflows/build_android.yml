@@ -73,6 +73,18 @@ jobs:
           flutter build apk --release $DEFINES
           flutter build apk --release --split-per-abi $DEFINES
 
+      - name: Release keeps the Kotlin names that JNI libraries look up
+        working-directory: ./mobile
+        run: |
+          # shared_preferences_android 2.5 (Pigeon JNI) يدوّر على دوال Kotlin بأسمائها الكاملة؛ إذا R8 غيّرها
+          # نسخة الإصدار بس تفشل (الجلسة ما تنحفظ). نفحص النسخة المبنية نفسها (القواعد: android/app/proguard-rules.pro).
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)
+          rm -rf /tmp/dex && mkdir /tmp/dex
+          unzip -q -o build/app/outputs/flutter-apk/app-release.apk 'classes*.dex' -d /tmp/dex
+          for d in /tmp/dex/classes*.dex; do "$BT/dexdump" "$d"; done > /tmp/dex/dump.txt
+          grep -A1 "name          : 'getAll'" /tmp/dex/dump.txt | grep -q "Lkotlin/coroutines/Continuation;)" \
+            || { echo "R8 renamed kotlin.coroutines.Continuation - see android/app/proguard-rules.pro"; exit 1; }
+
       - name: Upload Universal APK
         uses: actions/upload-artifact@v4
         with:
