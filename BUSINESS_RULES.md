@@ -66,7 +66,7 @@
 | **التطبيق بتوقيت بغداد (تدقيق 14/10، المرحلة 9):** «الوقت المحلي» داخل التطبيق = ساعة بغداد: كل وقت من السيرفر ينقرا بساعة بغداد، «اليوم» وساعة اليوم من ساعة بغداد، والوقت اللي يختاره المستخدم يروح للسيرفر كوقت بغداد. موبايل مضبوط على توقيت ثاني (مسافر أو غلط) يشوف نفس الأوقات والتواريخ. على موبايل بتوقيت العراق النتيجة نفسها بالضبط. المُدد بين لحظتين (مثل تحديث كل 15 دقيقة) تبقى بساعة الموبايل | — | `toCompanyTime`، `companyNow`، `companyWallToUtc`، `parseServerTime` (`mobile/lib/core/utils/company_time.dart`)، `Fmt` |
 | **يوم القطع بالتطبيق من إعدادات السيرفر (CODE-004):** أسماء أشهر أقساط السلف تتبع `payroll_policy.cutoff_day` (يتحدث كل ما تنقرا السلف؛ الافتراضي 26) | `system_settings` | `PayrollSettings` (`mobile/lib/core/logic/payroll_settings.dart`)، `payrollMonthOf` |
 | **الراتب إجباري (CODE-013):** ماكو راتب افتراضي مخفي (كان 600,000)؛ إضافة موظف بدون راتب = خطأ واضح، والنموذج بالموقع والتطبيق يطلبه | `employees.monthly_salary_iqd` NOT NULL بدون default | `EmployeeFormModal.tsx`، `employee_form_sheet.dart` |
-| **رمز الإشعارات بمكان واحد (CODE-007):** `fcm_tokens` بس. النسخ القديمة من التطبيق اللي تكتب بـ `employees.fcm_token` أو `device_tokens` ينتقل رمزها تلقائياً، ودالة الإرسال تقرا `fcm_tokens` بس | `copy_legacy_push_token`، `push-notification` | `notification_service.dart` |
+| **رمز الإشعارات بمكان واحد (CODE-007):** `fcm_tokens` بس. `device_tokens` انحذف (المرحلة 10؛ رموزه انتقلت قبل الحذف). عمود `employees.fcm_token` يبقى للنسخ اللي تكتب بيه وينتقل رمزه تلقائياً، والموقع والتطبيق ما يقرونه؛ ينحذف بالجزء الثالث بعد ما كل الموبايلات تتحدث. دالة الإرسال تقرا `fcm_tokens` بس | `copy_legacy_push_token`، `push-notification` | `notification_service.dart` |
 | **تعديل ما أثّر = خطأ (CODE-009):** تعديلات وحذف الإدارة (والموظف لملفه) بالموقع والتطبيق تتأكد إن سطر تغيّر فعلاً؛ إذا سياسة منعت بصمت يطلع «ما تغيّر شي» بدل نجاح كاذب | — | `ensureChanged` (`web/src/lib/write-guard.ts`، `mobile/lib/data/repositories/write_guard.dart`) |
 | **قائمة أشهر الرواتب تبدي من أول مسير بالقاعدة (BUG-017)** (بعد التصفير: الشهر العاشر 2026)، وكذلك قائمة تنظيف المسيرات | `payroll_periods` | `useFirstPayrollMonth`، `payrollMonthOptions` |
 | **دالة تنظيف السلة (daily-cleanup) تشتغل بس من المهمة المجدولة (BUG-019):** المهمة تصدر كود مؤقت لكل تشغيلة بترويسة `x-cleanup-token`، والدالة تقبله مرة وحدة وخلال ساعة. ماكو كلمة سر تنحفظ بمكان | `issue_cleanup_token`، `cleanup_run_tokens`، مهمة `daily_trash_storage_cleanup` | `supabase/functions/daily-cleanup/index.ts` |
@@ -153,6 +153,11 @@
 - **التذكيرات:** أندرويد من السيرفر (cron → FCM)، الآيفون محلية (`flutter_local_notifications`).
 - **إذن الإشعارات بالآيفون يُطلب بعد تسجيل الدخول** وليس عند التشغيل (كان يوقف أول شاشة).
 - **ملف migration مطبّق لا يُعدَّل أبداً:** `db push` يتخطاه. أي تغيير = ملف جديد.
+- **ملف أساس واحد بدل 95 ملف (المرحلة 10، CODE-002):** `supabase/migrations/20261025000000_create_baseline_schema.sql` = القاعدة مثل ما تطلع
+  من الملفات القديمة بالضبط (بـ `supabase/migrations_archive` للقراءة بس). مولّد بـ `node supabase/schema/baseline.mjs`، والفحص التلقائي
+  (`--check`) يتأكد إنه نفس الأرشيف بكل شي (3469 عنصر + البيانات). يبدي بقفل: على قاعدة موجودة يوكف، فعلى السيرفر الحي ينسجل كمطبّق بـ
+  `supabase migration repair` وما يشتغل. الملفات الجديدة تنكتب بعده بـ `supabase/migrations` مثل قبل. **أمر تحديث القاعدة يشتغل بس من
+  مجلد المشروع المحدّث** (نسخة قديمة فيها الـ 95 ملف ممكن تحاول تعيدها). المقارنة ويا الحية: `node supabase/schema/baseline.mjs --live`.
 - **الشاشات لا تكلّم Supabase مباشرة:** كل الاستعلامات في `mobile/lib/data/repositories/` (الويب: `web/src/features/<x>/api.ts`).
   الخدمات في `core/services` (البصمة، التتبع، الإشعارات، الرفع) بنية تحتية وتبقى تكلّم القاعدة.
 - **الشاشات تقرا البيانات من نماذج (تدقيق 14/10، CODE-014):** المستودعات ترجّع نماذج (`AttendanceModel`، `WorkScheduleModel`،
@@ -160,7 +165,7 @@
   القيم الافتراضية اللي تعرضها كل شاشة («موظف»، «القسم العام»، `--:--`) تبقى بالشاشة نفسها. المسموح يبقى خريطة:
   البيانات اللي تنرسل للسيرفر (insert/update/rpc)، وصفوف التتبع الحي اللي تروح كما هي لـ `buildTracking` (`core/logic/tracking_rules.dart`).
   كاش البصمة بالجهاز (`attendance_cache.json`) يبقى بنفس أعمدة الجدول، فكاش النسخ القديمة ينقرا عادي.
-- **أشياء انعملت يدوياً من لوحة Supabase** وصارت مسجّلة بـ `supabase/migrations/20261005000000_capture_dashboard_objects.sql`
+- **أشياء انعملت يدوياً من لوحة Supabase** وصارت مسجّلة بـ `supabase/migrations_archive/20261005000000_capture_dashboard_objects.sql`
   (بنفس تعريفها الحي، حتى قاعدة جديدة من الـ migrations تطلع مطابقة):
   - `geofence_zones` ← الـ triggers `trg_sync_geofences_to_branches` و`trg_sync_geofence_coordinates`: **رسم منطقة بالويب ينشئ
     أو يعدّل أو يحذف فرعاً بنفس المعرّف** بجدول `branches` (القيم الافتراضية: بغداد، نطاق 150 م).

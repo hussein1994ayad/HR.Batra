@@ -2,10 +2,11 @@
 // والأدمن يقراها من get_employee_pay (والموظف راتبه هو بس، والمدير ما يوصله شي).
 import { supabase } from './supabase';
 
-/** أعمدة الموظف المسموح قراءتها مباشرة (كل شي غير الراتب). نفس القائمة بملف القاعدة 20261018000000. */
+/** أعمدة الموظف المسموح قراءتها مباشرة (كل شي غير الراتب). نفس القائمة بملف القاعدة 20261018000000،
+ *  بدون fcm_token (رمز الإشعارات صار بـ fcm_tokens بس؛ العمود ينحذف بالمرحلة 10 الجزء الثالث). */
 export const EMPLOYEE_COLUMNS =
   'id, employee_code, full_name, phone, email, avatar_url, is_active, role, department_id, branch_id, created_at, ' +
-  'must_change_password, device_id_lock, fcm_token, document_urls, join_date, termination_date';
+  'must_change_password, device_id_lock, document_urls, join_date, termination_date';
 
 export interface EmployeePay {
   monthly_salary_iqd: number | null;

@@ -9,6 +9,11 @@ CREATE SCHEMA extensions;
 CREATE SCHEMA cron;
 CREATE SCHEMA net;
 
+-- مثل Supabase: uuid-ossp بـ extensions، وترتيب البحث "$user", public, extensions
+-- (حتى ملف الأساس يطلع بـ extensions.uuid_generate_v4() مثل القاعدة الحية — المرحلة 10)
+CREATE EXTENSION "uuid-ossp" WITH SCHEMA extensions;
+SET search_path TO "$user", public, extensions;
+
 CREATE TABLE auth.users (
   instance_id uuid, id uuid PRIMARY KEY, aud text, role text, email text,
   encrypted_password text, email_confirmed_at timestamptz,
@@ -41,9 +46,14 @@ $$ SELECT (string_to_array(name, '/'))[1:array_length(string_to_array(name, '/')
 CREATE FUNCTION extensions.gen_salt(text) RETURNS text LANGUAGE sql AS $$ SELECT 'salt' $$;
 CREATE FUNCTION extensions.crypt(text, text) RETURNS text LANGUAGE sql AS $$ SELECT md5($1) $$;
 
-CREATE FUNCTION cron.schedule(text, text, text) RETURNS bigint LANGUAGE sql AS $$ SELECT 1::bigint $$;
-CREATE FUNCTION cron.unschedule(text) RETURNS boolean LANGUAGE sql AS $$ SELECT true $$;
-CREATE TABLE cron.job (jobid bigint, jobname text);
+-- المهام المجدولة تنحفظ (الاسم، الوقت، الأمر) حتى تنقارن بين ملف الأساس والملفات القديمة — المرحلة 10
+CREATE TABLE cron.job (jobid bigserial, jobname text UNIQUE, schedule text, command text);
+CREATE FUNCTION cron.schedule(text, text, text) RETURNS bigint LANGUAGE sql AS $$
+  INSERT INTO cron.job (jobname, schedule, command) VALUES ($1, $2, $3)
+  ON CONFLICT (jobname) DO UPDATE SET schedule = EXCLUDED.schedule, command = EXCLUDED.command
+  RETURNING jobid $$;
+CREATE FUNCTION cron.unschedule(text) RETURNS boolean LANGUAGE sql AS $$
+  WITH d AS (DELETE FROM cron.job WHERE jobname = $1 RETURNING 1) SELECT true $$;
 CREATE FUNCTION net.http_post(url text, headers jsonb DEFAULT '{}', body jsonb DEFAULT '{}') RETURNS bigint
   LANGUAGE sql AS $$ SELECT 1::bigint $$;
 

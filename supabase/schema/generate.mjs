@@ -17,6 +17,7 @@ import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(here, '..', 'migrations');
+const archiveDir = join(here, '..', 'migrations_archive');
 const outFile = join(here, 'current_functions.sql');
 const live = process.argv.includes('--live');
 const checkOnly = process.argv.includes('--check');
@@ -36,11 +37,13 @@ async function rows(file) {
 }
 let db = null;
 
-// آخر ملف migration يعرّف كل دالة (الملفات مرتبة بالاسم = بالتاريخ)
-const migrations = readdirSync(migrationsDir).filter((f) => f.endsWith('.sql')).sort();
+// آخر ملف migration يعرّف كل دالة (الملفات مرتبة بالاسم = بالتاريخ): الأرشيف ثم اللي بعد ملف الأساس.
+// ملف الأساس نفسه يعرّف كل شي، فما ينحسب هنا حتى الفهرس يبين الملف الأصلي (المرحلة 10).
+const sqlIn = (dir) => readdirSync(dir).filter((f) => f.endsWith('.sql')).sort().map((f) => [dir, f]);
+const migrations = [...sqlIn(archiveDir), ...sqlIn(migrationsDir).filter(([, f]) => !f.endsWith('_create_baseline_schema.sql'))];
 const lastDefinedIn = new Map();
-for (const file of migrations) {
-  const sql = readFileSync(join(migrationsDir, file), 'utf8');
+for (const [dir, file] of migrations) {
+  const sql = readFileSync(join(dir, file), 'utf8');
   for (const m of sql.matchAll(/create\s+(?:or\s+replace\s+)?function\s+(?:public\.)?"?([a-z_][a-z0-9_]*)"?\s*\(/gi)) {
     lastDefinedIn.set(m[1].toLowerCase(), file);
   }

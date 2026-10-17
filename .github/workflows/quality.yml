@@ -78,3 +78,7 @@ jobs:
       # ملف الدوال الحالية (supabase/schema/current_functions.sql) لازم يطابق ملفات migrations (تدقيق 14/10 CODE-001)
       - name: Functions reference file is up to date
         run: node supabase/schema/generate.mjs --check
+      # ملف الأساس (supabase/migrations/20261025000000_create_baseline_schema.sql) = الملفات القديمة (migrations_archive)
+      # بكل شي: الجداول والدوال والصلاحيات والسياسات والمهام والبيانات (المرحلة 10، CODE-002)
+      - name: Baseline matches the archived migrations
+        run: node supabase/schema/baseline.mjs --check

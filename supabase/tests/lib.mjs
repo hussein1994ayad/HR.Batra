@@ -16,19 +16,48 @@ export const IDS = {
   branch: '00000000-0000-0000-0000-0000000000b1',
 };
 
-/** قاعدة فارغة: الـ stubs + كل ملفات migrations بالترتيب (بدون بيانات). يستعملها أيضاً supabase/schema/generate.mjs. */
-export async function buildSchema() {
+/** قاعدة فارغة: الـ stubs + ملفات [files] (URLs) بالترتيب. */
+export async function buildFromFiles(files) {
   const db = new PGlite({ extensions: { uuid_ossp } });
   await db.exec(fs.readFileSync(new URL('./stubs.sql', import.meta.url), 'utf8'));
-  for (const f of fs.readdirSync(repo).filter((f) => f.endsWith('.sql')).sort()) {
-    const file = new URL(f, repo.href + '/');
+  for (const file of files) {
     try {
       await db.exec(stripExt(fs.readFileSync(file, 'utf8')));
     } catch (e) {
-      throw new Error(`${f}: ${e.message}`);
+      throw new Error(`${file.pathname.split('/').pop()}: ${e.message}`);
     }
   }
   return db;
+}
+
+/** ملفات .sql بمجلد، مرتبة بالاسم (= بالتاريخ). */
+export function sqlFiles(dir) {
+  return fs.readdirSync(dir).filter((f) => f.endsWith('.sql')).sort().map((f) => new URL(f, dir.href + '/'));
+}
+
+/** قاعدة فارغة: الـ stubs + كل ملفات migrations بالترتيب (بدون بيانات). يستعملها أيضاً supabase/schema/generate.mjs. */
+export async function buildSchema() {
+  return buildFromFiles(sqlFiles(repo));
+}
+
+/** الجزء الرئيسي (public) من القاعدة كأوامر SQL (pg_dump: الجداول والدوال والصلاحيات والبيانات). */
+export async function dumpPublic(db) {
+  const { pgDump } = await import('@electric-sql/pglite-tools/pg_dump');
+  const file = await pgDump({ pg: db, args: ['--schema=public', '--no-owner'] });
+  // pg_dump يفرّغ search_path على نفس الاتصال: نرجعه مثل Supabase
+  await db.exec(`SET search_path TO "$user", public, extensions`);
+  return file.text();
+}
+
+/** لقطة القاعدة (supabase/schema/snapshot.sql): سطر لكل عنصر، مرتبة. */
+export async function snapshot(db) {
+  const sql = fs.readFileSync(new URL('../schema/snapshot.sql', import.meta.url), 'utf8');
+  await db.exec(`SET search_path = ''`);
+  try {
+    return (await db.query(sql)).rows.map((r) => `${r.kind}: ${r.item}`).sort();
+  } finally {
+    await db.exec(`SET search_path TO "$user", public, extensions`);
+  }
 }
 
 export async function setup() {

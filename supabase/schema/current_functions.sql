@@ -1,13 +1,13 @@
 -- =====================================================================
 -- النسخة الحالية من دوال قاعدة البيانات و triggers — مولّدة تلقائياً، للقراءة فقط.
 -- لا تعدّل هذا الملف ولا تطبّقه. التعديل = migration جديد، ثم: node supabase/schema/generate.mjs
--- المصدر: كل ملفات migrations بالترتيب — عدد الدوال: 205 — عدد الـ triggers: 51
+-- المصدر: كل ملفات migrations بالترتيب — عدد الدوال: 205 — عدد الـ triggers: 50
 -- =====================================================================
 
 -- ---------------------------------------------------------------------
 -- فهرس: الدالة ← آخر migration عرّفها
 -- ---------------------------------------------------------------------
---   _anonymize_employee(p_employee_id uuid)  ←  20261024000000_stage9_cleanup.sql
+--   _anonymize_employee(p_employee_id uuid)  ←  20261026000100_drop_unused_tracking_and_device_tokens.sql
 --   _ar_time(p_time time without time zone)  ←  20260930000100_arabic_reminder_times.sql
 --   _cap_loans_to_net(p_employee_id uuid, p_month text)  ←  20261020000000_fix_payroll_partial_exit_and_slip.sql
 --   _insert_loan_installments(p_loan_id uuid, p_amount numeric, p_months integer, p_first_due date)  ←  20260925000000_approve_loan_rpc.sql
@@ -226,7 +226,6 @@
 --   bonuses_deductions.trg_check_bonus_deduction_amount  →  check_bonus_deduction_amount()
 --   bonuses_deductions.trg_guard_bonus_deduction_entry  →  guard_bonus_deduction_entry()
 --   bonuses_deductions.trg_payroll_manual  →  trg_payroll_manual()
---   device_tokens.trg_copy_legacy_push_token  →  copy_legacy_push_token()
 --   employees.trg_assign_employee_code  →  assign_employee_code()
 --   employees.trg_audit_employees  →  record_audit_log()
 --   employees.trg_check_employee_basics  →  check_employee_basics()
@@ -278,7 +277,6 @@ CREATE TRIGGER trg_audit_bonuses AFTER INSERT OR DELETE OR UPDATE ON public.bonu
 CREATE TRIGGER trg_check_bonus_deduction_amount BEFORE INSERT OR UPDATE OF amount, type, employee_id ON public.bonuses_deductions FOR EACH ROW EXECUTE FUNCTION check_bonus_deduction_amount();
 CREATE TRIGGER trg_guard_bonus_deduction_entry BEFORE INSERT ON public.bonuses_deductions FOR EACH ROW EXECUTE FUNCTION guard_bonus_deduction_entry();
 CREATE TRIGGER trg_payroll_manual AFTER INSERT OR DELETE OR UPDATE ON public.bonuses_deductions FOR EACH ROW EXECUTE FUNCTION trg_payroll_manual();
-CREATE TRIGGER trg_copy_legacy_push_token AFTER INSERT OR UPDATE ON public.device_tokens FOR EACH ROW EXECUTE FUNCTION copy_legacy_push_token();
 CREATE TRIGGER trg_assign_employee_code BEFORE INSERT ON public.employees FOR EACH ROW EXECUTE FUNCTION assign_employee_code();
 CREATE TRIGGER trg_audit_employees AFTER INSERT OR DELETE OR UPDATE ON public.employees FOR EACH ROW EXECUTE FUNCTION record_audit_log();
 CREATE TRIGGER trg_check_employee_basics BEFORE INSERT OR UPDATE OF full_name, join_date, termination_date ON public.employees FOR EACH ROW EXECUTE FUNCTION check_employee_basics();
@@ -321,7 +319,7 @@ CREATE TRIGGER trg_keep_payroll_policy_keys BEFORE INSERT OR UPDATE ON public.sy
 CREATE TRIGGER trg_work_schedule_history AFTER INSERT OR DELETE OR UPDATE ON public.work_schedules FOR EACH ROW EXECUTE FUNCTION record_work_schedule_history();
 
 -- ---------------------------------------------------------------------
--- _anonymize_employee(p_employee_id uuid)  — آخر تعريف: 20261024000000_stage9_cleanup.sql
+-- _anonymize_employee(p_employee_id uuid)  — آخر تعريف: 20261026000100_drop_unused_tracking_and_device_tokens.sql
 -- ---------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public._anonymize_employee(p_employee_id uuid)
  RETURNS void
@@ -332,7 +330,7 @@ AS $function$
 BEGIN
   -- إخفاء هوية الموظف في جدول الموظفين وتصفير مستنداته بأمان
   UPDATE public.employees
-  SET 
+  SET
     full_name = 'مستخدم محذوف',
     phone = NULL,
     email = 'deleted_' || substring(p_employee_id::text from 1 for 8) || '@deleted.com',
@@ -344,7 +342,6 @@ BEGIN
   -- إزالة الأجهزة المقترنة والتوكنات
   DELETE FROM public.employee_devices WHERE employee_id = p_employee_id;
   DELETE FROM public.fcm_tokens WHERE employee_id = p_employee_id;
-  DELETE FROM public.device_tokens WHERE employee_id = p_employee_id;
 
   -- حذف الحساب من المصادقة
   DELETE FROM auth.users WHERE id = p_employee_id;

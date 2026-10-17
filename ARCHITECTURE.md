@@ -101,21 +101,23 @@ employees ─┬─→ employee_devices
            ├─→ salary_slips, bonuses_deductions
            ├─→ loans → loan_installments
            ├─→ documents
-           ├─→ notifications, device_tokens, fcm_tokens
-           └─→ geofence_zones ← employee_geofence_assignments
+           ├─→ notifications, fcm_tokens
+           └─→ geofence_zones
                                                     └─ geofence_violations
                                                     └─ mock_gps_attempts
 ```
 
-- **45 جدول** (تحديث 17/10/2026، بعد حذف الجداول الميتة بالمرحلة 9 من تدقيق 14/10) ومنها `audit_log` للتدقيق و`archived_employees` للأرشفة
+- **42 جدول** (تحديث 17/10/2026، بعد حذف الجداول الميتة بالمرحلتين 9 و10 من تدقيق 14/10) ومنها `audit_log` للتدقيق و`archived_employees` للأرشفة
 - **~205 دالة** — النسخة الحالية من كل دالة و trigger بـ `supabase/schema/current_functions.sql` (تتولد من ملفات migrations بـ
   `node supabase/schema/generate.mjs`، والفحص التلقائي يفشل إذا الملف مو محدّث)
+- **ملف أساس واحد** (المرحلة 10، 17/10/2026): `supabase/migrations` يبدي بـ `20261025000000_create_baseline_schema.sql` (~15 ألف سطر بدل
+  95 ملف و22 ألف سطر؛ كل دالة مرة وحدة). الملفات القديمة بـ `supabase/migrations_archive` للتاريخ بس
 - **7 Views** — تجنّب N+1 من العميل (`v_employee_directory`, `v_attendance_with_employee`, ...)
 - **RLS مفعّل** على جميع الجداول — سياسات تعتمد على `is_admin()`, `is_manager()`
 
 ### قواعد أساسية للتعديل على قاعدة البيانات
 
-1. **لا تعدّل migration سابق** — أنشئ migration جديد
+1. **لا تعدّل migration سابق** — أنشئ migration جديد (بعد ملف الأساس). ملف الأساس نفسه مولّد: `node supabase/schema/baseline.mjs`
 2. **كل migration يجب أن يكون idempotent** (`IF NOT EXISTS`, `DROP … IF EXISTS`)
 3. **تسمية**: `YYYYMMDDHHMMSS_<verb>_<scope>_<subject>.sql`
 4. **تغييرات schema حساسة** يجب أن تضيف triggers audit في نفس migration

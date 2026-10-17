@@ -12,7 +12,8 @@ HR.Batra/
 ├── mobile/          Flutter (Dart) — تطبيق الموظف والأدمن (Android + iOS)
 ├── web/             Next.js 16 (TypeScript + Tailwind v4) — لوحة الإدارة
 ├── supabase/        قاعدة بيانات PostgreSQL + Edge Functions
-│   ├── migrations/  ملفات SQL بترتيب زمني (الملف المطبّق لا يُعدَّل — أي تغيير بملف جديد)
+│   ├── migrations/  ملف الأساس + الملفات الجديدة بعده (الملف المطبّق لا يُعدَّل — أي تغيير بملف جديد)
+│   ├── migrations_archive/  الـ 95 ملف القديمة (تاريخ بس، المرحلة 10)
 │   ├── tests/       فحوصات قاعدة البيانات (PGlite محلياً: `cd supabase/tests && npm test`)
 │   ├── functions/   daily-cleanup, push-notification (Deno)
 │   └── seed_dev_data.sql
