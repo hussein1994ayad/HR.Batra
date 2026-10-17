@@ -25,9 +25,7 @@ void main() {
     });
 
     test('leaveTypeLabel prefers the policy name, then the fixed names', () {
-      final types = [
-        {'id': 'annual', 'name': 'إجازة اعتيادية'},
-      ];
+      const types = [LeaveTypeOption('annual', 'إجازة اعتيادية')];
       expect(leaveTypeLabel('annual', types), 'اعتيادية');
       expect(leaveTypeLabel('sick', types), 'مرضية');
       expect(leaveTypeLabel(null, types), 'أخرى');
@@ -51,10 +49,7 @@ void main() {
           ],
         },
       };
-      expect(parseActiveLeaveTypes(row), [
-        {'id': 'annual', 'name': 'سنوية'},
-        {'id': '7', 'name': ''},
-      ]);
+      expect(parseActiveLeaveTypes(row), const [LeaveTypeOption('annual', 'سنوية'), LeaveTypeOption('7', '')]);
     });
   });
 

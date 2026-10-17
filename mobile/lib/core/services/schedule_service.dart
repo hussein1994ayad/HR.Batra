@@ -6,16 +6,16 @@
 // جدول الموظف نفسه ← جدول قسمه ← جدول فرعه.
 // =========================================================================
 
+import '../models/work_schedule_model.dart';
+import '../utils/json_map.dart';
 import 'supabase_service.dart';
 
 class ScheduleService {
   /// جدول الدوام الفعلي للمستخدم الحالي، أو null إن لم يوجد جدول.
-  static Future<Map<String, dynamic>?> fetchEffectiveSchedule() async {
+  static Future<WorkScheduleModel?> fetchEffectiveSchedule() async {
     final dynamic rows =
         await SupabaseService.client.rpc<dynamic>('get_effective_work_schedule');
-    if (rows is List && rows.isNotEmpty) {
-      return Map<String, dynamic>.from(rows.first as Map);
-    }
-    return null;
+    final first = rowsOf(rows).firstOrNull;
+    return first == null ? null : WorkScheduleModel.fromMap(first);
   }
 }

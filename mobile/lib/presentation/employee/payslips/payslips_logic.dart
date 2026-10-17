@@ -50,39 +50,39 @@ Map<String, String> payslipCycleDates(String monthStr, {required int startDay, r
 
 /// فقط البنود التي دخلت في هذا الكشف: المرتبطة به (salary_slip_id)، أو اليدوية
 /// المسجلة قبل اعتماده. البنود المضافة بعد الاعتماد تخص كشفاً قادماً.
-List<PayslipDetail> itemsIncludedInSlip(List<Map<String, dynamic>> rows, {required String slipId, required DateTime? slipCreated}) {
+List<PayslipDetail> itemsIncludedInSlip(List<PayslipDetail> rows, {required String slipId, required DateTime? slipCreated}) {
   return rows.where((d) {
-    final linked = d['salary_slip_id']?.toString();
+    final linked = d.salarySlipId;
     if (linked != null) return linked == slipId;
-    final created = parseServerTime(d['created_at']);
+    final created = d.createdAt;
     return slipCreated == null || created == null || !created.isAfter(slipCreated);
-  }).map(PayslipDetail.fromMap).toList();
+  }).toList();
 }
 
 /// أسطر كشف المحرّك (salary_slip_lines) بنفس شكل تفاصيل الكشف القديمة
 /// (reason / amount / issue_date / type) — أقساط السلف لها سطرها الخاص في الكشف،
 /// والإجازات المدفوعة بلا مبلغ لا تظهر.
-List<PayslipDetail> slipLinesToDetails(List<Map<String, dynamic>> lines) => [
+List<PayslipDetail> slipLinesToDetails(List<SalarySlipLine> lines) => [
       for (final l in lines)
-        if (l['line_type'] != 'loan' && ((l['amount'] as num?) ?? 0) > 0)
+        if (l.lineType != 'loan' && l.amount > 0)
           PayslipDetail(
             reason: _lineReason(l),
-            amount: (l['amount'] as num).toDouble(),
-            issueDate: l['event_date']?.toString(),
-            type: ((l['direction'] as num?) ?? -1) > 0 ? 'bonus' : 'deduction',
+            amount: l.amount,
+            issueDate: l.eventDate,
+            type: l.direction > 0 ? 'bonus' : 'deduction',
           ),
     ];
 
-String _lineReason(Map<String, dynamic> l) {
-  final type = (l['line_type'] ?? '').toString();
+String _lineReason(SalarySlipLine l) {
+  final type = l.lineType ?? '';
   final label = kPayrollEventLabels[type] ?? 'بند';
-  final minutes = ((l['minutes'] as num?) ?? 0).round();
-  final notes = (l['notes'] ?? '').toString().trim();
+  final minutes = l.minutes.round();
+  final notes = (l.notes ?? '').trim();
   final base = type == 'bonus' || type == 'manual_deduction' || type == 'adjustment'
       ? (notes.isNotEmpty ? notes : label)
       : minutes > 0
           ? '$label $minutes دقيقة'
           : label;
-  final carried = (l['carried_from'] ?? '').toString();
+  final carried = l.carriedFrom ?? '';
   return carried.isEmpty ? base : '$base (مرحّل من $carried)';
 }

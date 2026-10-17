@@ -4,7 +4,7 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hr_pro/core/logic/end_of_service.dart';
-import 'package:hr_pro/core/models/salary_slip_model.dart';
+import 'package:hr_pro/core/models/models.dart';
 import 'package:hr_pro/data/repositories/employee_admin_repository.dart';
 import 'package:hr_pro/presentation/employee/payslips/payslips_logic.dart';
 import 'package:http/http.dart' as http;
@@ -69,10 +69,10 @@ void main() {
 
   test('new slip lines have plain labels', () {
     expect(kPayrollEventLabels['rounding'], 'فرق تقريب');
-    final details = slipLinesToDetails([
+    final details = slipLinesToDetails(<JsonRow>[
       {'line_type': 'excess_deduction', 'amount': 100000, 'direction': 1, 'event_date': '2026-10-26'},
       {'line_type': 'rounding', 'amount': 1, 'direction': -1, 'event_date': '2026-10-26'},
-    ]);
+    ].map(SalarySlipLine.fromMap).toList());
     expect(details.first.reason, contains('أكثر من الراتب'));
     expect(details.last.reason, 'فرق تقريب');
     expect(details.last.type, 'deduction');

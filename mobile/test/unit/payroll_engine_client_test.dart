@@ -74,14 +74,14 @@ void main() {
   });
 
   test('engine slip lines become payslip details (loans and zero lines hidden)', () {
-    final details = slipLinesToDetails([
+    final details = slipLinesToDetails(<JsonRow>[
       {'line_type': 'absence', 'event_date': '2026-09-10', 'amount': 20000, 'direction': -1, 'minutes': 0},
       {'line_type': 'late', 'event_date': '2026-09-24', 'amount': 1250, 'direction': -1, 'minutes': 30},
       {'line_type': 'absence', 'event_date': '2026-08-28', 'amount': 20000, 'direction': -1, 'minutes': 0, 'carried_from': '2026-08'},
       {'line_type': 'bonus', 'event_date': '2026-09-26', 'amount': 10000, 'direction': 1, 'notes': 'مكافأة أداء'},
       {'line_type': 'paid_leave', 'event_date': '2026-09-15', 'amount': 0, 'direction': 0},
       {'line_type': 'loan', 'event_date': '2026-09-20', 'amount': 100000, 'direction': -1},
-    ]);
+    ].map(SalarySlipLine.fromMap).toList());
     expect(details.map((d) => d.reason), ['غياب', 'تأخير 30 دقيقة', 'غياب (مرحّل من 2026-08)', 'مكافأة أداء']);
     expect(details.map((d) => d.type), ['deduction', 'deduction', 'deduction', 'bonus']);
   });

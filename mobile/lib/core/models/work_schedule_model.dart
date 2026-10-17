@@ -67,4 +67,18 @@ class WorkScheduleModel {
   int get checkInMinutes => minutesOf(checkInTime);
   int get checkOutMinutes => minutesOf(checkOutTime);
   bool worksOn(DateTime date) => workDays.contains(dbWeekday(date));
+
+  /// نفس أعمدة الجدول (للكاش المحلي بالجهاز؛ [WorkScheduleModel.fromMap] يقراه).
+  JsonRow toMap() => {
+        'id': id,
+        'name': name,
+        'employee_id': employeeId,
+        'department_id': departmentId,
+        'branch_id': branchId,
+        'check_in_time': checkInTime,
+        'check_out_time': checkOutTime,
+        'grace_period_minutes': gracePeriodMinutes,
+        'work_days': workDays,
+        'created_at': createdAt?.toIso8601String(),
+      };
 }

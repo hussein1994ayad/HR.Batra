@@ -31,6 +31,25 @@ String leaveStatusArabic(String? status) {
   }
 }
 
+/// نوع إجازة من سياسة الإجازات (leave_policy.active_types).
+class LeaveTypeOption {
+  final String id;
+  final String name;
+
+  const LeaveTypeOption(this.id, this.name);
+
+  factory LeaveTypeOption.fromMap(JsonRow map) => LeaveTypeOption(map.str('id') ?? '', map.str('name') ?? '');
+
+  @override
+  bool operator ==(Object other) => other is LeaveTypeOption && other.id == id && other.name == name;
+
+  @override
+  int get hashCode => Object.hash(id, name);
+
+  @override
+  String toString() => 'LeaveTypeOption($id, $name)';
+}
+
 class LeaveRequestModel {
   final String id;
   final String employeeId;

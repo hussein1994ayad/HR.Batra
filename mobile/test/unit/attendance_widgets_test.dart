@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hr_pro/core/models/models.dart';
 import 'package:hr_pro/core/theme/app_theme.dart';
 import 'package:hr_pro/presentation/employee/attendance/widgets/attendance_widgets.dart';
 
@@ -54,9 +55,9 @@ void main() {
     });
 
     testWidgets('schedule row appears when a schedule exists', (tester) async {
-      await tester.pumpWidget(_host(const AttendanceTodayCard(
-        todayAttendance: {'check_in_time': '2026-10-04T05:00:00Z'},
-        workSchedule: {'check_in_time': '08:00:00', 'check_out_time': '16:00:00'},
+      await tester.pumpWidget(_host(AttendanceTodayCard(
+        todayAttendance: AttendanceModel.fromMap(const {'check_in_time': '2026-10-04T05:00:00Z'}),
+        workSchedule: WorkScheduleModel.fromMap(const {'check_in_time': '08:00:00', 'check_out_time': '16:00:00'}),
       )));
       expect(find.text('--:--'), findsOneWidget);
       expect(find.text('الدوام المعتمد'), findsOneWidget);

@@ -87,14 +87,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
       if (data != null && mounted) {
         setState(() {
-          _employeeName = (data['full_name'] ?? 'موظف') as String;
-          _email = (data['email'] ?? 'name@company.com') as String;
-          _phone = (data['phone'] ?? 'لا يوجد هاتف مسجل') as String;
-          _employeeCode = (data['employee_code'] ?? 'EMP-000') as String;
-          _avatarUrl = (data['avatar_url'] ?? '') as String;
-          final docs = data['document_urls'];
+          _employeeName = data.fullName ?? 'موظف';
+          _email = data.email ?? 'name@company.com';
+          _phone = data.phone ?? 'لا يوجد هاتف مسجل';
+          _employeeCode = data.employeeCode ?? 'EMP-000';
+          _avatarUrl = data.avatarUrl ?? '';
           // أي شكل غير قائمة = بدون مستمسكات (بدل ما توكف الشاشة)
-          _documentUrls = docs is List ? [for (final u in docs) if (u != null) u.toString()] : [];
+          _documentUrls = [...data.documentUrls];
         });
       }
 

@@ -6,6 +6,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../../../../core/models/models.dart';
 import '../../../../core/services/precise_location.dart';
 import '../../../../core/utils/company_time.dart';
 import '../../../shared/ui/ui.dart';
@@ -154,26 +155,26 @@ class AttendanceLocationCard extends StatelessWidget {
 class AttendanceTodayCard extends StatelessWidget {
   const AttendanceTodayCard({super.key, required this.todayAttendance, required this.workSchedule});
 
-  final Map<String, dynamic>? todayAttendance;
-  final Map<String, dynamic>? workSchedule;
+  final AttendanceModel? todayAttendance;
+  final WorkScheduleModel? workSchedule;
 
   @override
   Widget build(BuildContext context) {
-    DateTime? parse(Object? v) => parseServerTime(v);
-    final hasCheckIn = todayAttendance?['check_in_time'] != null;
-    final hasCheckOut = todayAttendance?['check_out_time'] != null;
+    final checkIn = todayAttendance?.checkInTime;
+    final checkOut = todayAttendance?.checkOutTime;
+    final schedule = workSchedule;
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text('اليوم · ${Fmt.dateWithDay(companyNow())}', style: AppText.label),
           const SizedBox(height: AppSpace.sm),
-          KeyValueRow('الحضور', hasCheckIn ? Fmt.time(parse(todayAttendance!['check_in_time'])) : '--:--', icon: Icons.login_rounded),
-          KeyValueRow('الانصراف', hasCheckOut ? Fmt.time(parse(todayAttendance!['check_out_time'])) : '--:--', icon: Icons.logout_rounded),
-          if (workSchedule != null)
+          KeyValueRow('الحضور', checkIn != null ? Fmt.time(checkIn) : '--:--', icon: Icons.login_rounded),
+          KeyValueRow('الانصراف', checkOut != null ? Fmt.time(checkOut) : '--:--', icon: Icons.logout_rounded),
+          if (schedule != null)
             KeyValueRow(
               'الدوام المعتمد',
-              '${Fmt.timeOfDay(workSchedule!['check_in_time']?.toString())} - ${Fmt.timeOfDay(workSchedule!['check_out_time']?.toString())}',
+              '${Fmt.timeOfDay(schedule.checkInTime)} - ${Fmt.timeOfDay(schedule.checkOutTime)}',
               icon: Icons.schedule_rounded,
             ),
         ],

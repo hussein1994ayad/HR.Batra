@@ -352,9 +352,9 @@ class NotificationService {
 
       final plan = planAttendanceReminders(
         now: DateTime(now.year, now.month, now.day, now.hour, now.minute, now.second),
-        checkInTime: schedule['check_in_time']?.toString(),
-        checkOutTime: schedule['check_out_time']?.toString(),
-        workDays: [for (final d in (schedule['work_days'] as List<dynamic>? ?? const [0, 1, 2, 3, 4, 6])) (d as num).toInt()],
+        checkInTime: schedule.checkInTime,
+        checkOutTime: schedule.checkOutTime,
+        workDays: schedule.workDays,
         leaveDays: leaveDays,
         checkedInToday: att?['check_in_time'] != null,
         checkedOutToday: att?['check_out_time'] != null,

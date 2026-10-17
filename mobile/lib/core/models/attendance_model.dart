@@ -83,4 +83,49 @@ class AttendanceModel {
 
   Duration? get workDuration =>
       checkInTime == null || checkOutTime == null ? null : checkOutTime!.difference(checkInTime!);
+
+  /// نفس السجل ببصمة حضور ([checkIn] = true) أو انصراف بوقت وموقع جديد (دمج بصمات الجهاز بدون إنترنت).
+  AttendanceModel withPunch({required bool checkIn, required DateTime? time, double? lat, double? lng}) => AttendanceModel(
+        id: id,
+        employeeId: employeeId,
+        employeeName: employeeName,
+        branchId: branchId,
+        workDate: workDate,
+        checkInTime: checkIn ? time : checkInTime,
+        checkOutTime: checkIn ? checkOutTime : time,
+        checkInLat: checkIn ? lat : checkInLat,
+        checkInLng: checkIn ? lng : checkInLng,
+        checkOutLat: checkIn ? checkOutLat : lat,
+        checkOutLng: checkIn ? checkOutLng : lng,
+        status: status,
+        isMockDetected: isMockDetected,
+        checkOutOffline: checkOutOffline,
+        deductionStatus: deductionStatus,
+        deductionApplied: deductionApplied,
+        deductionReason: deductionReason,
+        createdAt: createdAt,
+      );
+}
+
+/// بصمة محفوظة بالجهاز (بدون إنترنت) ولسه ما انرفعت — عنصر من طابور `AttendanceSyncService`.
+class QueuedPunch {
+  final String? userId;
+
+  /// 'check_in' | 'check_out'
+  final String? type;
+
+  /// الوقت كما انحفظ (ISO؛ UTC للبصمات الجديدة).
+  final String? time;
+  final double? latitude;
+  final double? longitude;
+
+  const QueuedPunch({this.userId, this.type, this.time, this.latitude, this.longitude});
+
+  factory QueuedPunch.fromMap(JsonRow map) => QueuedPunch(
+        userId: map.str('user_id'),
+        type: map.str('type'),
+        time: map.str('time'),
+        latitude: map.dbl('latitude'),
+        longitude: map.dbl('longitude'),
+      );
 }

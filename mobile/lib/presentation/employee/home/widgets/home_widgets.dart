@@ -61,22 +61,17 @@ class HomeTodayCard extends StatelessWidget {
   /// يوم دوام حسب جدول الموظف (0 = الأحد) وما هو عطلة رسمية
   bool _isWorkDay(DateTime now) {
     if (isHoliday) return false;
-    final days = schedule?['work_days'];
-    return days is! List || days.map((d) => (d as num).toInt()).contains(now.weekday % 7);
+    return schedule?.worksOn(now) ?? true;
   }
-  final Map<String, dynamic>? attendance;
-  final Map<String, dynamic>? schedule;
+  final AttendanceModel? attendance;
+  final WorkScheduleModel? schedule;
   final VoidCallback onAction;
-
-  static DateTime? _parse(Object? v) => parseServerTime(v);
 
   /// عدد الدقائق المجدولة من "08:00:00" إلى "16:00:00".
   double? get _scheduledMinutes {
-    final a = schedule?['check_in_time']?.toString().split(':');
-    final b = schedule?['check_out_time']?.toString().split(':');
-    if (a == null || b == null || a.length < 2 || b.length < 2) return null;
-    final start = (int.tryParse(a[0]) ?? 0) * 60 + (int.tryParse(a[1]) ?? 0);
-    final end = (int.tryParse(b[0]) ?? 0) * 60 + (int.tryParse(b[1]) ?? 0);
+    final start = scheduleMinutesOf(schedule?.checkInTime);
+    final end = scheduleMinutesOf(schedule?.checkOutTime);
+    if (start == null || end == null) return null;
     return end > start ? (end - start).toDouble() : null;
   }
 
@@ -97,8 +92,8 @@ class HomeTodayCard extends StatelessWidget {
         ),
       );
     }
-    final checkIn = _parse(attendance?['check_in_time']);
-    final checkOut = _parse(attendance?['check_out_time']);
+    final checkIn = attendance?.checkInTime;
+    final checkOut = attendance?.checkOutTime;
     final state = checkOut != null
         ? HomeDayState.done
         : checkIn != null
@@ -129,7 +124,7 @@ class HomeTodayCard extends StatelessWidget {
           'غائب',
           AppTone.danger,
           'انتهى دوامك',
-          Fmt.timeOfDay(schedule?['check_out_time']?.toString()),
+          Fmt.timeOfDay(schedule?.checkOutTime),
           'عرض سجل الدوام',
           Icons.history_rounded,
           AppButtonVariant.secondary,
@@ -138,7 +133,7 @@ class HomeTodayCard extends StatelessWidget {
           lateMinutes > 0 ? 'متأخر ${_hm(Duration(minutes: lateMinutes))}' : 'لم تسجّل بعد',
           lateMinutes > 0 ? AppTone.danger : AppTone.warning,
           lateMinutes > 0 ? 'بدأ دوامك' : 'يبدأ دوامك',
-          Fmt.timeOfDay(schedule?['check_in_time']?.toString()),
+          Fmt.timeOfDay(schedule?.checkInTime),
           'تسجيل الحضور',
           Icons.fingerprint_rounded,
           AppButtonVariant.primary,
@@ -188,11 +183,11 @@ class HomeTodayCard extends StatelessWidget {
             children: [
               HomeTimeChip(icon: Icons.login_rounded, label: 'الحضور', value: checkIn == null ? '--:--' : Fmt.time(checkIn)),
               HomeTimeChip(icon: Icons.logout_rounded, label: 'الانصراف', value: checkOut == null ? '--:--' : Fmt.time(checkOut)),
-              if (schedule != null)
+              if (schedule case final s?)
                 HomeTimeChip(
                   icon: Icons.schedule_rounded,
                   label: 'الدوام',
-                  value: '${Fmt.timeOfDay(schedule!['check_in_time']?.toString())} - ${Fmt.timeOfDay(schedule!['check_out_time']?.toString())}',
+                  value: '${Fmt.timeOfDay(s.checkInTime)} - ${Fmt.timeOfDay(s.checkOutTime)}',
                 ),
             ],
           ),
@@ -203,10 +198,10 @@ class HomeTodayCard extends StatelessWidget {
               padding: EdgeInsets.only(top: AppSpace.sm),
               child: Center(child: Text('ما سجّلت حضور اليوم. إذا جنت مداوم راجع الإدارة.', style: AppText.caption, textAlign: TextAlign.center)),
             )
-          else if (state == HomeDayState.notStarted && !dayOff && schedule?['grace_period_minutes'] != null)
+          else if (state == HomeDayState.notStarted && !dayOff && schedule != null)
             Padding(
               padding: const EdgeInsets.only(top: AppSpace.sm),
-              child: Center(child: Text('سماحية التأخير ${schedule!['grace_period_minutes']} دقيقة', style: AppText.caption)),
+              child: Center(child: Text('سماحية التأخير ${schedule!.gracePeriodMinutes} دقيقة', style: AppText.caption)),
             ),
         ],
       ),
@@ -215,20 +210,18 @@ class HomeTodayCard extends StatelessWidget {
 
   /// دقائق التأخير لحد الآن إذا ما بصم بعد (بعد السماحية، وبأيام الدوام فقط)
   int _lateSoFar(DateTime now) {
-    final days = schedule?['work_days'];
-    if (days is List && !days.map((d) => (d as num).toInt()).contains(now.weekday % 7)) return 0;
-    final parts = schedule?['check_in_time']?.toString().split(':');
-    if (parts == null || parts.length < 2) return 0;
-    final start = (int.tryParse(parts[0]) ?? 0) * 60 + (int.tryParse(parts[1]) ?? 0);
-    final grace = (schedule?['grace_period_minutes'] as num?)?.toInt() ?? kDefaultGraceMinutes;
+    final s = schedule;
+    if (s == null || !s.worksOn(now)) return 0;
+    final start = scheduleMinutesOf(s.checkInTime);
+    if (start == null) return 0;
     final late = now.hour * 60 + now.minute - start;
-    return late > grace ? late : 0;
+    return late > s.gracePeriodMinutes ? late : 0;
   }
 
   /// خلص وقت الدوام اليوم (الدوام اللي يعبر منتصف الليل ما ينحسب هنا).
   bool _shiftEnded(DateTime now) {
-    final start = scheduleMinutesOf(schedule?['check_in_time']);
-    final end = scheduleMinutesOf(schedule?['check_out_time']);
+    final start = scheduleMinutesOf(schedule?.checkInTime);
+    final end = scheduleMinutesOf(schedule?.checkOutTime);
     if (start == null || end == null || end <= start) return false;
     return now.hour * 60 + now.minute >= end;
   }

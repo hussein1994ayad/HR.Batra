@@ -5,6 +5,7 @@
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/models/models.dart';
 import '../../core/services/supabase_service.dart';
 import '../../core/utils/app_log.dart';
 import 'announcement_repository.dart';
@@ -17,12 +18,14 @@ class HomeRepository {
   final AnnouncementRepository _announcements;
 
   /// الاسم والقسم والفرع والصورة والدور من دليل الموظفين.
-  Future<Map<String, dynamic>?> fetchProfile(String userId) {
-    return _db.from('v_employee_directory').select().eq('id', userId).maybeSingle();
+  Future<DirectoryEntry?> fetchProfile(String userId) async {
+    final row = await _db.from('v_employee_directory').select().eq('id', userId).maybeSingle();
+    return row == null ? null : DirectoryEntry.fromMap(row);
   }
 
-  Future<Map<String, dynamic>?> fetchTodayAttendance(String userId, String todayStr) {
-    return _db.from('attendance').select().eq('employee_id', userId).eq('work_date', todayStr).maybeSingle();
+  Future<AttendanceModel?> fetchTodayAttendance(String userId, String todayStr) async {
+    final row = await _db.from('attendance').select().eq('employee_id', userId).eq('work_date', todayStr).maybeSingle();
+    return row == null ? null : AttendanceModel.fromMap(row);
   }
 
   /// التعاميم السارية الآن لهذا الموظف فقط (مدة + جمهور مستهدف)

@@ -100,9 +100,9 @@ class TrackingSchedule {
       final workSchedule = await ScheduleService.fetchEffectiveSchedule();
       if (workSchedule != null) {
         trackingSchedule = {
-          'start_time': workSchedule['check_in_time'],
-          'end_time': workSchedule['check_out_time'],
-          'tracking_days': workSchedule['work_days'],
+          'start_time': workSchedule.checkInTime,
+          'end_time': workSchedule.checkOutTime,
+          'tracking_days': workSchedule.workDays,
         };
       }
 
