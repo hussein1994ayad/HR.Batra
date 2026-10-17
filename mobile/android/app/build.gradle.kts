@@ -23,17 +23,16 @@ val hasReleaseKeystore = keystorePropertiesFile.exists() &&
 android {
     namespace = "com.batra.hrpro.hr_pro"
     // 37: permission_handler 13 يتطلبه (يبني بس؛ targetSdk يبقى 36 فسلوك التطبيق على الأجهزة ما يتغير)
-    compileSdk = 37
+    // AGP 9: منصة أندرويد 37 مسجّلة بالرقم الجديد (37.0)، فتنكتب بالطريقة الجديدة
+    compileSdk {
+        version = release(37) { minorApiLevel = 0 }
+    }
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
         isCoreLibraryDesugaringEnabled = true
-    }
-
-    kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_17.toString()
     }
 
     defaultConfig {
@@ -73,6 +72,12 @@ android {
                 "proguard-rules.pro"
             )
         }
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
     }
 }
 

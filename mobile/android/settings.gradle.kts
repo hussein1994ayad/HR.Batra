@@ -19,8 +19,9 @@ pluginManagement {
 
 plugins {
     id("dev.flutter.flutter-plugin-loader") version "1.0.0"
-    id("com.android.application") version "8.11.1" apply false
-    id("org.jetbrains.kotlin.android") version "2.2.20" apply false
+    // نفس نسخ قالب Flutter 3.47 (AGP 9.1.0 و Kotlin 2.4.0)؛ إعدادا التوافق بـ gradle.properties يبقون للمكتبات القديمة
+    id("com.android.application") version "9.1.0" apply false
+    id("org.jetbrains.kotlin.android") version "2.4.0" apply false
     id("com.google.gms.google-services") version "4.4.2" apply false
 }
 
