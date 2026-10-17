@@ -123,8 +123,8 @@ Deno.serve(async (req: Request) => {
 
     const tokens: string[] = [];
 
-    // Tokens live in one place: fcm_tokens (audit 14/10 CODE-007). Old app builds that still write
-    // employees.fcm_token / device_tokens are copied into it by a database trigger.
+    // Tokens live in one place: fcm_tokens (audit 14/10 CODE-007; the old employees.fcm_token and
+    // device_tokens copies were dropped in stage 10).
     try {
       const tokensRes = await fetch(
         `${supabaseUrl}/rest/v1/fcm_tokens?employee_id=eq.${record.employee_id}&select=token`,

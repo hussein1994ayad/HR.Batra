@@ -1,7 +1,7 @@
 -- =====================================================================
 -- النسخة الحالية من دوال قاعدة البيانات و triggers — مولّدة تلقائياً، للقراءة فقط.
 -- لا تعدّل هذا الملف ولا تطبّقه. التعديل = migration جديد، ثم: node supabase/schema/generate.mjs
--- المصدر: كل ملفات migrations بالترتيب — عدد الدوال: 205 — عدد الـ triggers: 50
+-- المصدر: كل ملفات migrations بالترتيب — عدد الدوال: 204 — عدد الـ triggers: 49
 -- =====================================================================
 
 -- ---------------------------------------------------------------------
@@ -70,7 +70,6 @@
 --   clear_delivered_on_reopen()  ←  20261016000000_settled_loans_archive.sql
 --   close_payroll_period(p_month text)  ←  20260929000000_payroll_engine.sql
 --   company_timezone()  ←  20260924000100_server_side_attendance_and_device_lock.sql
---   copy_legacy_push_token()  ←  20261024000000_stage9_cleanup.sql
 --   create_default_leave_balance()  ←  20260924000200_leave_balances_and_decision_notifications.sql
 --   create_direct_loan(p_employee_id uuid, p_amount numeric, p_months integer, p_first_due date, p_pledge_url text, p_notes text)  ←  20260925000000_approve_loan_rpc.sql
 --   create_employee_secure(p_email text, p_password text, p_full_name text, p_phone text, p_role text, p_branch_id uuid, p_monthly_salary_iqd numeric, p_document_urls text[], p_employee_code text, p_employee_id uuid, p_join_date date, p_department_id uuid)  ←  20261024000000_stage9_cleanup.sql
@@ -230,7 +229,6 @@
 --   employees.trg_audit_employees  →  record_audit_log()
 --   employees.trg_check_employee_basics  →  check_employee_basics()
 --   employees.trg_check_employee_branch  →  check_employee_branch()
---   employees.trg_copy_legacy_push_token  →  copy_legacy_push_token()
 --   employees.trg_create_default_leave_balance  →  create_default_leave_balance()
 --   employees.trg_protect_employee_columns  →  protect_employee_columns()
 --   employees.trg_record_employee_assignment  →  record_employee_assignment()
@@ -281,7 +279,6 @@ CREATE TRIGGER trg_assign_employee_code BEFORE INSERT ON public.employees FOR EA
 CREATE TRIGGER trg_audit_employees AFTER INSERT OR DELETE OR UPDATE ON public.employees FOR EACH ROW EXECUTE FUNCTION record_audit_log();
 CREATE TRIGGER trg_check_employee_basics BEFORE INSERT OR UPDATE OF full_name, join_date, termination_date ON public.employees FOR EACH ROW EXECUTE FUNCTION check_employee_basics();
 CREATE TRIGGER trg_check_employee_branch BEFORE INSERT OR UPDATE OF branch_id, is_active ON public.employees FOR EACH ROW EXECUTE FUNCTION check_employee_branch();
-CREATE TRIGGER trg_copy_legacy_push_token AFTER UPDATE OF fcm_token ON public.employees FOR EACH ROW WHEN (((new.fcm_token IS NOT NULL) AND (new.fcm_token IS DISTINCT FROM old.fcm_token))) EXECUTE FUNCTION copy_legacy_push_token();
 CREATE TRIGGER trg_create_default_leave_balance AFTER INSERT ON public.employees FOR EACH ROW EXECUTE FUNCTION create_default_leave_balance();
 CREATE TRIGGER trg_protect_employee_columns BEFORE UPDATE ON public.employees FOR EACH ROW EXECUTE FUNCTION protect_employee_columns();
 CREATE TRIGGER trg_record_employee_assignment AFTER INSERT OR UPDATE OF branch_id, department_id ON public.employees FOR EACH ROW EXECUTE FUNCTION record_employee_assignment();
@@ -2581,38 +2578,6 @@ AS $function$
     (SELECT value #>> '{}' FROM system_settings WHERE key = 'timezone'),
     'Asia/Baghdad'
   );
-$function$;
-
--- ---------------------------------------------------------------------
--- copy_legacy_push_token()  — آخر تعريف: 20261024000000_stage9_cleanup.sql
--- ---------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION public.copy_legacy_push_token()
- RETURNS trigger
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
-DECLARE
-  v_emp uuid;
-  v_token text;
-  v_platform text;
-BEGIN
-  -- كل جدول بأسماء أعمدته (الحقل اللي مو موجود ما ينقرا)
-  IF TG_TABLE_NAME = 'employees' THEN
-    v_emp := NEW.id;
-    v_token := NEW.fcm_token;
-  ELSE
-    v_emp := NEW.employee_id;
-    v_token := NEW.token;
-    v_platform := NEW.platform;
-  END IF;
-  IF v_emp IS NOT NULL AND NULLIF(btrim(v_token), '') IS NOT NULL THEN
-    INSERT INTO fcm_tokens (employee_id, token, device_platform, updated_at)
-    VALUES (v_emp, v_token, v_platform, now())
-    ON CONFLICT (employee_id, token) DO UPDATE SET updated_at = now();
-  END IF;
-  RETURN NULL;
-END;
 $function$;
 
 -- ---------------------------------------------------------------------
