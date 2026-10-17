@@ -7,6 +7,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../../../core/services/precise_location.dart';
+import '../../../../core/utils/company_time.dart';
 import '../../../shared/ui/ui.dart';
 
 /// خريطة الفرع: دائرة النطاق + علامة الفرع + موقع الموظف الحالي.
@@ -158,14 +159,14 @@ class AttendanceTodayCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    DateTime? parse(Object? v) => v == null ? null : DateTime.tryParse(v.toString())?.toLocal();
+    DateTime? parse(Object? v) => parseServerTime(v);
     final hasCheckIn = todayAttendance?['check_in_time'] != null;
     final hasCheckOut = todayAttendance?['check_out_time'] != null;
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('اليوم · ${Fmt.dateWithDay(DateTime.now())}', style: AppText.label),
+          Text('اليوم · ${Fmt.dateWithDay(companyNow())}', style: AppText.label),
           const SizedBox(height: AppSpace.sm),
           KeyValueRow('الحضور', hasCheckIn ? Fmt.time(parse(todayAttendance!['check_in_time'])) : '--:--', icon: Icons.login_rounded),
           KeyValueRow('الانصراف', hasCheckOut ? Fmt.time(parse(todayAttendance!['check_out_time'])) : '--:--', icon: Icons.logout_rounded),
@@ -334,7 +335,7 @@ class PunchSuccessDialog extends StatelessWidget {
           const SizedBox(height: AppSpace.sm),
           Text(
             isSynced
-                ? '${Fmt.time(DateTime.now())} — ${note ?? (isCheckIn ? 'دوام موفق' : 'شكراً على يومك')}'
+                ? '${Fmt.time(companyNow())} — ${note ?? (isCheckIn ? 'دوام موفق' : 'شكراً على يومك')}'
                 : 'انقطع الإنترنت، فحفظنا البصمة بالجهاز وسنرسلها تلقائياً عند عودة الاتصال.',
             style: AppText.bodySm,
             textAlign: TextAlign.center,

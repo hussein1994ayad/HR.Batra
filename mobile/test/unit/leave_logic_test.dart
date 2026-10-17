@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hr_pro/core/models/models.dart';
 import 'package:hr_pro/core/theme/app_theme.dart';
+import 'package:hr_pro/core/utils/company_time.dart';
 import 'package:hr_pro/presentation/employee/leave/leave_logic.dart';
 import 'package:hr_pro/presentation/employee/leave/widgets/leave_widgets.dart';
 
@@ -74,8 +75,8 @@ void main() {
 
     test('overlap with an active request is refused; rejected/cancelled are ignored', () {
       final history = <Map<String, dynamic>>[
-        {'status': 'pending', 'start_date': DateTime(2026, 10, 10).toUtc().toIso8601String(), 'end_date': DateTime(2026, 10, 12).toUtc().toIso8601String()},
-        {'status': 'rejected', 'start_date': DateTime(2026, 10, 20).toUtc().toIso8601String(), 'end_date': DateTime(2026, 10, 21).toUtc().toIso8601String()},
+        {'status': 'pending', 'start_date': companyWallToUtc(DateTime(2026, 10, 10)).toIso8601String(), 'end_date': companyWallToUtc(DateTime(2026, 10, 12)).toIso8601String()},
+        {'status': 'rejected', 'start_date': companyWallToUtc(DateTime(2026, 10, 20)).toIso8601String(), 'end_date': companyWallToUtc(DateTime(2026, 10, 21)).toIso8601String()},
       ];
       expect(check(DateTime(2026, 10, 12), DateTime(2026, 10, 13), history: history), contains('تتعارض'));
       expect(check(DateTime(2026, 10, 13), DateTime(2026, 10, 14), history: history), isNull);

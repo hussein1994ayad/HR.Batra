@@ -16,6 +16,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../../core/models/models.dart';
 import '../../../core/services/supabase_service.dart';
 import '../../../core/utils/app_log.dart';
+import '../../../core/utils/company_time.dart';
 import '../../../core/utils/error_text.dart';
 import '../../../data/repositories/leave_repository.dart';
 import '../../shared/ui/ui.dart';
@@ -38,8 +39,8 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
   String _leaveType = 'annual';
   bool _isHourly = false;
   bool _isPaid = true;
-  DateTime _startDate = DateTime.now();
-  DateTime _endDate = DateTime.now().add(const Duration(days: 1));
+  DateTime _startDate = companyNow();
+  DateTime _endDate = companyNow().add(const Duration(days: 1));
   TimeOfDay _startHour = const TimeOfDay(hour: 8, minute: 0);
   TimeOfDay _endHour = const TimeOfDay(hour: 12, minute: 0);
   final _reasonController = TextEditingController();
@@ -167,7 +168,7 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
         isHourly: _isHourly,
         hourlyMinutes: _hourlyMinutes,
         history: _leaveHistory,
-        now: DateTime.now(),
+        now: companyNow(),
       );
 
   // مراجعة ثم إرسال الطلب
@@ -217,8 +218,8 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
         'employee_id': user.id,
         'leave_type': _leaveType,
         'is_hourly': _isHourly,
-        'start_date': _startDate.toUtc().toIso8601String(),
-        'end_date': _endDate.toUtc().toIso8601String(),
+        'start_date': companyWallToUtc(_startDate).toIso8601String(),
+        'end_date': companyWallToUtc(_endDate).toIso8601String(),
         'start_hour': startHourStr,
         'end_hour': endHourStr,
         'is_paid': _isPaid,
@@ -250,8 +251,8 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
       _isHourly = false;
       _isPaid = true;
       _leaveType = _leaveTypes.any((t) => t['id'] == 'annual') ? 'annual' : _leaveTypes.first['id']!;
-      _startDate = DateTime.now();
-      _endDate = DateTime.now().add(const Duration(days: 1));
+      _startDate = companyNow();
+      _endDate = companyNow().add(const Duration(days: 1));
     });
   }
 
@@ -447,8 +448,8 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> with SingleTick
     final DateTime? picked = await showDatePicker(
       context: context,
       initialDate: isStart ? _startDate : _endDate,
-      firstDate: DateTime.now().subtract(const Duration(days: 30)),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
+      firstDate: companyNow().subtract(const Duration(days: 30)),
+      lastDate: companyNow().add(const Duration(days: 365)),
       locale: const Locale('ar'),
       helpText: isStart ? 'تاريخ البداية' : 'تاريخ النهاية',
     );

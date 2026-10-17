@@ -2,6 +2,7 @@
 // وتحويل أسطر محرّك الرواتب لشكل التفاصيل القديم.
 
 import '../../../core/models/models.dart';
+import '../../../core/utils/company_time.dart';
 
 /// تواريخ الدورة المالية لشهر مالي (YYYY-MM): من يوم البداية (قد يكون بالشهر السابق) ليوم النهاية،
 /// مقصوصة على آخر يوم بالشهر. نص غير صالح = تواريخ فارغة.
@@ -44,7 +45,7 @@ Map<String, String> payslipCycleDates(String monthStr, {required int startDay, r
 /// (الشهر، السنة) من "YYYY-MM".
 (int month, int year) payslipMonthOf(String workMonth) {
   final p = workMonth.split('-');
-  return (p.length > 1 ? int.tryParse(p[1]) ?? 1 : 1, int.tryParse(p.first) ?? DateTime.now().year);
+  return (p.length > 1 ? int.tryParse(p[1]) ?? 1 : 1, int.tryParse(p.first) ?? companyNow().year);
 }
 
 /// فقط البنود التي دخلت في هذا الكشف: المرتبطة به (salary_slip_id)، أو اليدوية
@@ -53,7 +54,7 @@ List<PayslipDetail> itemsIncludedInSlip(List<Map<String, dynamic>> rows, {requir
   return rows.where((d) {
     final linked = d['salary_slip_id']?.toString();
     if (linked != null) return linked == slipId;
-    final created = DateTime.tryParse((d['created_at'] ?? '').toString());
+    final created = parseServerTime(d['created_at']);
     return slipCreated == null || created == null || !created.isAfter(slipCreated);
   }).map(PayslipDetail.fromMap).toList();
 }

@@ -10,6 +10,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/models/models.dart';
 import '../../core/services/supabase_service.dart';
+import '../../core/utils/company_time.dart';
 import 'write_guard.dart';
 
 class AdminActionsRepository {
@@ -83,7 +84,7 @@ class AdminActionsRepository {
           .eq('work_date', item.workDate)
           .maybeSingle());
       if (existing != null) {
-        await _db.from('attendance').update({...values, 'status': 'absent'}).eq('id', existing.str('id')!);
+        ensureChanged(await _db.from('attendance').update({...values, 'status': 'absent'}).eq('id', existing.str('id')!).select('id'));
       } else {
         await _db.from('attendance').insert({
           ...values,
@@ -94,7 +95,7 @@ class AdminActionsRepository {
         });
       }
     } else {
-      await _db.from('attendance').update(values).eq('id', item.attendanceId!);
+      ensureChanged(await _db.from('attendance').update(values).eq('id', item.attendanceId!).select('id'));
     }
 
     // إشعار بس عند الخصم. الإعفاء (مثل: نسي البصمة وهو مداوم) بدون إشعار — الموظف ما تبلّغ بالتأخير أصلاً،
@@ -109,18 +110,18 @@ class AdminActionsRepository {
   }
 
   Future<void> decideLeave(String requestId, {required bool approve, String? rejectionReason}) async {
-    await _db.from('leave_requests').update({
+    ensureChanged(await _db.from('leave_requests').update({
       'status': approve ? 'approved' : 'rejected',
       'approved_by': _adminId,
       'approved_at': DateTime.now().toUtc().toIso8601String(),
       if (!approve && rejectionReason != null && rejectionReason.trim().isNotEmpty)
         'rejection_reason': rejectionReason.trim(),
-    }).eq('id', requestId);
+    }).eq('id', requestId).select('id'));
   }
 
   /// اعتماد السلفة وتوليد أقساطها في معاملة واحدة على السيرفر (approve_loan).
   Future<void> approveLoan(LoanModel loan, {double? amount, int? months, DateTime? firstDue}) async {
-    final due = firstDue ?? _sameDayNextMonth(DateTime.now());
+    final due = firstDue ?? _sameDayNextMonth(companyNow());
     await _db.rpc<void>('approve_loan', params: {
       'p_loan_id': loan.id,
       'p_amount': amount ?? loan.amount,
@@ -130,12 +131,12 @@ class AdminActionsRepository {
   }
 
   Future<void> rejectLoan(String loanId, {String? reason}) async {
-    await _db.from('loans').update({
+    ensureChanged(await _db.from('loans').update({
       'status': 'rejected',
       'approved_by': _adminId,
       'approved_at': DateTime.now().toUtc().toIso8601String(),
       'rejection_reason': (reason == null || reason.trim().isEmpty) ? null : reason.trim(),
-    }).eq('id', loanId);
+    }).eq('id', loanId).select('id'));
   }
 
   /// اعتماد جهاز: يُقفل حساب الموظف على هذا الجهاز ويُرسل له إشعاراً.
@@ -154,7 +155,7 @@ class AdminActionsRepository {
   }
 
   Future<void> rejectDevice(String requestId) async {
-    await _db.from('employee_devices').delete().eq('id', requestId);
+    ensureChanged(await _db.from('employee_devices').delete().eq('id', requestId).select('id'));
   }
 
   /// نفس اليوم من الشهر القادم مع تثبيته على آخر الشهر (31 → 30/28).

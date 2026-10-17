@@ -16,7 +16,8 @@ export const IDS = {
   branch: '00000000-0000-0000-0000-0000000000b1',
 };
 
-export async function setup() {
+/** قاعدة فارغة: الـ stubs + كل ملفات migrations بالترتيب (بدون بيانات). يستعملها أيضاً supabase/schema/generate.mjs. */
+export async function buildSchema() {
   const db = new PGlite({ extensions: { uuid_ossp } });
   await db.exec(fs.readFileSync(new URL('./stubs.sql', import.meta.url), 'utf8'));
   for (const f of fs.readdirSync(repo).filter((f) => f.endsWith('.sql')).sort()) {
@@ -27,6 +28,11 @@ export async function setup() {
       throw new Error(`${f}: ${e.message}`);
     }
   }
+  return db;
+}
+
+export async function setup() {
+  const db = await buildSchema();
   await db.exec(`
     INSERT INTO branches (id, name, latitude, longitude, radius_meters)
       VALUES ('${IDS.branch}', 'الفرع الرئيسي', 33.3000, 44.4000, 100);

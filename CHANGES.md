@@ -864,3 +864,22 @@
 - **فحوص:** `test_employee_files.mjs` (السلة بعد الحفظ بس، الحفظ الفاشل ما يغيّر شي حتى الإيميل، الحذف النهائي يحط الملفات بالسلة، الأرشفة/الاسترجاع/الإتلاف،
   الأرقام بالتسلسل، الكود المؤقت)، `baghdad-time.test.ts` (كمبيوتر بتوقيت لوس أنجلوس)، e2e (التعديل بخطوة وحدة بدون حذف ملفات، الأرشفة، أشهر الرواتب)،
   وفحص التطبيق لرقم الموظف. تجربة على القاعدة الحية (تتراجع): الرقم التالي EMP-003، الأرشفة والاسترجاع يشتغلون، والصورة المشالة للسلة.
+
+## Step 81 — تدقيق 14/10 المرحلة 9: تنظيف وترتيب (CODE-001، 003، 004، 006 لحد 011، 013 + التطبيق بتوقيت بغداد)
+- **قرار صاحب الشركة 17/10/2026:** المرحلتين 7 (سجل العمليات) و8 (الدوام الليلي) انلغن. بالتاسعة البنود 1–9؛ ترقية المكتبات (CODE-012)
+  تنتقل لمرحلة لحالها بعد قرار البند 10 (CODE-014)، وبعدها المرحلة 10 (دمج ملفات القاعدة).
+- **القاعدة** `20261024000000_stage9_cleanup.sql` (تجربة على القاعدة الحية: نفس حركات وملخصات الرواتب بالضبط):
+  - (CODE-013) الراتب بدون default وNOT NULL. (CODE-008) حذف `idx_attendance_employee_date` و`idx_salary_slips_employee_month` المكررة، وإضافة `idx_loan_installments_loan`.
+  - (CODE-006) حذف `documents`، `branch_schedules`، `orphan_storage_candidates_cache` ومهمتها الأسبوعية الفاضية، `employees.plain_password`
+    (والـ trigger اللي يمسحه)، `leave_balances.annual_used/sick_used`. الحذف محمي: يوقف إذا اكو بيانات. `tracking_schedules` و`employee_geofence_assignments`
+    تبقى لحد ما كل الموبايلات تتحدث (تنحذف بالمرحلة 10).
+  - (CODE-007) نقل الرموز الموجودة لـ `fcm_tokens` و`copy_legacy_push_token` للنسخ القديمة.
+  - (CODE-003) `sync_payroll_day` صارت ترتّب أربع دوال: `_payroll_day_attendance_events`، `_payroll_day_leave_events`، `_payroll_day_hourly_leaves`، `_payroll_day_apply` (النص نفسه).
+- **دالة الإرسال** `push-notification`: تقرا وتنظف `fcm_tokens` بس.
+- **ملف الدوال** (CODE-001): `generate.mjs` يبني من ملفات migrations بـ PGlite (`buildSchema` بـ `supabase/tests/lib.mjs`)، والفحص التلقائي `--check` يفشل إذا الملف قديم.
+- **الموقع** (CODE-009): `ensureChanged` بالتعديلات والحذف الإدارية (الأجهزة، الفروع، الإجازات، السلف، الإعدادات، الجداول، التعاميم، العطل، السلة، الحضور).
+- **التطبيق:** ساعة بغداد بكل العرض و«اليوم» (`toCompanyTime`، `companyNow`، `companyWallToUtc`، `parseServerTime`)؛ يوم القطع من السيرفر (`PayrollSettings`)؛
+  الرمز بـ `fcm_tokens` بس؛ فحص السياج القديم (جدول فارغ) وقراءة `tracking_schedules` انشالوا (نفس السلوك)؛ `ensureChanged` بباقي التعديلات؛ الراتب إجباري بالنموذج.
+- **التوثيق** (CODE-010/011): أرقام `ARCHITECTURE.md`؛ `mobile/android/build/` مستبعد من git.
+- **فحوص:** `test_stage9_cleanup.mjs`؛ تحديث فحوص كانت تعتمد على الأشياء المحذوفة؛ `write-guard.test.ts`؛ `company_time_test.dart`؛
+  كل فحوص التطبيق تنجح بتوقيت بغداد وطوكيو ولوس أنجلوس (قبل: 6 شاشات تختلف).

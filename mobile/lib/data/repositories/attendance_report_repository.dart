@@ -8,6 +8,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/logic/attendance_report.dart';
 import '../../core/models/models.dart';
 import '../../core/services/supabase_service.dart';
+import '../../core/utils/company_time.dart';
+import 'write_guard.dart';
 
 /// قوائم التقرير: الأفرع، الموظفون، جداول الدوام، وأسماء أنواع الإجازات من السياسة ("إجازة <الاسم>").
 class ReportLookups {
@@ -109,8 +111,8 @@ class AttendanceReportRepository {
         .select('employee_id, start_date, end_date, leave_type, is_hourly, is_paid, start_hour, end_hour')
         .eq('status', 'approved')
         .inFilter('employee_id', employeeIds)
-        .lte('start_date', DateTime(to.year, to.month, to.day, 23, 59, 59).toUtc().toIso8601String())
-        .gte('end_date', from.toUtc().toIso8601String()));
+        .lte('start_date', companyWallToUtc(DateTime(to.year, to.month, to.day, 23, 59, 59)).toIso8601String())
+        .gte('end_date', companyWallToUtc(from).toIso8601String()));
 
     String hhmm(Object? t) => t == null ? '' : t.toString().substring(0, t.toString().length >= 5 ? 5 : t.toString().length);
 
@@ -140,6 +142,6 @@ class AttendanceReportRepository {
   }
 
   Future<void> updateAttendanceTimes(String recordId, Map<String, dynamic> updates) async {
-    await _db.from('attendance').update(updates).eq('id', recordId);
+    ensureChanged(await _db.from('attendance').update(updates).eq('id', recordId).select('id'));
   }
 }

@@ -2,6 +2,7 @@
 // ملف بسلة المحذوفات — الجدول: public.deleted_files (مع اسم من حذفه من employees)
 // =========================================================================
 
+import '../utils/company_time.dart';
 import '../utils/json_map.dart';
 
 class DeletedFileModel {
@@ -39,8 +40,8 @@ class DeletedFileModel {
       filePath: map.str('file_path'),
       fileType: map.str('file_type'),
       deletedByName: employees is Map ? (employees['full_name'] ?? 'غير معروف').toString() : 'غير معروف',
-      deletedAt: DateTime.tryParse(map['deleted_at']?.toString() ?? ''),
-      scheduledDeletion: DateTime.tryParse(map['scheduled_deletion_date']?.toString() ?? '')?.toLocal(),
+      deletedAt: parseServerTime(map['deleted_at']),
+      scheduledDeletion: parseServerTime(map['scheduled_deletion_date']),
       fileSizeBytes: size is num ? size : null,
     );
   }

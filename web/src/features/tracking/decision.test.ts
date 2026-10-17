@@ -18,8 +18,8 @@ function builder(table: string) {
     calls.push({ table, op: 'maybeSingle', args: [] });
     return Promise.resolve({ data: table === 'payroll_events' ? payrollEventRow : null, error: null });
   };
-  // await على البنّاء نفسه (update/insert بدون maybeSingle)
-  b.then = (resolve: unknown) => (resolve as (v: unknown) => void)({ data: null, error: null });
+  // await على البنّاء نفسه (update/insert بدون maybeSingle): مثل السيرفر، .select() بعد التعديل يرجّع السطر
+  b.then = (resolve: unknown) => (resolve as (v: unknown) => void)({ data: [{ id: 'row' }], error: null });
   return b;
 }
 

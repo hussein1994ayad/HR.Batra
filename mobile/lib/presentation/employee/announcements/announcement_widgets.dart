@@ -9,6 +9,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/models/models.dart';
+import '../../../core/utils/company_time.dart';
 import '../../shared/ui/ui.dart';
 
 export 'people_widgets.dart';
@@ -18,7 +19,7 @@ double? announcementProgress(AnnouncementModel a, {DateTime? now}) {
   final starts = a.shownFrom;
   final ends = a.endsAt;
   if (starts == null || ends == null || !ends.isAfter(starts)) return null;
-  final t = (now ?? DateTime.now()).difference(starts).inMinutes / ends.difference(starts).inMinutes;
+  final t = (now ?? companyNow()).difference(starts).inMinutes / ends.difference(starts).inMinutes;
   return t.clamp(0.0, 1.0);
 }
 
@@ -26,7 +27,7 @@ double? announcementProgress(AnnouncementModel a, {DateTime? now}) {
 String? announcementRemaining(AnnouncementModel a, {DateTime? now}) {
   final ends = a.endsAt;
   if (ends == null) return null;
-  final today = now ?? DateTime.now();
+  final today = now ?? companyNow();
   final days = DateTime(ends.year, ends.month, ends.day).difference(DateTime(today.year, today.month, today.day)).inDays;
   if (days <= 0) return 'ينتهي اليوم';
   if (days == 1) return 'ينتهي غداً';

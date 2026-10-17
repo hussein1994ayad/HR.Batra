@@ -1,6 +1,7 @@
 // بيانات صفحة الإعدادات. أداة التنظيف: «تنظيف مسير» مغلق عبر RPC يتحقق من الشروط ويسجّل العملية.
 
 import { supabase } from '@/lib/supabase';
+import { ensureChanged } from '@/lib/write-guard';
 import type { Announcement, Department, LeaveTypeOption, WorkSchedule } from '@/lib/db-types';
 import { DEFAULT_LEAVE_TYPES } from './logic';
 import type {
@@ -96,10 +97,12 @@ export async function saveGeneralSettings(s: {
 }): Promise<void> {
   const companyData = { ...s.company, updated_at: new Date().toISOString() };
   const { data: existing } = await supabase.from('company_settings').select('id').maybeSingle();
-  const { error: compErr } = existing
-    ? await supabase.from('company_settings').update(companyData).eq('id', existing.id)
-    : await supabase.from('company_settings').insert(companyData);
-  if (compErr) throw compErr;
+  if (existing) {
+    await ensureChanged(supabase.from('company_settings').update(companyData).eq('id', existing.id).select('id'));
+  } else {
+    const { error: compErr } = await supabase.from('company_settings').insert(companyData);
+    if (compErr) throw compErr;
+  }
 
   const { error: sysErr } = await supabase.from('system_settings').upsert([
     {
@@ -137,14 +140,17 @@ export async function addWorkSchedule(row: Record<string, unknown>): Promise<voi
 }
 
 export async function deleteWorkSchedule(id: string): Promise<void> {
-  const { error } = await supabase.from('work_schedules').delete().eq('id', id);
-  if (error) throw error;
+  await ensureChanged(supabase.from('work_schedules').delete().eq('id', id).select('id'));
 }
 
 // دالتا التعاميم ترجعان الخطأ بدل رميه: الواجهة تطفي مؤشر التحميل قبل فحصه.
-export async function deleteAnnouncement(id: string) {
-  const { error } = await supabase.from('announcements').delete().eq('id', id);
-  return error;
+export async function deleteAnnouncement(id: string): Promise<Error | null> {
+  try {
+    await ensureChanged(supabase.from('announcements').delete().eq('id', id).select('id'));
+    return null;
+  } catch (err) {
+    return err as Error;
+  }
 }
 
 export async function deleteAllAnnouncements() {
@@ -173,7 +179,11 @@ export async function addHoliday(date: string, name: string) {
   return error;
 }
 
-export async function deleteHoliday(date: string) {
-  const { error } = await supabase.from('official_holidays').delete().eq('holiday_date', date);
-  return error;
+export async function deleteHoliday(date: string): Promise<Error | null> {
+  try {
+    await ensureChanged(supabase.from('official_holidays').delete().eq('holiday_date', date).select('holiday_date'));
+    return null;
+  } catch (err) {
+    return err as Error;
+  }
 }

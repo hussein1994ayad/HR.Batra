@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/models/models.dart';
 import '../../../core/utils/app_log.dart';
+import '../../../core/utils/company_time.dart';
 import '../../../data/repositories/storage_repository.dart';
 import '../../shared/ui/ui.dart';
 import 'storage_logic.dart';
@@ -166,7 +167,7 @@ class _TrashScreenState extends State<TrashScreen> {
     final deletedBy = file.deletedByName;
     final deletedAt = file.deletedAt;
     final expiry = file.scheduledDeletion;
-    final daysLeft = expiry?.difference(DateTime.now()).inDays;
+    final daysLeft = expiry?.difference(companyNow()).inDays;
     final icon = switch (type) {
       'avatar' => Icons.person_rounded,
       'pledge' => Icons.draw_rounded,

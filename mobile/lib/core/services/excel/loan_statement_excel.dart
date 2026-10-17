@@ -11,6 +11,7 @@ import '../../constants/constants.dart';
 import '../../design/formatters.dart';
 import '../../models/loan_model.dart';
 import '../../utils/app_log.dart';
+import '../../utils/company_time.dart';
 
 /// توليد كشف حساب سلفة تفصيلي واحترافي بصيغة Excel (.xlsx)
 Future<String> buildAndSaveLoanStatementExcel(LoanRecord record) async {
@@ -33,7 +34,7 @@ Future<String> buildAndSaveLoanStatementExcel(LoanRecord record) async {
   final double remainingAmt = loan.remainingAmount;
   final double paidAmt = totalAmount - remainingAmt > 0 ? (totalAmount - remainingAmt) : 0.0;
   final String status = loan.status;
-  final String loanDate = DateFormat('yyyy-MM-dd').format(loan.createdAt ?? DateTime.now());
+  final String loanDate = DateFormat('yyyy-MM-dd').format(loan.createdAt ?? companyNow());
   final String notes = record.notes ?? 'لا توجد ملاحظات إضافية';
 
   // الألوان المستوحاة من هوية HR Pro
@@ -71,7 +72,7 @@ Future<String> buildAndSaveLoanStatementExcel(LoanRecord record) async {
 
   sheet.getRangeByName('A2:F2').merge();
   final xlsio.Range subTitleRange = sheet.getRangeByName('A2');
-  final String exportDateStr = DateFormat('yyyy/MM/dd - hh:mm a').format(DateTime.now());
+  final String exportDateStr = DateFormat('yyyy/MM/dd - hh:mm a').format(companyNow());
   subTitleRange.setText('تاريخ استخراج الكشف: $exportDateStr | حالة السلفة: ${status == "approved" ? "سلفة معتمدة ونشطة ✅" : status == "completed" ? "سلفة مسددة بالكامل 🏁" : status == "rejected" ? "سلفة مرفوضة ❌" : "سلفة معلقة ⏳"}');
   subTitleRange.cellStyle.fontSize = 10;
   subTitleRange.cellStyle.fontColor = '#FFFFFF';
@@ -323,7 +324,7 @@ Future<String> buildAndSaveLoanStatementExcel(LoanRecord record) async {
   // مسار الحفظ في مجلد المستندات / التحميلات
   final Directory appDir = await getApplicationDocumentsDirectory();
   final String cleanEmpName = employeeName.replaceAll(RegExp(r'[^\w\s\u0600-\u06FF]'), '_').trim();
-  final String fileName = 'سلفة_${cleanEmpName}_${DateFormat("yyyyMMdd_HHmm").format(DateTime.now())}.xlsx';
+  final String fileName = 'سلفة_${cleanEmpName}_${DateFormat("yyyyMMdd_HHmm").format(companyNow())}.xlsx';
   final String filePath = '${appDir.path}/$fileName';
 
   final File file = File(filePath);

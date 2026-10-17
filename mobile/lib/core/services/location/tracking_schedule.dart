@@ -1,5 +1,5 @@
 // متى نتتبع؟ فقط إذا الموظف بصم حضور اليوم وما بصم انصراف، وضمن أيام وساعات التتبع
-// (tracking_schedules، وإلا جدول الدوام الفعلي). الحالة تنحفظ محلياً (tracking_state.json)
+// (جدول الدوام الفعلي). الحالة تنحفظ محلياً (tracking_state.json)
 // حتى يكمل القرار بدون إنترنت، وتُحدَّث من السيرفر إذا أقدم من 10 دقائق.
 
 import 'dart:convert';
@@ -8,6 +8,7 @@ import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 
 import '../../utils/app_log.dart';
+import '../../utils/company_time.dart';
 import '../schedule_service.dart';
 import '../supabase_service.dart';
 
@@ -61,7 +62,7 @@ class TrackingSchedule {
   /// التحقق من صلاحية اليوم والوقت وحالة تسجيل الدخول لتحديد ما إذا كان يجب استمرار التتبع.
   /// [isTrackingFallback]: إذا ماكو إنترنت ولا حالة محلية لليوم، نعتمد حالة الجلسة الحالية.
   static Future<bool> shouldTrack(String userId, {required bool isTrackingFallback}) async {
-    final todayStr = DateTime.now().toIso8601String().split('T')[0];
+    final todayStr = companyDateStr();
 
     // 1. محاولة قراءة الحالة المخزنة محلياً
     final cached = await readState();
@@ -94,29 +95,22 @@ class TrackingSchedule {
         }
       }
 
-      dynamic trackingSchedule = await SupabaseService.client
-          .from('tracking_schedules')
-          .select()
-          .eq('employee_id', userId)
-          .maybeSingle();
-
-      // Fallback: لو ما فيه tracking_schedule، استخدم work_schedule (الأوقات الرسمية للدوام)
-      if (trackingSchedule == null) {
-        final workSchedule = await ScheduleService.fetchEffectiveSchedule();
-        if (workSchedule != null) {
-          trackingSchedule = {
-            'start_time': workSchedule['check_in_time'],
-            'end_time': workSchedule['check_out_time'],
-            'tracking_days': workSchedule['work_days'],
-          };
-        }
+      // ساعات التتبع = جدول الدوام الفعلي (جدول tracking_schedules ما يكتبه شي — تدقيق 14/10 CODE-006)
+      Map<String, dynamic>? trackingSchedule;
+      final workSchedule = await ScheduleService.fetchEffectiveSchedule();
+      if (workSchedule != null) {
+        trackingSchedule = {
+          'start_time': workSchedule['check_in_time'],
+          'end_time': workSchedule['check_out_time'],
+          'tracking_days': workSchedule['work_days'],
+        };
       }
 
       await saveState(
         hasCheckedIn: hasCheckedIn,
         checkedInDate: todayStr,
         userId: userId,
-        schedule: trackingSchedule as Map<String, dynamic>?,
+        schedule: trackingSchedule,
       );
 
       if (!hasCheckedIn) return false;
@@ -145,7 +139,7 @@ class TrackingSchedule {
 
   /// أيام التتبع (0 = الأحد كما بقاعدة البيانات) والساعات؛ الافتراضي 08:00–18:00.
   static bool evaluateSchedule(Map<String, dynamic> schedule) {
-    final now = DateTime.now();
+    final now = companyNow();
     final int pgDay = now.weekday % 7; // Sunday = 0, Monday = 1, etc.
     final List<dynamic> trackingDays = (schedule['tracking_days'] ?? <dynamic>[]) as List<dynamic>;
 
@@ -162,7 +156,7 @@ class TrackingSchedule {
   /// التحقق من وقوع الوقت الحالي بين وقت البدء والنهاية (نهاية قبل البداية = دوام يعبر منتصف الليل)
   static bool isCurrentTimeBetween(String startStr, String endStr, {DateTime? now}) {
     try {
-      final current = now ?? DateTime.now();
+      final current = now ?? companyNow();
       final startParts = startStr.split(':');
       final endParts = endStr.split(':');
 

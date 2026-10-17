@@ -4,6 +4,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/models/models.dart';
+import '../../../../core/utils/company_time.dart';
 import '../../../shared/ui/ui.dart';
 import '../../announcements/announcement_widgets.dart';
 import '../../attendance/attendance_logic.dart';
@@ -67,7 +68,7 @@ class HomeTodayCard extends StatelessWidget {
   final Map<String, dynamic>? schedule;
   final VoidCallback onAction;
 
-  static DateTime? _parse(Object? v) => v == null ? null : DateTime.tryParse(v.toString())?.toLocal();
+  static DateTime? _parse(Object? v) => parseServerTime(v);
 
   /// عدد الدقائق المجدولة من "08:00:00" إلى "16:00:00".
   double? get _scheduledMinutes {
@@ -104,7 +105,7 @@ class HomeTodayCard extends StatelessWidget {
             ? HomeDayState.working
             : HomeDayState.notStarted;
 
-    final now = this.now ?? DateTime.now();
+    final now = this.now ?? companyNow();
     final worked = checkIn == null ? Duration.zero : (checkOut ?? now).difference(checkIn);
     final planned = _scheduledMinutes;
 

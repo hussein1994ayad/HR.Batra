@@ -2,6 +2,7 @@
 // المساعد الذكي للأدمن — الرسائل والرد (Edge Function: supabase/functions/hr-assistant)
 // =========================================================================
 
+import '../utils/company_time.dart';
 import '../utils/json_map.dart';
 
 /// رسالة بالمحادثة. المرفقات (ملفات/وثائق) تبقى بالشاشة وما ترجع للسيرفر.
@@ -114,7 +115,7 @@ class AssistantConversation {
   static AssistantConversation? fromMap(JsonRow m) {
     final id = m.str('id');
     if (id == null) return null;
-    return AssistantConversation(id: id, title: m.str('title') ?? 'محادثة', updatedAt: DateTime.tryParse(m.str('updated_at') ?? '')?.toLocal());
+    return AssistantConversation(id: id, title: m.str('title') ?? 'محادثة', updatedAt: parseServerTime(m.str('updated_at')));
   }
 }
 

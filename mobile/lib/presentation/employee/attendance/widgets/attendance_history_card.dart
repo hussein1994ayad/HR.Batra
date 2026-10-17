@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/models/models.dart';
 import '../../../../core/services/supabase_service.dart';
 import '../../../../core/utils/app_log.dart';
+import '../../../../core/utils/company_time.dart';
 import '../../../../data/repositories/attendance_repository.dart';
 import '../../../shared/ui/ui.dart';
 
@@ -33,7 +34,7 @@ class _AttendanceHistoryCardState extends State<AttendanceHistoryCard> {
   Future<void> _load() async {
     final user = SupabaseService.currentUser;
     if (user == null) return;
-    final today = DateTime.now();
+    final today = companyNow();
     try {
       final rows = await AttendanceRepository().fetchRecentHistory(user.id, today: today, days: widget.days);
       if (mounted) setState(() => _rows = rows);

@@ -1,6 +1,7 @@
 // بيانات صفحة التخزين: سلة المحذوفات، أحجام الـ Buckets، حجم قاعدة البيانات وجداولها.
 
 import { supabase } from '@/lib/supabase';
+import { ensureChanged } from '@/lib/write-guard';
 import { bucketFor } from '@/lib/storage';
 import type { DeletedFile } from '@/lib/db-types';
 import type { TableSizeRow } from './logic';
@@ -94,8 +95,7 @@ export async function fetchDeletedFiles(): Promise<DeletedFile[]> {
 
 /** استعادة ملف (وسمه كمسترجع). ترمي عند الفشل. */
 export async function restoreDeletedFile(id: string): Promise<void> {
-  const { error } = await supabase.from('deleted_files').update({ restored_at: new Date().toISOString() }).eq('id', id);
-  if (error) throw error;
+  await ensureChanged(supabase.from('deleted_files').update({ restored_at: new Date().toISOString() }).eq('id', id).select('id'));
 }
 
 /** إتلاف ملف نهائياً: من التخزين أولاً ثم من السجل. ترمي عند أول فشل. */

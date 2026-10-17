@@ -15,6 +15,7 @@ import 'package:syncfusion_flutter_pdf/pdf.dart';
 import '../constants/constants.dart';
 import '../design/formatters.dart';
 import '../utils/app_log.dart';
+import '../utils/company_time.dart';
 import 'share_helper.dart';
 
 class PdfExportService {
@@ -152,7 +153,7 @@ class PdfExportService {
     final ltrLeft = PdfStringFormat(lineAlignment: PdfVerticalAlignment.middle);
     final leftArabic = PdfStringFormat(textDirection: PdfTextDirection.rightToLeft);
     text('تاريخ الإصدار', smallFont, PdfColor(148, 163, 184), y + 14, x: pad, w: size.width / 2, fmt: leftArabic);
-    text(DateFormat('yyyy-MM-dd  HH:mm').format(DateTime.now()), smallFont, PdfColor(203, 213, 225), y + 14 + lineH(smallFont),
+    text(DateFormat('yyyy-MM-dd  HH:mm').format(companyNow()), smallFont, PdfColor(203, 213, 225), y + 14 + lineH(smallFont),
         x: pad, w: size.width / 2, fmt: ltrLeft);
     y += headerH + 18;
 

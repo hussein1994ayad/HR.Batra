@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hr_pro/core/theme/app_theme.dart';
+import 'package:hr_pro/core/utils/company_time.dart';
 import 'package:hr_pro/presentation/admin/attendance_report/widgets/edit_times_sheet.dart';
 
 void main() {
   testWidgets('shows current times and returns them on save; null when dismissed', (tester) async {
     ({TimeOfDay? checkIn, TimeOfDay? checkOut})? result;
     var done = false;
-    final checkIn = DateTime(2026, 10, 4, 8, 5).toUtc().toIso8601String();
+    final checkIn = companyWallToUtc(DateTime(2026, 10, 4, 8, 5)).toIso8601String(); // 8:05 بتوقيت بغداد
     await tester.pumpWidget(MaterialApp(
       theme: AppTheme.darkTheme,
       home: Builder(

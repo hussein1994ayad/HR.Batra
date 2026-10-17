@@ -2,6 +2,7 @@
 // إشعار الموظف بالقرار (مع سبب الرفض) يُرسل من قاعدة البيانات: trg_notify_employee_leave_decision
 
 import { supabase } from '@/lib/supabase';
+import { ensureChanged } from '@/lib/write-guard';
 import type { LeaveRequest, RequestStatus } from '@/lib/db-types';
 
 export async function fetchLeaves(status: RequestStatus): Promise<LeaveRequest[]> {
@@ -41,7 +42,7 @@ export async function decideLeave(
   } = await supabase.auth.getSession();
   if (!session) return false;
 
-  const { error } = await supabase
+  await ensureChanged(supabase
     .from('leave_requests')
     .update({
       status: approve ? 'approved' : 'rejected',
@@ -50,7 +51,7 @@ export async function decideLeave(
       approved_by: session.user.id,
       approved_at: new Date().toISOString(),
     })
-    .eq('id', requestId);
-  if (error) throw error;
+    .eq('id', requestId)
+    .select('id'));
   return true;
 }

@@ -3,6 +3,7 @@
 // والمبلغ المتبقي يُعاد حسابه تلقائياً بعد تعديل/حذف الأقساط: trg_update_loan_and_installments
 
 import { supabase } from '@/lib/supabase';
+import { ensureChanged } from '@/lib/write-guard';
 import { fetchEmployeePay, type EmployeePay } from '@/lib/employeePay';
 import type { Loan, SettledLoan } from '@/lib/db-types';
 import type { ApprovalDraft, EditLoanDraft, PaymentMethod } from './types';
@@ -38,7 +39,7 @@ async function currentAdminId(): Promise<string> {
 }
 
 export async function rejectLoan(loanId: string, reason: string) {
-  const { error } = await supabase
+  await ensureChanged(supabase
     .from('loans')
     .update({
       status: 'rejected',
@@ -46,8 +47,8 @@ export async function rejectLoan(loanId: string, reason: string) {
       approved_at: new Date().toISOString(),
       rejection_reason: reason.trim() || null,
     })
-    .eq('id', loanId);
-  if (error) throw error;
+    .eq('id', loanId)
+    .select('id'));
 }
 
 /**
@@ -97,11 +98,11 @@ export async function payInstallment(installmentId: string, amount: number, meth
 }
 
 export async function revertInstallmentPayment(installmentId: string) {
-  const { error } = await supabase
+  await ensureChanged(supabase
     .from('loan_installments')
     .update({ is_paid: false, paid_at: null, payment_type: 'salary_deduction', payment_note: null })
-    .eq('id', installmentId);
-  if (error) throw error;
+    .eq('id', installmentId)
+    .select('id'));
 }
 
 /** تأجيل قسط شهر: ينتقل لشهر جديد بعد آخر قسط بملاحظة، والباقي ما يتغير، والموظف ينشعر (postpone_loan_installment). */

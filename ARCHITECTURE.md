@@ -27,7 +27,7 @@
 
 - **Mobile** — تطبيق Flutter يعمل على Android (SDK 24+) و iOS (14+). يستخدمه الموظف والأدمن.
 - **Web** — لوحة إدارة Next.js 16، static-exported، تُنشر على أي CDN. للأدمن والمدراء فقط.
-- **Backend** — Supabase (PostgreSQL 15). كل شي يعبر Supabase — لا خوادم Node/Python وسيطة.
+- **Backend** — Supabase (PostgreSQL 17). كل شي يعبر Supabase — لا خوادم Node/Python وسيطة.
 
 ---
 
@@ -107,9 +107,10 @@ employees ─┬─→ employee_devices
                                                     └─ mock_gps_attempts
 ```
 
-- **28 جدول** أساسي + `audit_log` للتدقيق + `archived_employees` للأرشفة
-- **17 RPC** (دوال) — راجع `supabase/migrations/20260920000000_document_rpcs_and_add_audit_log.sql` لتوثيق كل دالة
-- **6 Views** — تجنّب N+1 من العميل (`v_employee_directory`, `v_attendance_with_employee`, ...)
+- **45 جدول** (تحديث 17/10/2026، بعد حذف الجداول الميتة بالمرحلة 9 من تدقيق 14/10) ومنها `audit_log` للتدقيق و`archived_employees` للأرشفة
+- **~205 دالة** — النسخة الحالية من كل دالة و trigger بـ `supabase/schema/current_functions.sql` (تتولد من ملفات migrations بـ
+  `node supabase/schema/generate.mjs`، والفحص التلقائي يفشل إذا الملف مو محدّث)
+- **7 Views** — تجنّب N+1 من العميل (`v_employee_directory`, `v_attendance_with_employee`, ...)
 - **RLS مفعّل** على جميع الجداول — سياسات تعتمد على `is_admin()`, `is_manager()`
 
 ### قواعد أساسية للتعديل على قاعدة البيانات
@@ -202,7 +203,7 @@ Login flow:
 
 ## 10. الأمان — نقاط حرجة
 
-1. **kلمات المرور**: تُخزَّن في `employees.plain_password` (⚠️ يجب تشفيرها لاحقاً) + Supabase Auth
+1. **كلمات المرور**: بـ Supabase Auth بس (مشفّرة). ما تنحفظ مقروءة بأي مكان (عمود `plain_password` انشال بالمرحلة 9)
 2. **مفاتيح Supabase**: تُمرَّر عبر `--dart-define` في الإنتاج. القيم في `constants.dart` للتطوير فقط
 3. **RLS**: كل جدول عليه سياسات، بدون exception
 4. **Audit Log**: كل تغيير في salary_slips, loans, employees, bonuses_deductions, leave_requests يُسجَّل تلقائياً
@@ -213,11 +214,11 @@ Login flow:
 
 ## 11. التغييرات القادمة المقترحة (Roadmap)
 
-- [ ] تشفير `plain_password` باستخدام pgcrypto
+- [x] ~~تشفير `plain_password`~~ — العمود انشال، كلمات السر بـ Supabase Auth بس
 - [ ] استخدام Riverpod providers بدلاً من `AuthService.currentUserRole` static
-- [ ] تقسيم الشاشات الكبيرة (admin_dashboard 1806 سطر → عدة widgets)
-- [ ] إضافة unit tests + widget tests
-- [ ] استخراج طبقة Repository لفصل الاستعلامات عن الـ UI
+- [x] تقسيم الشاشات الكبيرة (أكبر شاشة هسه ~540 سطر)
+- [x] unit + widget tests (أكثر من 700 فحص بالتطبيق، ولقطات نصية للشاشات)
+- [x] طبقة Repository (`mobile/lib/data/repositories/`)
 - [ ] Sentry/Crashlytics للـ error tracking
 - [ ] Push notification للمدير عند طلب سلفة/إجازة جديدة
 - [ ] تمكين 2FA للأدوار الإدارية

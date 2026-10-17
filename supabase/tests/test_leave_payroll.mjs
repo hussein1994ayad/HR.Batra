@@ -9,7 +9,7 @@ const bal = async (id) => {
 
 // ---------------- leave balances ----------------
 check('every employee has a balance row', (await db.query(`SELECT count(*)::int n FROM leave_balances`)).rows[0].n === 4);
-await db.exec(`INSERT INTO employees (id, employee_code, full_name, branch_id) VALUES ('00000000-0000-0000-0000-0000000000f1','N1','جديد', '${IDS.branch}')`);
+await db.exec(`INSERT INTO employees (id, employee_code, full_name, branch_id, monthly_salary_iqd) VALUES ('00000000-0000-0000-0000-0000000000f1','N1','جديد', '${IDS.branch}', 500000)`);
 check('new employee gets a balance row automatically',
   (await db.query(`SELECT 1 FROM leave_balances WHERE employee_id='00000000-0000-0000-0000-0000000000f1'`)).rows.length === 1);
 
@@ -36,7 +36,7 @@ await as(db, 'admin', `UPDATE leave_requests SET status='approved' WHERE id=$1`,
 check('an hourly leave uses the monthly hours, not the days', (await bal(IDS.emp)).hours_used === 3 && (await bal(IDS.emp)).sick_used === 0, JSON.stringify(await bal(IDS.emp)));
 
 await expectError('employee still cannot edit own balance',
-  as(db, 'emp', `UPDATE leave_balances SET annual_used = 0 WHERE employee_id=$1 RETURNING 1`, [IDS.emp])
+  as(db, 'emp', `UPDATE leave_balances SET annual_entitlement = 99 WHERE employee_id=$1 RETURNING 1`, [IDS.emp])
     .then((x) => { if (!x.rows.length) throw new Error('blocked by RLS'); }), 'blocked by RLS');
 
 // ---------------- payroll (legacy path: months before the engine, e.g. 2026-08) ----------------

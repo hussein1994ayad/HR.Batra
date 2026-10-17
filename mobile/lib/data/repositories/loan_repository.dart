@@ -2,11 +2,13 @@
 // سلف الموظفين: السجل الكامل للإدارة، ومنح سلفة مباشرة، وطلبات الموظف نفسه وإلغاؤها
 // =========================================================================
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../core/logic/payroll_settings.dart';
 import '../../core/models/models.dart';
 import '../../core/services/file_upload_service.dart';
 import '../../core/services/supabase_service.dart';
@@ -24,6 +26,7 @@ class LoanRepository {
   final SupabaseClient _db;
 
   Future<LoansOverview> loadOverview() async {
+    unawaited(_refreshPayrollSettings());
     final results = await Future.wait<Object?>([
       _db.from('branches').select('id, name').order('name'),
       _db
@@ -86,7 +89,16 @@ class LoanRepository {
   // ── طلبات الموظف نفسه (شاشة السلف) ──
 
   /// سلف الموظف مع أقساطها، الأحدث أولاً.
+  /// يوم القطع من إعدادات السيرفر (لأسماء أشهر الأقساط). أي خطأ = يبقى آخر يوم معروف.
+  Future<void> _refreshPayrollSettings() async {
+    try {
+      final row = await _db.from('system_settings').select('value').eq('key', 'payroll_policy').maybeSingle();
+      PayrollSettings.apply(row?['value']);
+    } catch (_) {}
+  }
+
   Future<List<LoanModel>> fetchMyLoans(String userId) async {
+    unawaited(_refreshPayrollSettings());
     final data = await _db.from('loans').select('*, loan_installments(*)').eq('employee_id', userId).order('created_at', ascending: false);
     return rowsOf(data).map(LoanModel.fromMap).toList();
   }

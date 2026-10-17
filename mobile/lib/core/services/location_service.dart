@@ -3,7 +3,7 @@
 //
 // نقطة الدخول للتتبع: البدء/الإيقاف مع البصمة، خدمة الخلفية (أندرويد)، وتدفق الموقع الحي.
 // التفاصيل بمجلد location/: متى نتتبع (tracking_schedule)، الرفع والطابور الأوفلاين
-// (location_uploader)، السياج الجغرافي (geofence_monitor)، ودخول/خروج الفروع (branch_presence_monitor).
+// (location_uploader)، ودخول/خروج الفروع (branch_presence_monitor). أحداث السياج القديمة المخزنة ترتفع بـ geofence_monitor.
 // =========================================================================
 
 import 'dart:async';
@@ -16,9 +16,9 @@ import 'package:permission_handler/permission_handler.dart';
 
 import '../constants/constants.dart';
 import '../utils/app_log.dart';
+import '../utils/company_time.dart';
 import 'ios_region_monitor.dart';
 import 'location/branch_presence_monitor.dart';
-import 'location/geofence_monitor.dart';
 import 'location/location_uploader.dart';
 import 'location/tracking_schedule.dart';
 import 'supabase_service.dart';
@@ -168,7 +168,7 @@ class LocationService {
       _isTracking = true;
 
       // حفظ حالة الدوام والتتبع محلياً للعمل في وضع الأوفلاين
-      final todayStr = DateTime.now().toIso8601String().split('T')[0];
+      final todayStr = companyDateStr();
       await TrackingSchedule.saveState(
         hasCheckedIn: true,
         checkedInDate: todayStr,
@@ -252,10 +252,9 @@ class LocationService {
     _isTracking = false;
     _activeEmployeeId = null;
     _stopLocationUpdates();
-    GeofenceMonitor.clearStates();
 
     // حفظ انتهاء الدوام محلياً
-    final todayStr = DateTime.now().toIso8601String().split('T')[0];
+    final todayStr = companyDateStr();
     await TrackingSchedule.saveState(
       hasCheckedIn: false,
       checkedInDate: todayStr,
@@ -454,10 +453,7 @@ class LocationService {
           }
         }
 
-        // 4. مطابقة إحداثيات الموقع مع السياج الجغرافي (يعمل أوفلاين ويزامن لاحقاً)
-        await GeofenceMonitor.verify(userId, position);
-
-        // 5. رصد دخول/خروج الفروع (يعمل أوفلاين ويزامن لاحقاً)
+        // 4. رصد دخول/خروج الفروع (يعمل أوفلاين ويزامن لاحقاً)
         await BranchPresenceMonitor.check(userId, position);
       } catch (e, stack) {
         appLog('⚠️ خطأ داخل مستمع الموقع: $e\n$stack');

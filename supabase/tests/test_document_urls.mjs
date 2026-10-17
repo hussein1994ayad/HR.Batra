@@ -9,7 +9,7 @@ await expectError('1) an object instead of a list is refused', db.query(`UPDATE 
 await expectOk('   an empty list is fine', db.query(`UPDATE employees SET document_urls = '[]'::jsonb WHERE id = $1`, [IDS.emp]));
 await expectOk('   no documents at all (NULL) is still allowed', db.query(`UPDATE employees SET document_urls = NULL WHERE id = $1`, [IDS.emp2]));
 
-await db.query(`INSERT INTO employees (id, employee_code, full_name, branch_id, must_change_password) VALUES ('00000000-0000-0000-0000-0000000000d9', 'DU1', 'جديد', $1, false)`, [IDS.branch]);
+await db.query(`INSERT INTO employees (id, employee_code, full_name, branch_id, monthly_salary_iqd, must_change_password) VALUES ('00000000-0000-0000-0000-0000000000d9', 'DU1', 'جديد', $1, 500000, false)`, [IDS.branch]);
 const fresh = await one(`SELECT jsonb_typeof(document_urls) t FROM employees WHERE id = '00000000-0000-0000-0000-0000000000d9'`);
 check('2) a new employee starts with an empty list', fresh.t === 'array', JSON.stringify(fresh));
 
