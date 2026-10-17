@@ -219,7 +219,7 @@ export function useLoans() {
       `delete_loan_${loan.id}`,
       async () => {
         // الكشف أولاً: إذا ما نزل، السلفة ما تتأرشف
-        downloadLoanStatement(loan);
+        await downloadLoanStatement(loan);
         await archiveSettledLoan(loan);
         toast.success('تأرشفت السلفة وانحفظ سجلها');
         query.reload();

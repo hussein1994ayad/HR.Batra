@@ -116,7 +116,7 @@ export function PayrollCleanupSection() {
         title="تنظيف مسير مغلق"
         description="حذف سجلات الحضور والتتبع والإشعارات لمسير رواتب خلص وتسلّم، لتوفير مساحة القاعدة. كشوف الرواتب ما تنلمس."
         actions={
-          <Button size="sm" variant="soft" icon={FileSpreadsheet} disabled={!preview && !loans} onClick={() => downloadCleanupReport(preview, loans)}>
+          <Button size="sm" variant="soft" icon={FileSpreadsheet} disabled={!preview && !loans} onClick={() => downloadCleanupReport(preview, loans).catch(() => toast.error('ما نزل تقرير المعاينة'))}>
             تقرير المعاينة Excel
           </Button>
         }

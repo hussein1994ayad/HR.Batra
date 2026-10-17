@@ -1,12 +1,12 @@
 // تصدير كشف المراقبة والانضباط إلى Excel.
 
-import * as XLSX from 'xlsx';
+import { downloadExcel, recordsToRows, spanningCell } from '@/lib/excel';
 import type { Branch, LeaveRequest } from '@/lib/db-types';
 import { formatClock } from '@/lib/format';
 import { formatHours, isDateWithinRange } from './logic';
 import type { AttendanceRow, Decision, MockGpsAttempt, TrackedEmployee } from './types';
 
-export function exportDisciplineReport(input: {
+export async function exportDisciplineReport(input: {
   rows: AttendanceRow[];
   decisionsList: Decision[];
   leaveRequests: LeaveRequest[];
@@ -17,7 +17,7 @@ export function exportDisciplineReport(input: {
   endDate: string;
   selectedBranch: string;
   selectedEmployee: string;
-}): void {
+}): Promise<void> {
   const {
     rows, decisionsList, leaveRequests, securityLogs, branches, employees,
     startDate, endDate, selectedBranch, selectedEmployee,
@@ -114,48 +114,35 @@ export function exportDisciplineReport(input: {
     };
   });
 
-  // 1. Create a blank sheet with a professional title block
-  const worksheet = XLSX.utils.aoa_to_sheet([
-    ["كشف المراقبة والانضباط الوظيفي التفصيلي الموحد - شركة بترى"],
-    [`الفترة المشمولة بالتقرير: من ${startDate} إلى ${endDate}`],
-    [`فرع المؤسسة المصفى: ${selectedBranch === 'all' ? 'جميع الفروع' : (branches.find(b => b.id === selectedBranch)?.name || '')} | الموظف المصفى: ${selectedEmployee === 'all' ? 'جميع الموظفين' : (employees.find(e => e.id === selectedEmployee)?.full_name || '')}`],
-    [`تاريخ ووقت استخراج التقرير: ${new Date().toLocaleString('ar-IQ', { hour12: true })}`],
-    [] // Blank spacer row
+  // 1. Title block: four lines, each merged across the 13 columns (A1:M1 ... A4:M4), then a blank spacer row
+  const title = [
+    "كشف المراقبة والانضباط الوظيفي التفصيلي الموحد - شركة بترى",
+    `الفترة المشمولة بالتقرير: من ${startDate} إلى ${endDate}`,
+    `فرع المؤسسة المصفى: ${selectedBranch === 'all' ? 'جميع الفروع' : (branches.find(b => b.id === selectedBranch)?.name || '')} | الموظف المصفى: ${selectedEmployee === 'all' ? 'جميع الموظفين' : (employees.find(e => e.id === selectedEmployee)?.full_name || '')}`,
+    `تاريخ ووقت استخراج التقرير: ${new Date().toLocaleString('ar-IQ', { hour12: true })}`,
+  ];
+
+  // 2. The main table starts at A6 (header row, then one row per day)
+  const data = [...title.map((line) => [spanningCell(line, 13)]), [null], ...recordsToRows(excelData)];
+
+  // 3. Right-to-left layout for Arabic readers, and column widths that prevent clipping
+  const columns = [
+    6,   // ت
+    28,  // اسم الموظف
+    20,  // الفرع
+    15,  // تاريخ الدوام
+    12,  // اليوم
+    16,  // وقت الدخول الفعلي
+    16,  // وقت الخروج الفعلي
+    16,  // ساعات العمل
+    20,  // حالة الدوام
+    15,  // مدة التأخير
+    20,  // حالة الخصم
+    22,  // قيمة الخصم (د.ع)
+    45,  // ملاحظات الانضباط والتنبيهات الذكية
+  ].map((width) => ({ width }));
+
+  await downloadExcel(`تقرير_الانضباط_والتتبع_شركة_بترى_${startDate}_الى_${endDate}.xlsx`, [
+    { name: "كشف الانضباط والتتبع", data, columns, rightToLeft: true },
   ]);
-
-  // 2. Append the main json data starting at A6
-  XLSX.utils.sheet_add_json(worksheet, excelData, { origin: "A6" });
-
-  // 3. Set layout direction to RTL for Arabic reader
-  worksheet['!dir'] = 'rtl';
-  worksheet['!views'] = [{ RTL: true }];
-
-  // 4. Merge headers for the title blocks (A1:M1, A2:M2, A3:M3, A4:M4)
-  worksheet['!merges'] = [
-    { s: { r: 0, c: 0 }, e: { r: 0, c: 12 } }, // Row 1
-    { s: { r: 1, c: 0 }, e: { r: 1, c: 12 } }, // Row 2
-    { s: { r: 2, c: 0 }, e: { r: 2, c: 12 } }, // Row 3
-    { s: { r: 3, c: 0 }, e: { r: 3, c: 12 } }  // Row 4
-  ];
-
-  // 5. Adjust column widths dynamically to prevent clipping
-  worksheet['!cols'] = [
-    { wch: 6 },   // ت
-    { wch: 28 },  // اسم الموظف
-    { wch: 20 },  // الفرع
-    { wch: 15 },  // تاريخ الدوام
-    { wch: 12 },  // اليوم
-    { wch: 16 },  // وقت الدخول الفعلي
-    { wch: 16 },  // وقت الخروج الفعلي
-    { wch: 16 },  // ساعات العمل
-    { wch: 20 },  // حالة الدوام
-    { wch: 15 },  // مدة التأخير
-    { wch: 20 },  // حالة الخصم
-    { wch: 22 },  // قيمة الخصم (د.ع)
-    { wch: 45 }   // ملاحظات الانضباط والتنبيهات الذكية
-  ];
-
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, "كشف الانضباط والتتبع");
-  XLSX.writeFile(workbook, `تقرير_الانضباط_والتتبع_شركة_بترى_${startDate}_الى_${endDate}.xlsx`);
 }
