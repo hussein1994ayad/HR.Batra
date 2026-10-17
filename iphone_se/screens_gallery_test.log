@@ -1,0 +1,94 @@
+Resolving dependencies...
+Downloading packages...
+  cli_util 0.4.2 (0.6.0 available)
+  cross_file 0.3.5+5 (0.4.0 available)
+  dbus 0.7.15 (0.8.0 available)
+  go_router 17.5.0 (18.1.0 available)
+  gsettings 0.2.8 (0.2.9 available)
+! intl 0.20.3 (overridden)
+  material_color_utilities 0.13.0 (0.13.1 available)
+  test_api 0.7.12 (0.7.15 available)
+Got dependencies!
+7 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+The following plugins do not support Swift Package Manager for ios:
+  - flutter_background_service_ios
+This will become an error in a future version of Flutter. Please contact the plugin maintainers to request Swift Package Manager adoption.
+Running Xcode build...                                          
+Xcode build done.                                           114.5s
+VMServiceFlutterDriver: Connecting to Flutter application at http://127.0.0.1:52842/ZCyLvVtBdMM=/
+VMServiceFlutterDriver: Isolate found with number: 4992635013948891
+VMServiceFlutterDriver: Isolate 4992635013948891 is runnable.
+VMServiceFlutterDriver: Isolate is paused at start.
+VMServiceFlutterDriver: Attempting to resume isolate
+flutter: 00:00 +0: (setUpAll)
+flutter: 00:00 +1: 01_login
+VMServiceFlutterDriver: Connected to Flutter application.
+VMServiceFlutterDriver: request_data message is taking a long time to complete...
+flutter: 00:05 +2: 02_change_password
+flutter: 00:08 +3: 03_home
+flutter: 00:08 +3: 01_login
+flutter: ⚠️ خدمة GPS معطلة في الجهاز
+flutter: === notifications channel: RealtimeSubscribeStatus.channelError ===
+flutter: === channel error: WebSocketChannelException: SocketException: Failed host lookup: 'fake.supabase.test' (OS Error: nodename nor servname provided, or not known, errno = 8) ===
+flutter: === attendance channel: RealtimeSubscribeStatus.channelError ===
+flutter: 💾 تم حفظ حالة التتبع محلياً للعمل أوفلاين.
+flutter: 🚀 بدء تشغيل تدفق التتبع الجغرافي الحي للموظف: 00000000-0000-4000-8000-000000000001
+flutter: ⚠️ خطأ في التقاط الموقع الأولي: type 'Null' is not a subtype of type 'Map<dynamic, dynamic>'
+flutter: iOS: بدأت مراقبة 1 فرع
+flutter: iOS: setCheckedIn(true)
+flutter: ✅ تم تفعيل وتشغيل نظام التتبع الجغرافي بنجاح للموظف: 00000000-0000-4000-8000-000000000001
+flutter: === notifications channel: RealtimeSubscribeStatus.channelError ===
+flutter: === channel error: WebSocketChannelException: SocketException: Failed host lookup: 'fake.supabase.test' (OS Error: nodename nor servname provided, or not known, errno = 8) ===
+flutter: === attendance channel: RealtimeSubscribeStatus.channelError ===
+flutter: === notifications channel: RealtimeSubscribeStatus.closed ===
+flutter: === attendance channel: RealtimeSubscribeStatus.closed ===
+flutter: 00:12 +4: 04_attendance
+flutter: 00:13 +4: 01_login
+flutter:   \^[[1m[flutter_map]\^[[0m
+    We want to help keep OpenStreetMap available for everyone. Our examples
+    and demo app use the public tile servers, but they are NOT free to use by
+    everyone! Please review whether the OpenStreetMap tile servers are suitable
+    for your project.
+    See:
+      * https://operations.osmfoundation.org/policies/tiles (OSM Tile Usage Policy)
+      * https://docs.fleaflet.dev/osm-warn for more information about this warning
+flutter: 00:16 +5: 05_leave
+flutter: 00:19 +6: 06_loan
+flutter: 00:22 +7: 07_settings_employee
+flutter: 00:25 +8: 08_settings_admin
+flutter: 00:28 +9: 09_notifications
+flutter: 00:30 +10: 10_payslips
+flutter: 00:33 +11: 11_directory
+flutter: 00:36 +12: 11b_announcements_board
+flutter: 00:39 +13: 12_admin_dashboard
+flutter: 00:42 +14: 13_admin_loans
+flutter: 00:45 +15: 14_admin_tracking
+flutter: 00:45 +15: 01_login
+flutter:   \^[[1m[flutter_map]\^[[0m
+    We want to help keep OpenStreetMap available for everyone. Our examples
+    and demo app use the public tile servers, but they are NOT free to use by
+    everyone! Please review whether the OpenStreetMap tile servers are suitable
+    for your project.
+    See:
+      * https://operations.osmfoundation.org/policies/tiles (OSM Tile Usage Policy)
+      * https://docs.fleaflet.dev/osm-warn for more information about this warning
+flutter: 00:47 +16: 15_employee_management
+flutter: 00:50 +17: 16_branches
+flutter: 00:51 +17: 01_login
+flutter:   \^[[1m[flutter_map]\^[[0m
+    We want to help keep OpenStreetMap available for everyone. Our examples
+    and demo app use the public tile servers, but they are NOT free to use by
+    everyone! Please review whether the OpenStreetMap tile servers are suitable
+    for your project.
+    See:
+      * https://operations.osmfoundation.org/policies/tiles (OSM Tile Usage Policy)
+      * https://docs.fleaflet.dev/osm-warn for more information about this warning
+flutter: 00:53 +18: 17_branch_schedule
+flutter: 00:56 +19: 18_announcements
+flutter: 00:59 +20: 19_attendance_report
+flutter: 01:02 +21: 20_trash
+flutter: 01:04 +22: 21_storage
+flutter: 01:07 +23: (tearDownAll)
+flutter: 01:08 +24: All tests passed!
+All tests passed.

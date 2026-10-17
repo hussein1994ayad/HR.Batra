@@ -1,0 +1,156 @@
+Resolving dependencies...
+Downloading packages...
+  cli_util 0.4.2 (0.6.0 available)
+  cross_file 0.3.5+5 (0.4.0 available)
+  dbus 0.7.15 (0.8.0 available)
+  go_router 17.5.0 (18.1.0 available)
+  gsettings 0.2.8 (0.2.9 available)
+! intl 0.20.3 (overridden)
+  material_color_utilities 0.13.0 (0.13.1 available)
+  test_api 0.7.12 (0.7.15 available)
+Got dependencies!
+7 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+The following plugins do not support Swift Package Manager for ios:
+  - flutter_background_service_ios
+This will become an error in a future version of Flutter. Please contact the plugin maintainers to request Swift Package Manager adoption.
+Running Xcode build...                                          
+Xcode build done.                                           46.1s
+VMServiceFlutterDriver: Connecting to Flutter application at http://127.0.0.1:50045/U5VWQ_v2Wy8=/
+VMServiceFlutterDriver: Isolate found with number: 7269652216068739
+VMServiceFlutterDriver: Isolate 7269652216068739 is runnable.
+VMServiceFlutterDriver: Isolate is paused at start.
+VMServiceFlutterDriver: Attempting to resume isolate
+flutter: 00:00 +0: (setUpAll)
+flutter: 00:00 +1: employee_tabs
+VMServiceFlutterDriver: Connected to Flutter application.
+flutter: ⚠️ خدمة GPS معطلة في الجهاز
+flutter: === notifications channel: RealtimeSubscribeStatus.channelError ===
+flutter: === channel error: WebSocketChannelException: SocketException: Failed host lookup: 'fake.supabase.test' (OS Error: nodename nor servname provided, or not known, errno = 8) ===
+flutter: === attendance channel: RealtimeSubscribeStatus.channelError ===
+flutter: 💾 تم حفظ حالة التتبع محلياً للعمل أوفلاين.
+flutter: 🚀 بدء تشغيل تدفق التتبع الجغرافي الحي للموظف: 00000000-0000-4000-8000-000000000001
+flutter: ⚠️ خطأ في التقاط الموقع الأولي: type 'Null' is not a subtype of type 'Map<dynamic, dynamic>'
+flutter: iOS: بدأت مراقبة 1 فرع
+flutter: iOS: setCheckedIn(true)
+flutter: ✅ تم تفعيل وتشغيل نظام التتبع الجغرافي بنجاح للموظف: 00000000-0000-4000-8000-000000000001
+flutter: === notifications channel: RealtimeSubscribeStatus.channelError ===
+flutter: === channel error: WebSocketChannelException: SocketException: Failed host lookup: 'fake.supabase.test' (OS Error: nodename nor servname provided, or not known, errno = 8) ===
+flutter: === attendance channel: RealtimeSubscribeStatus.channelError ===
+VMServiceFlutterDriver: request_data message is taking a long time to complete...
+flutter: === notifications channel: RealtimeSubscribeStatus.channelError ===
+flutter: === channel error: WebSocketChannelException: SocketException: Failed host lookup: 'fake.supabase.test' (OS Error: nodename nor servname provided, or not known, errno = 8) ===
+flutter: === attendance channel: RealtimeSubscribeStatus.channelError ===
+flutter:   \^[[1m[flutter_map]\^[[0m
+    We want to help keep OpenStreetMap available for everyone. Our examples
+    and demo app use the public tile servers, but they are NOT free to use by
+    everyone! Please review whether the OpenStreetMap tile servers are suitable
+    for your project.
+    See:
+      * https://operations.osmfoundation.org/policies/tiles (OSM Tile Usage Policy)
+      * https://docs.fleaflet.dev/osm-warn for more information about this warning
+flutter: === notifications channel: RealtimeSubscribeStatus.timedOut ===
+flutter: === attendance channel: RealtimeSubscribeStatus.timedOut ===
+flutter: === notifications channel: RealtimeSubscribeStatus.channelError ===
+flutter: === channel error: WebSocketChannelException: SocketException: Failed host lookup: 'fake.supabase.test' (OS Error: nodename nor servname provided, or not known, errno = 8) ===
+flutter: === attendance channel: RealtimeSubscribeStatus.channelError ===
+flutter: === notifications channel: RealtimeSubscribeStatus.channelError ===
+flutter: === channel error: WebSocketChannelException: SocketException: Failed host lookup: 'fake.supabase.test' (OS Error: nodename nor servname provided, or not known, errno = 8) ===
+flutter: === attendance channel: RealtimeSubscribeStatus.channelError ===
+flutter: === notifications channel: RealtimeSubscribeStatus.closed ===
+flutter: === attendance channel: RealtimeSubscribeStatus.closed ===
+flutter: 00:24 +2: leave_request
+flutter: 00:24 +2: employee_tabs
+flutter: ⚠️ خدمة GPS معطلة في الجهاز
+flutter: 💾 تم حفظ حالة التتبع محلياً للعمل أوفلاين.
+flutter: ⚠️ خطأ في التقاط الموقع الأولي: type 'Null' is not a subtype of type 'Map<dynamic, dynamic>'
+flutter: === notifications channel: RealtimeSubscribeStatus.channelError ===
+flutter: === channel error: WebSocketChannelException: SocketException: Failed host lookup: 'fake.supabase.test' (OS Error: nodename nor servname provided, or not known, errno = 8) ===
+flutter: === attendance channel: RealtimeSubscribeStatus.channelError ===
+flutter: iOS: بدأت مراقبة 1 فرع
+flutter: iOS: setCheckedIn(true)
+flutter: ✅ تم تفعيل وتشغيل نظام التتبع الجغرافي بنجاح للموظف: 00000000-0000-4000-8000-000000000001
+flutter: === notifications channel: RealtimeSubscribeStatus.timedOut ===
+flutter: === attendance channel: RealtimeSubscribeStatus.timedOut ===
+flutter: === notifications channel: RealtimeSubscribeStatus.channelError ===
+flutter: === channel error: WebSocketChannelException: SocketException: Failed host lookup: 'fake.supabase.test' (OS Error: nodename nor servname provided, or not known, errno = 8) ===
+flutter: === attendance channel: RealtimeSubscribeStatus.channelError ===
+flutter: === notifications channel: RealtimeSubscribeStatus.closed ===
+flutter: === attendance channel: RealtimeSubscribeStatus.closed ===
+flutter: 00:44 +3: loan_request
+flutter: 00:44 +3: employee_tabs
+flutter: ⚠️ خدمة GPS معطلة في الجهاز
+flutter: 💾 تم حفظ حالة التتبع محلياً للعمل أوفلاين.
+flutter: ⚠️ خطأ في التقاط الموقع الأولي: type 'Null' is not a subtype of type 'Map<dynamic, dynamic>'
+flutter: === notifications channel: RealtimeSubscribeStatus.channelError ===
+flutter: === channel error: WebSocketChannelException: SocketException: Failed host lookup: 'fake.supabase.test' (OS Error: nodename nor servname provided, or not known, errno = 8) ===
+flutter: === attendance channel: RealtimeSubscribeStatus.channelError ===
+flutter: iOS: بدأت مراقبة 1 فرع
+flutter: iOS: setCheckedIn(true)
+flutter: ✅ تم تفعيل وتشغيل نظام التتبع الجغرافي بنجاح للموظف: 00000000-0000-4000-8000-000000000001
+flutter: === notifications channel: RealtimeSubscribeStatus.timedOut ===
+flutter: === attendance channel: RealtimeSubscribeStatus.timedOut ===
+flutter: 00:54 +3: loan_request
+flutter: image picker: camera_access_denied User denied access
+flutter: 00:55 +3: employee_tabs
+flutter: === notifications channel: RealtimeSubscribeStatus.channelError ===
+flutter: === channel error: WebSocketChannelException: SocketException: Failed host lookup: 'fake.supabase.test' (OS Error: nodename nor servname provided, or not known, errno = 8) ===
+flutter: === attendance channel: RealtimeSubscribeStatus.channelError ===
+flutter: 01:02 +3: loan_request
+flutter: حجم الصورة الأصلي: 0.22 كيلوبايت
+flutter: حجم الصورة بعد الضغط: 0.46 كيلوبايت
+flutter: المساحة الموفرة بالسيرفر: -108.0%
+flutter: 01:05 +3: employee_tabs
+flutter: === notifications channel: RealtimeSubscribeStatus.closed ===
+flutter: === attendance channel: RealtimeSubscribeStatus.closed ===
+flutter: 01:05 +4: pages_and_back
+flutter: 01:05 +4: employee_tabs
+flutter: ⚠️ خدمة GPS معطلة في الجهاز
+flutter: 💾 تم حفظ حالة التتبع محلياً للعمل أوفلاين.
+flutter: ⚠️ خطأ في التقاط الموقع الأولي: type 'Null' is not a subtype of type 'Map<dynamic, dynamic>'
+flutter: === notifications channel: RealtimeSubscribeStatus.channelError ===
+flutter: === channel error: WebSocketChannelException: SocketException: Failed host lookup: 'fake.supabase.test' (OS Error: nodename nor servname provided, or not known, errno = 8) ===
+flutter: === attendance channel: RealtimeSubscribeStatus.channelError ===
+flutter: iOS: بدأت مراقبة 1 فرع
+flutter: iOS: setCheckedIn(true)
+flutter: ✅ تم تفعيل وتشغيل نظام التتبع الجغرافي بنجاح للموظف: 00000000-0000-4000-8000-000000000001
+flutter: === notifications channel: RealtimeSubscribeStatus.timedOut ===
+flutter: === attendance channel: RealtimeSubscribeStatus.timedOut ===
+flutter: === notifications channel: RealtimeSubscribeStatus.channelError ===
+flutter: === channel error: WebSocketChannelException: SocketException: Failed host lookup: 'fake.supabase.test' (OS Error: nodename nor servname provided, or not known, errno = 8) ===
+flutter: === attendance channel: RealtimeSubscribeStatus.channelError ===
+flutter: 01:22 +4: pages_and_back
+flutter: ⚠️ خدمة GPS معطلة في الجهاز
+flutter: 💾 تم حفظ حالة التتبع محلياً للعمل أوفلاين.
+flutter: ⚠️ خطأ في التقاط الموقع الأولي: type 'Null' is not a subtype of type 'Map<dynamic, dynamic>'
+flutter: iOS: بدأت مراقبة 1 فرع
+flutter: iOS: setCheckedIn(true)
+flutter: ✅ تم تفعيل وتشغيل نظام التتبع الجغرافي بنجاح للموظف: 00000000-0000-4000-8000-000000000001
+flutter: 01:24 +4: employee_tabs
+flutter: === notifications channel: RealtimeSubscribeStatus.closed ===
+flutter: === attendance channel: RealtimeSubscribeStatus.closed ===
+flutter: 01:24 +5: settings_logout_dialog
+flutter: 01:24 +5: employee_tabs
+flutter: ⚠️ خدمة GPS معطلة في الجهاز
+flutter: 💾 تم حفظ حالة التتبع محلياً للعمل أوفلاين.
+flutter: ⚠️ خطأ في التقاط الموقع الأولي: type 'Null' is not a subtype of type 'Map<dynamic, dynamic>'
+flutter: iOS: بدأت مراقبة 1 فرع
+flutter: === notifications channel: RealtimeSubscribeStatus.channelError ===
+flutter: === channel error: WebSocketChannelException: SocketException: Failed host lookup: 'fake.supabase.test' (OS Error: nodename nor servname provided, or not known, errno = 8) ===
+flutter: === attendance channel: RealtimeSubscribeStatus.channelError ===
+flutter: iOS: setCheckedIn(true)
+flutter: ✅ تم تفعيل وتشغيل نظام التتبع الجغرافي بنجاح للموظف: 00000000-0000-4000-8000-000000000001
+flutter: === notifications channel: RealtimeSubscribeStatus.timedOut ===
+flutter: === attendance channel: RealtimeSubscribeStatus.timedOut ===
+flutter: === notifications channel: RealtimeSubscribeStatus.channelError ===
+flutter: === channel error: WebSocketChannelException: SocketException: Failed host lookup: 'fake.supabase.test' (OS Error: nodename nor servname provided, or not known, errno = 8) ===
+flutter: === attendance channel: RealtimeSubscribeStatus.channelError ===
+flutter: === notifications channel: RealtimeSubscribeStatus.closed ===
+flutter: === attendance channel: RealtimeSubscribeStatus.closed ===
+flutter: 01:34 +6: admin_dashboard
+flutter: 01:54 +7: admin_add_employee
+flutter: 02:07 +8: admin_create_loan
+flutter: 02:19 +9: admin_schedule
+flutter: 02:29 +10: (tearDownAll)
+flutter: 02:31 +11: All tests passed!
+All tests passed.

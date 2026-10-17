@@ -1,0 +1,65 @@
+Resolving dependencies...
+Downloading packages...
+  cli_util 0.4.2 (0.6.0 available)
+  cross_file 0.3.5+5 (0.4.0 available)
+  dbus 0.7.15 (0.8.0 available)
+  go_router 17.5.0 (18.1.0 available)
+  gsettings 0.2.8 (0.2.9 available)
+! intl 0.20.3 (overridden)
+  material_color_utilities 0.13.0 (0.13.1 available)
+  test_api 0.7.12 (0.7.15 available)
+Got dependencies!
+7 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+The following plugins do not support Swift Package Manager for ios:
+  - flutter_background_service_ios
+This will become an error in a future version of Flutter. Please contact the plugin maintainers to request Swift Package Manager adoption.
+Running Xcode build...                                          
+Xcode build done.                                           165.5s
+VMServiceFlutterDriver: Connecting to Flutter application at http://127.0.0.1:51401/5CQUy5ZHMfs=/
+VMServiceFlutterDriver: Isolate found with number: 8337093050216735
+VMServiceFlutterDriver: Waiting for isolate 8337093050216735 to be runnable.
+Failed to index parameter type: <WFMediaPickerParameter: 0x10c2bb780> in is.workflow.actions.playmusic: (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFMediaPickerParameter) for locale: en
+Failed to index parameter type: <WFTagFieldParameter: 0x10c32a920> in is.workflow.actions.addnewreminder: (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFTagFieldParameter) for locale: en
+VMServiceFlutterDriver: Isolate 8337093050216735 is runnable.
+VMServiceFlutterDriver: Isolate is paused at start.
+VMServiceFlutterDriver: Attempting to resume isolate
+flutter: 00:00 +0: real app launches (login, or home if a session exists) without crashing
+Failed to index parameter type: <WFMailSenderPickerParameter: 0x10c44bc00> in is.workflow.actions.sendemail: (extension in ActionKit):__C.WFParameter.ToolKitConversionError.missingIntentDescription for locale: en
+Skipping: <WFUnionParameter: 0x10c487000> in com.apple.MobileSMS.SendMessageReactionIntent because union values themselves are not treated as a type
+flutter: supabase.supabase_flutter: INFO: ***** Supabase init completed *****
+flutter: ⚠️ Firebase غير مضبوط لهذه المنصة — إشعارات Push معطلة.
+VMServiceFlutterDriver: Connected to Flutter application.
+VMServiceFlutterDriver: request_data message is taking a long time to complete...
+Failed to index action parameter: <WFSystemShortcutPickerParameter: 0x10a447cc0> due to (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFSystemShortcutPickerParameter)
+is.workflow.actions.useractivity.open WFOpenUserActivityAction: Skipped because: [donation-based action]
+Failed to index action parameter: <WFSystemShortcutPickerParameter: 0x10a48f300> due to (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFSystemShortcutPickerParameter)
+Failed to index action parameter: <WFEvernoteTagsTagFieldParameter: 0x109e7b800> due to (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFEvernoteTagsTagFieldParameter)
+is.workflow.actions.sirikit.donation.handle WFHandleDonatedIntentAction: Skipped because: [donation-based action]
+Failed to index action parameter: <WFContentArrayParameter: 0x10a5b9180> due to (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFContentArrayParameter)
+Failed to index action parameter: <WFInputTypeParameter: 0x10a5bed00> due to ActionKit.(unknown context at $1047d2880).WFParameterStateToolKitConversionError.unknownParameterState(WFMultipleValueParameterState)
+Failed to index action parameter: <WFInputSurfaceParameter: 0x10a5a2b80> due to (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFInputSurfaceParameter)
+is.workflow.actions.choosefrommenu WFChooseFromMenuAction: Skipped because: [control flow]
+Failed to check availability in Spotlight for action is.workflow.actions.workout.start: Error Domain=NSOSStatusErrorDomain Code=-10814 "(null)" UserInfo={_LSLine=156, _LSFunction=+[LSBundleRecord bundleRecordWithBundleIdentifier:allowPlaceholder:error:], _LSFile=LSBundleRecord.mm, NSUnderlyingError=0x10c854750 {Error Domain=NSOSStatusErrorDomain Code=-10814 "Unable to find this application extension record in the Launch Services database." UserInfo={_LSLine=652, _LSFunction=_LSPluginFindWithPlatformInfo, _LSFile=LSPluginBundle.mm, NSDebugDescription=Unable to find this application extension record in the Launch Services database., SK=com.apple.SessionTrackerApp, IS=false}}}
+flutter: 00:11 +1: native device id (Keychain) is stable
+flutter: 00:11 +2: native iOS location monitor accepts configure / token / stop
+flutter: 00:11 +3: precise location is available and matches the simulator
+flutter: 00:12 +4: tracking service starts and stops (location split refactor)
+flutter: 💾 تم حفظ حالة التتبع محلياً للعمل أوفلاين.
+flutter: 🚀 بدء تشغيل تدفق التتبع الجغرافي الحي للموظف: 00000000-0000-0000-0000-000000000001
+flutter: iOS: setCheckedIn(true)
+flutter: ✅ تم تفعيل وتشغيل نظام التتبع الجغرافي بنجاح للموظف: 00000000-0000-0000-0000-000000000001
+flutter: ⚠️ تعذر رفع الموقع الفوري، سيتم حفظه محلياً أوفلاين: PostgrestException(message: new row violates row-level security policy for table "location_tracking", code: 42501, details: Unauthorized, hint: null)
+flutter: 📍 تم تخزين نقطة الموقع محلياً (أوفلاين). الإجمالي المخزن: 1
+flutter: خطأ في تسجيل خرق تزييف الموقع: PostgrestException(message: new row violates row-level security policy for table "mock_gps_attempts", code: 42501, details: Unauthorized, hint: null)
+flutter: iOS: توقفت المراقبة تماماً
+flutter: تم إيقاف تدفق الموقع الجغرافي.
+flutter: 💾 تم حفظ حالة التتبع محلياً للعمل أوفلاين.
+flutter: 🛑 تم إيقاف خدمة التتبع الجغرافي بالكامل.
+flutter: 00:18 +5: (tearDownAll)
+flutter: 00:18 +6: All tests passed!
+All tests passed.
+Failed to index action parameter: <WFLightroomPresetPickerParameter: 0x10a66df40> due to (extension in ActionKit):__C.WFParameter.ToolKitConversionError.missingIntentDescription
+Failed to check availability in Spotlight for action is.workflow.actions.lightroom.import: Error Domain=NSOSStatusErrorDomain Code=-10814 "(null)" UserInfo={_LSLine=156, _LSFunction=+[LSBundleRecord bundleRecordWithBundleIdentifier:allowPlaceholder:error:], _LSFile=LSBundleRecord.mm, NSUnderlyingError=0x10c854420 {Error Domain=NSOSStatusErrorDomain Code=-10814 "Unable to find this application extension record in the Launch Services database." UserInfo={_LSLine=652, _LSFunction=_LSPluginFindWithPlatformInfo, _LSFile=LSPluginBundle.mm, NSDebugDescription=Unable to find this application extension record in the Launch Services database., SK=com.adobe.lrmobile, IS=false}}}
+Failed to index action parameter: <WFPosterPickerParameter: 0x1090a2640> due to (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFPosterPickerParameter)
+Failed to index action parameter: <WFPhotoItemCollectionParameter: 0x10a7dd340> due to (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFPhotoItemCollectionParameter)
