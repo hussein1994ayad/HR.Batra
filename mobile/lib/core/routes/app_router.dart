@@ -2,8 +2,8 @@
 // نظام HR Pro v6.0 - موجه ومسارات التطبيق المحدّث (App Router)
 // =========================================================================
 
-import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../../core/design/design.dart';
 import '../../presentation/admin/admin_dashboard/admin_dashboard_screen.dart';

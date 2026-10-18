@@ -1,6 +1,5 @@
 // يفتح النوافذ المنبثقة المهمة على أصغر هاتف وبخط مكبّر ويتأكد أنها لا تنكسر.
 
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hr_pro/presentation/admin/admin_dashboard/admin_dashboard_screen.dart';
 import 'package:hr_pro/presentation/admin/admin_loans/admin_loans_screen.dart';
@@ -8,6 +7,7 @@ import 'package:hr_pro/presentation/admin/admin_loans/widgets/loan_card.dart';
 import 'package:hr_pro/presentation/admin/branches/branch_management_screen.dart';
 import 'package:hr_pro/presentation/admin/branches/branch_schedule_screen.dart';
 import 'package:hr_pro/presentation/admin/employee_management/employee_management_screen.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../support/harness.dart';
 

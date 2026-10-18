@@ -1,7 +1,7 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hr_pro/core/theme/app_theme.dart';
 import 'package:hr_pro/presentation/shared/ui/ui.dart';
+import 'package:material_ui/material_ui.dart';
 
 void main() {
   testWidgets('AppCard renders its child and handles taps', (WidgetTester tester) async {

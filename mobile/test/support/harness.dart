@@ -4,10 +4,8 @@
 import 'dart:io';
 import 'dart:ui' as ui;
 
-import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -15,6 +13,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:hr_pro/core/providers/app_container.dart';
 import 'package:hr_pro/core/providers/auth_provider.dart';
 import 'package:hr_pro/core/theme/app_theme.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'fake_backend.dart';
@@ -117,11 +116,7 @@ Future<void> pumpScreen(
             debugShowCheckedModeBanner: false,
             locale: const Locale('ar', 'IQ'),
             supportedLocales: const [Locale('ar', 'IQ'), Locale('ar', '')],
-            localizationsDelegates: const [
-              GlobalMaterialLocalizations.delegate,
-              GlobalWidgetsLocalizations.delegate,
-              GlobalCupertinoLocalizations.delegate,
-            ],
+            localizationsDelegates: GlobalMaterialLocalizations.delegates,
             theme: device.ios ? AppTheme.darkTheme.copyWith(platform: TargetPlatform.iOS) : AppTheme.darkTheme,
             darkTheme: device.ios ? AppTheme.darkTheme.copyWith(platform: TargetPlatform.iOS) : AppTheme.darkTheme,
             themeMode: ThemeMode.dark,

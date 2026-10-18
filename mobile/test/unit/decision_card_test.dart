@@ -1,11 +1,11 @@
 // قرار الخصم/الإعفاء: ملاحظات جاهزة تنضغط (مثل: نسي البصمة وهو مداوم) وتوصل مع القرار.
 
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hr_pro/core/logic/decision_reasons.dart';
 import 'package:hr_pro/core/models/models.dart';
 import 'package:hr_pro/core/theme/app_theme.dart';
 import 'package:hr_pro/presentation/admin/admin_dashboard/widgets/decision_card.dart';
+import 'package:material_ui/material_ui.dart';
 
 void main() {
   testWidgets('a branch manager sees no amount and cannot type one (the computed amount is deducted)', (tester) async {

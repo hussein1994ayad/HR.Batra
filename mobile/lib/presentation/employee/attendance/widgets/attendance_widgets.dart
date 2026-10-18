@@ -1,10 +1,10 @@
 // أجزاء عرض شاشة البصمة: خريطة الفرع، كارت الموقع والمسافة، وكارت دوام اليوم.
 // كلها عرض فقط؛ الحالة ومنطق البصمة باقيين بالشاشة.
 
-import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../../../../core/models/models.dart';
 import '../../../../core/services/precise_location.dart';

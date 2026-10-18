@@ -6,7 +6,7 @@
 // التعميم يظهر في "التعاميم" خلال مدته فقط ثم يختفي تلقائياً.
 // =========================================================================
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../../../core/models/models.dart';
 import '../../../core/utils/app_log.dart';

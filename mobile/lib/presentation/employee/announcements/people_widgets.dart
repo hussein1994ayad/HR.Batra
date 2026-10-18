@@ -1,7 +1,7 @@
 // المجازون الآن والمتأخرون اليوم (الرئيسية ولوحة التعاميم):
 // صورة بحلقة ملوّنة (يومية بنفسجي، زمنية أزرق، تأخير برتقالي)، الاسم، الفرع، ومتى يعود أو مدة التأخير.
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../../../core/models/models.dart';
 import '../../../core/utils/company_time.dart';

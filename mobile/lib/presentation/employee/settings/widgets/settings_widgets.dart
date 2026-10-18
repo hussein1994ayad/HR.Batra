@@ -1,6 +1,6 @@
 // أجزاء عرض شاشة الإعدادات: كارت الملف الشخصي، حالة الإشعارات، ووثائقي (المستمسكات).
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../../../../core/services/storage_links.dart';
 import '../../../shared/ui/ui.dart';

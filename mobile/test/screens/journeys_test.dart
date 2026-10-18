@@ -2,9 +2,9 @@
 // وعلى أندرويد كمرجع. نفس الرحلات تنشغل على المحاكي بـ integration_test/user_journeys_test.dart.
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../support/fake_backend.dart';
 import '../support/journeys.dart';

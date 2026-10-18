@@ -1,8 +1,8 @@
 // تقرير الحضور بصيغة Excel: ورقة "يوم بيوم" وورقة "ملخص الموظفين" (بايتات بدون حفظ — قابل للاختبار).
 // الواجهة العامة: ExcelExportService.generateAttendanceReportExcel / buildAttendanceReportBytes.
 
-import 'package:flutter/material.dart' show DateUtils;
 import 'package:intl/intl.dart';
+import 'package:material_ui/material_ui.dart' show DateUtils;
 import 'package:syncfusion_flutter_xlsio/xlsio.dart' as xlsio;
 
 import '../../logic/attendance_report.dart';

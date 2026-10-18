@@ -1,7 +1,7 @@
 // أجزاء الشاشة الرئيسية للموظف: الرأس، كارد اليوم (حضور ← انصراف ← اكتمل)، الاختصارات،
 // مدخل لوحة الإدارة، والتعاميم.
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../../../../core/models/models.dart';
 import '../../../../core/utils/company_time.dart';

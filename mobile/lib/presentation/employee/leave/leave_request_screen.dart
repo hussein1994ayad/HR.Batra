@@ -10,8 +10,8 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../../../core/models/models.dart';
 import '../../../core/services/supabase_service.dart';

@@ -4,10 +4,10 @@
 
 import 'dart:math' as math;
 
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hr_pro/core/design/design.dart';
 import 'package:hr_pro/core/theme/app_theme.dart';
+import 'package:material_ui/material_ui.dart';
 
 double _contrast(Color a, Color b) {
   final la = a.computeLuminance();

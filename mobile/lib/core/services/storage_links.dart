@@ -4,7 +4,7 @@
 // في القاعدة (بصيغة /object/public/...) لا يفتح بدون صلاحية. هنا نحوّله لرابط
 // موقّع مؤقت، والسيرفر يتحقق أن الطالب صاحب الملف أو أدمن (أو مدير لمرفق إجازة).
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'supabase_service.dart';
 

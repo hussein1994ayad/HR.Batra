@@ -7,7 +7,7 @@
 // • زر الرجوع في تبويب غير الرئيسية يرجع للرئيسية بدل إغلاق التطبيق
 // =========================================================================
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../../core/design/design.dart';
 import '../shared/widgets/bottom_nav_bar.dart';
