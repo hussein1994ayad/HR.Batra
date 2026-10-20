@@ -73,6 +73,13 @@
             android:name="flutterEmbedding"
             android:value="2" />
 
+        <!-- الإشعارات: التسجيل برقم التنصيب (register()/onRegistered بـ firebase_messaging 17).
+             بدون هذا السطر Firebase يرفض register() بخطأ "API disabled" وما يوصل رقم للسيرفر.
+             فحص test/unit/push_registration_test.dart يتأكد إنه موجود. -->
+        <meta-data
+            android:name="firebase_messaging_installation_id_enabled"
+            android:value="true" />
+
         <!-- Geolocator Foreground Service -->
         <service
             android:name="com.baseflow.geolocator.GeolocatorForegroundService"

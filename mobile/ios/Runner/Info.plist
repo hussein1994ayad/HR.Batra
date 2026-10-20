@@ -109,6 +109,9 @@
 	     is looked up by name at notification time. -->
 	<key>FirebaseAppDelegateProxyEnabled</key>
 	<false/>
+	<!-- التسجيل برقم التنصيب (register()/onRegistered بـ firebase_messaging 17)؛ بدونه register() يُرفض. -->
+	<key>FirebaseMessagingInstallationIdEnabled</key>
+	<true/>
 
 	<!-- ================================================================
 	     Scene / launch / orientation

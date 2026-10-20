@@ -414,17 +414,39 @@ class NotificationService {
   // -----------------------------------------------------------------------
   static const String _kPushIdKey = 'push.fid';
   static bool _listeningForRegistration = false;
+  static int _registrations = 0;
 
   /// يسجّل الموبايل: الرقم يوصل بـ onRegistered وينحفظ. ورقم محفوظ قبل (Firebase ما يعيد الحدث كل مرة)
   /// يتثبت للمستخدم الحالي حتى بعد تبديل الحساب.
   static Future<void> _registerForPush() async {
     if (!_listeningForRegistration) {
       _listeningForRegistration = true; // يبقى طول عمر التطبيق مثل onMessage
-      _firebaseMessaging.onRegistered.listen((fid) => unawaited(_savePushId(fid)));
+      _firebaseMessaging.onRegistered.listen((fid) {
+        _registrations++;
+        unawaited(_savePushId(fid));
+      });
     }
     final known = await _knownPushId();
     if (known != null) await _savePushId(known);
-    await _firebaseMessaging.register();
+    final before = _registrations;
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    await _tryRegister();
+    // احتياط: إذا الرقم ما وصل خلال 20 ثانية (مثلاً الإنترنت انقطع لحظتها) نعيد التسجيل مرة وحدة.
+    // (الطريقة القديمة getToken ما تنفع احتياط: ويا إعداد رقم التنصيب Firebase يرفضها "API disabled")
+    unawaited(Future<void>.delayed(const Duration(seconds: 20), () async {
+      if (_registrations != before) return;
+      if (userId == null || Supabase.instance.client.auth.currentUser?.id != userId) return;
+      await _tryRegister();
+    }));
+  }
+
+  static Future<void> _tryRegister() async {
+    try {
+      await _firebaseMessaging.register();
+    } catch (e) {
+      // مثل "API disabled" إذا إعداد firebase_messaging_installation_id_enabled انشال من AndroidManifest
+      appLog('تسجيل الإشعارات برقم التنصيب فشل: $e');
+    }
   }
 
   static Future<String?> _knownPushId() async {
