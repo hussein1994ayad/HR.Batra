@@ -1,0 +1,16 @@
+Timestamp               Ty Process[PID:TID]
+2026-10-20 08:18:17.026 E  Runner[43915:1e057] [com.apple.UIKit:UIFocus] FlutterView implements focusItemsInRect: - caching for linear focus movement is limited as long as this view is on screen.
+2026-10-20 08:18:17.056 E  Runner[43915:1e057] (libCoreFSCache.dylib) fopen failed for data file: errno = 2 (No such file or directory)
+2026-10-20 08:18:17.167 E  Runner[43915:1e057] (libCoreFSCache.dylib) fopen failed for data file: errno = 2 (No such file or directory)
+2026-10-20 08:18:17.334 E  Runner[43915:1e057] [com.apple.BackgroundTasks:Framework] Registration rejected; dev.flutter.background.refresh is not advertised in the application's Info.plist
+2026-10-20 08:18:19.796 E  Runner[43915:1e0b0] [com.apple.app_launch_measurement:General] Failed to send CA Event for app launch measurements for ca_event_type: 0 event_name: com.apple.app_launch_measurement.FirstFramePresentationMetric
+2026-10-20 08:18:19.882 E  Runner[43915:1e0b0] [com.apple.app_launch_measurement:General] Failed to send CA Event for app launch measurements for ca_event_type: 1 event_name: com.apple.app_launch_measurement.ExtendedLaunchMetrics
+2026-10-20 08:18:31.953 E  Runner[43915:1e06b] [com.google.firebase:[FirebaseCore]] 13.0.0 - [FirebaseCore][I-COR000012] Could not locate configuration file: 'GoogleService-Info.plist'.
+2026-10-20 08:18:31.955 E  Runner[43915:1e06b] [com.google.firebase:[FirebaseCore]] 13.0.0 - [FirebaseCore][I-COR000005] No app has been configured yet.
+2026-10-20 08:19:16.600 Df Runner[43915:1e057] (Flutter) flutter: ══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+2026-10-20 08:19:16.601 Df Runner[43915:1e057] (Flutter) flutter: The following TimeoutException was thrown running a test:
+2026-10-20 08:19:16.601 Df Runner[43915:1e057] (Flutter) flutter: TimeoutException after 0:00:20.000000: Future not completed
+2026-10-20 08:19:16.601 Df Runner[43915:1e057] (Flutter) flutter: When the exception was thrown, this was the stack:
+2026-10-20 08:19:16.615 Df Runner[43915:1e057] (Flutter) flutter:   Test failed. See exception logs above.
+  The test description was: precise location is available and matches the simulator
+2026-10-20 08:19:26.926 Df Runner[43915:1e057] (Flutter) flutter: ⚠️ خطأ في التقاط الموقع الأولي: TimeoutException after 0:00:10.000000: Future not completed

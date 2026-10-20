@@ -1,0 +1,9 @@
+Timestamp               Ty Process[PID:TID]
+2026-10-20 08:55:52.740 E  Runner[24200:53291] [com.apple.UIKit:UIFocus] FlutterView implements focusItemsInRect: - caching for linear focus movement is limited as long as this view is on screen.
+2026-10-20 08:55:52.807 E  Runner[24200:53291] (libCoreFSCache.dylib) fopen failed for data file: errno = 2 (No such file or directory)
+2026-10-20 08:55:53.364 E  Runner[24200:53291] (libCoreFSCache.dylib) fopen failed for data file: errno = 2 (No such file or directory)
+2026-10-20 08:55:53.431 E  Runner[24200:53291] [com.apple.BackgroundTasks:Framework] Registration rejected; dev.flutter.background.refresh is not advertised in the application's Info.plist
+2026-10-20 08:55:56.569 E  Runner[24200:532ae] [com.apple.app_launch_measurement:General] Failed to send CA Event for app launch measurements for ca_event_type: 0 event_name: com.apple.app_launch_measurement.FirstFramePresentationMetric
+2026-10-20 08:55:56.649 E  Runner[24200:532ae] [com.apple.app_launch_measurement:General] Failed to send CA Event for app launch measurements for ca_event_type: 1 event_name: com.apple.app_launch_measurement.ExtendedLaunchMetrics
+2026-10-20 08:55:59.699 E  Runner[24200:532b4] [com.google.firebase:[FirebaseCore]] 13.0.0 - [FirebaseCore][I-COR000012] Could not locate configuration file: 'GoogleService-Info.plist'.
+2026-10-20 08:55:59.699 E  Runner[24200:532b4] [com.google.firebase:[FirebaseCore]] 13.0.0 - [FirebaseCore][I-COR000005] No app has been configured yet.
