@@ -23,6 +23,22 @@ void main() {
       await q.replace([]);
       expect(File('${dir.path}/q.json').existsSync(), isFalse);
     });
+
+    test('drain uploads each item and keeps only the failed ones for next time', () async {
+      final q = OfflineJsonQueue('q.json', directory: () async => dir);
+      expect(await q.drain((_) async {}), isNull);
+      for (final n in [1, 2, 3]) {
+        await q.append({'n': n});
+      }
+      final sent = <int>[];
+      final r = await q.drain((item) async {
+        if (item['n'] == 2) throw Exception('offline');
+        sent.add(item['n'] as int);
+      });
+      expect(sent, [1, 3]);
+      expect((r!.uploaded, r.pending), (2, 1));
+      expect(await q.readAll(), [{'n': 2}]);
+    });
   });
 
   test('isPointInPolygon (ray casting)', () {

@@ -39,30 +39,17 @@ class GeofenceMonitor {
   /// مزامنة أحداث السياج الجغرافي المخزنة أوفلاين — بالطابع الزمني الأصلي للحدث
   static Future<void> syncOffline() async {
     try {
-      final list = await _queue.readAll();
-      if (list.isEmpty) return;
-
-      final remaining = <Map<String, dynamic>>[];
-      for (final raw in list) {
-        if (raw is! Map) continue;
-        final ev = Map<String, dynamic>.from(raw);
-        try {
-          // مزامنة السجل في جدول المخالفات فقط (للوحة الإدارة) — بدون إشعار للموظف
-          await SupabaseService.client
-              .from('geofence_violations')
-              .insert({
-                'employee_id': ev['employee_id'],
-                'zone_id': ev['zone_id'],
-                'violation_type': ev['violation_type'],
-                'timestamp': ev['timestamp'],
-              })
-              .timeout(const Duration(seconds: 8));
-        } catch (_) {
-          remaining.add(ev);
-        }
-      }
-      await _queue.replace(remaining);
-      appLog('✅ مزامنة أحداث السياج: ${list.length - remaining.length} رُفعت، ${remaining.length} بالانتظار.');
+      // جدول المخالفات فقط (للوحة الإدارة) — بدون إشعار للموظف
+      final r = await _queue.drain((ev) => SupabaseService.client
+          .from('geofence_violations')
+          .insert({
+            'employee_id': ev['employee_id'],
+            'zone_id': ev['zone_id'],
+            'violation_type': ev['violation_type'],
+            'timestamp': ev['timestamp'],
+          })
+          .timeout(const Duration(seconds: 8)));
+      if (r != null) appLog('✅ مزامنة أحداث السياج: ${r.uploaded} رُفعت، ${r.pending} بالانتظار.');
     } catch (e) {
       appLog('⚠️ فشل مزامنة أحداث السياج الجغرافي: $e');
     }
