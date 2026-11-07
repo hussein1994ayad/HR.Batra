@@ -21,7 +21,8 @@ export function Badge({
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[10px] font-bold whitespace-nowrap',
+        // font-sans: الشارة كلام عربي حتى لو داخل عمود أرقام (خط الأرقام يفرّق الحروف)
+        'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[10px] font-bold font-sans whitespace-nowrap',
         TONE_CHIP[tone],
         className,
       )}
@@ -99,7 +100,8 @@ export function SegmentedTabs<T extends string>({
   return (
     <div
       role="tablist"
-      className={cn('inline-flex max-w-full overflow-x-auto no-scrollbar p-1 gap-1 rounded-xl bg-slate-950/60 border border-slate-800/80', className)}
+      // flex-wrap: على الشاشة الضيقة التبويبات تنزل لسطر ثاني بدل ما تنقص من الطرف
+      className={cn('inline-flex flex-wrap max-w-full p-1 gap-1 rounded-xl bg-slate-950/60 border border-slate-800/80', className)}
     >
       {options.map((opt) => {
         const active = opt.value === value;
