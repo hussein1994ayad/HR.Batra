@@ -26,6 +26,16 @@ const _devices = [
 void main() {
   setUpAll(() => GoogleFonts.config.allowRuntimeFetching = false);
 
+  // على محاكي الآيفون: طلب صلاحية الموقع الحقيقي يطلّع نافذة النظام فوق التطبيق وكل لقطات الرحلة تطلع سودة.
+  // الرحلات لازم تجاوب أسئلة الموقع بنفسها: صفحة الدوام تشوف موقع وهمي، والنظام ما ينسأل أبداً.
+  testWidgets('journeys answer location questions themselves (no system permission prompt)', (tester) async {
+    await tester.runAsync(FakeBackend.ensureInitialized);
+    final j = kJourneys.firstWhere((j) => j.name == 'employee_tabs');
+    final location = FakeLocation();
+    await runJourney(tester, j, (_) async {}, location: location);
+    expect(location.calls, greaterThan(0), reason: 'أسئلة الموقع راحت لغير الوهمي (يعني للنظام)');
+  });
+
   for (final device in _devices) {
     for (final j in kJourneys) {
       testWidgets('${device.name}: ${j.name}', (tester) async {

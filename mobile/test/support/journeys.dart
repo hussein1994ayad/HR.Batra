@@ -10,6 +10,7 @@ import 'package:cupertino_ui/cupertino_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:geolocator_platform_interface/geolocator_platform_interface.dart';
 import 'package:hr_pro/core/providers/app_container.dart';
 import 'package:hr_pro/core/providers/auth_provider.dart';
 import 'package:hr_pro/core/routes/app_router.dart';
@@ -17,6 +18,7 @@ import 'package:hr_pro/main.dart' show HRProApp;
 import 'package:hr_pro/presentation/shared/ui/ui.dart';
 import 'package:image_picker_platform_interface/image_picker_platform_interface.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:permission_handler_platform_interface/permission_handler_platform_interface.dart' as ph;
 import 'package:supabase_flutter/supabase_flutter.dart' show Supabase;
 
 import 'fake_backend.dart';
@@ -63,6 +65,90 @@ class FakeImagePicker extends ImagePickerPlatform {
     final f = await _pick('photo_access_denied');
     return f == null ? const [] : [f];
   }
+}
+
+/// موقع وهمي للرحلات. بدونه التطبيق يطلب صلاحية الموقع من الآيفون، فتطلع نافذة النظام فوق التطبيق
+/// على المحاكي (أداة الفحص تعيد تنصيب التطبيق فتضيع الصلاحية الممنوحة) وكل لقطات الرحلة تطلع سودة.
+/// صفحة الدوام تشوف موقع دقيق مسموح عند الفرع؛ وصلاحية التتبع بالخلفية "مرفوضة" بدون سؤال،
+/// حتى ما يشتغل التتبع الحقيقي (مراقب الآيفون الأصلي يطلب صلاحية "دائماً" من النظام).
+class FakeLocation {
+  int calls = 0;
+  static const lat = 33.3152, lng = 44.3661; // فرع الفحوص (fixtures.dart)
+
+  Position get position => Position(latitude: lat, longitude: lng, timestamp: DateTime.now(), accuracy: 5,
+      altitude: 0, altitudeAccuracy: 0, heading: 0, headingAccuracy: 0, speed: 0, speedAccuracy: 0);
+
+  GeolocatorPlatform? _geo;
+  ph.PermissionHandlerPlatform? _perm;
+
+  void install() {
+    _geo = GeolocatorPlatform.instance;
+    _perm = ph.PermissionHandlerPlatform.instance;
+    GeolocatorPlatform.instance = _FakeGeolocator(this);
+    ph.PermissionHandlerPlatform.instance = _FakePermissions(this);
+  }
+
+  void restore() {
+    if (_geo != null) GeolocatorPlatform.instance = _geo!;
+    if (_perm != null) ph.PermissionHandlerPlatform.instance = _perm!;
+  }
+}
+
+class _FakeGeolocator extends GeolocatorPlatform {
+  _FakeGeolocator(this.f);
+  final FakeLocation f;
+  T _n<T>(T v) {
+    f.calls++;
+    return v;
+  }
+
+  @override
+  Future<LocationPermission> checkPermission() async => _n(LocationPermission.whileInUse);
+  @override
+  Future<LocationPermission> requestPermission() async => _n(LocationPermission.whileInUse);
+  @override
+  Future<bool> isLocationServiceEnabled() async => _n(true);
+  @override
+  Future<LocationAccuracyStatus> getLocationAccuracy() async => _n(LocationAccuracyStatus.precise);
+  @override
+  Future<LocationAccuracyStatus> requestTemporaryFullAccuracy({required String purposeKey}) async =>
+      _n(LocationAccuracyStatus.precise);
+  @override
+  Future<Position?> getLastKnownPosition({bool forceLocationManager = false}) async => _n(f.position);
+  @override
+  Future<Position> getCurrentPosition({LocationSettings? locationSettings}) async => _n(f.position);
+  @override
+  Stream<Position> getPositionStream({LocationSettings? locationSettings}) => _n(Stream.value(f.position));
+  @override
+  Stream<ServiceStatus> getServiceStatusStream() => _n(Stream.value(ServiceStatus.enabled));
+  @override
+  Future<bool> openAppSettings() async => _n(true);
+  @override
+  Future<bool> openLocationSettings() async => _n(true);
+}
+
+class _FakePermissions extends ph.PermissionHandlerPlatform {
+  _FakePermissions(this.f);
+  final FakeLocation f;
+
+  @override
+  Future<ph.PermissionStatus> checkPermissionStatus(ph.Permission permission) async {
+    f.calls++;
+    return ph.PermissionStatus.denied;
+  }
+
+  @override
+  Future<Map<ph.Permission, ph.PermissionStatus>> requestPermissions(List<ph.Permission> permissions) async {
+    f.calls++;
+    return {for (final p in permissions) p: ph.PermissionStatus.denied};
+  }
+
+  @override
+  Future<ph.ServiceStatus> checkServiceStatus(ph.Permission permission) async => ph.ServiceStatus.enabled;
+  @override
+  Future<bool> shouldShowRequestPermissionRationale(ph.Permission permission) async => false;
+  @override
+  Future<bool> openAppSettings() async => true;
 }
 
 class JourneyDriver {
@@ -408,16 +494,18 @@ final List<Journey> kJourneys = [
 ];
 
 /// يشغّل رحلة كاملة وينظّف بعدها.
-Future<void> runJourney(WidgetTester tester, Journey j, Shot shot) async {
+Future<void> runJourney(WidgetTester tester, Journey j, Shot shot, {FakeLocation? location}) async {
   final picker = FakeImagePicker();
   final previous = ImagePickerPlatform.instance;
   ImagePickerPlatform.instance = picker;
+  final loc = (location ?? FakeLocation())..install();
   await tester.runAsync(picker.prepare);
   final d = JourneyDriver(tester, shot, picker)..journey = j.name;
   try {
     await j.run(d);
   } finally {
     ImagePickerPlatform.instance = previous;
+    loc.restore();
     tester.view.resetViewInsets();
     FocusManager.instance.primaryFocus?.unfocus();
     await tester.pumpWidget(const SizedBox.shrink());
