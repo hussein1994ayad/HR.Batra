@@ -2,7 +2,7 @@
 
 > رقم إصدار التطبيق الفعلي في `mobile/pubspec.yaml` (`version:`). عبارة "v6.0" في عناوين بعض الملفات اسم قديم للمشروع وليست رقم إصدار.
 
-نظام إدارة موارد بشرية متكامل لشركة **بترا** ذات الفروع المتعددة (القناة، العكد، كمب سارة، بغداد الجديدة).
+نظام إدارة موارد بشرية متكامل لشركة **بترا** ذات الفروع المتعددة.
 واجهة عربية RTL كاملة، دينار عراقي، وتغطي: الحضور بالبصمة الجغرافية، الرواتب، السلف، الإجازات، التتبع الميداني الحي.
 
 ## البنية
@@ -15,13 +15,13 @@ HR.Batra/
 │   ├── migrations/  ملف الأساس + الملفات الجديدة بعده (الملف المطبّق لا يُعدَّل — أي تغيير بملف جديد)
 │   ├── migrations_archive/  الـ 95 ملف القديمة (تاريخ بس، المرحلة 10)
 │   ├── tests/       فحوصات قاعدة البيانات (PGlite محلياً: `cd supabase/tests && npm test`)
-│   ├── functions/   daily-cleanup, push-notification (Deno)
+│   ├── functions/   daily-cleanup, push-notification, hr-assistant (Deno)
 │   └── seed_dev_data.sql
 ├── .github/workflows/  CI: Android APK + iOS IPA + Web + فحص محاكي آيفون (نتائجه بفرع ios-sim-results)
 └── .env.example     قالب متغيرات البيئة
 ```
 
-راجع [`ARCHITECTURE.md`](./ARCHITECTURE.md) لتفاصيل معمارية النظام والقرارات التصميمية،
+راجع [`DEVELOPER_GUIDE.md`](./DEVELOPER_GUIDE.md) للبنية والقرارات وطريقة التطوير والإصدار،
 و[`BUSINESS_RULES.md`](./BUSINESS_RULES.md) لمكان كل قاعدة عمل (الحضور، الرواتب، السلف) ونسخها،
 و[`CHANGES.md`](./CHANGES.md) لسجل إعادة الهيكلة.
 
@@ -29,8 +29,8 @@ HR.Batra/
 
 | البند | الإصدار |
 |---|---|
-| Flutter SDK | 3.41.9+ (Dart 3.11+) |
-| Node.js | 20+ |
+| Flutter SDK | 3.47+ (Dart 3.13+) |
+| Node.js | 24 |
 | Supabase CLI | آخر إصدار |
 | Java (للأندرويد) | 17 |
 | Xcode (لـ iOS) | 15+ (على macOS) |
@@ -108,6 +108,7 @@ npm run build
 - `.github/workflows/build_ios_physical.yml` — يبني IPA لأجهزة حقيقية
 - `.github/workflows/build_ios_simulator.yml` — يبني IPA للمحاكي
 - `.github/workflows/build_web.yml` — يبني static export من Next.js
+- `.github/workflows/quality.yml` — فحص الكود وكل الفحوص (التطبيق، الويب، قاعدة البيانات)، ويشتغل هم على كل طلب دمج
 
 الملفات المُنتجة (artifacts) تظهر في تبويب **Actions** لكل run.
 
@@ -138,7 +139,7 @@ cd mobile && flutter clean && flutter pub get
 
 ## المساهمة
 
-راجع [`ARCHITECTURE.md`](./ARCHITECTURE.md) قبل التعديل. لأي schema change، أضف migration جديد بصيغة `YYYYMMDDHHMMSS_<verb>_<scope>_<subject>.sql` (انظر [`supabase/MIGRATION_STYLE.md`](./supabase/MIGRATION_STYLE.md)).
+راجع [`DEVELOPER_GUIDE.md`](./DEVELOPER_GUIDE.md) قبل التعديل. لأي schema change، أضف migration جديد بصيغة `YYYYMMDDHHMMSS_<verb>_<scope>_<subject>.sql` (انظر [`supabase/MIGRATION_STYLE.md`](./supabase/MIGRATION_STYLE.md)).
 
 ## الترخيص
 

@@ -101,15 +101,7 @@ class BranchPresenceMonitor {
   /// مزامنة الأحداث المخزنة أوفلاين
   static Future<void> syncOffline() async {
     try {
-      final list = await _queue.readAll();
-      if (list.isEmpty) return;
-
-      final remaining = <Map<String, dynamic>>[];
-      for (final raw in list) {
-        if (raw is! Map) continue;
-        final ev = Map<String, dynamic>.from(raw);
-        try {
-          await SupabaseService.client.from('notifications').insert({
+      final r = await _queue.drain((ev) => SupabaseService.client.from('notifications').insert({
             'employee_id': ev['employee_id'],
             'title': ev['event_type'] == 'enter'
                 ? 'دخول فرع ${ev['branch_name']} (مؤرشف)'
@@ -117,13 +109,8 @@ class BranchPresenceMonitor {
             'body': 'تم رصد ${ev['event_type'] == 'enter' ? 'دخولك إلى' : 'خروجك من'} فرع '
                 '${ev['branch_name']} في ${ev['timestamp']}',
             'type': 'attendance',
-          });
-        } catch (_) {
-          remaining.add(ev);
-        }
-      }
-      await _queue.replace(remaining);
-      appLog('✅ branch-events sync: ${list.length - remaining.length} uploaded, ${remaining.length} pending.');
+          }));
+      if (r != null) appLog('✅ branch-events sync: ${r.uploaded} uploaded, ${r.pending} pending.');
     } catch (e) {
       appLog('⚠️ branch-events sync failed: $e');
     }

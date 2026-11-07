@@ -29,3 +29,6 @@ mobile/ios/Runner/GoogleService-Info.plist
 
 # تصفير البيانات قبل الإطلاق: نسخة احتياطية وملف تنفيذ محلي (ما ينرفعون)
 launch-reset/
+
+# خريطة المشروع من graphify (تتولد وتتحدث على الجهاز تلقائياً بعد كل commit؛ ما تنرفع)
+graphify-out/

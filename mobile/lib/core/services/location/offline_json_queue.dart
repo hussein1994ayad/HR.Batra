@@ -33,6 +33,24 @@ class OfflineJsonQueue {
     return list.length;
   }
 
+  /// يرفع كل عنصر بـ [upload]؛ اللي يفشل يبقى للمرة الجاية. يرجع عدد المرفوع والباقي، أو null إذا الطابور فارغ.
+  Future<({int uploaded, int pending})?> drain(Future<void> Function(Map<String, dynamic> item) upload) async {
+    final list = await readAll();
+    if (list.isEmpty) return null;
+    final remaining = <Map<String, dynamic>>[];
+    for (final raw in list) {
+      if (raw is! Map) continue;
+      final item = Map<String, dynamic>.from(raw);
+      try {
+        await upload(item);
+      } catch (_) {
+        remaining.add(item);
+      }
+    }
+    await replace(remaining);
+    return (uploaded: list.length - remaining.length, pending: remaining.length);
+  }
+
   /// يستبدل المخزّن بما بقي بعد المزامنة (فارغ = حذف الملف).
   Future<void> replace(List<Map<String, dynamic>> remaining) async {
     final file = await _file;

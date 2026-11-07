@@ -1,4 +1,5 @@
 // تذكيرات البصمة: check_and_send_attendance_reminders(p_now)
+import './clock.mjs'; // ساعة الفحوص ثابتة (لازم أول استيراد)
 import { setup, as, IDS, expectError, check, done } from './lib.mjs';
 
 const db = await setup();

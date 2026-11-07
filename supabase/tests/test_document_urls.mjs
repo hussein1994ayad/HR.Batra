@@ -1,4 +1,5 @@
 // قائمة المستمسكات دائماً قائمة JSON (التصفير كتبها كائن `{}` فوقفت صفحة الموظفين).
+import './clock.mjs'; // ساعة الفحوص ثابتة (لازم أول استيراد)
 import { setup, as, IDS, expectOk, expectError, check, done } from './lib.mjs';
 
 const db = await setup();

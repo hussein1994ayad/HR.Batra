@@ -1,4 +1,5 @@
 // المساعد الذكي — سياق القرارات المعلّقة والتحقق من الحركات المقترحة (قراءة فقط).
+import './clock.mjs'; // ساعة الفحوص ثابتة (لازم أول استيراد)
 import { setup, as, IDS, check, expectError, done } from './lib.mjs';
 
 const db = await setup();

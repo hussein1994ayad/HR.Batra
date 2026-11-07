@@ -1,5 +1,6 @@
 // تدقيق 14/10/2026 — المرحلة 1: صلاحيات مدير الفرع وحدود المبالغ
 // (BUG-002/003/004/005/012/014/016، PAY-003/004/005). المدير IDS.manager بنفس فرع IDS.emp؛ OTHER بفرع ثاني.
+import './clock.mjs'; // ساعة الفحوص ثابتة (لازم أول استيراد)
 import { setup, as, IDS, expectOk, expectError, check, done } from './lib.mjs';
 
 const db = await setup();

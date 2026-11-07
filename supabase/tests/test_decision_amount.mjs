@@ -1,4 +1,5 @@
 // مبلغ الخصم يتعدل عند القرار (ويبقى بعد إعادة الحساب)، قرار غياب اليوم قبل الاحتساب، أجر اليوم، و«الغائبون اليوم» بلوحة التعاميم.
+import './clock.mjs'; // ساعة الفحوص ثابتة (لازم أول استيراد)
 import { setup, as, IDS, expectOk, expectError, check, done } from './lib.mjs';
 
 const db = await setup();

@@ -1,4 +1,5 @@
 // المرحلة 3: البصمة الناقصة بخصم مقترح (قرار الأدمن)، الموظف بدون فرع، العطلة داخل الإجازة، وشرط الأرشفة.
+import './clock.mjs'; // ساعة الفحوص ثابتة (لازم أول استيراد)
 import { setup, as, IDS, expectOk, expectError, check, done } from './lib.mjs';
 
 const db = await setup();

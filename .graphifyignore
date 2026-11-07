@@ -1,0 +1,13 @@
+# ما يدخل بخريطة graphify (الصيغة مثل .gitignore)
+# أيقونات التطبيق وصور الإقلاع: نفس الشعار بمقاسات، ما بيها معلومة
+mobile/android/app/src/main/res/
+mobile/ios/Runner/Assets.xcassets/
+mobile/assets/images/app_icon_batra.png
+# أصوات الإشعار
+*.wav
+# صور Next.js الافتراضية
+web/public/*.svg
+# رخص الخطوط
+OFL.txt
+# صور الشاشات القديمة (قبل إعادة التصميم)؛ الحالية بـ mobile/design/screenshots/after/
+mobile/design/screenshots/before/

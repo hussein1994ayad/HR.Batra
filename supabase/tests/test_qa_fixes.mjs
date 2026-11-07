@@ -1,5 +1,6 @@
 // تصليحات الفحص الشامل (2 تشرين الأول 2026): القفل المالي للتنظيف، العطل، حدود السلف والخصومات،
 // الحضور، بيانات الموظف، تغيير الراتب، ومدير الفرع.
+import './clock.mjs'; // ساعة الفحوص ثابتة (لازم أول استيراد)
 import { setup, as as asRaw, IDS, expectOk, expectError, check, done } from './lib.mjs';
 
 const db = await setup();
