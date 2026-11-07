@@ -140,61 +140,64 @@ class _AdminLoansManagementScreenState extends State<AdminLoansManagementScreen>
       ];
     }
 
-    return Scaffold(
-      backgroundColor: AppColors.bg,
-      floatingActionButton: FloatingActionButton.extended(
-        heroTag: 'create_loan_admin_fab',
-        icon: const Icon(Icons.add_rounded),
-        label: const Text('سلفة لموظف'),
-        onPressed: _createLoan,
-      ),
-      appBar: AppBar(
-        title: const Text('سلف الموظفين'),
-        actions: [
-          if (_isExporting)
-            const Padding(
-              padding: EdgeInsets.all(AppSpace.md),
-              child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
-            ),
-          IconButton(icon: const Icon(Icons.refresh_rounded), tooltip: 'تحديث', onPressed: _load),
-          const SizedBox(width: AppSpace.xs),
-        ],
-      ),
-      body: RefreshIndicator.adaptive(
-        onRefresh: _load,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(0, AppSpace.sm, 0, 96),
-          children: [
-            LoansFilterBar(
-              searchController: _searchController,
-              query: _query,
-              branches: _data.branches,
-              branchId: _branchId,
-              status: _status,
-              onQueryChanged: (v) => setState(() => _query = v),
-              onBranchChanged: (v) => setState(() => _branchId = v),
-              onStatusChanged: (v) => setState(() => _status = v),
-            ),
-            const SizedBox(height: AppSpace.md),
-            if (!(_isLoading && _data.loans.isEmpty)) ...[
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpace.page),
-                child: ContentWidth(
-                  maxWidth: 1000,
-                  child: LoansKpiPanel(kpis: LoanKpis.of(_data.loans, branchId: _branchId)),
-                ),
+    return FabHidesOnScroll(
+      fab: FloatingActionButton.extended(
+          heroTag: 'create_loan_admin_fab',
+          icon: const Icon(Icons.add_rounded),
+          label: const Text('سلفة لموظف'),
+          onPressed: _createLoan,
+        ),
+      builder: (fab) => Scaffold(
+        backgroundColor: AppColors.bg,
+        floatingActionButton: fab,
+        appBar: AppBar(
+          title: const Text('سلف الموظفين'),
+          actions: [
+            if (_isExporting)
+              const Padding(
+                padding: EdgeInsets.all(AppSpace.md),
+                child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
               ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpace.page),
-                child: SectionHeader('المستلفون (${loans.length})'),
-              ),
-            ],
-            for (final w in list)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpace.page),
-                child: ContentWidth(child: w),
-              ),
+            IconButton(icon: const Icon(Icons.refresh_rounded), tooltip: 'تحديث', onPressed: _load),
+            const SizedBox(width: AppSpace.xs),
           ],
+        ),
+        body: RefreshIndicator.adaptive(
+          onRefresh: _load,
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(0, AppSpace.sm, 0, 96),
+            children: [
+              LoansFilterBar(
+                searchController: _searchController,
+                query: _query,
+                branches: _data.branches,
+                branchId: _branchId,
+                status: _status,
+                onQueryChanged: (v) => setState(() => _query = v),
+                onBranchChanged: (v) => setState(() => _branchId = v),
+                onStatusChanged: (v) => setState(() => _status = v),
+              ),
+              const SizedBox(height: AppSpace.md),
+              if (!(_isLoading && _data.loans.isEmpty)) ...[
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpace.page),
+                  child: ContentWidth(
+                    maxWidth: 1000,
+                    child: LoansKpiPanel(kpis: LoanKpis.of(_data.loans, branchId: _branchId)),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpace.page),
+                  child: SectionHeader('المستلفون (${loans.length})'),
+                ),
+              ],
+              for (final w in list)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpace.page),
+                  child: ContentWidth(child: w),
+                ),
+            ],
+          ),
         ),
       ),
     );

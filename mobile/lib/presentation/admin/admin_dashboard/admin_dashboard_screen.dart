@@ -205,133 +205,136 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Ticker
       ('الأمان', s.securityLogs.length),
     ];
 
-    return Scaffold(
-      backgroundColor: AppColors.bg,
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => context.push(AppRoutes.adminAnnouncement),
-        icon: const Icon(Icons.campaign_rounded),
-        label: const Text('تعميم جديد'),
-      ),
-      body: NestedScrollView(
-        headerSliverBuilder: (context, _) => [
-          SliverAppBar(
-            pinned: true,
-            title: const Text('لوحة الإدارة'),
-            actions: [
-              IconButton(tooltip: 'تحديث', icon: const Icon(Icons.refresh_rounded), onPressed: _load),
-              IconButton(tooltip: 'أدوات الإدارة', icon: const Icon(Icons.apps_rounded), onPressed: _openTools),
-              const SizedBox(width: AppSpace.xs),
-            ],
-          ),
-          SliverToBoxAdapter(
-            child: ContentWidth(
-              maxWidth: 1000,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(AppSpace.page, AppSpace.xs, AppSpace.page, AppSpace.md),
-                child: _isLoading && s.present == 0 && s.absent == 0
-                    ? const Row(
-                        children: [
-                          Expanded(child: Skeleton(height: 96, radius: AppRadius.md)),
-                          SizedBox(width: AppSpace.md),
-                          Expanded(child: Skeleton(height: 96, radius: AppRadius.md)),
-                        ],
-                      )
-                    : DashboardStatsRow(present: s.present, absent: s.absent, violations: s.securityLogs.length, pending: pending),
-              ),
+    return FabHidesOnScroll(
+      fab: FloatingActionButton.extended(
+          onPressed: () => context.push(AppRoutes.adminAnnouncement),
+          icon: const Icon(Icons.campaign_rounded),
+          label: const Text('تعميم جديد'),
+        ),
+      builder: (fab) => Scaffold(
+        backgroundColor: AppColors.bg,
+        floatingActionButton: fab,
+        body: NestedScrollView(
+          headerSliverBuilder: (context, _) => [
+            SliverAppBar(
+              pinned: true,
+              title: const Text('لوحة الإدارة'),
+              actions: [
+                IconButton(tooltip: 'تحديث', icon: const Icon(Icons.refresh_rounded), onPressed: _load),
+                IconButton(tooltip: 'أدوات الإدارة', icon: const Icon(Icons.apps_rounded), onPressed: _openTools),
+                const SizedBox(width: AppSpace.xs),
+              ],
             ),
-          ),
-          SliverToBoxAdapter(
-            child: DashboardFiltersBar(
-              filter: _filter,
-              branches: _lookups.branches,
-              lockedBranchId: _isAdmin ? null : (_managerBranchId ?? '__none__'),
-              employees: _lookups.employees.where((e) => e.isActive && (_isAdmin || e.branchId == _managerBranchId)).toList(),
-              onChanged: _setFilter,
-            ),
-          ),
-          SliverPersistentHeader(
-            pinned: true,
-            delegate: _TabBarHeader(
-              TabBar(
-                controller: _tabController,
-                isScrollable: true,
-                tabAlignment: TabAlignment.start,
-                tabs: [
-                  for (final (label, count) in tabs)
-                    Tab(
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(label),
-                          if (count > 0) ...[
-                            const SizedBox(width: AppSpace.xs),
-                            Badge(label: Text('$count'), backgroundColor: AppColors.surface3, textColor: AppColors.textPrimary),
+            SliverToBoxAdapter(
+              child: ContentWidth(
+                maxWidth: 1000,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(AppSpace.page, AppSpace.xs, AppSpace.page, AppSpace.md),
+                  child: _isLoading && s.present == 0 && s.absent == 0
+                      ? const Row(
+                          children: [
+                            Expanded(child: Skeleton(height: 96, radius: AppRadius.md)),
+                            SizedBox(width: AppSpace.md),
+                            Expanded(child: Skeleton(height: 96, radius: AppRadius.md)),
                           ],
-                        ],
-                      ),
-                    ),
-                ],
+                        )
+                      : DashboardStatsRow(present: s.present, absent: s.absent, violations: s.securityLogs.length, pending: pending),
+                ),
               ),
             ),
-          ),
-        ],
-        body: _isLoading
-            ? const Padding(padding: EdgeInsets.all(AppSpace.page), child: SkeletonList(count: 4, itemHeight: 110))
-            : RefreshIndicator.adaptive(
-                onRefresh: _load,
-                notificationPredicate: (n) => n.depth <= 1,
-                child: TabBarView(
+            SliverToBoxAdapter(
+              child: DashboardFiltersBar(
+                filter: _filter,
+                branches: _lookups.branches,
+                lockedBranchId: _isAdmin ? null : (_managerBranchId ?? '__none__'),
+                employees: _lookups.employees.where((e) => e.isActive && (_isAdmin || e.branchId == _managerBranchId)).toList(),
+                onChanged: _setFilter,
+              ),
+            ),
+            SliverPersistentHeader(
+              pinned: true,
+              delegate: _TabBarHeader(
+                TabBar(
                   controller: _tabController,
-                  children: [
-                    DecisionsTab(
-                      hasDate: _filter.date != null,
-                      showAmounts: _isAdmin,
-                      decisions: s.decisions,
-                      scheduleFor: _scheduleFor,
-                      busyKey: _busyKey,
-                      onDecide: (item, {required deduct, required reason, amount}) => _run(
-                        item.key,
-                        () => _actions.applyDecision(item, deduct: deduct, reason: reason, amount: amount),
-                        deduct ? 'تم تطبيق الخصم' : 'تم الإعفاء من الخصم',
-                        deduct ? AppColors.warning : AppColors.success,
+                  isScrollable: true,
+                  tabAlignment: TabAlignment.start,
+                  tabs: [
+                    for (final (label, count) in tabs)
+                      Tab(
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(label),
+                            if (count > 0) ...[
+                              const SizedBox(width: AppSpace.xs),
+                              Badge(label: Text('$count'), backgroundColor: AppColors.surface3, textColor: AppColors.textPrimary),
+                            ],
+                          ],
+                        ),
                       ),
-                    ),
-                    LeavesTab(
-                      leaves: s.leaves,
-                      busyKey: _busyKey,
-                      onDecide: (leave, approve) => _run(
-                        leave.id,
-                        () => _actions.decideLeave(leave.id, approve: approve),
-                        approve ? 'قُبل طلب الإجازة' : 'رُفض طلب الإجازة',
-                        approve ? AppColors.success : AppColors.danger,
-                      ),
-                    ),
-                    if (_isAdmin)
-                    LoansTab(
-                      loans: s.loans,
-                      busyKey: _busyKey,
-                      onDecide: (loan, approve) => _run(
-                        loan.id,
-                        () => approve ? _actions.approveLoan(loan) : _actions.rejectLoan(loan.id),
-                        approve ? 'اعتُمدت السلفة وتولّدت الأقساط' : 'رُفض طلب السلفة',
-                        approve ? AppColors.success : AppColors.danger,
-                      ),
-                    ),
-                    if (_isAdmin)
-                    DevicesTab(
-                      devices: s.devices,
-                      busyKey: _busyKey,
-                      onDecide: (device, approve) => _run(
-                        device.id,
-                        () => approve ? _actions.approveDevice(device) : _actions.rejectDevice(device.id),
-                        approve ? 'اعتُمد الجهاز' : 'رُفض الجهاز وأُزيل',
-                        approve ? AppColors.success : AppColors.danger,
-                      ),
-                    ),
-                    SecurityTab(logs: s.securityLogs),
                   ],
                 ),
               ),
+            ),
+          ],
+          body: _isLoading
+              ? const Padding(padding: EdgeInsets.all(AppSpace.page), child: SkeletonList(count: 4, itemHeight: 110))
+              : RefreshIndicator.adaptive(
+                  onRefresh: _load,
+                  notificationPredicate: (n) => n.depth <= 1,
+                  child: TabBarView(
+                    controller: _tabController,
+                    children: [
+                      DecisionsTab(
+                        hasDate: _filter.date != null,
+                        showAmounts: _isAdmin,
+                        decisions: s.decisions,
+                        scheduleFor: _scheduleFor,
+                        busyKey: _busyKey,
+                        onDecide: (item, {required deduct, required reason, amount}) => _run(
+                          item.key,
+                          () => _actions.applyDecision(item, deduct: deduct, reason: reason, amount: amount),
+                          deduct ? 'تم تطبيق الخصم' : 'تم الإعفاء من الخصم',
+                          deduct ? AppColors.warning : AppColors.success,
+                        ),
+                      ),
+                      LeavesTab(
+                        leaves: s.leaves,
+                        busyKey: _busyKey,
+                        onDecide: (leave, approve) => _run(
+                          leave.id,
+                          () => _actions.decideLeave(leave.id, approve: approve),
+                          approve ? 'قُبل طلب الإجازة' : 'رُفض طلب الإجازة',
+                          approve ? AppColors.success : AppColors.danger,
+                        ),
+                      ),
+                      if (_isAdmin)
+                      LoansTab(
+                        loans: s.loans,
+                        busyKey: _busyKey,
+                        onDecide: (loan, approve) => _run(
+                          loan.id,
+                          () => approve ? _actions.approveLoan(loan) : _actions.rejectLoan(loan.id),
+                          approve ? 'اعتُمدت السلفة وتولّدت الأقساط' : 'رُفض طلب السلفة',
+                          approve ? AppColors.success : AppColors.danger,
+                        ),
+                      ),
+                      if (_isAdmin)
+                      DevicesTab(
+                        devices: s.devices,
+                        busyKey: _busyKey,
+                        onDecide: (device, approve) => _run(
+                          device.id,
+                          () => approve ? _actions.approveDevice(device) : _actions.rejectDevice(device.id),
+                          approve ? 'اعتُمد الجهاز' : 'رُفض الجهاز وأُزيل',
+                          approve ? AppColors.success : AppColors.danger,
+                        ),
+                      ),
+                      SecurityTab(logs: s.securityLogs),
+                    ],
+                  ),
+                ),
+        ),
       ),
     );
   }
