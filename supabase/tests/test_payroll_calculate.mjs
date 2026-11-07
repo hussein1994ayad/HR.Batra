@@ -1,4 +1,5 @@
 // «احتساب الرواتب» بزر + التحديث الليلي + صلاحيات المدير على حركات الرواتب.
+import './clock.mjs'; // ساعة الفحوص ثابتة (لازم أول استيراد)
 import { setup, as, IDS, expectOk, expectError, check, done } from './lib.mjs';
 
 const db = await setup();

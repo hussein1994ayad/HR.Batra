@@ -1,4 +1,5 @@
 // المساعد الذكي — الملخص الصباحي (أرقام القاعدة، مرة وحدة باليوم، يتطفى) وحفظ المحادثات (صاحبها فقط، 90 يوم).
+import './clock.mjs'; // ساعة الفحوص ثابتة (لازم أول استيراد)
 import { setup, as, IDS, check, expectError, done } from './lib.mjs';
 
 const db = await setup();

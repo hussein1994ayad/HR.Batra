@@ -1,3 +1,4 @@
+import './clock.mjs'; // ساعة الفحوص ثابتة (لازم أول استيراد)
 import { setup, as, IDS, check, done } from './lib.mjs';
 const db = await setup();
 const r = await as(db, 'emp', `SELECT request_account_deletion() AS n`);

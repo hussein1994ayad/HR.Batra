@@ -1,4 +1,5 @@
 // المرحلة 10 الجزء الثاني (تدقيق 14/10): الملفات تطابق السيرفر الحي (6 اختلافات قديمة)، وحذف الجداول اللي ما يستعملها شي.
+import './clock.mjs'; // ساعة الفحوص ثابتة (لازم أول استيراد)
 import fs from 'node:fs';
 import { IDS, buildFromFiles, check, done, expectError, setup, sqlFiles } from './lib.mjs';
 

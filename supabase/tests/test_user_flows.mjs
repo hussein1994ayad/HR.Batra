@@ -1,5 +1,6 @@
 // مسارات المستخدم الحقيقية: تعديل السلفة، قرارات المدير، إلغاء الإجازة، طلب سلفة مكرر،
 // "مسير هذا الشهر" للموظف، وظهور الكشف المعتمد لموظف معطّل.
+import './clock.mjs'; // ساعة الفحوص ثابتة (لازم أول استيراد)
 import { setup, as, IDS, expectOk, expectError, check, done } from './lib.mjs';
 
 const db = await setup();

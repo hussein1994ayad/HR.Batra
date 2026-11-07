@@ -1,3 +1,4 @@
+import './clock.mjs'; // ساعة الفحوص ثابتة (لازم أول استيراد)
 import fs from 'node:fs';
 import { setup, as, IDS, expectOk, expectError, check, done } from './lib.mjs';
 

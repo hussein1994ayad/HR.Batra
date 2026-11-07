@@ -1,5 +1,6 @@
 // محرّك الرواتب: المسيرات (1 → 26)، الترحيل، أجر اليوم ÷ 30، أجر الدقيقة حسب الدوام،
 // القرارات، الإضافي، الاعتماد، الإغلاق، والتعديل بعد الإغلاق.
+import './clock.mjs'; // ساعة الفحوص ثابتة (لازم أول استيراد)
 import fs from 'node:fs';
 import { setup, as, IDS, expectOk, expectError, check, done } from './lib.mjs';
 
