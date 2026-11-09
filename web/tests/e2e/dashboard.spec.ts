@@ -553,3 +553,37 @@ test.describe('workflows', () => {
     expect(saved.some((s) => s.key === 'payroll_policy')).toBe(false);
   });
 });
+
+test.describe('Arabic text', () => {
+  // خط الأرقام (font-mono) ما يربط الحروف العربية: «داخل الدوام» كانت تطلع حروف متفرقة و«150م» متداخلة.
+  async function fontOf(page: Page, text: string | RegExp) {
+    const el = page.getByText(text).first();
+    await expect(el).toBeVisible();
+    return el.evaluate((e) => ({ own: getComputedStyle(e).fontFamily, body: getComputedStyle(document.body).fontFamily }));
+  }
+
+  test('labels inside number columns keep the Arabic font', async ({ page }) => {
+    await mockSupabase(page);
+    await page.goto('/dashboard/tracking');
+    const inShift = await fontOf(page, 'داخل الدوام');
+    expect(inShift.own).toBe(inShift.body);
+
+    await page.goto('/dashboard/geofences');
+    const radius = await fontOf(page, /^\d+ ?م$/);
+    expect(radius.own).toBe(radius.body);
+  });
+
+  test('the holiday name box is wide enough for its hint text', async ({ page }) => {
+    await mockSupabase(page);
+    await page.goto('/dashboard/settings');
+    const box = page.getByPlaceholder(/عيد الأضحى/);
+    await expect(box).toBeVisible();
+    const fit = await box.evaluate((el: HTMLInputElement) => {
+      const cs = getComputedStyle(el);
+      const ctx = document.createElement('canvas').getContext('2d')!;
+      ctx.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+      return { need: Math.ceil(ctx.measureText(el.placeholder).width + parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight)), have: el.clientWidth };
+    });
+    expect(fit.have, `الخانة ${fit.have} والمثال يحتاج ${fit.need}`).toBeGreaterThanOrEqual(fit.need);
+  });
+});

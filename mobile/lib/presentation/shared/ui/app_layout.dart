@@ -1,3 +1,4 @@
+import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:material_ui/material_ui.dart';
 
 import '../../../core/design/design.dart';
@@ -71,12 +72,14 @@ class AppPage extends StatelessWidget {
     if (onRefresh != null) {
       scroll = RefreshIndicator.adaptive(onRefresh: onRefresh!, color: AppColors.brand, backgroundColor: AppColors.surface2, child: scroll);
     }
-    return Scaffold(
-      backgroundColor: AppColors.bg,
-      floatingActionButton: floatingActionButton,
-      bottomNavigationBar: bottomBar,
-      body: SafeArea(bottom: false, top: title == null, child: scroll),
-    );
+    Scaffold page(Widget? fab) => Scaffold(
+          backgroundColor: AppColors.bg,
+          floatingActionButton: fab,
+          bottomNavigationBar: bottomBar,
+          body: SafeArea(bottom: false, top: title == null, child: scroll),
+        );
+    final fab = floatingActionButton;
+    return fab == null ? page(null) : FabHidesOnScroll(fab: fab, builder: page);
   }
 }
 
@@ -217,5 +220,44 @@ class ResponsiveGrid extends StatelessWidget {
         children: [for (final child in children) SizedBox(width: w, child: child)],
       );
     });
+  }
+}
+
+/// يلف الـ Scaffold: الزر الطايف يختفي لما المستخدم ينزل بالقائمة (حتى ما يغطي الأرقام وهو يقرا)
+/// ويرجع لما يصعد. الاستعمال: `FabHidesOnScroll(fab: ..., builder: (fab) => Scaffold(floatingActionButton: fab, ...))`.
+class FabHidesOnScroll extends StatefulWidget {
+  const FabHidesOnScroll({super.key, required this.fab, required this.builder});
+  final Widget fab;
+  final Widget Function(Widget fab) builder;
+
+  @override
+  State<FabHidesOnScroll> createState() => _FabHidesOnScrollState();
+}
+
+class _FabHidesOnScrollState extends State<FabHidesOnScroll> {
+  bool _visible = true;
+
+  bool _onScroll(UserScrollNotification n) {
+    if (n.metrics.axis != Axis.vertical) return false;
+    final show = switch (n.direction) {
+      ScrollDirection.reverse => false,
+      ScrollDirection.forward => true,
+      ScrollDirection.idle => _visible,
+    };
+    if (show != _visible) setState(() => _visible = show);
+    return false;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return NotificationListener<UserScrollNotification>(
+      onNotification: _onScroll,
+      child: widget.builder(AnimatedSlide(
+        offset: _visible ? Offset.zero : const Offset(0, 2),
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
+        child: IgnorePointer(ignoring: !_visible, child: widget.fab),
+      )),
+    );
   }
 }

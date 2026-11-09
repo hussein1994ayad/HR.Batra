@@ -153,7 +153,7 @@ export default function GeofencesPage() {
                       <p className="text-[13px] font-bold text-white truncate">{b.name}</p>
                       <p className="text-[11px] text-slate-500 truncate">{b.address || 'بدون عنوان'}</p>
                     </div>
-                    <Badge tone="slate" className="font-mono">{Number(b.radius_meters) || DEFAULT_RADIUS}م</Badge>
+                    <Badge tone="slate" className="tabular-nums">{Number(b.radius_meters) || DEFAULT_RADIUS} م</Badge>
                     <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
                       <IconButton icon={Pencil} label="تعديل الفرع" tone="indigo" onClick={() => openEdit(b)} />
                       <IconButton icon={Trash2} label="حذف الفرع" tone="rose" loading={deleting === b.id} onClick={() => deleteBranch(b)} />

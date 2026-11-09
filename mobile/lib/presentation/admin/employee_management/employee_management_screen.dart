@@ -279,51 +279,54 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
       list = [for (var i = 0; i < filtered.length; i++) FadeSlideIn(index: i, child: _employeeTile(filtered[i]))];
     }
 
-    return Scaffold(
-      backgroundColor: AppColors.bg,
-      floatingActionButton: FloatingActionButton.extended(onPressed: _addEmployee, icon: const Icon(Icons.person_add_rounded), label: const Text('موظف جديد')),
-      appBar: AppBar(title: Text('الموظفون${_employees.isEmpty ? '' : ' (${_employees.length})'}')),
-      body: RefreshIndicator.adaptive(
-        onRefresh: _loadEmployees,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(AppSpace.page, AppSpace.sm, AppSpace.page, 96),
-          children: [
-            ContentWidth(
-              child: TextField(
-                controller: _search,
-                onChanged: (v) => setState(() => _searchQuery = v),
-                textInputAction: TextInputAction.search,
-                style: AppText.body,
-                decoration: InputDecoration(
-                  hintText: 'ابحث بالاسم، الكود، الهاتف، الفرع',
-                  prefixIcon: const Icon(Icons.search_rounded),
-                  suffixIcon: _searchQuery.isEmpty
-                      ? null
-                      : IconButton(
-                          tooltip: 'مسح البحث',
-                          icon: const Icon(Icons.close_rounded),
-                          onPressed: () {
-                            _search.clear();
-                            setState(() => _searchQuery = '');
-                          },
-                        ),
+    return FabHidesOnScroll(
+      fab: FloatingActionButton.extended(onPressed: _addEmployee, icon: const Icon(Icons.person_add_rounded), label: const Text('موظف جديد')),
+      builder: (fab) => Scaffold(
+        backgroundColor: AppColors.bg,
+        floatingActionButton: fab,
+        appBar: AppBar(title: Text('الموظفون${_employees.isEmpty ? '' : ' (${_employees.length})'}')),
+        body: RefreshIndicator.adaptive(
+          onRefresh: _loadEmployees,
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(AppSpace.page, AppSpace.sm, AppSpace.page, 96),
+            children: [
+              ContentWidth(
+                child: TextField(
+                  controller: _search,
+                  onChanged: (v) => setState(() => _searchQuery = v),
+                  textInputAction: TextInputAction.search,
+                  style: AppText.body,
+                  decoration: InputDecoration(
+                    hintText: 'ابحث بالاسم، الكود، الهاتف، الفرع',
+                    prefixIcon: const Icon(Icons.search_rounded),
+                    suffixIcon: _searchQuery.isEmpty
+                        ? null
+                        : IconButton(
+                            tooltip: 'مسح البحث',
+                            icon: const Icon(Icons.close_rounded),
+                            onPressed: () {
+                              _search.clear();
+                              setState(() => _searchQuery = '');
+                            },
+                          ),
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: AppSpace.sm),
-            AppChoiceChips<String>(
-              scrollable: true,
-              value: _statusFilter,
-              onChanged: (v) => setState(() => _statusFilter = v),
-              options: [
-                ('all', 'الكل (${_employees.length})', null),
-                ('active', 'نشط ($activeCount)', null),
-                ('inactive', 'معطل (${_employees.length - activeCount})', null),
-              ],
-            ),
-            const SizedBox(height: AppSpace.md),
-            for (final w in list) Padding(padding: const EdgeInsets.only(bottom: AppSpace.sm), child: ContentWidth(child: w)),
-          ],
+              const SizedBox(height: AppSpace.sm),
+              AppChoiceChips<String>(
+                scrollable: true,
+                value: _statusFilter,
+                onChanged: (v) => setState(() => _statusFilter = v),
+                options: [
+                  ('all', 'الكل (${_employees.length})', null),
+                  ('active', 'نشط ($activeCount)', null),
+                  ('inactive', 'معطل (${_employees.length - activeCount})', null),
+                ],
+              ),
+              const SizedBox(height: AppSpace.md),
+              for (final w in list) Padding(padding: const EdgeInsets.only(bottom: AppSpace.sm), child: ContentWidth(child: w)),
+            ],
+          ),
         ),
       ),
     );

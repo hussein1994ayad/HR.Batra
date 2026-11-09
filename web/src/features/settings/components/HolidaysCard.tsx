@@ -70,12 +70,13 @@ export function HolidaysCard() {
   return (
     <Card>
       <CardHeader icon={CalendarOff} tone="sky" title="العطل الرسمية" />
-      <div className="grid grid-cols-1 sm:grid-cols-[1fr_1.3fr_auto] gap-2 items-end">
+      {/* البطاقة ضيقة (عمود جانبي): الاسم بسطر كامل، والتاريخ وزر الإضافة تحته */}
+      <div className="grid grid-cols-[1fr_auto] gap-2 items-end">
+        <Field label="اسم العطلة" className="col-span-2">
+          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="مثال: عيد الأضحى" />
+        </Field>
         <Field label="التاريخ">
           <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} dir="ltr" />
-        </Field>
-        <Field label="اسم العطلة">
-          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="مثال: عيد الأضحى" />
         </Field>
         <Button type="button" variant="soft" icon={Plus} loading={busy} onClick={() => void add()}>
           إضافة
