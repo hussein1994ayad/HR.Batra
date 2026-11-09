@@ -107,6 +107,8 @@ jobs:
             if [ $first = 1 ] || [ "$label" = "iphone_se" ]; then targets="$targets app_launch_test"; fi
             for t in $targets; do
               log=$OUT/$label/$t.log; mkdir -p $OUT/$label
+              # الصلاحية من جديد قبل كل فحص (الفحوص اللي قبله ممكن تضيّعها، وفحص الموقع الحقيقي يحتاجها)
+              xcrun simctl privacy "$udid" grant location-always "$BUNDLE_ID" 2>/dev/null || true
               # حد 15 دقيقة لكل اختبار (macOS ما بيه أمر timeout)؛ إذا علّق نلتقط شاشة المحاكي لنعرف السبب
               # محاولتين: أداة flutter drive أحياناً تفشل بالاتصال بالتطبيق على الآيباد ("log reader failed")
               for attempt in 1 2; do
