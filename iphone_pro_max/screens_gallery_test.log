@@ -1,0 +1,204 @@
+Resolving dependencies...
+Downloading packages...
+  _flutterfire_internals 1.3.78 (1.3.79 available)
+  app_links_linux 1.0.4 (1.0.5 available)
+  archive 4.5.2 (4.7.1 available)
+  cli_util 0.4.2 (0.6.0 available)
+  code_assets 2.1.0 (2.2.0 available)
+  cross_file 0.3.5+5 (0.4.0 available)
+  crypto 3.0.7 (3.0.8 available)
+  cupertino_ui 1.1.3 (1.1.6 available)
+  dbus 0.7.15 (0.8.0 available)
+  file_selector_macos 0.9.5+1 (0.9.5+2 available)
+  firebase_core 5.0.0 (5.1.0 available)
+  firebase_core_web 4.0.0 (4.1.0 available)
+  firebase_messaging 17.0.0 (17.0.1 available)
+  firebase_messaging_platform_interface 4.11.0 (4.11.1 available)
+  firebase_messaging_web 4.3.0 (4.3.1 available)
+  flutter_local_notifications 22.3.2 (23.0.2 available)
+  flutter_local_notifications_linux 8.0.2 (9.0.0 available)
+  flutter_local_notifications_platform_interface 12.2.0 (13.0.0 available)
+  flutter_local_notifications_web 1.0.0 (2.0.0 available)
+  flutter_local_notifications_windows 3.1.1 (4.0.1 available)
+  flutter_riverpod 3.4.3 (3.5.0 available)
+  geolocator 14.1.1 (14.1.2 available)
+  geolocator_android 5.1.1+1 (5.2.1 available)
+  geolocator_apple 2.3.15 (2.4.3 available)
+  geolocator_platform_interface 4.4.0 (4.4.1 available)
+  go_router 18.1.0 (18.1.4 available)
+  gsettings 0.2.8 (0.2.9 available)
+  image 4.12.0 (4.13.0 available)
+  image_picker_ios 0.8.13+12 (0.8.13+15 available)
+! intl 0.20.3 (overridden)
+  jni 1.1.0 (1.1.2 available)
+  material_color_utilities 0.13.0 (0.13.1 available)
+  material_ui 1.7.0 (1.11.0 available)
+  objective_c 9.6.2 (9.6.4 available)
+  passkeys_platform_interface 2.10.0 (2.11.0 available)
+  permission_handler_android 14.1.0 (14.1.1 available)
+  permission_handler_apple 9.6.2 (9.6.5 available)
+  permission_handler_windows 0.2.2 (0.2.4 available)
+  posix 6.5.2 (6.5.4 available)
+  record 7.1.2 (7.2.0 available)
+  record_android 2.2.0 (2.3.0 available)
+  record_linux 2.1.3 (2.2.0 available)
+  record_platform_interface 2.1.0 (2.2.0 available)
+  record_web 2.1.3 (2.2.0 available)
+  record_windows 2.3.0 (2.4.0 available)
+  riverpod 3.4.3 (3.5.0 available)
+  shared_preferences_android 2.5.0 (2.5.5 available)
+  shared_preferences_foundation 2.6.0 (2.6.2 available)
+  syncfusion_flutter_core 35.1.40+1 (35.1.46 available)
+  syncfusion_flutter_pdf 35.1.40+1 (35.1.46 available)
+  syncfusion_flutter_xlsio 35.1.40+1 (35.1.46 available)
+  syncfusion_officecore 35.1.40+1 (35.1.46 available)
+  test_api 0.7.12 (0.7.15 available)
+  vector_math 2.4.3 (2.4.4 available)
+  web 1.1.1 (1.1.2 available)
+Got dependencies!
+54 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+The following plugins do not support Swift Package Manager for ios:
+  - flutter_background_service_ios
+This will become an error in a future version of Flutter. Please contact the plugin maintainers to request Swift Package Manager adoption.
+Running Xcode build...                                          
+Xcode build done.                                           190.4s
+VMServiceFlutterDriver: Connecting to Flutter application at http://127.0.0.1:54168/7Co3GvW4oa4=/
+VMServiceFlutterDriver: Isolate found with number: 6890439647841403
+Failed to index parameter type: <WFMailSenderPickerParameter: 0x10b935200> in is.workflow.actions.sendemail: (extension in ActionKit):__C.WFParameter.ToolKitConversionError.missingIntentDescription for locale: en
+Failed to index parameter type: <WFEvernoteTagsTagFieldParameter: 0x10b9ac600> in is.workflow.actions.evernote.get: (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFEvernoteTagsTagFieldParameter) for locale: en
+VMServiceFlutterDriver: Isolate 6890439647841403 is runnable.
+VMServiceFlutterDriver: Isolate is paused at start.
+VMServiceFlutterDriver: Attempting to resume isolate
+flutter: 00:00 +0: (setUpAll)
+flutter: 00:00 +1: 01_login
+Skipping: <WFUnionParameter: 0x10bad6400> in com.apple.mobilecal.EditEventIntent because union values themselves are not treated as a type
+Skipping: <WFUnionParameter: 0x10bad6600> in com.apple.mobilecal.EditEventIntent because union values themselves are not treated as a type
+VMServiceFlutterDriver: Connected to Flutter application.
+Failed to index parameter type: <WFSSHKeyParameter: 0x10bb921c0> in is.workflow.actions.runsshscript: (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFSSHKeyParameter) for locale: en
+Failed to index parameter type: <WFHomeServicePickerParameter: 0x10bb92280> in is.workflow.actions.gethomeaccessorystate: (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFHomeServicePickerParameter) for locale: en
+VMServiceFlutterDriver: request_data message is taking a long time to complete...
+flutter: 00:07 +2: 02_change_password
+flutter: 00:10 +3: 03_home
+Failed to index parameter type: <WFLightroomPresetPickerParameter: 0x10bbc0640> in is.workflow.actions.lightroom.import: (extension in ActionKit):__C.WFParameter.ToolKitConversionError.missingIntentDescription for locale: en
+flutter: 00:11 +3: 01_login
+flutter: ⚠️ خدمة GPS معطلة في الجهاز
+Failed to index parameter type: <WFSystemShortcutPickerParameter: 0x10bcf3cc0> in com.apple.shortcuts.WFShortcutsSmallWidgetConfigurationIntent: (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFSystemShortcutPickerParameter) for locale: en
+Failed to index parameter type: <WFFontPickerParameter: 0x10bd65080> in is.workflow.actions.overlaytext: (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFFontPickerParameter) for locale: en
+Failed to index parameter type: <WFMediaPickerParameter: 0x10be58240> in is.workflow.actions.playmusic: (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFMediaPickerParameter) for locale: en
+flutter: === notifications channel: RealtimeSubscribeStatus.channelError ===
+flutter: === channel error: WebSocketChannelException: SocketException: Failed host lookup: 'fake.supabase.test' (OS Error: nodename nor servname provided, or not known, errno = 8) ===
+flutter: === attendance channel: RealtimeSubscribeStatus.channelError ===
+Failed to index parameter type: <WFPosterPickerParameter: 0x10be5a640> in is.workflow.actions.wallpaper.set: (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFPosterPickerParameter) for locale: en
+flutter: 💾 تم حفظ حالة التتبع محلياً للعمل أوفلاين.
+Failed to index parameter type: <WFExpandingParameter: 0x10bec4460> in is.workflow.actions.downloadurl: (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFExpandingParameter) for locale: en
+flutter: 🚀 بدء تشغيل تدفق التتبع الجغرافي الحي للموظف: 00000000-0000-4000-8000-000000000001
+flutter: ⚠️ خطأ في التقاط الموقع الأولي: type 'Null' is not a subtype of type 'Map<dynamic, dynamic>'
+flutter: iOS: بدأت مراقبة 1 فرع
+flutter: iOS: setCheckedIn(true)
+flutter: ✅ تم تفعيل وتشغيل نظام التتبع الجغرافي بنجاح للموظف: 00000000-0000-4000-8000-000000000001
+flutter: === notifications channel: RealtimeSubscribeStatus.channelError ===
+flutter: === channel error: WebSocketChannelException: SocketException: Failed host lookup: 'fake.supabase.test' (OS Error: nodename nor servname provided, or not known, errno = 8) ===
+flutter: === attendance channel: RealtimeSubscribeStatus.channelError ===
+Failed to index parameter type: <WFInputTypeParameter: 0x10be8f900> in is.workflow.actions.input: ActionKit.(unknown context at $104482880).WFParameterStateToolKitConversionError.unknownParameterState(WFMultipleValueParameterState) for locale: en
+Failed to index parameter type: <WFInputSurfaceParameter: 0x10beca100> in is.workflow.actions.input: (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFInputSurfaceParameter) for locale: en
+Failed to index parameter type: <WFDynamicTagFieldParameter: 0x10bf30c00> in is.workflow.actions.wordpress.post: (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFDynamicTagFieldParameter) for locale: en
+Failed to index parameter type: <WFDynamicTagFieldParameter: 0x10bf30d00> in is.workflow.actions.wordpress.post: (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFDynamicTagFieldParameter) for locale: en
+Failed to index parameter type: <WFExpandingParameter: 0x10bec56c0> in is.workflow.actions.wordpress.post: (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFExpandingParameter) for locale: en
+Failed to index parameter type: <WFExpandingParameter: 0x10bec57a0> in is.workflow.actions.wordpress.post: (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFExpandingParameter) for locale: en
+Failed to index parameter type: <WFTagFieldParameter: 0x10bec6140> in is.workflow.actions.addnewreminder: (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFTagFieldParameter) for locale: en
+flutter: === notifications channel: RealtimeSubscribeStatus.closed ===
+flutter: === attendance channel: RealtimeSubscribeStatus.closed ===
+Failed to index parameter type: <WFEvernoteTagsTagFieldParameter: 0x10cc52200> in is.workflow.actions.evernote.new: (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFEvernoteTagsTagFieldParameter) for locale: en
+Failed to index parameter type: <WFSystemShortcutPickerParameter: 0x10cc81440> in com.apple.shortcuts.RunShortcutIntent: (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFSystemShortcutPickerParameter) for locale: en
+Failed to index parameter type: <WFExpandingParameter: 0x10cd1c540> in is.workflow.actions.encodemedia: (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFExpandingParameter) for locale: en
+Failed to index parameter type: <WFPhotoItemCollectionParameter: 0x10cd1c620> in com.apple.mobileslideshow.PLPhotosReliveWidgetConfigurationIntent: (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFPhotoItemCollectionParameter) for locale: en
+flutter: 00:18 +4: 04_attendance
+flutter: 00:19 +4: 01_login
+flutter:   \^[[1m[flutter_map]\^[[0m
+    We want to help keep OpenStreetMap available for everyone. Our examples
+    and demo app use the public tile servers, but they are NOT free to use by
+    everyone! Please review whether the OpenStreetMap tile servers are suitable
+    for your project.
+    See:
+      * https://operations.osmfoundation.org/policies/tiles (OSM Tile Usage Policy)
+      * https://docs.fleaflet.dev/osm-warn for more information about this warning
+flutter: 00:22 +5: 05_leave
+Failed to check availability in Spotlight for action is.workflow.actions.workout.end: Error Domain=NSOSStatusErrorDomain Code=-10814 "(null)" UserInfo={_LSLine=156, _LSFunction=+[LSBundleRecord bundleRecordWithBundleIdentifier:allowPlaceholder:error:], _LSFile=LSBundleRecord.mm, NSUnderlyingError=0x10cf52a30 {Error Domain=NSOSStatusErrorDomain Code=-10814 "Unable to find this application extension record in the Launch Services database." UserInfo={_LSLine=652, _LSFunction=_LSPluginFindWithPlatformInfo, _LSFile=LSPluginBundle.mm, NSDebugDescription=Unable to find this application extension record in the Launch Services database., SK=com.apple.SessionTrackerApp, IS=false}}}
+Failed to index action parameter: <WFSystemShortcutPickerParameter: 0x10a8e3240> due to (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFSystemShortcutPickerParameter)
+Failed to index action parameter: <WFPosterPickerParameter: 0x108cbb240> due to (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFPosterPickerParameter)
+is.workflow.actions.conditional WFConditionalAction: Skipped because: [control flow]
+Failed to index action parameter: <WFContentArrayParameter: 0x10ab4aa00> due to (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFContentArrayParameter)
+flutter: 00:26 +6: 06_loan
+flutter: 00:29 +7: 07_settings_employee
+flutter: 00:33 +8: 08_settings_admin
+flutter: 00:36 +9: 09_notifications
+flutter: 00:39 +10: 10_payslips
+Failed to index action parameter: <WFSystemShortcutPickerParameter: 0x10b858b40> due to (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFSystemShortcutPickerParameter)
+Failed to index action parameter: <WFSpotlightSearchResultTypePickerParameter: 0x10b870480> due to ActionKit.(unknown context at $104482880).WFParameterStateToolKitConversionError.unknownParameterState(WFMultipleValueParameterState)
+Failed to index action parameter: <WFHomeAccessoryPickerParameter: 0x10b859200> due to (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFHomeAccessoryPickerParameter)
+is.workflow.actions.choosefrommenu WFChooseFromMenuAction: Skipped because: [control flow]
+Failed to index action parameter: <WFMailSenderPickerParameter: 0x10b935200> due to (extension in ActionKit):__C.WFParameter.ToolKitConversionError.missingIntentDescription
+Failed to check availability in Spotlight for action is.workflow.actions.sendemail: Error Domain=NSOSStatusErrorDomain Code=-10814 "(null)" UserInfo={_LSLine=156, _LSFunction=+[LSBundleRecord bundleRecordWithBundleIdentifier:allowPlaceholder:error:], _LSFile=LSBundleRecord.mm, NSUnderlyingError=0x10cf537b0 {Error Domain=NSOSStatusErrorDomain Code=-10814 "Unable to find this application extension record in the Launch Services database." UserInfo={_LSLine=652, _LSFunction=_LSPluginFindWithPlatformInfo, _LSFile=LSPluginBundle.mm, NSDebugDescription=Unable to find this application extension record in the Launch Services database., SK=com.apple.mobilemail, IS=false}}}
+Failed to index action parameter: <WFEvernoteTagsTagFieldParameter: 0x10b9ac600> due to (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFEvernoteTagsTagFieldParameter)
+is.workflow.actions.repeat.each WFForEachRepeatAction: Skipped because: [control flow]
+flutter: 00:42 +11: 11_directory
+Failed to check availability in Spotlight for action is.workflow.actions.workout.start: Error Domain=NSOSStatusErrorDomain Code=-10814 "(null)" UserInfo={_LSLine=156, _LSFunction=+[LSBundleRecord bundleRecordWithBundleIdentifier:allowPlaceholder:error:], _LSFile=LSBundleRecord.mm, NSUnderlyingError=0x10cfa4b40 {Error Domain=NSOSStatusErrorDomain Code=-10814 "Unable to find this application extension record in the Launch Services database." UserInfo={_LSLine=652, _LSFunction=_LSPluginFindWithPlatformInfo, _LSFile=LSPluginBundle.mm, NSDebugDescription=Unable to find this application extension record in the Launch Services database., SK=com.apple.SessionTrackerApp, IS=false}}}
+Failed to index action parameter: <WFSSHKeyParameter: 0x10bb921c0> due to (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFSSHKeyParameter)
+Failed to index action parameter: <WFHomeServicePickerParameter: 0x10bb92280> due to (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFHomeServicePickerParameter)
+is.workflow.actions.useractivity.open WFOpenUserActivityAction: Skipped because: [donation-based action]
+is.workflow.actions.repeat.count WFFiniteRepeatAction: Skipped because: [control flow]
+is.workflow.actions.sirikit.donation.handle WFHandleDonatedIntentAction: Skipped because: [donation-based action]
+Failed to index action parameter: <WFLightroomPresetPickerParameter: 0x10bbc0640> due to (extension in ActionKit):__C.WFParameter.ToolKitConversionError.missingIntentDescription
+Failed to check availability in Spotlight for action is.workflow.actions.lightroom.import: Error Domain=NSOSStatusErrorDomain Code=-10814 "(null)" UserInfo={_LSLine=156, _LSFunction=+[LSBundleRecord bundleRecordWithBundleIdentifier:allowPlaceholder:error:], _LSFile=LSBundleRecord.mm, NSUnderlyingError=0x10cfa6ee0 {Error Domain=NSOSStatusErrorDomain Code=-10814 "Unable to find this application extension record in the Launch Services database." UserInfo={_LSLine=652, _LSFunction=_LSPluginFindWithPlatformInfo, _LSFile=LSPluginBundle.mm, NSDebugDescription=Unable to find this application extension record in the Launch Services database., SK=com.adobe.lrmobile, IS=false}}}
+Failed to index action parameter: <WFSystemShortcutPickerParameter: 0x10bcf3cc0> due to (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFSystemShortcutPickerParameter)
+flutter: 00:45 +12: 11b_announcements_board
+Failed to index action parameter: <WFFontPickerParameter: 0x10bd65080> due to (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFFontPickerParameter)
+Failed to index action parameter: <WFMediaPickerParameter: 0x10be58240> due to (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFMediaPickerParameter)
+Failed to index action parameter: <WFPosterPickerParameter: 0x10be5a640> due to (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFPosterPickerParameter)
+Failed to index action parameter: <WFInputTypeParameter: 0x10be8f900> due to ActionKit.(unknown context at $104482880).WFParameterStateToolKitConversionError.unknownParameterState(WFMultipleValueParameterState)
+Failed to index action parameter: <WFInputSurfaceParameter: 0x10beca100> due to (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFInputSurfaceParameter)
+Failed to index action parameter: <WFDynamicTagFieldParameter: 0x10bf30c00> due to (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFDynamicTagFieldParameter)
+Failed to index action parameter: <WFDynamicTagFieldParameter: 0x10bf30d00> due to (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFDynamicTagFieldParameter)
+Failed to index action parameter: <WFTagFieldParameter: 0x10bec6140> due to (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFTagFieldParameter)
+Failed to index action parameter: <WFEvernoteTagsTagFieldParameter: 0x10cc52200> due to (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFEvernoteTagsTagFieldParameter)
+Failed to index action parameter: <WFSystemShortcutPickerParameter: 0x10cc81440> due to (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFSystemShortcutPickerParameter)
+flutter: 00:48 +13: 12_admin_dashboard
+Failed to index action parameter: <WFPhotoItemCollectionParameter: 0x10cd1c620> due to (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFPhotoItemCollectionParameter)
+Indexed: 1097
+Errored: 0
+Skipped: [control flow: 4, donation-based action: 2]
+   control flow: 4
+   donation-based action: 2
+Finished in 147.868122s
+-[WFIsolatedShortcutRunner unaliveProcess] Releasing sandbox extensions
+flutter: 00:52 +14: 13_admin_loans
+flutter: 00:55 +15: 14_admin_tracking
+flutter: 00:56 +15: 01_login
+flutter:   \^[[1m[flutter_map]\^[[0m
+    We want to help keep OpenStreetMap available for everyone. Our examples
+    and demo app use the public tile servers, but they are NOT free to use by
+    everyone! Please review whether the OpenStreetMap tile servers are suitable
+    for your project.
+    See:
+      * https://operations.osmfoundation.org/policies/tiles (OSM Tile Usage Policy)
+      * https://docs.fleaflet.dev/osm-warn for more information about this warning
+flutter: 00:59 +16: 15_employee_management
+flutter: 01:03 +17: 16_branches
+flutter: 01:03 +17: 01_login
+flutter:   \^[[1m[flutter_map]\^[[0m
+    We want to help keep OpenStreetMap available for everyone. Our examples
+    and demo app use the public tile servers, but they are NOT free to use by
+    everyone! Please review whether the OpenStreetMap tile servers are suitable
+    for your project.
+    See:
+      * https://operations.osmfoundation.org/policies/tiles (OSM Tile Usage Policy)
+      * https://docs.fleaflet.dev/osm-warn for more information about this warning
+flutter: 01:06 +18: 17_branch_schedule
+flutter: 01:09 +19: 18_announcements
+flutter: 01:13 +20: 19_attendance_report
+flutter: 01:16 +21: 20_trash
+flutter: 01:19 +22: 21_storage
+flutter: 01:22 +23: (tearDownAll)
+flutter: 01:24 +24: All tests passed!
+All tests passed.

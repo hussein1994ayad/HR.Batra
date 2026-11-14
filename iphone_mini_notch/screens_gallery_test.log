@@ -1,0 +1,166 @@
+Resolving dependencies...
+Downloading packages...
+  _flutterfire_internals 1.3.78 (1.3.79 available)
+  app_links_linux 1.0.4 (1.0.5 available)
+  archive 4.5.2 (4.7.1 available)
+  cli_util 0.4.2 (0.6.0 available)
+  code_assets 2.1.0 (2.2.0 available)
+  cross_file 0.3.5+5 (0.4.0 available)
+  crypto 3.0.7 (3.0.8 available)
+  cupertino_ui 1.1.3 (1.1.6 available)
+  dbus 0.7.15 (0.8.0 available)
+  file_selector_macos 0.9.5+1 (0.9.5+2 available)
+  firebase_core 5.0.0 (5.1.0 available)
+  firebase_core_web 4.0.0 (4.1.0 available)
+  firebase_messaging 17.0.0 (17.0.1 available)
+  firebase_messaging_platform_interface 4.11.0 (4.11.1 available)
+  firebase_messaging_web 4.3.0 (4.3.1 available)
+  flutter_local_notifications 22.3.2 (23.0.2 available)
+  flutter_local_notifications_linux 8.0.2 (9.0.0 available)
+  flutter_local_notifications_platform_interface 12.2.0 (13.0.0 available)
+  flutter_local_notifications_web 1.0.0 (2.0.0 available)
+  flutter_local_notifications_windows 3.1.1 (4.0.1 available)
+  flutter_riverpod 3.4.3 (3.5.0 available)
+  geolocator 14.1.1 (14.1.2 available)
+  geolocator_android 5.1.1+1 (5.2.1 available)
+  geolocator_apple 2.3.15 (2.4.3 available)
+  geolocator_platform_interface 4.4.0 (4.4.1 available)
+  go_router 18.1.0 (18.1.4 available)
+  gsettings 0.2.8 (0.2.9 available)
+  image 4.12.0 (4.13.0 available)
+  image_picker_ios 0.8.13+12 (0.8.13+15 available)
+! intl 0.20.3 (overridden)
+  jni 1.1.0 (1.1.2 available)
+  material_color_utilities 0.13.0 (0.13.1 available)
+  material_ui 1.7.0 (1.11.0 available)
+  objective_c 9.6.2 (9.6.4 available)
+  passkeys_platform_interface 2.10.0 (2.11.0 available)
+  permission_handler_android 14.1.0 (14.1.1 available)
+  permission_handler_apple 9.6.2 (9.6.5 available)
+  permission_handler_windows 0.2.2 (0.2.4 available)
+  posix 6.5.2 (6.5.4 available)
+  record 7.1.2 (7.2.0 available)
+  record_android 2.2.0 (2.3.0 available)
+  record_linux 2.1.3 (2.2.0 available)
+  record_platform_interface 2.1.0 (2.2.0 available)
+  record_web 2.1.3 (2.2.0 available)
+  record_windows 2.3.0 (2.4.0 available)
+  riverpod 3.4.3 (3.5.0 available)
+  shared_preferences_android 2.5.0 (2.5.5 available)
+  shared_preferences_foundation 2.6.0 (2.6.2 available)
+  syncfusion_flutter_core 35.1.40+1 (35.1.46 available)
+  syncfusion_flutter_pdf 35.1.40+1 (35.1.46 available)
+  syncfusion_flutter_xlsio 35.1.40+1 (35.1.46 available)
+  syncfusion_officecore 35.1.40+1 (35.1.46 available)
+  test_api 0.7.12 (0.7.15 available)
+  vector_math 2.4.3 (2.4.4 available)
+  web 1.1.1 (1.1.2 available)
+Got dependencies!
+54 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+The following plugins do not support Swift Package Manager for ios:
+  - flutter_background_service_ios
+This will become an error in a future version of Flutter. Please contact the plugin maintainers to request Swift Package Manager adoption.
+Running Xcode build...                                          
+Xcode build done.                                           183.9s
+VMServiceFlutterDriver: Connecting to Flutter application at http://127.0.0.1:58750/CGYcmIxlHNs=/
+VMServiceFlutterDriver: Isolate found with number: 2315317149496307
+VMServiceFlutterDriver: Isolate 2315317149496307 is runnable.
+VMServiceFlutterDriver: Isolate is paused at start.
+VMServiceFlutterDriver: Attempting to resume isolate
+VMServiceFlutterDriver: Connected to Flutter application.
+Failed to index action parameter: <WFSSHKeyParameter: 0x109c3ea00> due to (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFSSHKeyParameter)
+is.workflow.actions.useractivity.open WFOpenUserActivityAction: Skipped because: [donation-based action]
+Failed to index action parameter: <WFHomeAccessoryPickerParameter: 0x109c3f240> due to (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFHomeAccessoryPickerParameter)
+is.workflow.actions.sirikit.donation.handle WFHandleDonatedIntentAction: Skipped because: [donation-based action]
+is.workflow.actions.repeat.each WFForEachRepeatAction: Skipped because: [control flow]
+VMServiceFlutterDriver: request_data message is taking a long time to complete...
+Failed to index action parameter: <WFMailSenderPickerParameter: 0x109e02880> due to (extension in ActionKit):__C.WFParameter.ToolKitConversionError.missingIntentDescription
+Failed to check availability in Spotlight for action is.workflow.actions.sendemail: Error Domain=NSOSStatusErrorDomain Code=-10814 "(null)" UserInfo={_LSLine=156, _LSFunction=+[LSBundleRecord bundleRecordWithBundleIdentifier:allowPlaceholder:error:], _LSFile=LSBundleRecord.mm, NSUnderlyingError=0x10b1cdbc0 {Error Domain=NSOSStatusErrorDomain Code=-10814 "Unable to find this application extension record in the Launch Services database." UserInfo={_LSLine=652, _LSFunction=_LSPluginFindWithPlatformInfo, _LSFile=LSPluginBundle.mm, NSDebugDescription=Unable to find this application extension record in the Launch Services database., SK=com.apple.mobilemail, IS=false}}}
+Failed to index action parameter: <WFMediaPickerParameter: 0x109e7b480> due to (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFMediaPickerParameter)
+flutter: 00:07 +2: 02_change_password
+Failed to index action parameter: <WFSystemShortcutPickerParameter: 0x109eb18c0> due to (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFSystemShortcutPickerParameter)
+Failed to index action parameter: <WFInputTypeParameter: 0x109f21980> due to ActionKit.(unknown context at $1026ba880).WFParameterStateToolKitConversionError.unknownParameterState(WFMultipleValueParameterState)
+Failed to index action parameter: <WFInputSurfaceParameter: 0x109eb3d80> due to (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFInputSurfaceParameter)
+Failed to index action parameter: <WFDynamicTagFieldParameter: 0x109f41100> due to (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFDynamicTagFieldParameter)
+Failed to index action parameter: <WFDynamicTagFieldParameter: 0x109f41200> due to (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFDynamicTagFieldParameter)
+Failed to check availability in Spotlight for action is.workflow.actions.workout.end: Error Domain=NSOSStatusErrorDomain Code=-10814 "(null)" UserInfo={_LSLine=156, _LSFunction=+[LSBundleRecord bundleRecordWithBundleIdentifier:allowPlaceholder:error:], _LSFile=LSBundleRecord.mm, NSUnderlyingError=0x10b1ce640 {Error Domain=NSOSStatusErrorDomain Code=-10814 "Unable to find this application extension record in the Launch Services database." UserInfo={_LSLine=652, _LSFunction=_LSPluginFindWithPlatformInfo, _LSFile=LSPluginBundle.mm, NSDebugDescription=Unable to find this application extension record in the Launch Services database., SK=com.apple.SessionTrackerApp, IS=false}}}
+Failed to index action parameter: <WFHomeServicePickerParameter: 0x109f5ce40> due to (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFHomeServicePickerParameter)
+is.workflow.actions.repeat.count WFFiniteRepeatAction: Skipped because: [control flow]
+Failed to index action parameter: <WFPosterPickerParameter: 0x109f5f9c0> due to (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFPosterPickerParameter)
+flutter: 00:10 +3: 03_home
+flutter: 00:10 +3: 01_login
+flutter: ⚠️ خدمة GPS معطلة في الجهاز
+Failed to index action parameter: <WFFontPickerParameter: 0x10a0cdc80> due to (extension in ActionKit):__C.WFParameter.ToolKitConversionError.incompatibleParameterType(WFFontPickerParameter)
+Failed to index action parameter: <WFLightroomPresetPickerParameter: 0x109d86440> due to (extension in ActionKit):__C.WFParameter.ToolKitConversionError.missingIntentDescription
+Failed to check availability in Spotlight for action is.workflow.actions.lightroom.import: Error Domain=NSOSStatusErrorDomain Code=-10814 "(null)" UserInfo={_LSLine=156, _LSFunction=+[LSBundleRecord bundleRecordWithBundleIdentifier:allowPlaceholder:error:], _LSFile=LSBundleRecord.mm, NSUnderlyingError=0x10b1cf420 {Error Domain=NSOSStatusErrorDomain Code=-10814 "Unable to find this application extension record in the Launch Services database." UserInfo={_LSLine=652, _LSFunction=_LSPluginFindWithPlatformInfo, _LSFile=LSPluginBundle.mm, NSDebugDescription=Unable to find this application extension record in the Launch Services database., SK=com.adobe.lrmobile, IS=false}}}
+Indexed: 1097
+Errored: 0
+Skipped: [donation-based action: 2, control flow: 4]
+   donation-based action: 2
+   control flow: 4
+Finished in 89.588443s
+-[WFIsolatedShortcutRunner unaliveProcess] Releasing sandbox extensions
+flutter: === notifications channel: RealtimeSubscribeStatus.channelError ===
+flutter: === channel error: WebSocketChannelException: SocketException: Failed host lookup: 'fake.supabase.test' (OS Error: nodename nor servname provided, or not known, errno = 8) ===
+flutter: === attendance channel: RealtimeSubscribeStatus.channelError ===
+flutter: 💾 تم حفظ حالة التتبع محلياً للعمل أوفلاين.
+flutter: 🚀 بدء تشغيل تدفق التتبع الجغرافي الحي للموظف: 00000000-0000-4000-8000-000000000001
+flutter: ⚠️ خطأ في التقاط الموقع الأولي: type 'Null' is not a subtype of type 'Map<dynamic, dynamic>'
+flutter: iOS: بدأت مراقبة 1 فرع
+flutter: iOS: setCheckedIn(true)
+flutter: ✅ تم تفعيل وتشغيل نظام التتبع الجغرافي بنجاح للموظف: 00000000-0000-4000-8000-000000000001
+flutter: === notifications channel: RealtimeSubscribeStatus.channelError ===
+flutter: === channel error: WebSocketChannelException: SocketException: Failed host lookup: 'fake.supabase.test' (OS Error: nodename nor servname provided, or not known, errno = 8) ===
+flutter: === attendance channel: RealtimeSubscribeStatus.channelError ===
+flutter: === notifications channel: RealtimeSubscribeStatus.closed ===
+flutter: === attendance channel: RealtimeSubscribeStatus.closed ===
+flutter: 00:16 +4: 04_attendance
+flutter: 00:16 +4: 01_login
+flutter:   \^[[1m[flutter_map]\^[[0m
+    We want to help keep OpenStreetMap available for everyone. Our examples
+    and demo app use the public tile servers, but they are NOT free to use by
+    everyone! Please review whether the OpenStreetMap tile servers are suitable
+    for your project.
+    See:
+      * https://operations.osmfoundation.org/policies/tiles (OSM Tile Usage Policy)
+      * https://docs.fleaflet.dev/osm-warn for more information about this warning
+flutter: 00:19 +5: 05_leave
+flutter: 00:23 +6: 06_loan
+flutter: 00:26 +7: 07_settings_employee
+flutter: 00:30 +8: 08_settings_admin
+flutter: 00:33 +9: 09_notifications
+flutter: 00:36 +10: 10_payslips
+flutter: 00:39 +11: 11_directory
+flutter: 00:42 +12: 11b_announcements_board
+flutter: 00:45 +13: 12_admin_dashboard
+flutter: 00:48 +14: 13_admin_loans
+flutter: 00:51 +15: 14_admin_tracking
+flutter: 00:52 +15: 01_login
+flutter:   \^[[1m[flutter_map]\^[[0m
+    We want to help keep OpenStreetMap available for everyone. Our examples
+    and demo app use the public tile servers, but they are NOT free to use by
+    everyone! Please review whether the OpenStreetMap tile servers are suitable
+    for your project.
+    See:
+      * https://operations.osmfoundation.org/policies/tiles (OSM Tile Usage Policy)
+      * https://docs.fleaflet.dev/osm-warn for more information about this warning
+flutter: 00:55 +16: 15_employee_management
+flutter: 00:58 +17: 16_branches
+flutter: 00:58 +17: 01_login
+flutter:   \^[[1m[flutter_map]\^[[0m
+    We want to help keep OpenStreetMap available for everyone. Our examples
+    and demo app use the public tile servers, but they are NOT free to use by
+    everyone! Please review whether the OpenStreetMap tile servers are suitable
+    for your project.
+    See:
+      * https://operations.osmfoundation.org/policies/tiles (OSM Tile Usage Policy)
+      * https://docs.fleaflet.dev/osm-warn for more information about this warning
+flutter: 01:01 +18: 17_branch_schedule
+flutter: 01:04 +19: 18_announcements
+flutter: 01:07 +20: 19_attendance_report
+flutter: 01:10 +21: 20_trash
+flutter: 01:13 +22: 21_storage
+flutter: 01:16 +23: (tearDownAll)
+flutter: 01:18 +24: All tests passed!
+All tests passed.
