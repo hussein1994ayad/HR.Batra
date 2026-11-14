@@ -183,27 +183,18 @@ class LocationService {
         unawaited(_requestBatteryOptimizationExemption());
       }
 
-      // 1. تشغيل التدفق المباشر للموقع في التطبيق فوراً
-      if (_positionStreamSubscription == null) {
+      // 1. خدمة الخلفية: لأندرويد فقط (Foreground Service)، وهي اللي تتابع الموقع حتى والتطبيق مسدود.
+      // على الآيفون التتبع من LocationMonitorIOS.swift (تحت)، وتشغيل المكتبة هناك كان يفتح محرك Flutter ثاني بالذاكرة.
+      final serviceTracks = Platform.isAndroid && await _ensureAndroidService();
+
+      // 2. متابعة الموقع من التطبيق نفسه: الآيفون، أو أندرويد إذا الخدمة ما اشتغلت. متابعتين سوا كانت تكرر كل نقطة
+      // وكل إشعار دخول/خروج فرع (بلاغ 14/11/2026).
+      if (!serviceTracks && _positionStreamSubscription == null) {
         _startLocationUpdates(userId);
       }
 
-      // 2. التقاط ورفع موقع أولي فوري للتسجيل اللحظي
+      // 3. التقاط ورفع موقع أولي فوري للتسجيل اللحظي
       unawaited(_captureInstantLocation(userId));
-
-      // 3. خدمة الخلفية: لأندرويد فقط (Foreground Service). على الآيفون التتبع من LocationMonitorIOS.swift
-      // (الخطوة التالية)، وتشغيل المكتبة هناك كان يفتح محرك Flutter ثاني بالذاكرة ما يسوي شي (onForeground فارغة).
-      if (Platform.isAndroid) {
-        try {
-          final service = FlutterBackgroundService();
-          final isRunning = await service.isRunning();
-          if (!isRunning) {
-            await service.startService();
-          }
-        } catch (e) {
-          appLog('⚠️ تعذر تشغيل BackgroundService: $e');
-        }
-      }
 
       // على iOS: فعّل Region Monitoring لتحمّل حالة التطبيق المقفل
       if (Platform.isIOS) {
@@ -286,6 +277,17 @@ class LocationService {
     } catch (e) {
       appLog('⚠️ تعذر رفع الموقع الفوري، سيتم حفظه محلياً أوفلاين: $e');
       await LocationUploader.cacheOffline(locationData);
+    }
+  }
+
+  /// يشغّل خدمة الخلفية بالأندرويد إذا مو شغالة. يرجع true إذا صارت شغالة (هي تتابع الموقع).
+  static Future<bool> _ensureAndroidService() async {
+    try {
+      final service = FlutterBackgroundService();
+      return await service.isRunning() || await service.startService();
+    } catch (e) {
+      appLog('⚠️ تعذر تشغيل BackgroundService: $e');
+      return false;
     }
   }
 

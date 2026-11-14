@@ -1,10 +1,12 @@
 // دخول وخروج الفروع (دائرة كل فرع: الموقع + نصف القطر): كل انتقال يصير إشعار حضور للموظف.
-// يعمل أوفلاين — الحدث ينحفظ ويُرفع لاحقاً بعنوان "(مؤرشف)".
+// القرار نفسه (ضد قفزات الموقع) بـ branch_presence.dart. يعمل أوفلاين — الحدث ينحفظ ويُرفع لاحقاً بعنوان "(مؤرشف)".
 
 import 'package:geolocator/geolocator.dart';
 
+import '../../design/formatters.dart';
 import '../../utils/app_log.dart';
 import '../supabase_service.dart';
+import 'branch_presence.dart';
 import 'offline_json_queue.dart';
 
 class BranchPresenceMonitor {
@@ -12,7 +14,7 @@ class BranchPresenceMonitor {
 
   static List<Map<String, dynamic>>? _cachedBranches;
   static DateTime? _lastBranchesFetchTime;
-  static final Map<String, bool> _lastBranchInsideStates = {};
+  static final Map<String, BranchPresence> _presence = {};
 
   static final OfflineJsonQueue _queue = OfflineJsonQueue('branch_events_offline.json');
 
@@ -51,10 +53,10 @@ class BranchPresenceMonitor {
         final distance = Geolocator.distanceBetween(
           position.latitude, position.longitude, bLat, bLng,
         );
-        final isInside = distance <= radius;
-        final wasInside = _lastBranchInsideStates[id];
+        final isInside = _presence.putIfAbsent(id, BranchPresence.new)
+            .update(distance: distance, radius: radius, accuracy: position.accuracy, at: position.timestamp);
 
-        if (wasInside != null && wasInside != isInside) {
+        if (isInside != null) {
           final event = {
             'employee_id': employeeId,
             'branch_id': id,
@@ -66,7 +68,6 @@ class BranchPresenceMonitor {
           };
           await _recordOrCacheEvent(event);
         }
-        _lastBranchInsideStates[id] = isInside;
       }
     } catch (e) {
       appLog('⚠️ فشل فحص دخول/خروج الفروع: $e');
@@ -77,15 +78,7 @@ class BranchPresenceMonitor {
   static Future<void> _recordOrCacheEvent(Map<String, dynamic> event) async {
     try {
       // نسجّله في notifications (يظهر للموظف وللأدمن بحسب حاجتك)
-      await SupabaseService.client.from('notifications').insert({
-        'employee_id': event['employee_id'],
-        'title': event['event_type'] == 'enter'
-            ? 'دخول فرع ${event['branch_name']}'
-            : 'خروج من فرع ${event['branch_name']}',
-        'body': 'تم رصد ${event['event_type'] == 'enter' ? 'دخولك إلى' : 'خروجك من'} فرع '
-            '${event['branch_name']} في ${event['timestamp']}',
-        'type': 'attendance',
-      }).timeout(const Duration(seconds: 8));
+      await SupabaseService.client.from('notifications').insert(notificationFor(event)).timeout(const Duration(seconds: 8));
       appLog('📍 branch event uploaded: ${event['event_type']} ${event['branch_name']}');
     } catch (_) {
       // فشل الرفع → نضيفه للـ cache للمزامنة لاحقاً
@@ -98,18 +91,23 @@ class BranchPresenceMonitor {
     }
   }
 
+  /// نص الإشعار: «دخول فرع X» + الوقت بتوقيت الشركة ("9:41 ص"). [archived] = حدث انحفظ أوفلاين وانرفع بعدين.
+  static Map<String, dynamic> notificationFor(Map<String, dynamic> event, {bool archived = false}) {
+    final enter = event['event_type'] == 'enter';
+    final name = event['branch_name'];
+    final at = Fmt.time(DateTime.tryParse(event['timestamp']?.toString() ?? ''));
+    return {
+      'employee_id': event['employee_id'],
+      'title': '${enter ? 'دخول فرع' : 'خروج من فرع'} $name${archived ? ' (مؤرشف)' : ''}',
+      'body': 'تم رصد ${enter ? 'دخولك إلى' : 'خروجك من'} فرع $name الساعة $at',
+      'type': 'attendance',
+    };
+  }
+
   /// مزامنة الأحداث المخزنة أوفلاين
   static Future<void> syncOffline() async {
     try {
-      final r = await _queue.drain((ev) => SupabaseService.client.from('notifications').insert({
-            'employee_id': ev['employee_id'],
-            'title': ev['event_type'] == 'enter'
-                ? 'دخول فرع ${ev['branch_name']} (مؤرشف)'
-                : 'خروج من فرع ${ev['branch_name']} (مؤرشف)',
-            'body': 'تم رصد ${ev['event_type'] == 'enter' ? 'دخولك إلى' : 'خروجك من'} فرع '
-                '${ev['branch_name']} في ${ev['timestamp']}',
-            'type': 'attendance',
-          }));
+      final r = await _queue.drain((ev) => SupabaseService.client.from('notifications').insert(notificationFor(ev, archived: true)));
       if (r != null) appLog('✅ branch-events sync: ${r.uploaded} uploaded, ${r.pending} pending.');
     } catch (e) {
       appLog('⚠️ branch-events sync failed: $e');
